@@ -1,0 +1,27 @@
+[package]
+name = "surf-parse"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+description = "Parser for the SurfDoc format — markdown superset with typed block directives"
+repository = "https://github.com/cloudsurf-software/surf-parse"
+homepage = "https://surfcontext.org"
+keywords = ["surfdoc", "markdown", "parser", "document", "accessibility"]
+categories = ["parser-implementations", "text-processing", "web-programming"]
+readme = "README.md"
+
+[features]
+default = ["terminal"]
+terminal = ["colored"]
+
+[dependencies]
+colored = { version = "3", optional = true }
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+
+[dev-dependencies]
+pretty_assertions = "1"
+proptest = "1"
