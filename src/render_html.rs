@@ -1427,17 +1427,13 @@ pub fn render_site_page(
 
     let source_path = escape_html(&config.source_path);
 
-    // Build navigation HTML
+    // Build navigation HTML (clean URLs — no /index.html suffix)
     let mut nav_html = format!(
-        "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/index.html\" class=\"site-name\">{}</a>\n",
+        "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/\" class=\"site-name\">{}</a>\n",
         escape_html(site_name)
     );
     for (route, nav_title) in nav_items {
-        let href = if route == "/" {
-            "/index.html".to_string()
-        } else {
-            format!("{}/index.html", route)
-        };
+        let href = route.to_string();
         let active = if *route == page.route { " active" } else { "" };
         nav_html.push_str(&format!(
             "  <a href=\"{}\"{}>{}</a>\n",
@@ -2629,9 +2625,9 @@ mod tests {
 
         let html = render_site_page(&page, &site, &nav_items, &config);
 
-        assert!(html.contains("/index.html"));
-        assert!(html.contains("/about/index.html"));
-        assert!(html.contains("/pricing/index.html"));
+        assert!(html.contains("href=\"/\""));
+        assert!(html.contains("href=\"/about\""));
+        assert!(html.contains("href=\"/pricing\""));
         // Active link for about page
         assert!(html.contains("class=\"active\">About</a>"));
     }
