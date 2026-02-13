@@ -204,6 +204,42 @@ fn scan_blocks(
 
         // Check for opening directive: `::name[attrs]`
         if let Some((depth, name, attrs_str)) = opening_directive(trimmed) {
+            // Greedy page boundary: when a ::page or ::footer arrives and the
+            // stack bottom is a ::page at the same depth, force-close the
+            // current page.  Leaf directives inside pages (::hero-image, ::cta,
+            // ::embed, etc.) don't have closers and steal the page's own `::`
+            // markers via depth matching.  This ensures each ::page is emitted
+            // as a top-level block regardless of inner leaf nesting.
+            if !stack.is_empty()
+                && (name == "page" || name == "footer")
+                && stack[0].depth == depth
+                && stack[0].name == "page"
+            {
+                // Discard unclosed nested blocks — they are raw content.
+                while stack.len() > 1 {
+                    stack.pop();
+                }
+                let open = stack.pop().unwrap();
+
+                let content = &source[open.content_start_offset..line_offset];
+                let content = content.strip_suffix('\n').unwrap_or(content);
+
+                blocks.push(Block::Unknown {
+                    name: open.name,
+                    attrs: open.attrs,
+                    content: content.to_string(),
+                    span: Span {
+                        start_line: open.start_line,
+                        end_line: idx + 1,
+                        start_offset: open.start_offset,
+                        end_offset: line_offset,
+                    },
+                });
+
+                md_start_line = None;
+                md_start_offset = None;
+            }
+
             // If we're at top level, flush any accumulated markdown.
             if stack.is_empty() {
                 flush_markdown(
@@ -748,5 +784,146 @@ Body.
             }
             other => panic!("Expected Data block, got {other:?}"),
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Multipage parsing tests — greedy page boundary.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn parse_multipage_with_leaf_directives() {
+        // Pages contain leaf directives (::hero-image, ::cta) that don't have
+        // closers.  The parser must still emit each page as a separate block.
+        let input = concat!(
+            "::site\nname: Test\n::\n",
+            "::page[route=\"/\" title=\"Home\"]\n",
+            "# Welcome\n",
+            "::hero-image[src=\"bg.jpg\"]\n",
+            "::cta[label=\"Go\" href=\"/about\"]\n",
+            "::\n",
+            "::page[route=\"/about\" title=\"About\"]\n",
+            "# About Us\n",
+            "::\n",
+            "::footer\n(c) 2026\n::\n",
+        );
+        let result = parse(input);
+        let pages: Vec<_> = result
+            .doc
+            .blocks
+            .iter()
+            .filter(|b| matches!(b, Block::Page { .. }))
+            .collect();
+        assert_eq!(pages.len(), 2, "Expected 2 pages, got {} — blocks: {:#?}", pages.len(), result.doc.blocks);
+        match &pages[0] {
+            Block::Page { route, title, .. } => {
+                assert_eq!(route, "/");
+                assert_eq!(title.as_deref(), Some("Home"));
+            }
+            _ => unreachable!(),
+        }
+        match &pages[1] {
+            Block::Page { route, title, .. } => {
+                assert_eq!(route, "/about");
+                assert_eq!(title.as_deref(), Some("About"));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn parse_multipage_children_resolved() {
+        // Verify that children inside pages are correctly resolved even when
+        // leaf directives are present.
+        let input = concat!(
+            "::page[route=\"/\"]\n",
+            "::hero-image[src=\"bg.jpg\"]\n",
+            "::columns\n:::column\nLeft\n:::\n:::column\nRight\n:::\n::\n",
+            "::cta[label=\"Click\"]\n",
+            "::\n",
+            "::page[route=\"/next\"]\n",
+            "# Next Page\n",
+            "::\n",
+        );
+        let result = parse(input);
+        let pages: Vec<_> = result
+            .doc
+            .blocks
+            .iter()
+            .filter(|b| matches!(b, Block::Page { .. }))
+            .collect();
+        assert_eq!(pages.len(), 2, "blocks: {:#?}", result.doc.blocks);
+
+        // First page should have children: hero-image, columns, cta
+        if let Block::Page { children, .. } = &pages[0] {
+            let has_columns = children.iter().any(|b| matches!(b, Block::Columns { .. }));
+            assert!(has_columns, "First page should contain a Columns block, got: {:#?}", children);
+        }
+    }
+
+    #[test]
+    fn parse_multipage_footer_closes_last_page() {
+        // A ::footer should force-close the preceding ::page.
+        let input = concat!(
+            "::page[route=\"/\"]\n",
+            "# Home\n",
+            "::hero-image[src=\"bg.jpg\"]\n",
+            "::\n",
+            "::footer\n(c) 2026\n::\n",
+        );
+        let result = parse(input);
+        let page_count = result.doc.blocks.iter().filter(|b| matches!(b, Block::Page { .. })).count();
+        let footer_count = result.doc.blocks.iter().filter(|b| matches!(b, Block::Footer { .. })).count();
+        assert_eq!(page_count, 1, "blocks: {:#?}", result.doc.blocks);
+        assert_eq!(footer_count, 1, "blocks: {:#?}", result.doc.blocks);
+    }
+
+    #[test]
+    fn parse_five_page_site() {
+        // Regression test modelled on the Bowties Tuxedo .surf file.
+        let input = concat!(
+            "::site\nname: Bowties\n::\n",
+            "::nav[logo=\"Bowties\"]\n- [Home](/)\n- [Gallery](/gallery)\n::\n",
+            "::page[route=\"/\" title=\"Home\"]\n",
+            "::hero-image[src=\"hero.jpg\"]\n",
+            "::cta[label=\"View\" href=\"/gallery\"]\n",
+            "::columns\n:::column\nA\n:::\n:::column\nB\n:::\n::\n",
+            "::testimonial[author=\"Review\"]\nGreat!\n::\n",
+            "::cta[label=\"Go\" href=\"/contact\"]\n",
+            "::\n",
+            "::page[route=\"/gallery\" title=\"Gallery\"]\n",
+            "# Gallery\n",
+            "::gallery\n![A](a.jpg) Caption A\n::\n",
+            "::cta[label=\"Book\" href=\"/contact\"]\n",
+            "::\n",
+            "::page[route=\"/services\" title=\"Services\"]\n",
+            "# Services\n",
+            "::\n",
+            "::page[route=\"/measurements\" title=\"Measurements\"]\n",
+            "::form[submit=\"Submit\"]\n- Name (text) *\n::\n",
+            "::\n",
+            "::page[route=\"/contact\" title=\"Contact\"]\n",
+            "# Contact\n",
+            "::embed[src=\"https://maps.google.com\"]\n",
+            "::form[submit=\"Send\"]\n- Name (text) *\n::\n",
+            "::\n",
+            "::footer\n## Links\n- [Home](/)\n::\n",
+        );
+        let result = parse(input);
+        let pages: Vec<_> = result
+            .doc
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                Block::Page { route, .. } => Some(route.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            pages,
+            vec!["/", "/gallery", "/services", "/measurements", "/contact"],
+            "Expected 5 pages, got {:?} — full blocks: {:#?}",
+            pages,
+            result.doc.blocks
+        );
     }
 }
