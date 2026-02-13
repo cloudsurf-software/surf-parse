@@ -1385,11 +1385,25 @@ pub fn extract_site(doc: &SurfDoc) -> (Option<SiteConfig>, Vec<PageEntry>, Vec<B
 /// CSS for site-level navigation and footer.
 const SITE_NAV_CSS: &str = r#"
 /* Site navigation */
-.surfdoc-site-nav { display: flex; align-items: center; gap: 1.5rem; padding: 0.75rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); max-width: 100%; position: sticky; top: 0; z-index: 100; }
+.surfdoc-site-nav { display: flex; align-items: center; flex-wrap: wrap; padding: 0.75rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); max-width: 100%; position: sticky; top: 0; z-index: 100; }
 .surfdoc-site-nav .site-name { font-weight: 700; color: #fff; font-size: 1rem; text-decoration: none; margin-right: auto; }
-.surfdoc-site-nav a { color: var(--text-dim); text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.5rem; border-radius: 4px; transition: color 0.15s, background 0.15s; }
-.surfdoc-site-nav a:hover { color: var(--text); background: var(--bg-hover); }
-.surfdoc-site-nav a.active { color: var(--accent); font-weight: 600; }
+.site-nav-links { display: flex; align-items: center; gap: 0.25rem; }
+.site-nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.625rem; border-radius: 6px; transition: color 0.15s, background 0.15s; }
+.site-nav-links a:hover { color: var(--text); background: var(--bg-hover); }
+.site-nav-links a.active { color: var(--accent); font-weight: 600; }
+.site-nav-toggle { display: none; }
+.site-nav-hamburger { display: none; cursor: pointer; padding: 0.5rem; margin-left: auto; flex-direction: column; gap: 5px; }
+.site-nav-hamburger span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 1px; transition: transform 0.2s, opacity 0.2s; }
+@media (max-width: 640px) {
+  .site-nav-hamburger { display: flex; }
+  .surfdoc-site-nav .site-name { margin-right: 0; }
+  .site-nav-links { display: none; flex-direction: column; align-items: stretch; width: 100%; padding: 0.5rem 0; }
+  .site-nav-links a { padding: 0.625rem 0.75rem; font-size: 1rem; }
+  .site-nav-toggle:checked ~ .site-nav-links { display: flex; }
+  .site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+  .site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(2) { opacity: 0; }
+  .site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+}
 
 /* Site footer */
 .surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border-subtle); text-align: center; color: var(--text-muted); font-size: 0.8rem; }
@@ -1432,11 +1446,15 @@ pub fn render_site_page(
         "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/\" class=\"site-name\">{}</a>\n",
         escape_html(site_name)
     );
+    // CSS-only hamburger toggle for mobile
+    nav_html.push_str("  <input type=\"checkbox\" class=\"site-nav-toggle\" id=\"site-nav-toggle\" aria-hidden=\"true\">\n");
+    nav_html.push_str("  <label for=\"site-nav-toggle\" class=\"site-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>\n");
+    nav_html.push_str("  <div class=\"site-nav-links\">\n");
     for (route, nav_title) in nav_items {
         let href = route.to_string();
         let active = if *route == page.route { " active" } else { "" };
         nav_html.push_str(&format!(
-            "  <a href=\"{}\"{}>{}</a>\n",
+            "    <a href=\"{}\"{}>{}</a>\n",
             escape_html(&href),
             if active.is_empty() {
                 String::new()
@@ -1446,7 +1464,7 @@ pub fn render_site_page(
             escape_html(nav_title),
         ));
     }
-    nav_html.push_str("</nav>");
+    nav_html.push_str("  </div>\n</nav>");
 
     // Build footer
     let footer_html = format!(
