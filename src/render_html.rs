@@ -98,9 +98,12 @@ fn resolve_font_preset(name: &str) -> Option<FontPreset> {
 fn apply_style_overrides(properties: &[StyleProperty], css_overrides: &mut String, imports: &mut Vec<&'static str>) {
     for prop in properties {
         match prop.key.as_str() {
-            "accent" => css_overrides.push_str(&format!(
-                "--accent: {};", escape_html(&prop.value)
-            )),
+            "accent" => {
+                let safe = sanitize_css_value(&prop.value);
+                if !safe.is_empty() {
+                    css_overrides.push_str(&format!("--accent: {};", safe));
+                }
+            }
             "font" => {
                 // Legacy: sets both heading and body
                 if let Some(preset) = resolve_font_preset(&prop.value) {
@@ -690,6 +693,22 @@ fn escape_html(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+/// Sanitize a value for use inside a CSS declaration.
+///
+/// Strips characters that could break out of a CSS property value context:
+/// semicolons, braces, angle brackets, backslashes, and url()/expression().
+fn sanitize_css_value(s: &str) -> String {
+    let stripped: String = s.chars()
+        .filter(|c| !matches!(c, ';' | '{' | '}' | '<' | '>' | '\\' | '"' | '\''))
+        .collect();
+    // Block CSS function injection (url(), expression(), etc.)
+    let lower = stripped.to_lowercase();
+    if lower.contains("url(") || lower.contains("expression(") || lower.contains("javascript:") {
+        return String::new();
+    }
+    stripped
 }
 
 fn render_block(block: &Block) -> String {
@@ -3479,5 +3498,43 @@ About
         let html = to_html(&doc);
         assert!(html.contains("alt=\"First\""), "Gallery item with alt should render it");
         assert!(html.contains("alt=\"\""), "Gallery item without alt should render empty");
+    }
+
+    #[test]
+    fn css_accent_sanitizes_semicolon_injection() {
+        use super::sanitize_css_value;
+        // Semicolons and braces are stripped — can't break out of CSS value
+        let result = sanitize_css_value("red; } body { background: red");
+        assert!(!result.contains(';'), "Semicolons should be stripped");
+        assert!(!result.contains('{'), "Open braces should be stripped");
+        assert!(!result.contains('}'), "Close braces should be stripped");
+        assert!(!result.is_empty(), "Non-dangerous text should remain");
+    }
+
+    #[test]
+    fn css_accent_sanitizes_url_injection() {
+        let doc = doc_with(vec![Block::Style {
+            properties: vec![StyleProperty {
+                key: "accent".into(),
+                value: "url(https://evil.com/track)".into(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // url() function calls are blocked entirely (returns empty → no accent set)
+        assert!(!html.contains("--accent:"), "url() injection should prevent accent from being set");
+    }
+
+    #[test]
+    fn css_accent_allows_valid_colors() {
+        let doc = doc_with(vec![Block::Style {
+            properties: vec![StyleProperty {
+                key: "accent".into(),
+                value: "#0052CC".into(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("--accent: #0052CC"), "Valid hex color should pass through");
     }
 }
