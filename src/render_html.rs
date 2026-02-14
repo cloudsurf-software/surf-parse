@@ -647,6 +647,41 @@ a.surfdoc-cta-secondary:hover { background: var(--bg-hover); color: var(--accent
 @media (max-width: 640px) {
     .surfdoc-footer-sections { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Details/collapsible blocks */
+.surfdoc-details { margin: 1rem 0; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; }
+.surfdoc-details summary { padding: 0.75rem 1rem; font-weight: 600; cursor: pointer; background: var(--bg-card); color: var(--text); font-size: 0.95rem; }
+.surfdoc-details summary:hover { background: var(--bg-hover); }
+.surfdoc-details-content { padding: 0.75rem 1rem; border-top: 1px solid var(--border-subtle); }
+
+/* Divider blocks */
+.surfdoc-divider { display: flex; align-items: center; gap: 1rem; margin: 2rem 0; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.surfdoc-divider::before, .surfdoc-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border-subtle); }
+.surfdoc-divider-plain { border: none; border-top: 1px solid var(--border-subtle); margin: 2rem 0; }
+
+/* Light mode overrides */
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #ffffff;
+        --bg-card: #f8f9fa;
+        --bg-hover: #f0f1f3;
+        --border: #d0d5dd;
+        --border-subtle: #e4e7ec;
+        --text: #1a1a2e;
+        --text-dim: #4a4a68;
+        --text-muted: #8888a0;
+        --accent: #2563eb;
+        --bg-alt: #f0f4f8;
+    }
+    body { background: var(--bg); color: var(--text); }
+    .surfdoc strong { color: #111; }
+    .surfdoc pre { background: #f6f8fa !important; border-color: var(--border-subtle); }
+    .surfdoc pre code { color: #24292e; }
+    .surfdoc code { background: rgba(0,0,0,0.04); }
+    .surfdoc-metric .value { color: #111; }
+    .surfdoc-nav { background: var(--bg-card); }
+    .surfdoc-footer { background: var(--bg-card); }
+}
 "#;
 
 /// Escape HTML special characters to prevent XSS.
@@ -1258,6 +1293,36 @@ fn render_block(block: &Block) -> String {
             html
         }
 
+        Block::Details {
+            title,
+            open,
+            content,
+            ..
+        } => {
+            let open_attr = if *open { " open" } else { "" };
+            let summary = title.as_deref().unwrap_or("Details");
+            format!(
+                "<details class=\"surfdoc-details\"{open_attr}>\
+                 <summary>{}</summary>\
+                 <div class=\"surfdoc-details-content\">{}</div>\
+                 </details>",
+                escape_html(summary),
+                render_markdown(content),
+            )
+        }
+
+        Block::Divider { label, .. } => {
+            match label {
+                Some(text) => format!(
+                    "<div class=\"surfdoc-divider\" role=\"separator\">\
+                     <span>{}</span>\
+                     </div>",
+                    escape_html(text)
+                ),
+                None => "<hr class=\"surfdoc-divider-plain\" />".to_string(),
+            }
+        }
+
         Block::Unknown {
             name, content, ..
         } => {
@@ -1321,6 +1386,38 @@ pub struct PageEntry {
     pub title: Option<String>,
     pub sidebar: bool,
     pub children: Vec<Block>,
+}
+
+impl PageEntry {
+    /// Returns the human-readable display title for this page.
+    ///
+    /// If the page has an explicit `title`, returns that. Otherwise, converts
+    /// the route to a readable label using [`humanize_route`].
+    pub fn display_title(&self) -> String {
+        self.title
+            .clone()
+            .unwrap_or_else(|| humanize_route(&self.route))
+    }
+}
+
+/// Convert a route path to a human-readable nav label.
+///
+/// `"/"` → `"Home"`, `"/gallery"` → `"Gallery"`, `"/about-us"` → `"About Us"`.
+pub fn humanize_route(route: &str) -> String {
+    let r = route.trim_matches('/');
+    if r.is_empty() {
+        return "Home".to_string();
+    }
+    r.split('-')
+        .map(|word| {
+            let mut c = word.chars();
+            match c.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Extract site config and page list from a parsed SurfDoc.
@@ -1432,11 +1529,11 @@ pub fn render_site_page(
         .as_deref()
         .unwrap_or("SurfDoc Site");
 
-    // Title: page title > site name + route
+    // Title: page title > humanized route + site name
     let title = match &page.title {
         Some(t) => format!("{} — {}", t, site_name),
         None if page.route == "/" => site_name.to_string(),
-        None => format!("{} — {}", page.route.trim_start_matches('/'), site_name),
+        None => format!("{} — {}", humanize_route(&page.route), site_name),
     };
 
     let source_path = escape_html(&config.source_path);
@@ -3079,5 +3176,104 @@ mod tests {
         let html = to_html(&doc);
         assert!(!html.contains("<style>"),
             "no style tag when there are no CSS overrides");
+    }
+
+    // -- humanize_route() unit tests ----------------------------------------
+
+    #[test]
+    fn humanize_route_home() {
+        assert_eq!(humanize_route("/"), "Home");
+    }
+
+    #[test]
+    fn humanize_route_simple() {
+        assert_eq!(humanize_route("/gallery"), "Gallery");
+    }
+
+    #[test]
+    fn humanize_route_hyphenated() {
+        assert_eq!(humanize_route("/about-us"), "About Us");
+    }
+
+    #[test]
+    fn humanize_route_contact() {
+        assert_eq!(humanize_route("/contact"), "Contact");
+    }
+
+    #[test]
+    fn humanize_route_multi_hyphen() {
+        assert_eq!(humanize_route("/terms-of-service"), "Terms Of Service");
+    }
+
+    #[test]
+    fn humanize_route_no_leading_slash() {
+        assert_eq!(humanize_route("pricing"), "Pricing");
+    }
+
+    #[test]
+    fn humanize_route_trailing_slash() {
+        assert_eq!(humanize_route("/blog/"), "Blog");
+    }
+
+    #[test]
+    fn humanize_route_empty_string() {
+        assert_eq!(humanize_route(""), "Home");
+    }
+
+    // -- PageEntry::display_title() tests -----------------------------------
+
+    #[test]
+    fn display_title_uses_explicit_title() {
+        let page = PageEntry {
+            route: "/about".into(),
+            layout: None,
+            title: Some("About Our Team".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        assert_eq!(page.display_title(), "About Our Team");
+    }
+
+    #[test]
+    fn display_title_falls_back_to_humanized_route() {
+        let page = PageEntry {
+            route: "/about-us".into(),
+            layout: None,
+            title: None,
+            sidebar: false,
+            children: vec![],
+        };
+        assert_eq!(page.display_title(), "About Us");
+    }
+
+    #[test]
+    fn display_title_home_route() {
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: None,
+            sidebar: false,
+            children: vec![],
+        };
+        assert_eq!(page.display_title(), "Home");
+    }
+
+    // -- render_site_page title uses humanize_route -------------------------
+
+    #[test]
+    fn render_site_page_humanizes_untitled_page() {
+        let site = SiteConfig {
+            name: Some("My Site".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/about-us".into(),
+            layout: None,
+            title: None,
+            sidebar: false,
+            children: vec![],
+        };
+        let html = render_site_page(&page, &site, &[], &PageConfig::default());
+        assert!(html.contains("<title>About Us — My Site</title>"));
     }
 }
