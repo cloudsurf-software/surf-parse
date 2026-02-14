@@ -315,6 +315,18 @@ pub enum Block {
         social: Vec<SocialLink>,
         span: Span,
     },
+    /// Collapsible content section.
+    Details {
+        title: Option<String>,
+        open: bool,
+        content: String,
+        span: Span,
+    },
+    /// Labeled thematic break.
+    Divider {
+        label: Option<String>,
+        span: Span,
+    },
 }
 
 /// Callout/admonition type.

@@ -47,6 +47,8 @@ pub fn resolve_block(block: Block) -> Block {
         "form" => parse_form(attrs, content, *span),
         "gallery" => parse_gallery(content, *span),
         "footer" => parse_footer(content, *span),
+        "details" => parse_details(attrs, content, *span),
+        "divider" => parse_divider(attrs, *span),
         _ => block,
     }
 }
@@ -1015,6 +1017,22 @@ fn parse_footer(content: &str, span: Span) -> Block {
         social,
         span,
     }
+}
+
+fn parse_details(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let title = attr_string(attrs, "title");
+    let open = attr_bool(attrs, "open");
+    Block::Details {
+        title,
+        open,
+        content: content.to_string(),
+        span,
+    }
+}
+
+fn parse_divider(attrs: &Attrs, span: Span) -> Block {
+    let label = attr_string(attrs, "label");
+    Block::Divider { label, span }
 }
 
 /// Scan forward from `start` looking for a closing directive matching `open_depth`.

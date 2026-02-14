@@ -282,6 +282,9 @@ fn validate_block(block: &Block, diagnostics: &mut Vec<Diagnostic>) {
             }
         }
 
+        Block::Details { .. } => {}
+        Block::Divider { .. } => {}
+
         // Markdown, Tasks, Summary, Columns, Style, Site, Unknown — no required-field validation
         _ => {}
     }

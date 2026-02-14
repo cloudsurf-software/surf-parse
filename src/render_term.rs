@@ -394,6 +394,27 @@ fn render_block(block: &Block) -> String {
             format!("{header}{}", links.join(" | "))
         }
 
+        Block::Details {
+            title, content, open, ..
+        } => {
+            let state = if *open { "\u{25bc}" } else { "\u{25b6}" }; // ▼ or ▶
+            let heading = title.as_deref().unwrap_or("Details");
+            format!("{} {}\n{content}", state, heading.bold())
+        }
+
+        Block::Divider { label, .. } => {
+            let rule = "\u{2500}".repeat(40); // ─
+            match label {
+                Some(text) => format!(
+                    "{} {} {}",
+                    "\u{2500}".repeat(3).dimmed(),
+                    text.dimmed(),
+                    "\u{2500}".repeat(36usize.saturating_sub(text.len())).dimmed(),
+                ),
+                None => rule.dimmed().to_string(),
+            }
+        }
+
         Block::Unknown {
             name, content, ..
         } => {

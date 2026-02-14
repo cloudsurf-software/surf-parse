@@ -327,6 +327,20 @@ fn render_block(block: &Block) -> String {
             }
             lines.join("\n")
         }
+
+        Block::Details {
+            title, content, ..
+        } => {
+            let heading = title.as_deref().unwrap_or("Details");
+            format!("**{}**\n\n{}", heading, content)
+        }
+
+        Block::Divider { label, .. } => {
+            match label {
+                Some(text) => format!("--- {} ---", text),
+                None => "---".to_string(),
+            }
+        }
     }
 }
 
