@@ -3276,4 +3276,109 @@ mod tests {
         let html = render_site_page(&page, &site, &[], &PageConfig::default());
         assert!(html.contains("<title>About Us — My Site</title>"));
     }
+
+    // -- E2E: full parse → extract → render pipeline -----------------------
+
+    #[test]
+    fn e2e_multipage_site_nav_labels() {
+        let source = r#"::site
+name = "E2E Test"
+::
+
+::page[route="/"]
+# Home
+::
+
+::page[route="/gallery"]
+# Photos
+::
+
+::page[route="/about-us"]
+About our company
+::
+
+::page[route="/terms-of-service"]
+Legal text
+::"#;
+
+        let result = crate::parse(source);
+        let (site_config, pages, _) = extract_site(&result.doc);
+        let site = site_config.unwrap();
+
+        // Build nav items the way all consumers should
+        let nav_items: Vec<(String, String)> = pages
+            .iter()
+            .map(|p| (p.route.clone(), p.display_title()))
+            .collect();
+
+        assert_eq!(nav_items.len(), 4);
+        assert_eq!(nav_items[0], ("/".into(), "Home".into()));
+        assert_eq!(nav_items[1], ("/gallery".into(), "Gallery".into()));
+        assert_eq!(nav_items[2], ("/about-us".into(), "About Us".into()));
+        assert_eq!(nav_items[3], ("/terms-of-service".into(), "Terms Of Service".into()));
+
+        // Render home page and verify nav in HTML
+        let config = PageConfig::default();
+        let html = render_site_page(&pages[0], &site, &nav_items, &config);
+
+        assert!(html.contains(">Home</a>"));
+        assert!(html.contains(">Gallery</a>"));
+        assert!(html.contains(">About Us</a>"));
+        assert!(html.contains(">Terms Of Service</a>"));
+    }
+
+    #[test]
+    fn e2e_explicit_titles_not_overridden() {
+        let source = r#"::site
+name = "Title Test"
+::
+
+::page[route="/" title="Welcome"]
+# Welcome
+::
+
+::page[route="/team" title="Our Team"]
+# Team
+::"#;
+
+        let result = crate::parse(source);
+        let (_, pages, _) = extract_site(&result.doc);
+
+        let nav_items: Vec<(String, String)> = pages
+            .iter()
+            .map(|p| (p.route.clone(), p.display_title()))
+            .collect();
+
+        assert_eq!(nav_items[0].1, "Welcome");
+        assert_eq!(nav_items[1].1, "Our Team");
+    }
+
+    #[test]
+    fn e2e_all_consumers_get_same_nav() {
+        // Simulates the three consumer patterns:
+        // 1. Wavesite (publish/preview): pages.iter().map(|p| (p.route.clone(), p.display_title()))
+        // 2. Surf Browser: same pattern (after fix)
+        // 3. iOS: delegates to server's /api/preview which uses pattern 1
+
+        let source = r#"::site
+name = "Consistency"
+::
+
+::page[route="/"]
+Home
+::
+
+::page[route="/about-us"]
+About
+::"#;
+
+        let result = crate::parse(source);
+        let (_, pages, _) = extract_site(&result.doc);
+
+        // All consumers use display_title() — verify it's deterministic
+        for _ in 0..3 {
+            let labels: Vec<String> = pages.iter().map(|p| p.display_title()).collect();
+            assert_eq!(labels, vec!["Home", "About Us"]);
+        }
+    }
 }
