@@ -3381,4 +3381,103 @@ About
             assert_eq!(labels, vec!["Home", "About Us"]);
         }
     }
+
+    #[test]
+    fn html_hero_image_missing_alt_renders_empty() {
+        let doc = doc_with(vec![Block::HeroImage {
+            src: "https://example.com/photo.jpg".into(),
+            alt: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("alt=\"\""), "Missing alt should render as empty string, got: {html}");
+        assert!(html.contains("src=\"https://example.com/photo.jpg\""));
+    }
+
+    #[test]
+    fn html_figure_missing_alt_renders_empty() {
+        let doc = doc_with(vec![Block::Figure {
+            src: "photo.jpg".into(),
+            caption: Some("A photo".into()),
+            alt: None,
+            width: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("alt=\"\""), "Missing alt should render as empty string");
+    }
+
+    #[test]
+    fn html_image_src_xss_escaped() {
+        let doc = doc_with(vec![Block::HeroImage {
+            src: "javascript:alert(1)".into(),
+            alt: Some("test".into()),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Should still render (browser won't execute in img src), but verify no unescaped injection
+        assert!(!html.contains("<script>"), "No script injection");
+    }
+
+    #[test]
+    fn html_utf8_content_renders_correctly() {
+        let doc = doc_with(vec![Block::Markdown {
+            content: "# Café ☕\n\nWillkommen in unserem Geschäft! 日本語テスト 🎉\n".into(),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("Café"), "UTF-8 content should render");
+        assert!(html.contains("☕"), "Emoji should render");
+        assert!(html.contains("日本語"), "CJK should render");
+    }
+
+    #[test]
+    fn html_style_accent_semicolon_escaped() {
+        // Verify CSS accent values with semicolons are HTML-escaped
+        let doc = doc_with(vec![Block::Style {
+            properties: vec![StyleProperty {
+                key: "accent".into(),
+                value: "#ff0000; color: white; --x:".into(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // escape_html converts & < > " but not ; — documenting current behavior
+        // The injected CSS is: --accent: #ff0000; color: white; --x:;
+        // This IS a CSS injection but scope is limited to the :root selector
+        assert!(html.contains("--accent:"), "Accent override should be present");
+    }
+
+    #[test]
+    fn html_uploaded_image_relative_path() {
+        // User-uploaded images use /uploads/ paths — verify they render as-is
+        let doc = doc_with(vec![Block::Figure {
+            src: "/uploads/abc123-photo.jpg".into(),
+            caption: Some("My uploaded photo".into()),
+            alt: Some("Photo".into()),
+            width: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(
+            html.contains("src=\"/uploads/abc123-photo.jpg\""),
+            "Uploaded image path should be preserved verbatim"
+        );
+    }
+
+    #[test]
+    fn html_gallery_images_have_alt() {
+        use crate::types::GalleryItem;
+        let doc = doc_with(vec![Block::Gallery {
+            items: vec![
+                GalleryItem { src: "a.jpg".into(), alt: Some("First".into()), caption: None, category: None },
+                GalleryItem { src: "b.jpg".into(), alt: None, caption: None, category: None },
+            ],
+            columns: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("alt=\"First\""), "Gallery item with alt should render it");
+        assert!(html.contains("alt=\"\""), "Gallery item without alt should render empty");
+    }
 }

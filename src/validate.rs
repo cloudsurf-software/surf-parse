@@ -21,7 +21,32 @@ pub fn validate(doc: &SurfDoc) -> Vec<Diagnostic> {
         validate_block(block, &mut diagnostics);
     }
 
+    // Cross-block validation: duplicate page routes
+    validate_unique_page_routes(&doc.blocks, &mut diagnostics);
+
     diagnostics
+}
+
+/// Check for duplicate `::page[route=...]` values within a document.
+fn validate_unique_page_routes(blocks: &[Block], diagnostics: &mut Vec<Diagnostic>) {
+    let mut seen: Vec<(&str, &crate::types::Span)> = Vec::new();
+    for block in blocks {
+        if let Block::Page { route, span, .. } = block {
+            if let Some((_, first_span)) = seen.iter().find(|(r, _)| *r == route.as_str()) {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: format!(
+                        "Duplicate page route \"{}\": first defined at line {}",
+                        route, first_span.start_line
+                    ),
+                    span: Some(*span),
+                    code: Some("V141".into()),
+                });
+            } else {
+                seen.push((route.as_str(), span));
+            }
+        }
+    }
 }
 
 fn validate_front_matter(doc: &SurfDoc, diagnostics: &mut Vec<Diagnostic>) {
@@ -394,6 +419,102 @@ mod tests {
             .collect();
         assert_eq!(figure_diags.len(), 1);
         assert_eq!(figure_diags[0].severity, Severity::Error);
+    }
+
+    #[test]
+    fn validate_duplicate_page_routes() {
+        let doc = SurfDoc {
+            front_matter: Some(FrontMatter {
+                title: Some("Test".into()),
+                doc_type: Some(DocType::Doc),
+                ..FrontMatter::default()
+            }),
+            blocks: vec![
+                Block::Page {
+                    route: "/".into(),
+                    title: Some("Home v1".into()),
+                    layout: None,
+                    sidebar: false,
+                    content: String::new(),
+                    children: vec![],
+                    span: Span { start_line: 1, end_line: 3, start_offset: 0, end_offset: 30 },
+                },
+                Block::Page {
+                    route: "/about".into(),
+                    title: Some("About".into()),
+                    layout: None,
+                    sidebar: false,
+                    content: String::new(),
+                    children: vec![],
+                    span: Span { start_line: 4, end_line: 6, start_offset: 31, end_offset: 60 },
+                },
+                Block::Page {
+                    route: "/".into(),
+                    title: Some("Home v2".into()),
+                    layout: None,
+                    sidebar: false,
+                    content: String::new(),
+                    children: vec![],
+                    span: Span { start_line: 7, end_line: 9, start_offset: 61, end_offset: 90 },
+                },
+            ],
+            source: String::new(),
+        };
+        let diags = validate(&doc);
+        let dup_diags: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("V141"))
+            .collect();
+        assert_eq!(dup_diags.len(), 1, "Expected exactly 1 duplicate route diagnostic");
+        assert!(dup_diags[0].message.contains("/"), "Should mention the duplicate route");
+        assert_eq!(dup_diags[0].severity, Severity::Error);
+    }
+
+    #[test]
+    fn validate_unique_page_routes_no_false_positive() {
+        let doc = SurfDoc {
+            front_matter: Some(FrontMatter {
+                title: Some("Test".into()),
+                doc_type: Some(DocType::Doc),
+                ..FrontMatter::default()
+            }),
+            blocks: vec![
+                Block::Page {
+                    route: "/".into(),
+                    title: Some("Home".into()),
+                    layout: None,
+                    sidebar: false,
+                    content: String::new(),
+                    children: vec![],
+                    span: span(),
+                },
+                Block::Page {
+                    route: "/about".into(),
+                    title: Some("About".into()),
+                    layout: None,
+                    sidebar: false,
+                    content: String::new(),
+                    children: vec![],
+                    span: span(),
+                },
+                Block::Page {
+                    route: "/contact".into(),
+                    title: Some("Contact".into()),
+                    layout: None,
+                    sidebar: false,
+                    content: String::new(),
+                    children: vec![],
+                    span: span(),
+                },
+            ],
+            source: String::new(),
+        };
+        let diags = validate(&doc);
+        let dup_diags: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("V141"))
+            .collect();
+        assert!(dup_diags.is_empty(), "No duplicate route diagnostics expected");
     }
 
     #[test]

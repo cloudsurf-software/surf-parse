@@ -926,4 +926,79 @@ Body.
             result.doc.blocks
         );
     }
+
+    #[test]
+    fn parse_utf8_content_no_panic() {
+        // Regression: verify byte offset calculation handles multibyte UTF-8
+        let input = "# Café ☕\n\n::callout[type=info]\nBienvenue à notre café!\n::\n\n日本語テスト\n";
+        let result = parse(input);
+        assert!(result.diagnostics.is_empty(), "diagnostics: {:?}", result.diagnostics);
+        // Verify the markdown block captured the UTF-8 heading
+        let md = result.doc.blocks.iter().find(|b| matches!(b, Block::Markdown { .. }));
+        assert!(md.is_some(), "Expected markdown block with UTF-8 heading");
+        if let Some(Block::Markdown { content, .. }) = md {
+            assert!(content.contains("Café ☕"), "UTF-8 heading not captured");
+        }
+    }
+
+    #[test]
+    fn parse_utf8_in_block_directives() {
+        // Test non-ASCII in block attributes and content
+        let input = "::callout[type=info]\nDas ist ein Prüfung mit Ümlauten: äöüß\n::\n";
+        let result = parse(input);
+        assert!(result.diagnostics.is_empty(), "diagnostics: {:?}", result.diagnostics);
+        assert_eq!(result.doc.blocks.len(), 1);
+    }
+
+    #[test]
+    fn parse_utf8_in_page_routes_and_titles() {
+        let input = concat!(
+            "::site\nname = \"カフェ\"\n::\n",
+            "::page[route=\"/\" title=\"ホーム\"]\n# ホーム\n::\n",
+            "::page[route=\"/über-uns\"]\n# Über Uns\n::\n",
+        );
+        let result = parse(input);
+        let pages: Vec<_> = result
+            .doc
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                Block::Page { route, .. } => Some(route.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(pages, vec!["/", "/über-uns"]);
+    }
+
+    #[test]
+    fn parse_emoji_heavy_content() {
+        // Stress test: every line has multibyte chars
+        let input = "# 🚀 Launch Day\n\n::callout[type=tip]\n💡 Remember: 大事なこと\n::\n\n🎉 We did it! 🎊\n";
+        let result = parse(input);
+        assert!(result.diagnostics.is_empty(), "diagnostics: {:?}", result.diagnostics);
+        assert!(result.doc.blocks.len() >= 2, "Expected at least 2 blocks");
+    }
+
+    #[test]
+    fn parse_duplicate_page_routes() {
+        // Two pages with identical routes — second should still parse
+        // (validation should catch this, not the parser)
+        let input = concat!(
+            "::site\nname = \"Test\"\n::\n",
+            "::page[route=\"/\"]\n# Home v1\n::\n",
+            "::page[route=\"/\"]\n# Home v2\n::\n",
+        );
+        let result = parse(input);
+        let pages: Vec<_> = result
+            .doc
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                Block::Page { route, .. } => Some(route.as_str()),
+                _ => None,
+            })
+            .collect();
+        // Parser emits both — validation should flag the duplicate
+        assert_eq!(pages.len(), 2, "Parser should emit both duplicate pages");
+    }
 }
