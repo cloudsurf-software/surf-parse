@@ -25,12 +25,26 @@ pub mod render_md;
 pub mod render_pdf;
 #[cfg(feature = "terminal")]
 pub mod render_term;
+#[cfg(feature = "axum")]
+pub mod serve;
+pub mod template;
 pub mod types;
 pub mod validate;
+
+/// Unified CSS for app chrome and SurfDoc content rendering.
+///
+/// Contains theme variables, reset, navigation, buttons, cards, forms,
+/// and all 29 SurfDoc block type styles. Dark-first with light mode support
+/// via `data-theme="light"` or `prefers-color-scheme`.
+///
+/// Override `:root` variables (`--accent`, `--background`, `--surface`,
+/// `--font-heading`, `--font-body`) for site-level theming.
+pub const SURFDOC_CSS: &str = include_str!("../assets/surfdoc.css");
 
 pub use builder::SurfDocBuilder;
 pub use error::*;
 pub use parse::parse;
+pub use template::TemplateContext;
 pub use types::*;
 
 pub use render_html::{PageConfig, SiteConfig, PageEntry, extract_site, humanize_route, render_site_page};
@@ -52,6 +66,18 @@ impl SurfDoc {
     /// Render this document as a complete HTML page with SurfDoc discovery metadata.
     pub fn to_html_page(&self, config: &PageConfig) -> String {
         render_html::to_html_page(self, config)
+    }
+
+    /// Render this document as an HTML fragment with template variable interpolation.
+    pub fn to_html_with_context(&self, ctx: &TemplateContext) -> String {
+        let html = self.to_html();
+        ctx.resolve(&html)
+    }
+
+    /// Render this document as a complete HTML page with template variable interpolation.
+    pub fn to_html_page_with_context(&self, config: &PageConfig, ctx: &TemplateContext) -> String {
+        let html = self.to_html_page(config);
+        ctx.resolve(&html)
     }
 
     /// Render this document to PDF bytes using headless Chromium.

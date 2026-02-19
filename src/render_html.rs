@@ -365,327 +365,11 @@ pub fn to_html_page(doc: &SurfDoc, config: &PageConfig) -> String {
     )
 }
 
-/// Embedded CSS for standalone SurfDoc pages.
-///
-/// Dark theme ported from the CloudSurf strategy-web reference implementation.
-/// Covers base typography, markdown elements, and all SurfDoc block types.
-const SURFDOC_CSS: &str = r#"
-:root {
-    --bg: #0a0a0f;
-    --bg-card: #12121a;
-    --bg-hover: #1a1a26;
-    --border: #2a2a3a;
-    --border-subtle: #1e1e2e;
-    --text: #e8e8f0;
-    --text-dim: #8888a0;
-    --text-muted: #5a5a72;
-    --accent: #3b82f6;
-    --bg-alt: #161B22;
-    --font-heading: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
-    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
-}
+// SURFDOC_CSS is now a public constant in lib.rs via include_str!("../assets/surfdoc.css").
+// It's referenced here as crate::SURFDOC_CSS.
+use crate::SURFDOC_CSS;
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-/* Layout */
-.surfdoc { max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem 4rem; line-height: 1.7; }
-
-/* Navigation bar */
-.surfdoc-nav { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); position: sticky; top: 0; z-index: 100; width: 100vw; margin-left: calc(-50vw + 50%); margin-top: -2rem; margin-bottom: 1rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-.surfdoc-nav-logo { font-weight: 700; color: #fff; font-size: 1rem; margin-right: auto; white-space: nowrap; }
-.surfdoc-nav-links { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
-.surfdoc-nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.625rem; border-radius: 6px; transition: color 0.15s, background 0.15s; display: inline-flex; align-items: center; gap: 0.375rem; }
-.surfdoc-nav-links a:hover { color: var(--text); background: var(--bg-hover); text-decoration: none; }
-.surfdoc-nav-toggle { display: none; }
-.surfdoc-nav-hamburger { display: none; cursor: pointer; padding: 0.5rem; margin-left: auto; flex-direction: column; gap: 5px; }
-.surfdoc-nav-hamburger span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 1px; transition: transform 0.2s, opacity 0.2s; }
-@media (max-width: 640px) {
-    .surfdoc-nav-hamburger { display: flex; }
-    .surfdoc-nav-logo { margin-right: 0; }
-    .surfdoc-nav-links { display: none; flex-direction: column; align-items: stretch; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-subtle); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-    .surfdoc-nav-links a { padding: 0.625rem 0.75rem; font-size: 1rem; }
-    .surfdoc-nav-toggle:checked ~ .surfdoc-nav-links { display: flex; }
-    .surfdoc-nav-toggle:checked ~ .surfdoc-nav-hamburger span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
-    .surfdoc-nav-toggle:checked ~ .surfdoc-nav-hamburger span:nth-child(2) { opacity: 0; }
-    .surfdoc-nav-toggle:checked ~ .surfdoc-nav-hamburger span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
-}
-
-/* Inline icons */
-.surfdoc-icon { display: inline-flex; align-items: center; vertical-align: middle; line-height: 0; }
-.surfdoc-icon svg { width: 1em; height: 1em; }
-
-/* Sections — alternating backgrounds */
-.surfdoc-section { padding: 2rem 0; }
-.surfdoc-section-alt { background: var(--bg-alt, #161B22); width: 100vw; margin-left: calc(-50vw + 50%); padding: 2rem calc(50vw - 50%); }
-.surfdoc-section h2 { margin-top: 0; }
-
-/* Typography */
-.surfdoc h1, .surfdoc h2, .surfdoc h3, .surfdoc h4 { font-family: var(--font-heading); }
-.surfdoc h1 { font-size: 1.875rem; font-weight: 700; margin: 2rem 0 1rem; letter-spacing: -0.025em; }
-.surfdoc h2 { font-size: 1.5rem; font-weight: 600; margin: 1.75rem 0 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-subtle); }
-.surfdoc h3 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-.surfdoc h4 { font-size: 1.1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--text-dim); }
-.surfdoc p { margin: 0.75rem 0; }
-.surfdoc a { color: var(--accent); text-decoration: none; }
-.surfdoc a:hover { text-decoration: underline; }
-.surfdoc strong { font-weight: 600; color: #fff; }
-.surfdoc em { color: var(--text-dim); }
-.surfdoc ul, .surfdoc ol { margin: 0.5rem 0; padding-left: 1.5rem; }
-.surfdoc li { margin: 0.25rem 0; }
-.surfdoc li::marker { color: var(--text-muted); }
-.surfdoc blockquote { border-left: 3px solid var(--accent); padding: 0.5rem 1rem; margin: 1rem 0; background: rgba(59,130,246,0.05); border-radius: 0 6px 6px 0; }
-.surfdoc blockquote p { margin: 0.25rem 0; }
-.surfdoc code { font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace; font-size: 0.85em; background: rgba(255,255,255,0.06); padding: 0.15em 0.4em; border-radius: 4px; }
-.surfdoc pre { background: #0d1117 !important; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; }
-.surfdoc pre code { background: transparent; padding: 0; font-size: 0.8rem; line-height: 1.6; }
-.surfdoc table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
-.surfdoc th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border); font-weight: 600; color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
-.surfdoc td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
-.surfdoc tr:hover td { background: rgba(255,255,255,0.02); }
-.surfdoc hr { border: none; border-top: 1px solid var(--border-subtle); margin: 2rem 0; }
-.surfdoc img { max-width: 100%; border-radius: 8px; }
-
-/* Callout blocks */
-.surfdoc-callout { border-left: 3px solid; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; background: var(--bg-card); }
-.surfdoc-callout strong { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.surfdoc-callout p { margin: 0; }
-.surfdoc-callout-info { border-color: #3b82f6; }
-.surfdoc-callout-info strong { color: #3b82f6; }
-.surfdoc-callout-warning { border-color: #f59e0b; }
-.surfdoc-callout-warning strong { color: #f59e0b; }
-.surfdoc-callout-danger { border-color: #ef4444; }
-.surfdoc-callout-danger strong { color: #ef4444; }
-.surfdoc-callout-tip { border-color: #22c55e; }
-.surfdoc-callout-tip strong { color: #22c55e; }
-.surfdoc-callout-note { border-color: #06b6d4; }
-.surfdoc-callout-note strong { color: #06b6d4; }
-.surfdoc-callout-success { border-color: #22c55e; background: rgba(34,197,94,0.05); }
-.surfdoc-callout-success strong { color: #22c55e; }
-
-/* Data tables */
-.surfdoc-data { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; }
-.surfdoc-data thead { background: var(--bg-card); }
-.surfdoc-data th { text-align: left; padding: 0.625rem 0.75rem; font-weight: 600; color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid var(--border); }
-.surfdoc-data td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
-.surfdoc-data tr:hover td { background: rgba(255,255,255,0.02); }
-.surfdoc-data tr:last-child td { border-bottom: none; }
-
-/* Code blocks */
-.surfdoc-code { background: #0d1117; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8rem; line-height: 1.6; }
-.surfdoc-code code { background: transparent; padding: 0; font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace; }
-
-/* Task lists */
-.surfdoc-tasks { list-style: none; padding-left: 0; margin: 1rem 0; }
-.surfdoc-tasks li { display: flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.75rem; margin: 0.125rem 0; border-radius: 6px; font-size: 0.9rem; }
-.surfdoc-tasks li:hover { background: var(--bg-hover); }
-.surfdoc-tasks input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
-.surfdoc-tasks .assignee { color: var(--accent); font-size: 0.8rem; margin-left: auto; }
-
-/* Decision records */
-.surfdoc-decision { border-left: 3px solid; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; background: var(--bg-card); }
-.surfdoc-decision .status { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 0.5rem; }
-.surfdoc-decision .date { color: var(--text-muted); font-size: 0.8rem; }
-.surfdoc-decision p { margin: 0.5rem 0 0; }
-.surfdoc-decision-accepted { border-color: #22c55e; }
-.surfdoc-decision-accepted .status { background: rgba(34,197,94,0.15); color: #22c55e; }
-.surfdoc-decision-rejected { border-color: #ef4444; }
-.surfdoc-decision-rejected .status { background: rgba(239,68,68,0.15); color: #ef4444; }
-.surfdoc-decision-proposed { border-color: #f59e0b; }
-.surfdoc-decision-proposed .status { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.surfdoc-decision-superseded { border-color: var(--text-muted); }
-.surfdoc-decision-superseded .status { background: rgba(90,90,114,0.15); color: var(--text-muted); }
-
-/* Metric displays */
-.surfdoc-metric { display: inline-flex; align-items: baseline; gap: 0.5rem; padding: 0.625rem 1rem; margin: 0.5rem 0.5rem 0.5rem 0; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; }
-.surfdoc-metric .label { color: var(--text-dim); font-size: 0.8rem; font-weight: 500; }
-.surfdoc-metric .value { font-size: 1.25rem; font-weight: 700; color: #fff; }
-.surfdoc-metric .unit { color: var(--text-muted); font-size: 0.8rem; }
-.surfdoc-metric .trend { font-size: 1rem; }
-.surfdoc-metric .trend.up { color: #22c55e; }
-.surfdoc-metric .trend.down { color: #ef4444; }
-.surfdoc-metric .trend.flat { color: var(--text-muted); }
-
-/* Summary blocks */
-.surfdoc-summary { border-left: 3px solid var(--accent); padding: 0.75rem 1rem; margin: 1rem 0; background: rgba(59,130,246,0.04); border-radius: 0 8px 8px 0; font-style: italic; color: var(--text-dim); }
-.surfdoc-summary p { margin: 0; }
-
-/* Figure blocks */
-.surfdoc-figure { margin: 1.5rem 0; text-align: center; }
-.surfdoc-figure img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border-subtle); }
-.surfdoc-figure figcaption { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); font-style: italic; }
-
-/* Unknown blocks */
-.surfdoc-unknown { padding: 0.75rem 1rem; margin: 1rem 0; background: var(--bg-card); border: 1px dashed var(--border); border-radius: 8px; color: var(--text-dim); font-size: 0.875rem; }
-
-/* Tabs blocks */
-.surfdoc-tabs { margin: 1rem 0; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; }
-.surfdoc-tabs nav { display: flex; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); }
-.surfdoc-tabs nav button { padding: 0.5rem 1rem; background: none; border: none; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
-.surfdoc-tabs nav button:hover { color: var(--text); background: var(--bg-hover); }
-.surfdoc-tabs nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
-.surfdoc-tabs .tab-panel { padding: 1rem; display: none; }
-.surfdoc-tabs .tab-panel.active { display: block; }
-
-/* Columns layout */
-.surfdoc-columns { display: grid; gap: 1.5rem; margin: 1rem 0; }
-.surfdoc-columns[data-cols="2"] { grid-template-columns: repeat(2, 1fr); }
-.surfdoc-columns[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
-.surfdoc-columns[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
-.surfdoc-column { min-width: 0; }
-@media (max-width: 640px) {
-    .surfdoc-columns { grid-template-columns: 1fr !important; }
-}
-
-/* Quote blocks */
-.surfdoc-quote { border-left: 3px solid var(--text-muted); padding: 0.75rem 1.25rem; margin: 1.5rem 0; }
-.surfdoc-quote blockquote { border: none; padding: 0; margin: 0; background: none; font-size: 1.1rem; font-style: italic; color: var(--text-dim); line-height: 1.6; }
-.surfdoc-quote .attribution { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); font-style: normal; }
-.surfdoc-quote .attribution::before { content: "— "; }
-
-/* CTA buttons — use a.surfdoc-cta to beat .surfdoc a specificity */
-a.surfdoc-cta { display: inline-block; padding: 0.625rem 1.5rem; margin: 0.5rem 0.5rem 0.5rem 0; border-radius: 8px; font-weight: 600; font-size: 0.95rem; text-decoration: none; transition: all 0.15s; cursor: pointer; }
-a.surfdoc-cta-primary { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
-a.surfdoc-cta-primary:hover { background: #2563eb; color: #fff; text-decoration: none; }
-a.surfdoc-cta-secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
-a.surfdoc-cta-secondary:hover { background: var(--bg-hover); color: var(--accent); text-decoration: none; }
-
-/* Hero image */
-.surfdoc-hero-image { margin: 2rem 0; text-align: center; }
-.surfdoc-hero-image img { max-width: 100%; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); }
-
-/* Testimonials */
-.surfdoc-testimonial { padding: 1.25rem 1.5rem; margin: 1rem 0; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; position: relative; }
-.surfdoc-testimonial blockquote { border: none; background: none; padding: 0; margin: 0 0 0.75rem; font-size: 1rem; font-style: italic; color: var(--text-dim); line-height: 1.6; }
-.surfdoc-testimonial .author { font-weight: 600; color: var(--text); font-size: 0.9rem; }
-.surfdoc-testimonial .role { color: var(--text-muted); font-size: 0.8rem; }
-
-/* Style blocks — invisible, metadata only */
-.surfdoc-style { display: none; }
-
-/* FAQ accordion */
-.surfdoc-faq { margin: 1rem 0; }
-.surfdoc-faq details { border: 1px solid var(--border-subtle); border-radius: 8px; margin: 0.5rem 0; overflow: hidden; }
-.surfdoc-faq summary { padding: 0.75rem 1rem; font-weight: 600; cursor: pointer; background: var(--bg-card); color: var(--text); font-size: 0.95rem; }
-.surfdoc-faq summary:hover { background: var(--bg-hover); }
-.surfdoc-faq .faq-answer { padding: 0.75rem 1rem; color: var(--text-dim); line-height: 1.6; border-top: 1px solid var(--border-subtle); }
-
-/* Pricing table */
-.surfdoc-pricing { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; }
-.surfdoc-pricing thead { background: var(--bg-card); }
-.surfdoc-pricing th { text-align: center; padding: 0.75rem; font-weight: 600; color: var(--text); border-bottom: 2px solid var(--border); font-size: 0.95rem; }
-.surfdoc-pricing th:first-child { text-align: left; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
-.surfdoc-pricing td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); text-align: center; }
-.surfdoc-pricing td:first-child { text-align: left; font-weight: 500; color: var(--text-dim); }
-.surfdoc-pricing tr:hover td { background: rgba(255,255,255,0.02); }
-.surfdoc-pricing tr:last-child td { border-bottom: none; }
-
-/* Site config — invisible, metadata only */
-.surfdoc-site { display: none; }
-
-/* Page sections */
-.surfdoc-page { margin: 2rem 0; padding: 2rem 0; border-top: 2px solid var(--border-subtle); }
-.surfdoc-page:first-of-type { border-top: none; margin-top: 0; }
-.surfdoc-page[data-layout="hero"] { text-align: center; padding: 4rem 0; }
-.surfdoc-page[data-layout="hero"] h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-.surfdoc-page[data-layout="hero"] p { font-size: 1.15rem; color: var(--text-dim); max-width: 36rem; margin: 0 auto 1.5rem; }
-.surfdoc-page[data-layout="hero"] .surfdoc-cta { margin: 0.5rem; }
-.surfdoc-page[data-layout="cards"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
-.surfdoc-page[data-layout="split"] { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: center; }
-@media (max-width: 640px) {
-    .surfdoc-page[data-layout="split"] { grid-template-columns: 1fr; }
-    .surfdoc-page[data-layout="hero"] h1 { font-size: 1.75rem; }
-}
-
-/* Embed blocks */
-.surfdoc-embed { margin: 1.5rem 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-subtle); }
-.surfdoc-embed iframe { display: block; width: 100%; border: none; }
-.surfdoc-embed-map { aspect-ratio: 16/9; }
-.surfdoc-embed-map iframe { height: 100%; }
-.surfdoc-embed-video { aspect-ratio: 16/9; }
-.surfdoc-embed-video iframe { height: 100%; }
-
-/* Form blocks */
-.surfdoc-form { margin: 1.5rem 0; padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; }
-.surfdoc-form-field { margin-bottom: 1rem; }
-.surfdoc-form-field label { display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-dim); margin-bottom: 0.375rem; }
-.surfdoc-form-field .required { color: #ef4444; }
-.surfdoc-form-field input, .surfdoc-form-field textarea, .surfdoc-form-field select { width: 100%; padding: 0.625rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9375rem; font-family: inherit; outline: none; transition: border-color 0.15s; }
-.surfdoc-form-field input:focus, .surfdoc-form-field textarea:focus, .surfdoc-form-field select:focus { border-color: var(--accent); }
-.surfdoc-form-field select { appearance: auto; }
-
-/* Gallery blocks */
-.surfdoc-gallery { margin: 1.5rem 0; }
-.surfdoc-gallery-filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.surfdoc-gallery-filters .filter-btn { padding: 0.375rem 0.875rem; border: 1px solid var(--border); background: transparent; color: var(--text-dim); border-radius: 20px; font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
-.surfdoc-gallery-filters .filter-btn:hover { color: var(--text); border-color: var(--text-muted); }
-.surfdoc-gallery-filters .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.surfdoc-gallery-grid { display: grid; gap: 1rem; }
-.surfdoc-gallery[data-cols="2"] .surfdoc-gallery-grid { grid-template-columns: repeat(2, 1fr); }
-.surfdoc-gallery[data-cols="3"] .surfdoc-gallery-grid { grid-template-columns: repeat(3, 1fr); }
-.surfdoc-gallery[data-cols="4"] .surfdoc-gallery-grid { grid-template-columns: repeat(4, 1fr); }
-.surfdoc-gallery-item { margin: 0; overflow: hidden; border-radius: 8px; border: 1px solid var(--border-subtle); }
-.surfdoc-gallery-item img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; transition: transform 0.2s; }
-.surfdoc-gallery-item:hover img { transform: scale(1.03); }
-.surfdoc-gallery-item figcaption { padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--text-dim); background: var(--bg-card); }
-@media (max-width: 640px) {
-    .surfdoc-gallery-grid { grid-template-columns: repeat(2, 1fr) !important; }
-}
-
-/* Footer blocks */
-.surfdoc-footer { margin-top: 3rem; padding: 2rem 0; border-top: 1px solid var(--border-subtle); width: 100vw; margin-left: calc(-50vw + 50%); padding-left: calc(50vw - 50%); padding-right: calc(50vw - 50%); background: var(--bg-card); }
-.surfdoc-footer-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 2rem; margin-bottom: 1.5rem; }
-.surfdoc-footer-col h4 { font-size: 0.8rem; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.75rem; }
-.surfdoc-footer-col ul { list-style: none; padding: 0; }
-.surfdoc-footer-col li { margin: 0.25rem 0; }
-.surfdoc-footer-col a { color: var(--text-dim); text-decoration: none; font-size: 0.875rem; transition: color 0.15s; }
-.surfdoc-footer-col a:hover { color: var(--text); text-decoration: none; }
-.surfdoc-footer-social { display: flex; gap: 1rem; margin-bottom: 1rem; }
-.surfdoc-footer-social .social-link { color: var(--text-dim); text-decoration: none; font-size: 0.875rem; text-transform: capitalize; transition: color 0.15s; }
-.surfdoc-footer-social .social-link:hover { color: var(--accent); }
-.surfdoc-footer-copyright { font-size: 0.8rem; color: var(--text-muted); }
-@media (max-width: 640px) {
-    .surfdoc-footer-sections { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* Details/collapsible blocks */
-.surfdoc-details { margin: 1rem 0; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; }
-.surfdoc-details summary { padding: 0.75rem 1rem; font-weight: 600; cursor: pointer; background: var(--bg-card); color: var(--text); font-size: 0.95rem; }
-.surfdoc-details summary:hover { background: var(--bg-hover); }
-.surfdoc-details-content { padding: 0.75rem 1rem; border-top: 1px solid var(--border-subtle); }
-
-/* Divider blocks */
-.surfdoc-divider { display: flex; align-items: center; gap: 1rem; margin: 2rem 0; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.surfdoc-divider::before, .surfdoc-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border-subtle); }
-.surfdoc-divider-plain { border: none; border-top: 1px solid var(--border-subtle); margin: 2rem 0; }
-
-/* Light mode overrides */
-@media (prefers-color-scheme: light) {
-    :root {
-        --bg: #ffffff;
-        --bg-card: #f8f9fa;
-        --bg-hover: #f0f1f3;
-        --border: #d0d5dd;
-        --border-subtle: #e4e7ec;
-        --text: #1a1a2e;
-        --text-dim: #4a4a68;
-        --text-muted: #8888a0;
-        --accent: #2563eb;
-        --bg-alt: #f0f4f8;
-    }
-    body { background: var(--bg); color: var(--text); }
-    .surfdoc strong { color: #111; }
-    .surfdoc pre { background: #f6f8fa !important; border-color: var(--border-subtle); }
-    .surfdoc pre code { color: #24292e; }
-    .surfdoc code { background: rgba(0,0,0,0.04); }
-    .surfdoc-metric .value { color: #111; }
-    .surfdoc-nav { background: var(--bg-card); }
-    .surfdoc-footer { background: var(--bg-card); }
-}
-"#;
+// The old inline CSS has been moved to assets/surfdoc.css and is loaded via include_str! in lib.rs.
 
 /// Escape HTML special characters to prevent XSS.
 fn escape_html(s: &str) -> String {
@@ -1498,14 +1182,14 @@ pub fn extract_site(doc: &SurfDoc) -> (Option<SiteConfig>, Vec<PageEntry>, Vec<B
     (site_config, pages, loose)
 }
 
-/// CSS for site-level navigation and footer.
+/// CSS for site-level navigation and footer (uses unified variable names).
 const SITE_NAV_CSS: &str = r#"
 /* Site navigation */
-.surfdoc-site-nav { display: flex; align-items: center; flex-wrap: wrap; padding: 0.75rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); max-width: 100%; position: sticky; top: 0; z-index: 100; }
+.surfdoc-site-nav { display: flex; align-items: center; flex-wrap: wrap; padding: 0.75rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--border); max-width: 100%; position: sticky; top: 0; z-index: 100; }
 .surfdoc-site-nav .site-name { font-weight: 700; color: #fff; font-size: 1rem; text-decoration: none; margin-right: auto; }
 .site-nav-links { display: flex; align-items: center; gap: 0.25rem; }
-.site-nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.625rem; border-radius: 6px; transition: color 0.15s, background 0.15s; }
-.site-nav-links a:hover { color: var(--text); background: var(--bg-hover); }
+.site-nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.625rem; border-radius: 6px; transition: color 0.15s, background 0.15s; }
+.site-nav-links a:hover { color: var(--text); background: var(--surface-hover); }
 .site-nav-links a.active { color: var(--accent); font-weight: 600; }
 .site-nav-toggle { display: none; }
 .site-nav-hamburger { display: none; cursor: pointer; padding: 0.5rem; margin-left: auto; flex-direction: column; gap: 5px; }
@@ -1522,7 +1206,7 @@ const SITE_NAV_CSS: &str = r#"
 }
 
 /* Site footer */
-.surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border-subtle); text-align: center; color: var(--text-muted); font-size: 0.8rem; }
+.surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-faint); font-size: 0.8rem; }
 "#;
 
 /// Render a full HTML page for one route within a multi-page site.
@@ -2916,7 +2600,7 @@ mod tests {
         let html = to_html_page(&doc, &config);
         // Must contain key CSS rules from SURFDOC_CSS
         assert!(html.contains("<style>"));
-        assert!(html.contains("--bg:"));
+        assert!(html.contains("--background:"));
         assert!(html.contains(".surfdoc {"));
         assert!(html.contains("a.surfdoc-cta-primary"));
     }

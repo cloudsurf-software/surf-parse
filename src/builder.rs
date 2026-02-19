@@ -1262,6 +1262,29 @@ fn serialize_block(block: &Block) -> String {
                 format!("::{name}{attrs_str}\n{content}\n::")
             }
         }
+
+        Block::Details { title, open, content, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(t) = title {
+                attrs_parts.push(format!("title=\"{}\"", escape_attr(t)));
+            }
+            if *open {
+                attrs_parts.push("open".to_string());
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            format!("::details{attrs_str}\n{content}\n::")
+        }
+
+        Block::Divider { label, .. } => {
+            match label {
+                Some(l) => format!("::divider[label=\"{}\"]", escape_attr(l)),
+                None => "::divider".to_string(),
+            }
+        }
     }
 }
 
