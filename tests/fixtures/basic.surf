@@ -1,0 +1,182 @@
+---
+title: "Basic SurfDoc Test"
+type: doc
+status: active
+tags: [test, parser, surfdoc]
+created: "2026-02-10"
+author: "Test Suite"
+---
+
+# Introduction
+
+This document exercises all 8 SurfDoc block types alongside normal markdown content.
+
+::callout[type=warning]
+This is a warning callout to test the callout block type.
+Pay attention to this message.
+::
+
+## Data Section
+
+::data[format=csv]
+Product, Revenue, Growth
+TaskSurf, $2K, 15%
+Wavesite, $500, 8%
+NoteSurf, $0, N/A
+::
+
+Here is some markdown between blocks with **bold** and *italic* text.
+
+::code[lang=rust]
+fn main() {
+    println!("Hello, SurfDoc!");
+}
+::
+
+## Task Tracking
+
+::tasks
+- [x] Implement parser
+- [x] Add block resolution
+- [ ] Write integration tests
+- [ ] Ship v1.0 @brady
+::
+
+## Architecture Decision
+
+::decision[status=accepted date="2026-02-10"]
+We chose Rust for the surf-parse crate due to its strong type system,
+zero-cost abstractions, and excellent error handling.
+::
+
+## Key Metrics
+
+::metric[label="Parse Speed" value="<1ms" trend=up unit="per file"]
+::
+
+## Executive Summary
+
+::summary
+The SurfDoc format provides a markdown superset with typed block directives,
+enabling structured documents that degrade gracefully to plain markdown.
+::
+
+## Architecture Diagram
+
+::figure[src="architecture.png" caption="System Architecture" alt="SurfDoc architecture diagram"]
+::
+
+## Multi-Column Layout
+
+::columns
+:::column
+**Left Column**
+
+This is the left column with its own content.
+:::
+:::column
+**Right Column**
+
+This is the right column with different content.
+:::
+::
+
+## Tabbed Content
+
+::tabs
+## Overview
+This tab contains the overview information.
+
+## Details
+This tab has detailed technical information about the implementation.
+
+## FAQ
+Frequently asked questions go here.
+::
+
+## Notable Quote
+
+::quote[by="Alan Kay" cite="ACM Conference 1971"]
+The best way to predict the future is to invent it.
+::
+
+## Call to Action
+
+::cta[label="Get Started" href="/signup" primary]
+::
+
+::cta[label="Learn More" href="https://docs.example.com"]
+::
+
+## Hero Visual
+
+::hero-image[src="assets/screenshot.png" alt="Product screenshot"]
+::
+
+## What Users Say
+
+::testimonial[author="Jane Dev" role="Engineer" company="Acme Corp"]
+This tool replaced 3 others for me. Incredible developer experience.
+::
+
+::testimonial[author="Bob Builder"]
+Simple, fast, and it just works.
+::
+
+## Custom Styling
+
+::style
+hero-bg: gradient indigo
+card-radius: lg
+accent: #6366f1
+max-width: 1200px
+::
+
+## Frequently Asked Questions
+
+::faq
+### Is my data encrypted?
+Yes — AES-256 at rest, TLS in transit.
+
+### Can I self-host?
+Yes. Docker image available.
+
+### What about team pricing?
+See the pricing table below.
+::
+
+## Pricing
+
+::pricing-table
+| | Free | Pro | Team |
+|---|---|---|---|
+| Price | $0 | $4.99/mo | $8.99/seat/mo |
+| Notes | Unlimited | Unlimited | Unlimited |
+| Sync | Local only | Cloud | Team |
+::
+
+## Site Configuration
+
+::site[domain="example.com"]
+name: Example App
+tagline: Build something amazing
+theme: dark
+accent: #6366f1
+font: inter
+::
+
+## Home Page
+
+::page[route="/" layout="hero"]
+# Build Something Amazing
+
+The fastest way to ship your next product.
+
+::cta[label="Get Started" href="/signup" primary]
+::cta[label="Learn More" href="/docs"]
+::hero-image[src="assets/screenshot.png" alt="Product screenshot"]
+::
+
+## Conclusion
+
+This completes the basic fixture covering all 19 block types plus front matter and markdown.

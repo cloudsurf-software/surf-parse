@@ -507,3 +507,14 @@ pub struct Span {
     /// 0-based byte offset past the last character.
     pub end_offset: usize,
 }
+
+impl Span {
+    /// A zero-valued span for programmatically constructed blocks that have no
+    /// source location.
+    pub const SYNTHETIC: Span = Span {
+        start_line: 0,
+        end_line: 0,
+        start_offset: 0,
+        end_offset: 0,
+    };
+}

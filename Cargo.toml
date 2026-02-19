@@ -1,6 +1,6 @@
 [package]
 name = "surf-parse"
-version = "0.3.0"
+version = "0.3.2"
 edition = "2024"
 license = "MIT"
 description = "Parser for the SurfDoc format — markdown superset with typed block directives"
@@ -13,16 +13,21 @@ readme = "README.md"
 [features]
 default = ["terminal"]
 terminal = ["colored"]
+pdf = ["chromiumoxide", "tokio", "futures"]
 
 [dependencies]
+chromiumoxide = { version = "0.8", optional = true, default-features = false, features = ["tokio-runtime"] }
 colored = { version = "3", optional = true }
+futures = { version = "0.3", optional = true }
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 thiserror = "2"
+tokio = { version = "1", optional = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
 proptest = "1"
 toml = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

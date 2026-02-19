@@ -3,7 +3,7 @@
 use surf_parse::{Block, Severity};
 
 fn fixtures_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
 fn read_fixture(name: &str) -> String {
