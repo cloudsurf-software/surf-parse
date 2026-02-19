@@ -1538,6 +1538,102 @@ a.surfdoc-cta-secondary:hover { background: var(--surface-hover); color: var(--a
 .surfdoc-divider-plain { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 
 
+/* ============================================================
+   50. SURFDOC HERO
+   ============================================================ */
+
+.surfdoc-hero { margin: 2rem 0; padding: 3rem 0; text-align: center; }
+.surfdoc-hero-left { text-align: left; }
+.surfdoc-hero-inner { max-width: 640px; margin: 0 auto; }
+.surfdoc-hero-left .surfdoc-hero-inner { margin: 0; max-width: none; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+.surfdoc-hero-badge { display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border); background: var(--surface); border-radius: 9999px; padding: 0.25rem 0.75rem; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 1.5rem; }
+.surfdoc-hero-headline { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700; color: var(--text); line-height: 1.1; margin: 0 0 1rem; }
+.surfdoc-hero-subtitle { font-size: 1.125rem; color: var(--text-muted); line-height: 1.6; margin: 0 0 2rem; max-width: 520px; }
+.surfdoc-hero:not(.surfdoc-hero-left) .surfdoc-hero-subtitle { margin-left: auto; margin-right: auto; }
+.surfdoc-hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.surfdoc-hero:not(.surfdoc-hero-left) .surfdoc-hero-actions { justify-content: center; }
+.surfdoc-hero-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 0.9rem; font-weight: 500; text-decoration: none; transition: all 0.15s; min-height: 44px; }
+.surfdoc-hero-btn-primary { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+.surfdoc-hero-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.surfdoc-hero-btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.surfdoc-hero-btn-secondary:hover { border-color: var(--text-faint); background: var(--surface); }
+.surfdoc-hero-image-side { display: flex; align-items: center; justify-content: center; }
+.surfdoc-hero-image-side img { max-width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+
+/* ============================================================
+   51. SURFDOC FEATURES
+   ============================================================ */
+
+.surfdoc-features { display: grid; gap: 1.5rem; margin: 2rem 0; }
+.surfdoc-features[data-cols="2"] { grid-template-columns: repeat(2, 1fr); }
+.surfdoc-features[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
+.surfdoc-features[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
+.surfdoc-features:not([data-cols]) { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.surfdoc-feature-card { padding: 1.5rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); transition: border-color 0.15s, transform 0.15s; }
+.surfdoc-feature-card:hover { border-color: var(--text-faint); transform: translateY(-2px); }
+.surfdoc-feature-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 8px; background: rgba(59, 130, 246, 0.1); color: var(--accent); font-size: 1rem; margin-bottom: 0.75rem; }
+.surfdoc-feature-title { font-size: 1rem; font-weight: 600; color: var(--text); margin: 0 0 0.5rem; }
+.surfdoc-feature-body { font-size: 0.875rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+.surfdoc-feature-link { display: inline-block; margin-top: 0.75rem; font-size: 0.875rem; color: var(--accent); text-decoration: none; font-weight: 500; }
+.surfdoc-feature-link:hover { text-decoration: underline; }
+
+/* ============================================================
+   52. SURFDOC STEPS
+   ============================================================ */
+
+.surfdoc-steps { list-style: none; padding: 0; margin: 2rem 0; counter-reset: none; }
+.surfdoc-step { display: flex; gap: 1rem; padding: 1.25rem 0; border-bottom: 1px solid var(--border); }
+.surfdoc-step:last-child { border-bottom: none; }
+.surfdoc-step-number { display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 9999px; background: rgba(59, 130, 246, 0.1); color: var(--accent); font-size: 0.8rem; font-weight: 700; font-family: var(--font-mono); flex-shrink: 0; margin-top: 0.125rem; }
+.surfdoc-step-content { flex: 1; min-width: 0; }
+.surfdoc-step-title { font-size: 1rem; font-weight: 600; color: var(--text); margin: 0 0 0.25rem; display: flex; align-items: center; gap: 0.75rem; }
+.surfdoc-step-time { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
+.surfdoc-step-body { font-size: 0.875rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+/* ============================================================
+   53. SURFDOC STATS
+   ============================================================ */
+
+.surfdoc-stats { display: flex; flex-wrap: wrap; gap: 1rem; margin: 2rem 0; }
+.surfdoc-stat { flex: 1; min-width: 120px; text-align: center; padding: 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.surfdoc-stat-value { display: block; font-size: 1.75rem; font-weight: 700; color: var(--text); line-height: 1.2; }
+.surfdoc-stat-label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.25rem; }
+
+/* ============================================================
+   54. SURFDOC COMPARISON
+   ============================================================ */
+
+.surfdoc-comparison { width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.875rem; }
+.surfdoc-comparison thead tr { background: var(--surface); border-bottom: 1px solid var(--border); }
+.surfdoc-comparison th { text-align: center; padding: 0.625rem 1rem; font-weight: 500; color: var(--text); }
+.surfdoc-comparison th:first-child { text-align: left; }
+.surfdoc-comparison td { text-align: center; padding: 0.5rem 1rem; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.surfdoc-comparison td:first-child { text-align: left; font-weight: 500; color: var(--text); }
+.surfdoc-comparison tbody tr:last-child td { border-bottom: none; }
+.surfdoc-comparison-highlight { background: rgba(59, 130, 246, 0.06); }
+.surfdoc-comparison th.surfdoc-comparison-highlight { color: var(--accent); font-weight: 700; }
+.surfdoc-check { color: #22c55e; font-weight: 700; font-size: 1rem; }
+.surfdoc-dash { color: var(--text-faint); font-size: 1rem; }
+
+/* ============================================================
+   55. SURFDOC LOGO
+   ============================================================ */
+
+.surfdoc-logo { margin: 2rem 0; text-align: center; }
+.surfdoc-logo img { display: inline-block; }
+
+/* ============================================================
+   56. SURFDOC TOC
+   ============================================================ */
+
+.surfdoc-toc { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.surfdoc-toc ul { list-style: none; padding: 0; margin: 0; border-left: 1px solid var(--border); }
+.surfdoc-toc-item { margin: 0; }
+.surfdoc-toc-item a { display: block; padding: 0.25rem 0 0.25rem 0.75rem; margin-left: -1px; border-left: 1px solid transparent; color: var(--text-muted); text-decoration: none; font-size: 0.875rem; transition: color 0.15s, border-color 0.15s; }
+.surfdoc-toc-item a:hover { color: var(--text); border-left-color: var(--border); }
+.surfdoc-toc-l2 a { padding-left: 0.75rem; }
+.surfdoc-toc-l3 a { padding-left: 1.5rem; }
+
 /* ================================================================
    ================================================================
    LIGHT MODE — SURFDOC CONTENT OVERRIDES
@@ -1661,6 +1757,22 @@ a.surfdoc-cta-secondary:hover { background: var(--surface-hover); color: var(--a
 
     /* SurfDoc footer */
     .surfdoc-footer-sections { grid-template-columns: repeat(2, 1fr); }
+
+    /* SurfDoc hero */
+    .surfdoc-hero-left .surfdoc-hero-inner { grid-template-columns: 1fr; }
+    .surfdoc-hero-image-side { display: none; }
+    .surfdoc-hero-headline { font-size: 2rem; }
+
+    /* SurfDoc features */
+    .surfdoc-features { grid-template-columns: 1fr !important; }
+
+    /* SurfDoc stats */
+    .surfdoc-stats { flex-direction: column; }
+    .surfdoc-stat { min-width: 0; }
+
+    /* SurfDoc comparison */
+    .surfdoc-comparison { font-size: 0.8rem; }
+    .surfdoc-comparison th, .surfdoc-comparison td { padding: 0.375rem 0.5rem; }
 }
 
 /* ============================================================

@@ -109,25 +109,22 @@ fn apply_style_overrides(properties: &[StyleProperty], css_overrides: &mut Strin
                 if let Some(preset) = resolve_font_preset(&prop.value) {
                     css_overrides.push_str(&format!("--font-heading: {};", preset.stack));
                     css_overrides.push_str(&format!("--font-body: {};", preset.stack));
-                    if let Some(url) = preset.import {
-                        if !imports.contains(&url) { imports.push(url); }
-                    }
+                    if let Some(url) = preset.import
+                        && !imports.contains(&url) { imports.push(url); }
                 }
             }
             "heading-font" => {
                 if let Some(preset) = resolve_font_preset(&prop.value) {
                     css_overrides.push_str(&format!("--font-heading: {};", preset.stack));
-                    if let Some(url) = preset.import {
-                        if !imports.contains(&url) { imports.push(url); }
-                    }
+                    if let Some(url) = preset.import
+                        && !imports.contains(&url) { imports.push(url); }
                 }
             }
             "body-font" => {
                 if let Some(preset) = resolve_font_preset(&prop.value) {
                     css_overrides.push_str(&format!("--font-body: {};", preset.stack));
-                    if let Some(url) = preset.import {
-                        if !imports.contains(&url) { imports.push(url); }
-                    }
+                    if let Some(url) = preset.import
+                        && !imports.contains(&url) { imports.push(url); }
                 }
             }
             _ => {}
@@ -1026,6 +1023,288 @@ fn render_block(block: &Block) -> String {
             }
         }
 
+        Block::Hero {
+            headline,
+            subtitle,
+            badge,
+            align,
+            image,
+            buttons,
+            content: _,
+            ..
+        } => {
+            let align_cls = if align == "left" { " surfdoc-hero-left" } else { "" };
+            let mut parts = Vec::new();
+            parts.push(format!("<section class=\"surfdoc-hero{}\">", align_cls));
+            parts.push("<div class=\"surfdoc-hero-inner\">".to_string());
+            if let Some(b) = badge {
+                parts.push(format!("<span class=\"surfdoc-hero-badge\">{}</span>", escape_html(b)));
+            }
+            if let Some(h) = headline {
+                parts.push(format!("<h1 class=\"surfdoc-hero-headline\">{}</h1>", escape_html(h)));
+            }
+            if let Some(s) = subtitle {
+                parts.push(format!("<p class=\"surfdoc-hero-subtitle\">{}</p>", escape_html(s)));
+            }
+            if !buttons.is_empty() {
+                parts.push("<div class=\"surfdoc-hero-actions\">".to_string());
+                for btn in buttons {
+                    let cls = if btn.primary { "surfdoc-hero-btn surfdoc-hero-btn-primary" } else { "surfdoc-hero-btn surfdoc-hero-btn-secondary" };
+                    parts.push(format!("<a href=\"{}\" class=\"{}\">{}</a>", escape_html(&btn.href), cls, escape_html(&btn.label)));
+                }
+                parts.push("</div>".to_string());
+            }
+            parts.push("</div>".to_string());
+            if let Some(img) = image {
+                parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"\"></div>", escape_html(img)));
+            }
+            parts.push("</section>".to_string());
+            parts.join("")
+        }
+
+        Block::Features { cards, cols, .. } => {
+            let col_attr = cols.map(|c| format!(" data-cols=\"{}\"", c)).unwrap_or_default();
+            let mut parts = Vec::new();
+            parts.push(format!("<div class=\"surfdoc-features\"{}>", col_attr));
+            for card in cards {
+                parts.push("<div class=\"surfdoc-feature-card\">".to_string());
+                if let Some(icon) = &card.icon {
+                    parts.push(format!("<span class=\"surfdoc-feature-icon\">{}</span>", escape_html(icon)));
+                }
+                parts.push(format!("<h3 class=\"surfdoc-feature-title\">{}</h3>", escape_html(&card.title)));
+                if !card.body.is_empty() {
+                    parts.push(format!("<p class=\"surfdoc-feature-body\">{}</p>", escape_html(&card.body)));
+                }
+                if let (Some(label), Some(href)) = (&card.link_label, &card.link_href) {
+                    parts.push(format!("<a href=\"{}\" class=\"surfdoc-feature-link\">{} \u{2192}</a>", escape_html(href), escape_html(label)));
+                }
+                parts.push("</div>".to_string());
+            }
+            parts.push("</div>".to_string());
+            parts.join("")
+        }
+
+        Block::Steps { steps, .. } => {
+            let mut parts = Vec::new();
+            parts.push("<ol class=\"surfdoc-steps\">".to_string());
+            for (i, step) in steps.iter().enumerate() {
+                parts.push("<li class=\"surfdoc-step\">".to_string());
+                parts.push(format!("<span class=\"surfdoc-step-number\">{}</span>", i + 1));
+                parts.push("<div class=\"surfdoc-step-content\">".to_string());
+                let time_html = step.time.as_ref().map(|t| format!("<span class=\"surfdoc-step-time\">{}</span>", escape_html(t))).unwrap_or_default();
+                parts.push(format!("<h3 class=\"surfdoc-step-title\">{}{}</h3>", escape_html(&step.title), time_html));
+                if !step.body.is_empty() {
+                    parts.push(format!("<p class=\"surfdoc-step-body\">{}</p>", escape_html(&step.body)));
+                }
+                parts.push("</div>".to_string());
+                parts.push("</li>".to_string());
+            }
+            parts.push("</ol>".to_string());
+            parts.join("")
+        }
+
+        Block::Stats { items, .. } => {
+            let mut parts = Vec::new();
+            parts.push("<div class=\"surfdoc-stats\">".to_string());
+            for item in items {
+                let style = item.color.as_ref().map(|c| format!(" style=\"color:{}\"", escape_html(c))).unwrap_or_default();
+                parts.push(format!(
+                    "<div class=\"surfdoc-stat\"><span class=\"surfdoc-stat-value\"{}>{}</span><span class=\"surfdoc-stat-label\">{}</span></div>",
+                    style, escape_html(&item.value), escape_html(&item.label)
+                ));
+            }
+            parts.push("</div>".to_string());
+            parts.join("")
+        }
+
+        Block::Comparison {
+            headers,
+            rows,
+            highlight,
+            ..
+        } => {
+            let mut parts = Vec::new();
+            parts.push("<table class=\"surfdoc-comparison\">".to_string());
+            parts.push("<thead><tr>".to_string());
+            for h in headers {
+                let cls = if highlight.as_deref() == Some(h.as_str()) { " class=\"surfdoc-comparison-highlight\"" } else { "" };
+                parts.push(format!("<th{}>{}</th>", cls, escape_html(h)));
+            }
+            parts.push("</tr></thead>".to_string());
+            parts.push("<tbody>".to_string());
+            for row in rows {
+                parts.push("<tr>".to_string());
+                for (i, cell) in row.iter().enumerate() {
+                    let cls = if headers.get(i).and_then(|h| highlight.as_ref().map(|hi| h == hi)).unwrap_or(false) {
+                        " class=\"surfdoc-comparison-highlight\""
+                    } else {
+                        ""
+                    };
+                    let rendered = comparison_cell(cell);
+                    parts.push(format!("<td{}>{}</td>", cls, rendered));
+                }
+                parts.push("</tr>".to_string());
+            }
+            parts.push("</tbody></table>".to_string());
+            parts.join("")
+        }
+
+        Block::Logo { src, alt, size, .. } => {
+            let alt_attr = alt.as_ref().map(|a| escape_html(a)).unwrap_or_default();
+            let style = size.map(|s| format!(" style=\"max-width:{}px\"", s)).unwrap_or_default();
+            format!(
+                "<div class=\"surfdoc-logo\"><img src=\"{}\" alt=\"{}\"{}></div>",
+                escape_html(src), alt_attr, style
+            )
+        }
+
+        Block::Toc { depth, entries, .. } => {
+            if entries.is_empty() {
+                format!("<nav class=\"surfdoc-toc\" data-depth=\"{}\"></nav>", depth)
+            } else {
+                let mut parts = Vec::new();
+                parts.push(format!("<nav class=\"surfdoc-toc\" data-depth=\"{}\"><ul>", depth));
+                for entry in entries {
+                    parts.push(format!(
+                        "<li class=\"surfdoc-toc-item surfdoc-toc-l{}\"><a href=\"#{}\">{}</a></li>",
+                        entry.level, escape_html(&entry.id), escape_html(&entry.text)
+                    ));
+                }
+                parts.push("</ul></nav>".to_string());
+                parts.join("")
+            }
+        }
+
+        Block::BeforeAfter {
+            before_items,
+            after_items,
+            transition,
+            ..
+        } => {
+            let mut parts = Vec::new();
+            parts.push("<div class=\"surfdoc-before-after\">".to_string());
+            parts.push("<div class=\"surfdoc-ba-before\">".to_string());
+            parts.push("<h3 class=\"surfdoc-ba-heading\">Before</h3>".to_string());
+            for item in before_items {
+                parts.push(format!(
+                    "<div class=\"surfdoc-ba-item\"><span class=\"surfdoc-ba-dot surfdoc-ba-dot-red\"></span><strong>{}</strong><span>{}</span></div>",
+                    escape_html(&item.label),
+                    escape_html(&item.detail)
+                ));
+            }
+            parts.push("</div>".to_string());
+            if let Some(t) = transition {
+                parts.push(format!(
+                    "<div class=\"surfdoc-ba-transition\"><span class=\"surfdoc-ba-line\"></span><span class=\"surfdoc-ba-label\">{}</span><span class=\"surfdoc-ba-line\"></span></div>",
+                    escape_html(t)
+                ));
+            }
+            parts.push("<div class=\"surfdoc-ba-after\">".to_string());
+            parts.push("<h3 class=\"surfdoc-ba-heading\">After</h3>".to_string());
+            for item in after_items {
+                parts.push(format!(
+                    "<div class=\"surfdoc-ba-item surfdoc-ba-item-green\"><span class=\"surfdoc-ba-dot surfdoc-ba-dot-green\"></span><strong>{}</strong><span>{}</span></div>",
+                    escape_html(&item.label),
+                    escape_html(&item.detail)
+                ));
+            }
+            parts.push("</div>".to_string());
+            parts.push("</div>".to_string());
+            parts.join("")
+        }
+
+        Block::Pipeline { steps, .. } => {
+            let mut parts = Vec::new();
+            parts.push("<div class=\"surfdoc-pipeline\">".to_string());
+            for (i, step) in steps.iter().enumerate() {
+                if i > 0 {
+                    parts.push("<span class=\"surfdoc-pipeline-arrow\">\u{2192}</span>".to_string());
+                }
+                parts.push("<div class=\"surfdoc-pipeline-step\">".to_string());
+                parts.push(format!("<strong class=\"surfdoc-pipeline-label\">{}</strong>", escape_html(&step.label)));
+                if let Some(desc) = &step.description {
+                    parts.push(format!("<span class=\"surfdoc-pipeline-desc\">{}</span>", escape_html(desc)));
+                }
+                parts.push("</div>".to_string());
+            }
+            parts.push("</div>".to_string());
+            parts.join("")
+        }
+
+        Block::Section {
+            bg,
+            headline,
+            subtitle,
+            children,
+            ..
+        } => {
+            let bg_cls = bg.as_ref().map(|b| format!(" section-{}", escape_html(b))).unwrap_or_default();
+            let mut html = format!("<section class=\"surfdoc-section{bg_cls}\">");
+            html.push_str("<div class=\"surfdoc-section-inner\">");
+            if headline.is_some() || subtitle.is_some() {
+                html.push_str("<div class=\"surfdoc-section-header\">");
+                if let Some(h) = headline {
+                    html.push_str(&format!("<h2>{}</h2>", escape_html(h)));
+                }
+                if let Some(s) = subtitle {
+                    html.push_str(&format!("<p>{}</p>", escape_html(s)));
+                }
+                html.push_str("</div>");
+            }
+            for child in children {
+                html.push_str(&render_block(child));
+            }
+            html.push_str("</div>");
+            html.push_str("</section>");
+            html
+        }
+
+        Block::ProductCard {
+            title,
+            subtitle,
+            badge,
+            badge_color,
+            body,
+            features,
+            cta_label,
+            cta_href,
+            ..
+        } => {
+            let mut parts = Vec::new();
+            parts.push("<div class=\"surfdoc-product-card\">".to_string());
+            parts.push("<div class=\"surfdoc-product-header\">".to_string());
+            parts.push("<div class=\"surfdoc-product-titles\">".to_string());
+            parts.push(format!("<h3 class=\"surfdoc-product-title\">{}</h3>", escape_html(title)));
+            if let Some(s) = subtitle {
+                parts.push(format!("<p class=\"surfdoc-product-subtitle\">{}</p>", escape_html(s)));
+            }
+            parts.push("</div>".to_string());
+            if let Some(b) = badge {
+                let color_cls = badge_color.as_ref().map(|c| format!(" surfdoc-badge-{}", escape_html(c))).unwrap_or_default();
+                parts.push(format!("<span class=\"surfdoc-badge{color_cls}\">{}</span>", escape_html(b)));
+            }
+            parts.push("</div>".to_string());
+            if !body.is_empty() {
+                parts.push(format!("<div class=\"surfdoc-product-body\">{}</div>", render_markdown(body)));
+            }
+            if !features.is_empty() {
+                parts.push("<ul class=\"surfdoc-product-features\">".to_string());
+                for f in features {
+                    parts.push(format!("<li>{}</li>", escape_html(f)));
+                }
+                parts.push("</ul>".to_string());
+            }
+            if let (Some(label), Some(href)) = (cta_label, cta_href) {
+                parts.push(format!(
+                    "<a href=\"{}\" class=\"surfdoc-product-cta\">{}</a>",
+                    escape_html(href),
+                    escape_html(label)
+                ));
+            }
+            parts.push("</div>".to_string());
+            parts.join("")
+        }
+
         Block::Unknown {
             name, content, ..
         } => {
@@ -1035,6 +1314,15 @@ fn render_block(block: &Block) -> String {
                 escape_html(content),
             )
         }
+    }
+}
+
+/// Render a comparison cell value: "yes"/"true"/"✓" → green check, "no"/"false"/"✗"/"-" → muted dash, else literal.
+fn comparison_cell(cell: &str) -> String {
+    match cell.trim().to_lowercase().as_str() {
+        "yes" | "true" | "✓" | "✔" => "<span class=\"surfdoc-check\">\u{2713}</span>".to_string(),
+        "no" | "false" | "✗" | "✘" | "-" | "—" => "<span class=\"surfdoc-dash\">\u{2014}</span>".to_string(),
+        _ => escape_html(cell),
     }
 }
 
@@ -1259,7 +1547,7 @@ pub fn render_site_page(
             if active.is_empty() {
                 String::new()
             } else {
-                format!(" class=\"active\"")
+                " class=\"active\"".to_string()
             },
             escape_html(nav_title),
         ));

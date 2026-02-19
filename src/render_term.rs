@@ -449,7 +449,7 @@ fn render_block(block: &Block) -> String {
         }
 
         Block::Footer { sections, copyright, .. } => {
-            let mut lines = vec!["─".repeat(40).dimmed().to_string()];
+            let mut lines = vec!["\u{2500}".repeat(40).dimmed().to_string()];
             for section in sections {
                 lines.push(format!("{}", section.heading.bold()));
                 for link in &section.links {
@@ -458,6 +458,155 @@ fn render_block(block: &Block) -> String {
             }
             if let Some(cr) = copyright {
                 lines.push(cr.dimmed().to_string());
+            }
+            lines.join("\n")
+        }
+
+        Block::Hero {
+            headline, subtitle, buttons, ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("{}", h.bold()));
+            }
+            if let Some(s) = subtitle {
+                lines.push(s.dimmed().to_string());
+            }
+            for btn in buttons {
+                let marker = if btn.primary { "\u{25b6}" } else { "\u{25b7}" };
+                lines.push(format!("  {} {} {}", marker, btn.label.cyan(), btn.href.dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Features { cards, .. } => {
+            let mut lines = Vec::new();
+            for card in cards {
+                let icon = card.icon.as_deref().unwrap_or("\u{2022}");
+                lines.push(format!("{} {}", icon, card.title.bold()));
+                if !card.body.is_empty() {
+                    lines.push(format!("  {}", card.body.dimmed()));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Steps { steps, .. } => {
+            let mut lines = Vec::new();
+            for (i, step) in steps.iter().enumerate() {
+                let time_str = step.time.as_ref().map(|t| format!(" ({})", t)).unwrap_or_default();
+                lines.push(format!("{}. {}{}", i + 1, step.title.bold(), time_str.dimmed()));
+                if !step.body.is_empty() {
+                    lines.push(format!("   {}", step.body.dimmed()));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Stats { items, .. } => {
+            items
+                .iter()
+                .map(|item| format!("{} {}", item.value.bold(), item.label.dimmed()))
+                .collect::<Vec<_>>()
+                .join("  \u{2502}  ")
+        }
+
+        Block::Comparison { headers, rows, .. } => {
+            let mut lines = Vec::new();
+            lines.push(headers.join(" | ").bold().to_string());
+            for row in rows {
+                lines.push(row.join(" | "));
+            }
+            lines.join("\n")
+        }
+
+        Block::Logo { src, alt, .. } => {
+            let label = alt.as_deref().unwrap_or("Logo");
+            format!("{} {}", format!("[{label}]").cyan(), src.dimmed())
+        }
+
+        Block::Toc { depth, .. } => {
+            format!("{} (depth: {})", "Table of Contents".bold(), depth)
+        }
+
+        Block::BeforeAfter {
+            before_items,
+            after_items,
+            transition,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            lines.push(format!("{}", "Before".bold().red()));
+            for item in before_items {
+                lines.push(format!("  {} {} {}", "\u{25cf}".red(), item.label.bold(), item.detail.dimmed()));
+            }
+            if let Some(t) = transition {
+                lines.push(format!("  {} {} {}", "\u{2193}".cyan(), t.cyan(), "\u{2193}".cyan()));
+            }
+            lines.push(format!("{}", "After".bold().green()));
+            for item in after_items {
+                lines.push(format!("  {} {} {}", "\u{25cf}".green(), item.label.bold(), item.detail.dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Pipeline { steps, .. } => {
+            steps
+                .iter()
+                .map(|s| {
+                    if let Some(d) = &s.description {
+                        format!("{} ({})", s.label.bold(), d.dimmed())
+                    } else {
+                        format!("{}", s.label.bold())
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(&format!(" {} ", "\u{2192}".cyan()))
+        }
+
+        Block::Section {
+            headline,
+            subtitle,
+            children,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("{}", h.bold()));
+            }
+            if let Some(s) = subtitle {
+                lines.push(format!("{}", s.dimmed()));
+            }
+            for child in children {
+                lines.push(render_block(child));
+            }
+            lines.join("\n")
+        }
+
+        Block::ProductCard {
+            title,
+            subtitle,
+            badge,
+            features,
+            cta_label,
+            cta_href,
+            body,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            let badge_str = badge.as_ref().map(|b| format!(" [{}]", b.green())).unwrap_or_default();
+            lines.push(format!("{}{}", title.bold(), badge_str));
+            if let Some(s) = subtitle {
+                lines.push(format!("{}", s.dimmed()));
+            }
+            if !body.is_empty() {
+                lines.push(body.clone());
+            }
+            for f in features {
+                lines.push(format!("  {} {f}", "\u{2713}".green()));
+            }
+            if let (Some(label), Some(href)) = (cta_label, cta_href) {
+                lines.push(format!("{} ({})", label.cyan(), href.dimmed()));
             }
             lines.join("\n")
         }

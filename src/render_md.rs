@@ -263,6 +263,97 @@ fn render_block(block: &Block) -> String {
                 .join("\n")
         }
 
+        Block::BeforeAfter {
+            before_items,
+            after_items,
+            transition,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            lines.push("**Before**".to_string());
+            for item in before_items {
+                lines.push(format!("- {} \u{2014} {}", item.label, item.detail));
+            }
+            lines.push(String::new());
+            if let Some(t) = transition {
+                lines.push(format!("\u{2193} *{t}* \u{2193}"));
+                lines.push(String::new());
+            }
+            lines.push("**After**".to_string());
+            for item in after_items {
+                lines.push(format!("- {} \u{2014} {}", item.label, item.detail));
+            }
+            lines.join("\n")
+        }
+
+        Block::Pipeline { steps, .. } => {
+            steps
+                .iter()
+                .map(|s| {
+                    if let Some(d) = &s.description {
+                        format!("{} ({})", s.label, d)
+                    } else {
+                        s.label.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" \u{2192} ")
+        }
+
+        Block::Section {
+            headline,
+            subtitle,
+            children,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("## {h}"));
+                lines.push(String::new());
+            }
+            if let Some(s) = subtitle {
+                lines.push(s.clone());
+                lines.push(String::new());
+            }
+            for child in children {
+                lines.push(render_block(child));
+                lines.push(String::new());
+            }
+            lines.join("\n").trim().to_string()
+        }
+
+        Block::ProductCard {
+            title,
+            subtitle,
+            badge,
+            body,
+            features,
+            cta_label,
+            cta_href,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            let badge_str = badge.as_ref().map(|b| format!(" [{b}]")).unwrap_or_default();
+            lines.push(format!("### {title}{badge_str}"));
+            lines.push(String::new());
+            if let Some(s) = subtitle {
+                lines.push(format!("*{s}*"));
+                lines.push(String::new());
+            }
+            if !body.is_empty() {
+                lines.push(body.clone());
+                lines.push(String::new());
+            }
+            for f in features {
+                lines.push(format!("- {f}"));
+            }
+            if let (Some(label), Some(href)) = (cta_label, cta_href) {
+                lines.push(String::new());
+                lines.push(format!("[{label}]({href})"));
+            }
+            lines.join("\n").trim().to_string()
+        }
+
         Block::Unknown {
             name,
             content,
@@ -335,11 +426,87 @@ fn render_block(block: &Block) -> String {
             format!("**{}**\n\n{}", heading, content)
         }
 
-        Block::Divider { label, .. } => {
-            match label {
-                Some(text) => format!("--- {} ---", text),
-                None => "---".to_string(),
+        Block::Divider { label, .. } => match label {
+            Some(text) => format!("--- {} ---", text),
+            None => "---".to_string(),
+        },
+
+        Block::Hero {
+            headline,
+            subtitle,
+            buttons,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("# {h}"));
+                lines.push(String::new());
             }
+            if let Some(s) = subtitle {
+                lines.push(s.clone());
+                lines.push(String::new());
+            }
+            for btn in buttons {
+                lines.push(format!("[{}]({})", btn.label, btn.href));
+            }
+            lines.join("\n")
+        }
+
+        Block::Features { cards, .. } => {
+            let mut lines = Vec::new();
+            for card in cards {
+                lines.push(format!("### {}", card.title));
+                lines.push(String::new());
+                if !card.body.is_empty() {
+                    lines.push(card.body.clone());
+                    lines.push(String::new());
+                }
+                if let (Some(label), Some(href)) = (&card.link_label, &card.link_href) {
+                    lines.push(format!("[{label}]({href})"));
+                    lines.push(String::new());
+                }
+            }
+            lines.join("\n").trim().to_string()
+        }
+
+        Block::Steps { steps, .. } => {
+            let mut lines = Vec::new();
+            for (i, step) in steps.iter().enumerate() {
+                lines.push(format!("{}. **{}**", i + 1, step.title));
+                if !step.body.is_empty() {
+                    lines.push(format!("   {}", step.body));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Stats { items, .. } => {
+            items
+                .iter()
+                .map(|item| format!("- **{}** {}", item.value, item.label))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+
+        Block::Comparison {
+            headers, rows, ..
+        } => {
+            let mut lines = Vec::new();
+            lines.push(format!("| {} |", headers.join(" | ")));
+            lines.push(format!("| {} |", headers.iter().map(|_| "---").collect::<Vec<_>>().join(" | ")));
+            for row in rows {
+                lines.push(format!("| {} |", row.join(" | ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Logo { src, alt, .. } => {
+            let alt_text = alt.as_deref().unwrap_or("Logo");
+            format!("![{alt_text}]({src})")
+        }
+
+        Block::Toc { .. } => {
+            "*Table of Contents*".to_string()
         }
     }
 }

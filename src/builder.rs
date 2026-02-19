@@ -7,8 +7,9 @@
 
 use crate::types::{
     Block, CalloutType, ColumnContent, DataFormat, DecisionStatus, EmbedType, FaqItem,
-    FooterSection, FormField, FormFieldType, FrontMatter, GalleryItem, NavItem, SocialLink, Span,
-    StyleProperty, SurfDoc, TabPanel, TaskItem, Trend,
+    FeatureCard, FooterSection, FormField, FormFieldType, FrontMatter, GalleryItem, HeroButton,
+    NavItem, SocialLink, Span, StatItem, StepItem, StyleProperty, SurfDoc, TabPanel, TaskItem,
+    Trend,
 };
 
 // -----------------------------------------------------------------------
@@ -503,6 +504,163 @@ impl SurfDocBuilder {
         self
     }
 
+    /// Add a hero section block.
+    pub fn hero(
+        mut self,
+        headline: Option<&str>,
+        subtitle: Option<&str>,
+        badge: Option<&str>,
+        buttons: Vec<HeroButton>,
+    ) -> Self {
+        self.blocks.push(Block::Hero {
+            headline: headline.map(|s| s.to_string()),
+            subtitle: subtitle.map(|s| s.to_string()),
+            badge: badge.map(|s| s.to_string()),
+            align: "center".to_string(),
+            image: None,
+            buttons,
+            content: String::new(),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a features card grid block.
+    pub fn features(mut self, cards: Vec<FeatureCard>, cols: Option<u32>) -> Self {
+        self.blocks.push(Block::Features {
+            cards,
+            cols,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a steps block.
+    pub fn steps(mut self, steps: Vec<StepItem>) -> Self {
+        self.blocks.push(Block::Steps {
+            steps,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a stats block.
+    pub fn stats(mut self, items: Vec<StatItem>) -> Self {
+        self.blocks.push(Block::Stats {
+            items,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a comparison table block.
+    pub fn comparison(
+        mut self,
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+        highlight: Option<&str>,
+    ) -> Self {
+        self.blocks.push(Block::Comparison {
+            headers,
+            rows,
+            highlight: highlight.map(|s| s.to_string()),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a logo block.
+    pub fn logo(mut self, src: &str, alt: Option<&str>, size: Option<u32>) -> Self {
+        self.blocks.push(Block::Logo {
+            src: src.to_string(),
+            alt: alt.map(|s| s.to_string()),
+            size,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a table-of-contents block.
+    pub fn toc(mut self, depth: u32) -> Self {
+        self.blocks.push(Block::Toc {
+            depth,
+            entries: Vec::new(),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a before/after comparison block.
+    pub fn before_after(
+        mut self,
+        before_items: Vec<crate::types::BeforeAfterItem>,
+        after_items: Vec<crate::types::BeforeAfterItem>,
+        transition: Option<&str>,
+    ) -> Self {
+        self.blocks.push(Block::BeforeAfter {
+            before_items,
+            after_items,
+            transition: transition.map(|s| s.to_string()),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a pipeline flow block.
+    pub fn pipeline(mut self, steps: Vec<crate::types::PipelineStep>) -> Self {
+        self.blocks.push(Block::Pipeline {
+            steps,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a section container block.
+    pub fn section(
+        mut self,
+        bg: Option<&str>,
+        headline: Option<&str>,
+        subtitle: Option<&str>,
+        content: &str,
+    ) -> Self {
+        self.blocks.push(Block::Section {
+            bg: bg.map(|s| s.to_string()),
+            headline: headline.map(|s| s.to_string()),
+            subtitle: subtitle.map(|s| s.to_string()),
+            content: content.to_string(),
+            children: Vec::new(),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a product card block.
+    #[allow(clippy::too_many_arguments)]
+    pub fn product_card(
+        mut self,
+        title: &str,
+        subtitle: Option<&str>,
+        badge: Option<&str>,
+        badge_color: Option<&str>,
+        body: &str,
+        features: Vec<String>,
+        cta_label: Option<&str>,
+        cta_href: Option<&str>,
+    ) -> Self {
+        self.blocks.push(Block::ProductCard {
+            title: title.to_string(),
+            subtitle: subtitle.map(|s| s.to_string()),
+            badge: badge.map(|s| s.to_string()),
+            badge_color: badge_color.map(|s| s.to_string()),
+            body: body.to_string(),
+            features,
+            cta_label: cta_label.map(|s| s.to_string()),
+            cta_href: cta_href.map(|s| s.to_string()),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
     /// Consume the builder and produce a `SurfDoc`.
     pub fn build(self) -> SurfDoc {
         let source = to_surf_source_inner(&self.front_matter, &self.blocks);
@@ -576,7 +734,7 @@ fn serialize_front_matter(fm: &FrontMatter) -> String {
         lines.push(format!("scope: {}", scope_str(*scope)));
     }
     if let Some(tags) = &fm.tags {
-        let tag_strs: Vec<String> = tags.iter().map(|t| t.clone()).collect();
+        let tag_strs: Vec<String> = tags.iter().cloned().collect();
         lines.push(format!("tags: [{}]", tag_strs.join(", ")));
     }
     if let Some(created) = &fm.created {
@@ -607,8 +765,8 @@ fn serialize_front_matter(fm: &FrontMatter) -> String {
     if let Some(decision) = &fm.decision {
         lines.push(format!("decision: \"{}\"", escape_yaml_string(decision)));
     }
-    if let Some(related) = &fm.related {
-        if !related.is_empty() {
+    if let Some(related) = &fm.related
+        && !related.is_empty() {
             lines.push("related:".to_string());
             for r in related {
                 let mut entry = format!("  - path: \"{}\"", escape_yaml_string(&r.path));
@@ -622,7 +780,6 @@ fn serialize_front_matter(fm: &FrontMatter) -> String {
                 lines.push(entry);
             }
         }
-    }
     // Extra fields
     for (key, value) in &fm.extra {
         lines.push(format!("{key}: {}", serde_yaml_value_to_inline(value)));
@@ -1279,11 +1436,255 @@ fn serialize_block(block: &Block) -> String {
             format!("::details{attrs_str}\n{content}\n::")
         }
 
-        Block::Divider { label, .. } => {
-            match label {
-                Some(l) => format!("::divider[label=\"{}\"]", escape_attr(l)),
-                None => "::divider".to_string(),
+        Block::Divider { label, .. } => match label {
+            Some(l) => format!("::divider[label=\"{}\"]", escape_attr(l)),
+            None => "::divider".to_string(),
+        },
+
+        Block::Hero {
+            headline,
+            subtitle,
+            badge,
+            align,
+            image,
+            buttons,
+            ..
+        } => {
+            let mut attrs_parts = Vec::new();
+            if align != "center" {
+                attrs_parts.push(format!("align=\"{}\"", escape_attr(align)));
             }
+            if let Some(b) = badge {
+                attrs_parts.push(format!("badge=\"{}\"", escape_attr(b)));
+            }
+            if let Some(img) = image {
+                attrs_parts.push(format!("image=\"{}\"", escape_attr(img)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            if let Some(h) = headline {
+                content_lines.push(format!("# {h}"));
+                content_lines.push(String::new());
+            }
+            if let Some(s) = subtitle {
+                content_lines.push(s.clone());
+                content_lines.push(String::new());
+            }
+            for btn in buttons {
+                let suffix = if btn.primary { "{primary}" } else { "" };
+                content_lines.push(format!("[{}]({}){}", btn.label, btn.href, suffix));
+            }
+            format!("::hero{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Features { cards, cols, .. } => {
+            let attrs_str = cols
+                .map(|c| format!("[cols={}]", c))
+                .unwrap_or_default();
+            let mut content_lines = Vec::new();
+            for card in cards {
+                let icon_str = card
+                    .icon
+                    .as_ref()
+                    .map(|i| format!(" {{icon={i}}}"))
+                    .unwrap_or_default();
+                content_lines.push(format!("### {}{}", card.title, icon_str));
+                content_lines.push(String::new());
+                if !card.body.is_empty() {
+                    content_lines.push(card.body.clone());
+                    content_lines.push(String::new());
+                }
+                if let (Some(label), Some(href)) = (&card.link_label, &card.link_href) {
+                    content_lines.push(format!("[{label}]({href})"));
+                    content_lines.push(String::new());
+                }
+            }
+            format!("::features{attrs_str}\n{}\n::", content_lines.join("\n").trim())
+        }
+
+        Block::Steps { steps, .. } => {
+            let mut content_lines = Vec::new();
+            for step in steps {
+                let time_str = step
+                    .time
+                    .as_ref()
+                    .map(|t| format!(" {{time=\"{t}\"}}"))
+                    .unwrap_or_default();
+                content_lines.push(format!("### {}{}", step.title, time_str));
+                content_lines.push(String::new());
+                if !step.body.is_empty() {
+                    content_lines.push(step.body.clone());
+                    content_lines.push(String::new());
+                }
+            }
+            format!("::steps\n{}\n::", content_lines.join("\n").trim())
+        }
+
+        Block::Stats { items, .. } => {
+            let mut content_lines = Vec::new();
+            for item in items {
+                let color_str = item
+                    .color
+                    .as_ref()
+                    .map(|c| format!(" color=\"{c}\""))
+                    .unwrap_or_default();
+                content_lines.push(format!(
+                    "- {} {{label=\"{}\"{}}}",
+                    item.value, escape_attr(&item.label), color_str
+                ));
+            }
+            format!("::stats\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Comparison {
+            headers,
+            rows,
+            highlight,
+            ..
+        } => {
+            let attrs_str = highlight
+                .as_ref()
+                .map(|h| format!("[highlight=\"{}\"]", escape_attr(h)))
+                .unwrap_or_default();
+            let mut content_lines = Vec::new();
+            content_lines.push(format!("| {} |", headers.join(" | ")));
+            content_lines.push(format!(
+                "| {} |",
+                headers.iter().map(|_| "---").collect::<Vec<_>>().join(" | ")
+            ));
+            for row in rows {
+                content_lines.push(format!("| {} |", row.join(" | ")));
+            }
+            format!("::comparison{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Logo { src, alt, size, .. } => {
+            let mut attrs_parts = vec![format!("src=\"{}\"", escape_attr(src))];
+            if let Some(a) = alt {
+                attrs_parts.push(format!("alt=\"{}\"", escape_attr(a)));
+            }
+            if let Some(s) = size {
+                attrs_parts.push(format!("size={}", s));
+            }
+            format!("::logo[{}]", attrs_parts.join(" "))
+        }
+
+        Block::Toc { depth, .. } => {
+            if *depth == 3 {
+                "::toc".to_string()
+            } else {
+                format!("::toc[depth={}]", depth)
+            }
+        }
+
+        Block::BeforeAfter {
+            before_items,
+            after_items,
+            transition,
+            ..
+        } => {
+            let attrs_str = transition
+                .as_ref()
+                .map(|t| format!("[transition=\"{}\"]", escape_attr(t)))
+                .unwrap_or_default();
+            let mut content_lines = Vec::new();
+            content_lines.push("### Before".to_string());
+            for item in before_items {
+                content_lines.push(format!("- {} | {}", item.label, item.detail));
+            }
+            content_lines.push(String::new());
+            content_lines.push("### After".to_string());
+            for item in after_items {
+                content_lines.push(format!("- {} | {}", item.label, item.detail));
+            }
+            format!("::before-after{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Pipeline { steps, .. } => {
+            let content_lines: Vec<String> = steps
+                .iter()
+                .map(|s| match &s.description {
+                    Some(d) => format!("{} | {}", s.label, d),
+                    None => s.label.clone(),
+                })
+                .collect();
+            format!("::pipeline\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Section {
+            bg,
+            headline,
+            subtitle,
+            content,
+            ..
+        } => {
+            let attrs_str = bg
+                .as_ref()
+                .map(|b| format!("[bg=\"{}\"]", escape_attr(b)))
+                .unwrap_or_default();
+            if content.is_empty() {
+                let mut inner = Vec::new();
+                if let Some(h) = headline {
+                    inner.push(format!("## {h}"));
+                }
+                if let Some(s) = subtitle {
+                    inner.push(s.clone());
+                }
+                if inner.is_empty() {
+                    format!("::section{attrs_str}\n::")
+                } else {
+                    format!("::section{attrs_str}\n{}\n::", inner.join("\n"))
+                }
+            } else {
+                format!("::section{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::ProductCard {
+            title,
+            subtitle,
+            badge,
+            badge_color,
+            body,
+            features,
+            cta_label,
+            cta_href,
+            ..
+        } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(b) = badge {
+                attrs_parts.push(format!("badge=\"{}\"", escape_attr(b)));
+            }
+            if let Some(bc) = badge_color {
+                attrs_parts.push(format!("badge-color=\"{}\"", escape_attr(bc)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            content_lines.push(format!("## {title}"));
+            if let Some(s) = subtitle {
+                content_lines.push(s.clone());
+            }
+            content_lines.push(String::new());
+            if !body.is_empty() {
+                content_lines.push(body.clone());
+                content_lines.push(String::new());
+            }
+            for f in features {
+                content_lines.push(format!("- {f}"));
+            }
+            if let (Some(label), Some(href)) = (cta_label, cta_href) {
+                content_lines.push(String::new());
+                content_lines.push(format!("[{label}]({href})"));
+            }
+            format!("::product-card{attrs_str}\n{}\n::", content_lines.join("\n"))
         }
     }
 }

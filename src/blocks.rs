@@ -4,8 +4,9 @@
 //! the block name. Unknown block names pass through unchanged.
 
 use crate::types::{
-    AttrValue, Attrs, Block, CalloutType, ColumnContent, DataFormat, DecisionStatus, EmbedType,
-    FaqItem, FooterSection, FormField, FormFieldType, GalleryItem, NavItem, SocialLink, Span,
+    AttrValue, Attrs, BeforeAfterItem, Block, CalloutType, ColumnContent, DataFormat,
+    DecisionStatus, EmbedType, FaqItem, FeatureCard, FooterSection, FormField, FormFieldType,
+    GalleryItem, HeroButton, NavItem, PipelineStep, SocialLink, Span, StatItem, StepItem,
     StyleProperty, TabPanel, TaskItem, Trend,
 };
 
@@ -49,6 +50,17 @@ pub fn resolve_block(block: Block) -> Block {
         "footer" => parse_footer(content, *span),
         "details" => parse_details(attrs, content, *span),
         "divider" => parse_divider(attrs, *span),
+        "hero" => parse_hero(attrs, content, *span),
+        "features" => parse_features(attrs, content, *span),
+        "steps" => parse_steps(content, *span),
+        "stats" => parse_stats(content, *span),
+        "comparison" => parse_comparison(attrs, content, *span),
+        "logo" => parse_logo(attrs, *span),
+        "toc" => parse_toc(attrs, *span),
+        "before-after" => parse_before_after(attrs, content, *span),
+        "pipeline" => parse_pipeline(content, *span),
+        "section" => parse_section(attrs, content, *span),
+        "product-card" => parse_product_card(attrs, content, *span),
         _ => block,
     }
 }
@@ -866,8 +878,7 @@ fn parse_gallery(content: &str, span: Span) -> Block {
         // Parse gallery items: `![alt](src) Category: caption`
         // or simpler: `![alt](src) caption`
         // or minimal: `![](src)`
-        if trimmed.starts_with("![") {
-            let after_bang = &trimmed[2..];
+        if let Some(after_bang) = trimmed.strip_prefix("![") {
             if let Some(alt_end) = after_bang.find("](") {
                 let alt_text = &after_bang[..alt_end];
                 let after_bracket = &after_bang[alt_end + 2..];
@@ -976,8 +987,7 @@ fn parse_footer(content: &str, span: Span) -> Block {
         }
 
         // Link: `- [Label](href)` — reuse nav link parsing
-        if trimmed.starts_with("- [") {
-            let rest = &trimmed[3..];
+        if let Some(rest) = trimmed.strip_prefix("- [") {
             if let Some(label_end) = rest.find("](") {
                 let label = rest[..label_end].to_string();
                 let after_bracket = &rest[label_end + 2..];
@@ -1163,6 +1173,524 @@ fn flush_md_lines(lines: &mut Vec<&str>, children: &mut Vec<Block>) {
         });
     }
     lines.clear();
+}
+
+// ------------------------------------------------------------------
+// Landing page block parsers
+// ------------------------------------------------------------------
+
+fn parse_hero(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let badge = attr_string(attrs, "badge");
+    let align = attr_string(attrs, "align").unwrap_or_else(|| "center".to_string());
+    let image = attr_string(attrs, "image");
+
+    let mut headline: Option<String> = None;
+    let mut subtitle_lines: Vec<&str> = Vec::new();
+    let mut buttons: Vec<HeroButton> = Vec::new();
+    let mut in_subtitle = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if in_subtitle {
+                in_subtitle = false;
+            }
+            continue;
+        }
+
+        // Heading -> headline
+        if let Some(rest) = trimmed.strip_prefix("# ") {
+            headline = Some(rest.trim().to_string());
+            in_subtitle = false;
+            continue;
+        }
+
+        // Markdown link -> button: [Label](href){primary} or [Label](href)
+        if trimmed.starts_with('[')
+            && let Some(label_end) = trimmed.find("](") {
+                let label = trimmed[1..label_end].to_string();
+                let after = &trimmed[label_end + 2..];
+                // Find closing paren, possibly followed by {primary}
+                if let Some(href_end) = after.find(')') {
+                    let href = after[..href_end].to_string();
+                    let suffix = after[href_end + 1..].trim();
+                    let primary = suffix == "{primary}";
+                    buttons.push(HeroButton {
+                        label,
+                        href,
+                        primary,
+                    });
+                    continue;
+                }
+            }
+
+        // Otherwise it's subtitle text
+        if headline.is_some() && buttons.is_empty() {
+            subtitle_lines.push(trimmed);
+            in_subtitle = true;
+        }
+    }
+
+    let subtitle = if subtitle_lines.is_empty() {
+        None
+    } else {
+        Some(subtitle_lines.join(" "))
+    };
+
+    Block::Hero {
+        headline,
+        subtitle,
+        badge,
+        align,
+        image,
+        buttons,
+        content: content.to_string(),
+        span,
+    }
+}
+
+fn parse_features(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let cols = attr_string(attrs, "cols").and_then(|s| s.parse::<u32>().ok());
+    let mut cards: Vec<FeatureCard> = Vec::new();
+    let mut current_title: Option<String> = None;
+    let mut current_icon: Option<String> = None;
+    let mut current_lines: Vec<&str> = Vec::new();
+
+    let flush = |title: String, icon: Option<String>, lines: &[&str]| -> FeatureCard {
+        let mut body_lines: Vec<&str> = Vec::new();
+        let mut link_label: Option<String> = None;
+        let mut link_href: Option<String> = None;
+
+        for &line in lines {
+            body_lines.push(line);
+        }
+
+        // Check if the last non-empty line is a markdown link
+        if let Some(last) = body_lines.iter().rev().find(|l| !l.trim().is_empty()) {
+            let t = last.trim();
+            if t.starts_with('[')
+                && let Some(le) = t.find("](") {
+                    let after = &t[le + 2..];
+                    if let Some(he) = after.find(')') {
+                        link_label = Some(t[1..le].to_string());
+                        link_href = Some(after[..he].to_string());
+                        // Remove last line from body
+                        while body_lines.last().is_some_and(|l| l.trim().is_empty()) {
+                            body_lines.pop();
+                        }
+                        body_lines.pop(); // remove the link line
+                    }
+                }
+        }
+
+        let body = body_lines.join("\n").trim().to_string();
+        FeatureCard {
+            title,
+            icon,
+            body,
+            link_label,
+            link_href,
+        }
+    };
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("### ") {
+            // Flush previous card
+            if let Some(title) = current_title.take() {
+                cards.push(flush(title, current_icon.take(), &current_lines));
+                current_lines.clear();
+            }
+            // Extract {icon=name} from heading
+            let heading = rest.trim();
+            if let Some(brace_start) = heading.rfind("{icon=") {
+                let before = heading[..brace_start].trim().to_string();
+                let after = &heading[brace_start + 6..];
+                let icon_name = after.trim_end_matches('}').to_string();
+                current_title = Some(before);
+                current_icon = Some(icon_name);
+            } else {
+                current_title = Some(heading.to_string());
+                current_icon = None;
+            }
+        } else {
+            current_lines.push(line);
+        }
+    }
+
+    // Flush final card
+    if let Some(title) = current_title {
+        cards.push(flush(title, current_icon, &current_lines));
+    }
+
+    Block::Features { cards, cols, span }
+}
+
+fn parse_steps(content: &str, span: Span) -> Block {
+    let mut steps: Vec<StepItem> = Vec::new();
+    let mut current_title: Option<String> = None;
+    let mut current_time: Option<String> = None;
+    let mut current_lines: Vec<&str> = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed
+            .strip_prefix("### ")
+            .or_else(|| trimmed.strip_prefix("## "))
+        {
+            // Flush previous step
+            if let Some(title) = current_title.take() {
+                steps.push(StepItem {
+                    title,
+                    time: current_time.take(),
+                    body: current_lines.join("\n").trim().to_string(),
+                });
+                current_lines.clear();
+            }
+            // Extract {time="X"} from heading
+            let heading = rest.trim();
+            if let Some(brace_start) = heading.rfind("{time=") {
+                let before = heading[..brace_start].trim().to_string();
+                let after = &heading[brace_start + 6..];
+                let time_val = after.trim_end_matches('}').trim_matches('"').to_string();
+                current_title = Some(before);
+                current_time = Some(time_val);
+            } else {
+                current_title = Some(heading.to_string());
+                current_time = None;
+            }
+        } else {
+            current_lines.push(line);
+        }
+    }
+
+    // Flush final step
+    if let Some(title) = current_title {
+        steps.push(StepItem {
+            title,
+            time: current_time,
+            body: current_lines.join("\n").trim().to_string(),
+        });
+    }
+
+    Block::Steps { steps, span }
+}
+
+fn parse_stats(content: &str, span: Span) -> Block {
+    let mut items: Vec<StatItem> = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let text = trimmed.strip_prefix("- ").unwrap_or(trimmed);
+        if text.is_empty() {
+            continue;
+        }
+
+        // Extract {label="..." color="..."} suffix
+        if let Some(brace_start) = text.rfind('{') {
+            let value = text[..brace_start].trim().to_string();
+            let attrs_str = &text[brace_start + 1..].trim_end_matches('}');
+            let label = extract_quoted_attr(attrs_str, "label").unwrap_or_default();
+            let color = extract_quoted_attr(attrs_str, "color");
+            if !value.is_empty() && !label.is_empty() {
+                items.push(StatItem {
+                    value,
+                    label,
+                    color,
+                });
+            }
+        }
+    }
+
+    Block::Stats { items, span }
+}
+
+/// Extract a quoted attribute value from an inline attr string like `label="Foo" color="#hex"`.
+fn extract_quoted_attr(s: &str, key: &str) -> Option<String> {
+    let pattern = format!("{}=", key);
+    if let Some(pos) = s.find(&pattern) {
+        let after = &s[pos + pattern.len()..];
+        if let Some(inner) = after.strip_prefix('"') {
+            if let Some(end) = inner.find('"') {
+                return Some(inner[..end].to_string());
+            }
+        } else {
+            // Unquoted value -- take until space or end
+            let end = after.find(' ').unwrap_or(after.len());
+            return Some(after[..end].to_string());
+        }
+    }
+    None
+}
+
+fn parse_comparison(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let highlight = attr_string(attrs, "highlight");
+
+    let mut headers: Vec<String> = Vec::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !trimmed.starts_with('|') {
+            continue;
+        }
+        // Skip separator rows
+        let inner = trimmed.trim_matches('|');
+        if inner.chars().all(|c| c == '-' || c == '|' || c == ' ' || c == ':') {
+            continue;
+        }
+        let cells: Vec<String> = trimmed
+            .split('|')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.trim().to_string())
+            .collect();
+        if headers.is_empty() {
+            headers = cells;
+        } else {
+            rows.push(cells);
+        }
+    }
+
+    Block::Comparison {
+        headers,
+        rows,
+        highlight,
+        span,
+    }
+}
+
+fn parse_logo(attrs: &Attrs, span: Span) -> Block {
+    let src = attr_string(attrs, "src").unwrap_or_default();
+    let alt = attr_string(attrs, "alt");
+    let size = attr_string(attrs, "size").and_then(|s| s.parse::<u32>().ok());
+    Block::Logo {
+        src,
+        alt,
+        size,
+        span,
+    }
+}
+
+fn parse_toc(attrs: &Attrs, span: Span) -> Block {
+    let depth = attr_string(attrs, "depth")
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(3);
+    Block::Toc {
+        depth,
+        entries: Vec::new(),
+        span,
+    }
+}
+
+fn parse_before_after(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let transition = attr_string(attrs, "transition");
+    let mut before_items: Vec<BeforeAfterItem> = Vec::new();
+    let mut after_items: Vec<BeforeAfterItem> = Vec::new();
+    let mut in_after = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.eq_ignore_ascii_case("### before") {
+            in_after = false;
+            continue;
+        }
+        if trimmed.eq_ignore_ascii_case("### after") {
+            in_after = true;
+            continue;
+        }
+        if trimmed.is_empty() {
+            continue;
+        }
+        let text = trimmed.strip_prefix("- ").unwrap_or(trimmed);
+        if let Some(pipe_pos) = text.find(" | ") {
+            let label = text[..pipe_pos].trim().to_string();
+            let detail = text[pipe_pos + 3..].trim().to_string();
+            let item = BeforeAfterItem { label, detail };
+            if in_after {
+                after_items.push(item);
+            } else {
+                before_items.push(item);
+            }
+        }
+    }
+
+    Block::BeforeAfter {
+        before_items,
+        after_items,
+        transition,
+        span,
+    }
+}
+
+fn parse_pipeline(content: &str, span: Span) -> Block {
+    let mut steps: Vec<PipelineStep> = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let text = trimmed.strip_prefix("- ").unwrap_or(trimmed);
+        if let Some(pipe_pos) = text.find(" | ") {
+            let label = text[..pipe_pos].trim().to_string();
+            let description = Some(text[pipe_pos + 3..].trim().to_string());
+            steps.push(PipelineStep { label, description });
+        } else {
+            steps.push(PipelineStep {
+                label: text.trim().to_string(),
+                description: None,
+            });
+        }
+    }
+
+    Block::Pipeline { steps, span }
+}
+
+fn parse_section(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let bg = attr_string(attrs, "bg");
+    let mut headline: Option<String> = None;
+    let mut subtitle: Option<String> = None;
+    let mut body_start = 0;
+    let mut found_headline = false;
+
+    for (i, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() && !found_headline {
+            body_start = i + 1;
+            continue;
+        }
+        if !found_headline {
+            if let Some(rest) = trimmed.strip_prefix("## ") {
+                headline = Some(rest.trim().to_string());
+                found_headline = true;
+                body_start = i + 1;
+                continue;
+            }
+        }
+        if found_headline && subtitle.is_none() && !trimmed.is_empty() {
+            // Check if this line looks like a subtitle (plain text, not a directive or heading)
+            if !trimmed.starts_with("::") && !trimmed.starts_with('#') && !trimmed.starts_with("- ") {
+                subtitle = Some(trimmed.to_string());
+                body_start = i + 1;
+                continue;
+            }
+        }
+        if found_headline {
+            body_start = i;
+            break;
+        }
+    }
+
+    let remaining: String = content
+        .lines()
+        .skip(body_start)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let remaining = remaining.trim().to_string();
+
+    let children = parse_page_children(&remaining);
+
+    Block::Section {
+        bg,
+        headline,
+        subtitle,
+        content: content.to_string(),
+        children,
+        span,
+    }
+}
+
+fn parse_product_card(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let badge = attr_string(attrs, "badge");
+    let badge_color = attr_string(attrs, "badge-color");
+
+    let mut title = String::new();
+    let mut subtitle: Option<String> = None;
+    let mut body_lines: Vec<&str> = Vec::new();
+    let mut features: Vec<String> = Vec::new();
+    let mut cta_label: Option<String> = None;
+    let mut cta_href: Option<String> = None;
+
+    // States: 0=before_title, 1=after_title(subtitle), 2=body, 3=features
+    let mut state = 0;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        match state {
+            0 => {
+                if let Some(rest) = trimmed.strip_prefix("## ") {
+                    title = rest.trim().to_string();
+                    state = 1;
+                }
+            }
+            1 => {
+                if trimmed.is_empty() {
+                    if subtitle.is_some() {
+                        state = 2;
+                    }
+                    continue;
+                }
+                if trimmed.starts_with("- ") {
+                    features.push(trimmed[2..].to_string());
+                    state = 3;
+                } else if trimmed.starts_with('[') && trimmed.contains("](") {
+                    parse_cta_link(trimmed, &mut cta_label, &mut cta_href);
+                } else if subtitle.is_none() {
+                    subtitle = Some(trimmed.to_string());
+                } else {
+                    body_lines.push(trimmed);
+                    state = 2;
+                }
+            }
+            2 => {
+                if trimmed.starts_with("- ") {
+                    features.push(trimmed[2..].to_string());
+                    state = 3;
+                } else if trimmed.starts_with('[') && trimmed.contains("](") {
+                    parse_cta_link(trimmed, &mut cta_label, &mut cta_href);
+                } else {
+                    body_lines.push(trimmed);
+                }
+            }
+            3 => {
+                if trimmed.starts_with("- ") {
+                    features.push(trimmed[2..].to_string());
+                } else if trimmed.starts_with('[') && trimmed.contains("](") {
+                    parse_cta_link(trimmed, &mut cta_label, &mut cta_href);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let body = body_lines.join("\n").trim().to_string();
+
+    Block::ProductCard {
+        title,
+        subtitle,
+        badge,
+        badge_color,
+        body,
+        features,
+        cta_label,
+        cta_href,
+        span,
+    }
+}
+
+fn parse_cta_link(trimmed: &str, cta_label: &mut Option<String>, cta_href: &mut Option<String>) {
+    if let Some(label_end) = trimmed.find("](") {
+        let label = trimmed[1..label_end].to_string();
+        let after = &trimmed[label_end + 2..];
+        if let Some(href_end) = after.find(')') {
+            *cta_label = Some(label);
+            *cta_href = Some(after[..href_end].to_string());
+        }
+    }
 }
 
 // ------------------------------------------------------------------
@@ -2709,6 +3237,469 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 }
             }
             other => panic!("Expected Page, got {other:?}"),
+        }
+    }
+
+    // -- Hero --------------------------------------------------
+
+    #[test]
+    fn resolve_hero_basic() {
+        let content = "# Build Something Great\n\nThe fastest way to ship your next project.\n\n[Get Started](/signup){primary}\n[Learn More](/docs)";
+        let block = unknown("hero", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Hero {
+                headline,
+                subtitle,
+                buttons,
+                align,
+                badge,
+                image,
+                ..
+            } => {
+                assert_eq!(headline, Some("Build Something Great".to_string()));
+                assert_eq!(
+                    subtitle,
+                    Some("The fastest way to ship your next project.".to_string())
+                );
+                assert_eq!(buttons.len(), 2);
+                assert_eq!(buttons[0].label, "Get Started");
+                assert_eq!(buttons[0].href, "/signup");
+                assert!(buttons[0].primary);
+                assert_eq!(buttons[1].label, "Learn More");
+                assert_eq!(buttons[1].href, "/docs");
+                assert!(!buttons[1].primary);
+                assert_eq!(align, "center");
+                assert!(badge.is_none());
+                assert!(image.is_none());
+            }
+            other => panic!("Expected Hero, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_hero_with_badge_and_image() {
+        let content = "# Welcome Home\n\nYour new favorite tool.\n\n[Try Free](/free){primary}";
+        let block = unknown(
+            "hero",
+            attrs(&[
+                ("badge", AttrValue::String("New".into())),
+                ("image", AttrValue::String("hero.png".into())),
+                ("align", AttrValue::String("left".into())),
+            ]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::Hero {
+                headline,
+                badge,
+                image,
+                align,
+                buttons,
+                ..
+            } => {
+                assert_eq!(headline, Some("Welcome Home".to_string()));
+                assert_eq!(badge, Some("New".to_string()));
+                assert_eq!(image, Some("hero.png".to_string()));
+                assert_eq!(align, "left");
+                assert_eq!(buttons.len(), 1);
+                assert!(buttons[0].primary);
+            }
+            other => panic!("Expected Hero, got {other:?}"),
+        }
+    }
+
+    // -- Features ----------------------------------------------
+
+    #[test]
+    fn resolve_features_basic() {
+        let content = "### Fast {icon=zap}\n\nBlazingly fast builds.\n\n### Secure {icon=lock}\n\nEnd-to-end encryption.\n\n### Simple {icon=star}\n\nNo config needed.";
+        let block = unknown("features", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Features { cards, cols, .. } => {
+                assert_eq!(cards.len(), 3);
+                assert_eq!(cards[0].title, "Fast");
+                assert_eq!(cards[0].icon, Some("zap".to_string()));
+                assert!(cards[0].body.contains("Blazingly fast"));
+                assert_eq!(cards[1].title, "Secure");
+                assert_eq!(cards[1].icon, Some("lock".to_string()));
+                assert_eq!(cards[2].title, "Simple");
+                assert_eq!(cards[2].icon, Some("star".to_string()));
+                assert!(cols.is_none());
+            }
+            other => panic!("Expected Features, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_features_with_link() {
+        let content = "### Docs\n\nComprehensive documentation.\n\n[Read Docs](/docs)";
+        let block = unknown(
+            "features",
+            attrs(&[("cols", AttrValue::String("2".into()))]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::Features { cards, cols, .. } => {
+                assert_eq!(cards.len(), 1);
+                assert_eq!(cards[0].title, "Docs");
+                assert_eq!(cards[0].link_label, Some("Read Docs".to_string()));
+                assert_eq!(cards[0].link_href, Some("/docs".to_string()));
+                assert!(!cards[0].body.contains("[Read Docs]"));
+                assert_eq!(cols, Some(2));
+            }
+            other => panic!("Expected Features, got {other:?}"),
+        }
+    }
+
+    // -- Steps -------------------------------------------------
+
+    #[test]
+    fn resolve_steps_basic() {
+        let content = "### Sign Up {time=\"1 min\"}\n\nCreate your account.\n\n### Configure\n\nSet your preferences.\n\n### Deploy {time=\"5 min\"}\n\nShip to production.";
+        let block = unknown("steps", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Steps { steps, .. } => {
+                assert_eq!(steps.len(), 3);
+                assert_eq!(steps[0].title, "Sign Up");
+                assert_eq!(steps[0].time, Some("1 min".to_string()));
+                assert!(steps[0].body.contains("Create your account"));
+                assert_eq!(steps[1].title, "Configure");
+                assert!(steps[1].time.is_none());
+                assert_eq!(steps[2].title, "Deploy");
+                assert_eq!(steps[2].time, Some("5 min".to_string()));
+            }
+            other => panic!("Expected Steps, got {other:?}"),
+        }
+    }
+
+    // -- Stats -------------------------------------------------
+
+    #[test]
+    fn resolve_stats_basic() {
+        let content = "- 99.9% {label=\"Uptime\" color=\"#22c55e\"}\n- 10K+ {label=\"Users\"}\n- <50ms {label=\"Latency\" color=\"#3b82f6\"}\n- 24/7 {label=\"Support\"}";
+        let block = unknown("stats", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Stats { items, .. } => {
+                assert_eq!(items.len(), 4);
+                assert_eq!(items[0].value, "99.9%");
+                assert_eq!(items[0].label, "Uptime");
+                assert_eq!(items[0].color, Some("#22c55e".to_string()));
+                assert_eq!(items[1].value, "10K+");
+                assert_eq!(items[1].label, "Users");
+                assert!(items[1].color.is_none());
+                assert_eq!(items[2].value, "<50ms");
+                assert_eq!(items[2].label, "Latency");
+                assert_eq!(items[2].color, Some("#3b82f6".to_string()));
+                assert_eq!(items[3].value, "24/7");
+                assert_eq!(items[3].label, "Support");
+            }
+            other => panic!("Expected Stats, got {other:?}"),
+        }
+    }
+
+    // -- Comparison --------------------------------------------
+
+    #[test]
+    fn resolve_comparison_basic() {
+        let content = "| Feature | Free | Pro | Team |\n|---|---|---|---|\n| Projects | 3 | Unlimited | Unlimited |\n| Storage | 1GB | 10GB | 100GB |\n| Support | Community | Email | Priority |";
+        let block = unknown("comparison", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Comparison {
+                headers,
+                rows,
+                highlight,
+                ..
+            } => {
+                assert_eq!(headers, vec!["Feature", "Free", "Pro", "Team"]);
+                assert_eq!(rows.len(), 3);
+                assert_eq!(rows[0], vec!["Projects", "3", "Unlimited", "Unlimited"]);
+                assert_eq!(rows[1][0], "Storage");
+                assert_eq!(rows[2][3], "Priority");
+                assert!(highlight.is_none());
+            }
+            other => panic!("Expected Comparison, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_comparison_highlight() {
+        let content = "| | Basic | Pro |\n|---|---|---|\n| Price | $0 | $12/mo |";
+        let block = unknown(
+            "comparison",
+            attrs(&[("highlight", AttrValue::String("Pro".into()))]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::Comparison {
+                headers,
+                rows,
+                highlight,
+                ..
+            } => {
+                assert_eq!(headers, vec!["", "Basic", "Pro"]);
+                assert_eq!(rows.len(), 1);
+                assert_eq!(highlight, Some("Pro".to_string()));
+            }
+            other => panic!("Expected Comparison, got {other:?}"),
+        }
+    }
+
+    // -- Logo --------------------------------------------------
+
+    #[test]
+    fn resolve_logo_basic() {
+        let block = unknown(
+            "logo",
+            attrs(&[
+                ("src", AttrValue::String("/logo.svg".into())),
+                ("alt", AttrValue::String("Acme Inc".into())),
+                ("size", AttrValue::String("120".into())),
+            ]),
+            "",
+        );
+        match resolve_block(block) {
+            Block::Logo {
+                src, alt, size, ..
+            } => {
+                assert_eq!(src, "/logo.svg");
+                assert_eq!(alt, Some("Acme Inc".to_string()));
+                assert_eq!(size, Some(120));
+            }
+            other => panic!("Expected Logo, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_logo_defaults() {
+        let block = unknown(
+            "logo",
+            attrs(&[("src", AttrValue::String("brand.png".into()))]),
+            "",
+        );
+        match resolve_block(block) {
+            Block::Logo {
+                src, alt, size, ..
+            } => {
+                assert_eq!(src, "brand.png");
+                assert!(alt.is_none());
+                assert!(size.is_none());
+            }
+            other => panic!("Expected Logo, got {other:?}"),
+        }
+    }
+
+    // -- Toc ---------------------------------------------------
+
+    #[test]
+    fn resolve_toc_default_depth() {
+        let block = unknown("toc", Attrs::new(), "");
+        match resolve_block(block) {
+            Block::Toc {
+                depth, entries, ..
+            } => {
+                assert_eq!(depth, 3);
+                assert!(entries.is_empty());
+            }
+            other => panic!("Expected Toc, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_toc_custom_depth() {
+        let block = unknown(
+            "toc",
+            attrs(&[("depth", AttrValue::String("2".into()))]),
+            "",
+        );
+        match resolve_block(block) {
+            Block::Toc { depth, .. } => {
+                assert_eq!(depth, 2);
+            }
+            other => panic!("Expected Toc, got {other:?}"),
+        }
+    }
+
+    // -- BeforeAfter -----------------------------------------------
+
+    #[test]
+    fn resolve_before_after_basic() {
+        let content = "### Before\n- Manual | Write everything by hand\n- Slow | Takes hours\n### After\n- Automated | One-click generation\n- Fast | Takes seconds";
+        let block = unknown(
+            "before-after",
+            attrs(&[("transition", AttrValue::String("SurfDoc".into()))]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::BeforeAfter {
+                before_items,
+                after_items,
+                transition,
+                ..
+            } => {
+                assert_eq!(before_items.len(), 2);
+                assert_eq!(before_items[0].label, "Manual");
+                assert_eq!(before_items[0].detail, "Write everything by hand");
+                assert_eq!(after_items.len(), 2);
+                assert_eq!(after_items[1].label, "Fast");
+                assert_eq!(transition, Some("SurfDoc".to_string()));
+            }
+            other => panic!("Expected BeforeAfter, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_before_after_no_transition() {
+        let content = "### Before\n- Old | Legacy way\n### After\n- New | Modern way";
+        let block = unknown("before-after", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::BeforeAfter {
+                before_items,
+                after_items,
+                transition,
+                ..
+            } => {
+                assert_eq!(before_items.len(), 1);
+                assert_eq!(after_items.len(), 1);
+                assert_eq!(transition, None);
+            }
+            other => panic!("Expected BeforeAfter, got {other:?}"),
+        }
+    }
+
+    // -- Pipeline --------------------------------------------------
+
+    #[test]
+    fn resolve_pipeline_basic() {
+        let content = "Phone | User's device\nAI Chat | Natural language\nSurfDoc | Structured output";
+        let block = unknown("pipeline", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Pipeline { steps, .. } => {
+                assert_eq!(steps.len(), 3);
+                assert_eq!(steps[0].label, "Phone");
+                assert_eq!(steps[0].description, Some("User's device".to_string()));
+                assert_eq!(steps[2].label, "SurfDoc");
+            }
+            other => panic!("Expected Pipeline, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_pipeline_no_desc() {
+        let content = "Step 1\nStep 2\nStep 3";
+        let block = unknown("pipeline", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Pipeline { steps, .. } => {
+                assert_eq!(steps.len(), 3);
+                assert_eq!(steps[0].label, "Step 1");
+                assert_eq!(steps[0].description, None);
+            }
+            other => panic!("Expected Pipeline, got {other:?}"),
+        }
+    }
+
+    // -- Section ---------------------------------------------------
+
+    #[test]
+    fn resolve_section_with_headline() {
+        let content = "## Why SurfDoc?\nThe future of documents\n\nSome body text here.";
+        let block = unknown(
+            "section",
+            attrs(&[("bg", AttrValue::String("muted".into()))]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::Section {
+                bg,
+                headline,
+                subtitle,
+                children,
+                ..
+            } => {
+                assert_eq!(bg, Some("muted".to_string()));
+                assert_eq!(headline, Some("Why SurfDoc?".to_string()));
+                assert_eq!(subtitle, Some("The future of documents".to_string()));
+                assert!(!children.is_empty());
+            }
+            other => panic!("Expected Section, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_section_bg_attr() {
+        let content = "## Features";
+        let block = unknown(
+            "section",
+            attrs(&[("bg", AttrValue::String("dark".into()))]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::Section { bg, headline, .. } => {
+                assert_eq!(bg, Some("dark".to_string()));
+                assert_eq!(headline, Some("Features".to_string()));
+            }
+            other => panic!("Expected Section, got {other:?}"),
+        }
+    }
+
+    // -- ProductCard -----------------------------------------------
+
+    #[test]
+    fn resolve_product_card_full() {
+        let content = "## Surf Browser\nNative SurfDoc viewer\n\nRender .surf files beautifully.\n\n- Fast rendering\n- Dark mode\n- Offline support\n\n[Download](/download)";
+        let block = unknown(
+            "product-card",
+            attrs(&[
+                ("badge", AttrValue::String("Available".into())),
+                ("badge-color", AttrValue::String("green".into())),
+            ]),
+            content,
+        );
+        match resolve_block(block) {
+            Block::ProductCard {
+                title,
+                subtitle,
+                badge,
+                badge_color,
+                body,
+                features,
+                cta_label,
+                cta_href,
+                ..
+            } => {
+                assert_eq!(title, "Surf Browser");
+                assert_eq!(subtitle, Some("Native SurfDoc viewer".to_string()));
+                assert_eq!(badge, Some("Available".to_string()));
+                assert_eq!(badge_color, Some("green".to_string()));
+                assert!(body.contains("Render .surf files"));
+                assert_eq!(features.len(), 3);
+                assert_eq!(features[0], "Fast rendering");
+                assert_eq!(cta_label, Some("Download".to_string()));
+                assert_eq!(cta_href, Some("/download".to_string()));
+            }
+            other => panic!("Expected ProductCard, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_product_card_minimal() {
+        let content = "## Simple Product\n\n- One feature";
+        let block = unknown("product-card", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::ProductCard {
+                title,
+                subtitle,
+                badge,
+                features,
+                cta_label,
+                ..
+            } => {
+                assert_eq!(title, "Simple Product");
+                assert_eq!(subtitle, None);
+                assert_eq!(badge, None);
+                assert_eq!(features.len(), 1);
+                assert_eq!(cta_label, None);
+            }
+            other => panic!("Expected ProductCard, got {other:?}"),
         }
     }
 }

@@ -327,6 +327,86 @@ pub enum Block {
         label: Option<String>,
         span: Span,
     },
+    /// Full hero section with headline, subtitle, CTA buttons.
+    Hero {
+        headline: Option<String>,
+        subtitle: Option<String>,
+        badge: Option<String>,
+        align: String,
+        image: Option<String>,
+        buttons: Vec<HeroButton>,
+        content: String,
+        span: Span,
+    },
+    /// Card grid for features, products, or values.
+    Features {
+        cards: Vec<FeatureCard>,
+        cols: Option<u32>,
+        span: Span,
+    },
+    /// Numbered process/timeline steps.
+    Steps {
+        steps: Vec<StepItem>,
+        span: Span,
+    },
+    /// Row of metric/stat cards.
+    Stats {
+        items: Vec<StatItem>,
+        span: Span,
+    },
+    /// Feature comparison matrix with check/dash rendering.
+    Comparison {
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+        highlight: Option<String>,
+        span: Span,
+    },
+    /// Centered brand/logo display.
+    Logo {
+        src: String,
+        alt: Option<String>,
+        size: Option<u32>,
+        span: Span,
+    },
+    /// Auto-generated table of contents from document headings.
+    Toc {
+        depth: u32,
+        entries: Vec<TocEntry>,
+        span: Span,
+    },
+    /// Before/After problem→solution visualization.
+    BeforeAfter {
+        before_items: Vec<BeforeAfterItem>,
+        after_items: Vec<BeforeAfterItem>,
+        transition: Option<String>,
+        span: Span,
+    },
+    /// Horizontal flow pipeline with arrows between steps.
+    Pipeline {
+        steps: Vec<PipelineStep>,
+        span: Span,
+    },
+    /// Page section container with background control and child blocks.
+    Section {
+        bg: Option<String>,
+        headline: Option<String>,
+        subtitle: Option<String>,
+        content: String,
+        children: Vec<Block>,
+        span: Span,
+    },
+    /// Rich product card with badge, body, features, and CTA.
+    ProductCard {
+        title: String,
+        subtitle: Option<String>,
+        badge: Option<String>,
+        badge_color: Option<String>,
+        body: String,
+        features: Vec<String>,
+        cta_label: Option<String>,
+        cta_href: Option<String>,
+        span: Span,
+    },
 }
 
 /// Callout/admonition type.
@@ -467,6 +547,62 @@ pub struct FooterSection {
 pub struct SocialLink {
     pub platform: String,
     pub href: String,
+}
+
+/// A button within a `Hero` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeroButton {
+    pub label: String,
+    pub href: String,
+    pub primary: bool,
+}
+
+/// A card within a `Features` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureCard {
+    pub title: String,
+    pub icon: Option<String>,
+    pub body: String,
+    pub link_label: Option<String>,
+    pub link_href: Option<String>,
+}
+
+/// A step within a `Steps` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StepItem {
+    pub title: String,
+    pub time: Option<String>,
+    pub body: String,
+}
+
+/// A stat within a `Stats` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatItem {
+    pub value: String,
+    pub label: String,
+    pub color: Option<String>,
+}
+
+/// A TOC entry within a `Toc` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TocEntry {
+    pub text: String,
+    pub id: String,
+    pub level: u32,
+}
+
+/// An item within a `BeforeAfter` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeforeAfterItem {
+    pub label: String,
+    pub detail: String,
+}
+
+/// A step within a `Pipeline` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineStep {
+    pub label: String,
+    pub description: Option<String>,
 }
 
 /// Inline extension found within text content.
