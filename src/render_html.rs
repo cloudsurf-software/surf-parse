@@ -3509,4 +3509,167 @@ About
         let html = to_html(&doc);
         assert!(html.contains("--accent: #0052CC"), "Valid hex color should pass through");
     }
+
+    // -- BeforeAfter -----------------------------------------------
+
+    #[test]
+    fn html_before_after_basic() {
+        let doc = doc_with(vec![Block::BeforeAfter {
+            before_items: vec![crate::types::BeforeAfterItem {
+                label: "Manual".into(),
+                detail: "Hand-written".into(),
+            }],
+            after_items: vec![crate::types::BeforeAfterItem {
+                label: "Automated".into(),
+                detail: "One-click".into(),
+            }],
+            transition: Some("SurfDoc".into()),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-before-after"));
+        assert!(html.contains("surfdoc-ba-dot-red"));
+        assert!(html.contains("surfdoc-ba-dot-green"));
+        assert!(html.contains("surfdoc-ba-transition"));
+        assert!(html.contains("SurfDoc"));
+        assert!(html.contains("Manual"));
+        assert!(html.contains("Automated"));
+    }
+
+    #[test]
+    fn html_before_after_no_transition() {
+        let doc = doc_with(vec![Block::BeforeAfter {
+            before_items: vec![crate::types::BeforeAfterItem {
+                label: "Old".into(),
+                detail: "Legacy".into(),
+            }],
+            after_items: vec![crate::types::BeforeAfterItem {
+                label: "New".into(),
+                detail: "Modern".into(),
+            }],
+            transition: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-before-after"));
+        assert!(!html.contains("surfdoc-ba-transition"));
+    }
+
+    // -- Pipeline --------------------------------------------------
+
+    #[test]
+    fn html_pipeline_basic() {
+        let doc = doc_with(vec![Block::Pipeline {
+            steps: vec![
+                crate::types::PipelineStep { label: "Phone".into(), description: Some("Input".into()) },
+                crate::types::PipelineStep { label: "AI".into(), description: None },
+                crate::types::PipelineStep { label: "App".into(), description: Some("Output".into()) },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-pipeline"));
+        assert!(html.contains("surfdoc-pipeline-step"));
+        assert!(html.contains("surfdoc-pipeline-arrow"));
+        assert!(html.contains("Phone"));
+        assert!(html.contains("Input"));
+    }
+
+    #[test]
+    fn html_pipeline_no_arrows_single_step() {
+        let doc = doc_with(vec![Block::Pipeline {
+            steps: vec![
+                crate::types::PipelineStep { label: "Solo".into(), description: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-pipeline"));
+        assert!(!html.contains("surfdoc-pipeline-arrow"));
+    }
+
+    // -- Section ---------------------------------------------------
+
+    #[test]
+    fn html_section_muted() {
+        let doc = doc_with(vec![Block::Section {
+            bg: Some("muted".into()),
+            headline: Some("Features".into()),
+            subtitle: Some("What we offer".into()),
+            content: String::new(),
+            children: vec![Block::Markdown {
+                content: "Some content".into(),
+                span: span(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-section section-muted"));
+        assert!(html.contains("surfdoc-section-header"));
+        assert!(html.contains("Features"));
+        assert!(html.contains("What we offer"));
+    }
+
+    #[test]
+    fn html_section_no_bg() {
+        let doc = doc_with(vec![Block::Section {
+            bg: None,
+            headline: Some("Title".into()),
+            subtitle: None,
+            content: String::new(),
+            children: vec![],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("class=\"surfdoc-section\""));
+        assert!(!html.contains("section-muted"));
+    }
+
+    // -- ProductCard -----------------------------------------------
+
+    #[test]
+    fn html_product_card_full() {
+        let doc = doc_with(vec![Block::ProductCard {
+            title: "Surf Browser".into(),
+            subtitle: Some("Native viewer".into()),
+            badge: Some("Available".into()),
+            badge_color: Some("green".into()),
+            body: "Render .surf files.".into(),
+            features: vec!["Fast".into(), "Dark mode".into()],
+            cta_label: Some("Download".into()),
+            cta_href: Some("/download".into()),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-product-card"));
+        assert!(html.contains("surfdoc-badge-green"));
+        assert!(html.contains("Available"));
+        assert!(html.contains("Surf Browser"));
+        assert!(html.contains("Native viewer"));
+        assert!(html.contains("surfdoc-product-features"));
+        assert!(html.contains("Fast"));
+        assert!(html.contains("surfdoc-product-cta"));
+        assert!(html.contains("/download"));
+    }
+
+    #[test]
+    fn html_product_card_minimal() {
+        let doc = doc_with(vec![Block::ProductCard {
+            title: "Basic".into(),
+            subtitle: None,
+            badge: None,
+            badge_color: None,
+            body: String::new(),
+            features: vec![],
+            cta_label: None,
+            cta_href: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-product-card"));
+        assert!(html.contains("Basic"));
+        assert!(!html.contains("surfdoc-badge"));
+        assert!(!html.contains("surfdoc-product-features"));
+        assert!(!html.contains("surfdoc-product-cta"));
+    }
 }

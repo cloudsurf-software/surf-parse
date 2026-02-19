@@ -846,4 +846,80 @@ mod tests {
             "Output should not contain ::metric markers"
         );
     }
+
+    #[test]
+    fn md_before_after() {
+        let doc = doc_with(vec![Block::BeforeAfter {
+            before_items: vec![crate::types::BeforeAfterItem {
+                label: "Manual".into(),
+                detail: "Hand-written".into(),
+            }],
+            after_items: vec![crate::types::BeforeAfterItem {
+                label: "Auto".into(),
+                detail: "Generated".into(),
+            }],
+            transition: Some("SurfDoc".into()),
+            span: span(),
+        }]);
+        let md = to_markdown(&doc);
+        assert!(md.contains("**Before**"));
+        assert!(md.contains("**After**"));
+        assert!(md.contains("Manual"));
+        assert!(md.contains("SurfDoc"));
+    }
+
+    #[test]
+    fn md_pipeline() {
+        let doc = doc_with(vec![Block::Pipeline {
+            steps: vec![
+                crate::types::PipelineStep { label: "A".into(), description: Some("first".into()) },
+                crate::types::PipelineStep { label: "B".into(), description: None },
+            ],
+            span: span(),
+        }]);
+        let md = to_markdown(&doc);
+        assert!(md.contains("A (first)"));
+        assert!(md.contains("\u{2192}"));
+        assert!(md.contains("B"));
+    }
+
+    #[test]
+    fn md_section() {
+        let doc = doc_with(vec![Block::Section {
+            bg: Some("muted".into()),
+            headline: Some("Features".into()),
+            subtitle: Some("What we offer".into()),
+            content: String::new(),
+            children: vec![Block::Markdown {
+                content: "Some content".into(),
+                span: span(),
+            }],
+            span: span(),
+        }]);
+        let md = to_markdown(&doc);
+        assert!(md.contains("## Features"));
+        assert!(md.contains("What we offer"));
+        assert!(md.contains("Some content"));
+    }
+
+    #[test]
+    fn md_product_card() {
+        let doc = doc_with(vec![Block::ProductCard {
+            title: "Surf".into(),
+            subtitle: Some("Browser".into()),
+            badge: Some("Available".into()),
+            badge_color: None,
+            body: "A great product.".into(),
+            features: vec!["Fast".into(), "Secure".into()],
+            cta_label: Some("Get it".into()),
+            cta_href: Some("/download".into()),
+            span: span(),
+        }]);
+        let md = to_markdown(&doc);
+        assert!(md.contains("### Surf [Available]"));
+        assert!(md.contains("*Browser*"));
+        assert!(md.contains("A great product."));
+        assert!(md.contains("- Fast"));
+        assert!(md.contains("[Get it](/download)"));
+    }
 }

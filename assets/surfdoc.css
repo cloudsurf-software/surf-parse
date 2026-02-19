@@ -1634,6 +1634,72 @@ a.surfdoc-cta-secondary:hover { background: var(--surface-hover); color: var(--a
 .surfdoc-toc-l2 a { padding-left: 0.75rem; }
 .surfdoc-toc-l3 a { padding-left: 1.5rem; }
 
+/* ============================================================
+   57. SURFDOC BEFORE-AFTER
+   ============================================================ */
+
+.surfdoc-before-after { margin: 2rem 0; }
+.surfdoc-ba-before, .surfdoc-ba-after { display: grid; gap: 0.75rem; margin: 0.75rem 0; }
+.surfdoc-ba-heading { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0 0 0.25rem; }
+.surfdoc-ba-item { display: flex; align-items: baseline; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.surfdoc-ba-item strong { white-space: nowrap; }
+.surfdoc-ba-item span { color: var(--text-muted); }
+.surfdoc-ba-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.surfdoc-ba-dot-red { background: #ef4444; }
+.surfdoc-ba-dot-green { background: #22c55e; }
+.surfdoc-ba-item-green { border-color: rgba(34, 197, 94, 0.3); }
+.surfdoc-ba-transition { display: flex; align-items: center; gap: 1rem; margin: 1.25rem 0; }
+.surfdoc-ba-line { flex: 1; height: 1px; background: var(--border); }
+.surfdoc-ba-label { font-size: 0.875rem; font-weight: 600; color: var(--accent, #3b82f6); white-space: nowrap; }
+
+/* ============================================================
+   58. SURFDOC PIPELINE
+   ============================================================ */
+
+.surfdoc-pipeline { display: flex; align-items: stretch; gap: 0; margin: 2rem 0; flex-wrap: wrap; justify-content: center; }
+.surfdoc-pipeline-step { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-align: center; min-width: 120px; }
+.surfdoc-pipeline-label { font-size: 0.9375rem; }
+.surfdoc-pipeline-desc { font-size: 0.8125rem; color: var(--text-muted); }
+.surfdoc-pipeline-arrow { display: flex; align-items: center; padding: 0 0.5rem; font-size: 1.25rem; color: var(--text-muted); }
+@media (max-width: 640px) {
+    .surfdoc-pipeline { flex-direction: column; align-items: center; }
+    .surfdoc-pipeline-arrow { transform: rotate(90deg); padding: 0.25rem 0; }
+}
+
+/* ============================================================
+   59. SURFDOC SECTION
+   ============================================================ */
+
+.surfdoc-section { margin: 0; padding: 3rem 0; }
+.surfdoc-section-inner { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; }
+.surfdoc-section-header { text-align: center; margin-bottom: 2rem; }
+.surfdoc-section-header h2 { font-size: 1.75rem; margin: 0 0 0.5rem; }
+.surfdoc-section-header p { font-size: 1.125rem; color: var(--text-muted); margin: 0; }
+.section-muted { background: var(--surface); margin-left: calc(-50vw + 50%); margin-right: calc(-50vw + 50%); padding-left: calc(50vw - 50%); padding-right: calc(50vw - 50%); }
+.section-dark { background: #111; color: #f5f5f5; margin-left: calc(-50vw + 50%); margin-right: calc(-50vw + 50%); padding-left: calc(50vw - 50%); padding-right: calc(50vw - 50%); }
+
+/* ============================================================
+   60. SURFDOC PRODUCT CARD
+   ============================================================ */
+
+.surfdoc-product-card { border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; background: var(--surface); margin: 1rem 0; }
+.surfdoc-product-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.surfdoc-product-titles { flex: 1; }
+.surfdoc-product-title { margin: 0; font-size: 1.25rem; }
+.surfdoc-product-subtitle { margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.9375rem; }
+.surfdoc-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; background: rgba(107, 114, 128, 0.15); color: var(--text-muted); }
+.surfdoc-badge-green { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.surfdoc-badge-yellow { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.surfdoc-badge-blue { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.surfdoc-badge-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.surfdoc-product-body { margin-bottom: 1rem; color: var(--text-muted); }
+.surfdoc-product-body p { margin: 0; }
+.surfdoc-product-features { list-style: none; padding: 0; margin: 0 0 1rem; }
+.surfdoc-product-features li { padding: 0.25rem 0; padding-left: 1.25rem; position: relative; color: var(--text-muted); }
+.surfdoc-product-features li::before { content: "\2713"; position: absolute; left: 0; color: #22c55e; font-weight: 700; }
+.surfdoc-product-cta { display: inline-block; padding: 0.5rem 1.25rem; border-radius: 8px; background: var(--accent, #3b82f6); color: #fff; text-decoration: none; font-weight: 600; font-size: 0.875rem; transition: opacity 0.15s; }
+.surfdoc-product-cta:hover { opacity: 0.9; }
+
 /* ================================================================
    ================================================================
    LIGHT MODE — SURFDOC CONTENT OVERRIDES
