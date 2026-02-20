@@ -93,6 +93,37 @@ fn resolve_font_preset(name: &str) -> Option<FontPreset> {
     }
 }
 
+/// Parse a hex color (#RGB, #RRGGBB) and return the WCAG-compliant text color.
+/// Returns "#fff" for dark accents, "#1a1a2e" for light accents.
+fn accent_text_color(hex: &str) -> &'static str {
+    let hex = hex.trim().trim_start_matches('#');
+    let (r, g, b) = match hex.len() {
+        3 => {
+            let r = u8::from_str_radix(&hex[0..1], 16).unwrap_or(0) * 17;
+            let g = u8::from_str_radix(&hex[1..2], 16).unwrap_or(0) * 17;
+            let b = u8::from_str_radix(&hex[2..3], 16).unwrap_or(0) * 17;
+            (r, g, b)
+        }
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
+            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
+            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
+            (r, g, b)
+        }
+        _ => return "#fff", // Can't parse — default to white
+    };
+    // sRGB to linear, then relative luminance (WCAG 2.1)
+    fn linearize(c: u8) -> f64 {
+        let s = c as f64 / 255.0;
+        if s <= 0.04045 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+    }
+    let lum = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b);
+    // Threshold 0.25: ensures minimum ~3.5:1 contrast ratio (WCAG AA for large
+    // text / UI components). Catches greens, yellows, ambers while keeping
+    // standard blues (#3b82f6) and reds (#ef4444) with white text.
+    if lum > 0.25 { "#1a1a2e" } else { "#fff" }
+}
+
 /// Apply font/style properties from a `StyleProperty` list to CSS overrides.
 /// Collects any required font imports into the `imports` set.
 fn apply_style_overrides(properties: &[StyleProperty], css_overrides: &mut String, imports: &mut Vec<&'static str>) {
@@ -102,6 +133,9 @@ fn apply_style_overrides(properties: &[StyleProperty], css_overrides: &mut Strin
                 let safe = sanitize_css_value(&prop.value);
                 if !safe.is_empty() {
                     css_overrides.push_str(&format!("--accent: {};", safe));
+                    // Compute ADA-compliant text color for accent backgrounds
+                    let text = accent_text_color(&prop.value);
+                    css_overrides.push_str(&format!("--accent-text: {};", text));
                 }
             }
             "font" => {
@@ -2820,8 +2854,8 @@ mod tests {
 
     #[test]
     fn cta_primary_css_sets_white_text() {
-        // Verify the CSS actually sets color: #fff on primary buttons
-        assert!(SURFDOC_CSS.contains("a.surfdoc-cta-primary { background: var(--accent); color: #fff;"));
+        // Verify the CSS uses --accent-text for ADA-compliant button text color
+        assert!(SURFDOC_CSS.contains("a.surfdoc-cta-primary { background: var(--accent); color: var(--accent-text, #fff);"));
     }
 
     // -- Bug regression: alternating section backgrounds ----------------------
@@ -3161,8 +3195,8 @@ mod tests {
         }]);
         let html = to_html(&doc);
         // Must scope to .surfdoc, NOT :root
-        assert!(html.contains("<style>.surfdoc { --accent: #ec4899; }</style>"),
-            "accent override should be scoped to .surfdoc, got: {}", html);
+        assert!(html.contains("<style>.surfdoc { --accent: #ec4899;--accent-text: #fff; }</style>"),
+            "accent override should be scoped to .surfdoc with accent-text, got: {}", html);
         assert!(!html.contains(":root { --accent:"),
             "accent override must NOT use :root (leaks into editor chrome)");
     }
@@ -3517,6 +3551,28 @@ About
         }]);
         let html = to_html(&doc);
         assert!(html.contains("--accent: #0052CC"), "Valid hex color should pass through");
+        assert!(html.contains("--accent-text:"), "accent-text should be computed for valid accent");
+    }
+
+    #[test]
+    fn accent_text_color_wcag_compliance() {
+        // Light accents → dark text (luminance > 0.25)
+        assert_eq!(accent_text_color("#4CAF50"), "#1a1a2e"); // Green (L≈0.33)
+        assert_eq!(accent_text_color("#f59e0b"), "#1a1a2e"); // Amber (L≈0.57)
+        assert_eq!(accent_text_color("#ffffff"), "#1a1a2e"); // White (L=1.0)
+        assert_eq!(accent_text_color("#eab308"), "#1a1a2e"); // Yellow (L≈0.55)
+        // Dark accents → white text (luminance ≤ 0.25)
+        assert_eq!(accent_text_color("#3b82f6"), "#fff");    // Blue (L≈0.24)
+        assert_eq!(accent_text_color("#283593"), "#fff");    // Indigo (L≈0.04)
+        assert_eq!(accent_text_color("#000000"), "#fff");    // Black (L=0)
+        assert_eq!(accent_text_color("#ef4444"), "#fff");    // Red (L≈0.23)
+        assert_eq!(accent_text_color("#ec4899"), "#fff");    // Pink (L≈0.25)
+        assert_eq!(accent_text_color("#8b5cf6"), "#fff");    // Purple (L≈0.13)
+        // Short hex
+        assert_eq!(accent_text_color("#fff"), "#1a1a2e");
+        assert_eq!(accent_text_color("#000"), "#fff");
+        // Invalid → default white
+        assert_eq!(accent_text_color("not-a-color"), "#fff");
     }
 
     // -- BeforeAfter -----------------------------------------------
