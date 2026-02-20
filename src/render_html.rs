@@ -1037,6 +1037,12 @@ fn render_block(block: &Block) -> String {
             let mut parts = Vec::new();
             parts.push(format!("<section class=\"surfdoc-hero{}\">", align_cls));
             parts.push("<div class=\"surfdoc-hero-inner\">".to_string());
+            // Centered layout: image above text (logo/product image)
+            if align != "left" {
+                if let Some(img) = image {
+                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"\"></div>", escape_html(img)));
+                }
+            }
             if let Some(b) = badge {
                 parts.push(format!("<span class=\"surfdoc-hero-badge\">{}</span>", escape_html(b)));
             }
@@ -1055,8 +1061,11 @@ fn render_block(block: &Block) -> String {
                 parts.push("</div>".to_string());
             }
             parts.push("</div>".to_string());
-            if let Some(img) = image {
-                parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"\"></div>", escape_html(img)));
+            // Left-aligned layout: image to the side (side-by-side)
+            if align == "left" {
+                if let Some(img) = image {
+                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"\"></div>", escape_html(img)));
+                }
             }
             parts.push("</section>".to_string());
             parts.join("")

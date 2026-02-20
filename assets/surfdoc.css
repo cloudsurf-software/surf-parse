@@ -1557,6 +1557,8 @@ a.surfdoc-cta-secondary:hover { background: var(--surface-hover); color: var(--a
 .surfdoc-hero-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
 .surfdoc-hero-btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .surfdoc-hero-btn-secondary:hover { border-color: var(--text-faint); background: var(--surface); }
+.surfdoc-hero-image { margin-bottom: 1.5rem; }
+.surfdoc-hero-image img { max-height: 280px; border-radius: 12px; }
 .surfdoc-hero-image-side { display: flex; align-items: center; justify-content: center; }
 .surfdoc-hero-image-side img { max-width: 100%; border-radius: 12px; border: 1px solid var(--border); }
 
