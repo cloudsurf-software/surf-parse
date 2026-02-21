@@ -1519,7 +1519,7 @@ pub fn extract_site(doc: &SurfDoc) -> (Option<SiteConfig>, Vec<PageEntry>, Vec<B
 const SITE_NAV_CSS: &str = r#"
 /* Site navigation */
 .surfdoc-site-nav { display: flex; align-items: center; flex-wrap: wrap; padding: 0.75rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--border); max-width: 100%; position: sticky; top: 0; z-index: 100; }
-.surfdoc-site-nav .site-name { font-weight: 700; color: #fff; font-size: 1rem; text-decoration: none; margin-right: auto; }
+.surfdoc-site-nav .site-name { font-weight: 700; color: var(--text); font-size: 1rem; text-decoration: none; margin-right: auto; }
 .site-nav-links { display: flex; align-items: center; gap: 0.25rem; }
 .site-nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.625rem; border-radius: 6px; transition: color 0.15s, background 0.15s; }
 .site-nav-links a:hover { color: var(--text); background: var(--surface-hover); }
@@ -2813,28 +2813,17 @@ mod tests {
         assert!(html.contains("<title>My Site</title>"));
     }
 
-    // -- Bug regression: CTA specificity fix (a.surfdoc-cta beats .surfdoc a) --
+    // -- Bug regression: CTA specificity fix (.surfdoc .surfdoc-cta beats .surfdoc a) --
 
     #[test]
-    fn css_cta_selectors_use_element_qualifier() {
-        // The CSS must use `a.surfdoc-cta-primary` (specificity 0-1-1) to beat
-        // `.surfdoc a` (also 0-1-1 but later in cascade). Without the `a` element
-        // qualifier, link color var(--accent) overrides the white button text.
-        assert!(SURFDOC_CSS.contains("a.surfdoc-cta-primary"));
-        assert!(SURFDOC_CSS.contains("a.surfdoc-cta-secondary"));
-        assert!(SURFDOC_CSS.contains("a.surfdoc-cta {"));
-        // Every occurrence of .surfdoc-cta-primary must be preceded by `a`
-        // (i.e. no bare `.surfdoc-cta-primary` without element qualifier)
-        for (i, _) in SURFDOC_CSS.match_indices(".surfdoc-cta-primary") {
-            if i == 0 || SURFDOC_CSS.as_bytes()[i - 1] != b'a' {
-                panic!("Found bare .surfdoc-cta-primary without 'a' element qualifier at byte {}", i);
-            }
-        }
-        for (i, _) in SURFDOC_CSS.match_indices(".surfdoc-cta-secondary") {
-            if i == 0 || SURFDOC_CSS.as_bytes()[i - 1] != b'a' {
-                panic!("Found bare .surfdoc-cta-secondary without 'a' element qualifier at byte {}", i);
-            }
-        }
+    fn css_cta_selectors_use_parent_scope() {
+        // The CSS must use `.surfdoc .surfdoc-cta-primary` (specificity 0-2-0) to beat
+        // `.surfdoc a` (0-1-1). This works for both <a> and <button> elements.
+        assert!(SURFDOC_CSS.contains(".surfdoc .surfdoc-cta-primary"));
+        assert!(SURFDOC_CSS.contains(".surfdoc .surfdoc-cta-secondary"));
+        assert!(SURFDOC_CSS.contains(".surfdoc .surfdoc-cta {"));
+        // Must NOT use element-qualified selectors (a.surfdoc-cta) since <button> also uses these classes
+        assert!(!SURFDOC_CSS.contains("a.surfdoc-cta"));
     }
 
     #[test]
@@ -2857,7 +2846,7 @@ mod tests {
     #[test]
     fn cta_primary_css_sets_white_text() {
         // Verify the CSS uses --accent-text for ADA-compliant button text color
-        assert!(SURFDOC_CSS.contains("a.surfdoc-cta-primary { background: var(--accent); color: var(--accent-text, #fff);"));
+        assert!(SURFDOC_CSS.contains(".surfdoc .surfdoc-cta-primary { background: var(--accent); color: var(--accent-text, #fff);"));
     }
 
     // -- Bug regression: alternating section backgrounds ----------------------
@@ -2935,7 +2924,7 @@ mod tests {
         assert!(html.contains("<style>"));
         assert!(html.contains("--background:"));
         assert!(html.contains(".surfdoc {"));
-        assert!(html.contains("a.surfdoc-cta-primary"));
+        assert!(html.contains(".surfdoc .surfdoc-cta-primary"));
     }
 
     #[test]
