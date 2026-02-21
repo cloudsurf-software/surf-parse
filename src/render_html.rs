@@ -1112,7 +1112,9 @@ fn render_block(block: &Block) -> String {
             for card in cards {
                 parts.push("<div class=\"surfdoc-feature-card\">".to_string());
                 if let Some(icon) = &card.icon {
-                    parts.push(format!("<span class=\"surfdoc-feature-icon\">{}</span>", escape_html(icon)));
+                    if let Some(svg) = get_icon(icon) {
+                        parts.push(format!("<span class=\"surfdoc-feature-icon\">{}</span>", svg));
+                    }
                 }
                 parts.push(format!("<h3 class=\"surfdoc-feature-title\">{}</h3>", escape_html(&card.title)));
                 if !card.body.is_empty() {
@@ -3097,6 +3099,131 @@ mod tests {
         let html = to_html(&doc);
         assert!(!html.contains("surfdoc-icon"));
         assert!(!html.contains("<svg"));
+    }
+
+    // -- Features icon tests ----------------------------------------------
+
+    #[test]
+    fn html_features_with_known_icon() {
+        let doc = doc_with(vec![Block::Features {
+            cards: vec![crate::types::FeatureCard {
+                title: "Fast".into(),
+                icon: Some("zap".into()),
+                body: "Lightning fast".into(),
+                link_label: None,
+                link_href: None,
+            }],
+            cols: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-feature-icon"), "should have icon wrapper");
+        assert!(html.contains("<svg"), "should contain inline SVG");
+        assert!(!html.contains(">zap<"), "should NOT render icon name as text");
+    }
+
+    #[test]
+    fn html_features_with_unknown_icon_omitted() {
+        let doc = doc_with(vec![Block::Features {
+            cards: vec![crate::types::FeatureCard {
+                title: "Mystery".into(),
+                icon: Some("nonexistent-icon".into()),
+                body: "No icon".into(),
+                link_label: None,
+                link_href: None,
+            }],
+            cols: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(!html.contains("surfdoc-feature-icon"), "unknown icon should be omitted");
+        assert!(!html.contains("nonexistent-icon"), "icon name should not appear as text");
+        assert!(html.contains("Mystery"), "title should still render");
+    }
+
+    #[test]
+    fn html_features_no_icon_no_svg() {
+        let doc = doc_with(vec![Block::Features {
+            cards: vec![crate::types::FeatureCard {
+                title: "Plain".into(),
+                icon: None,
+                body: "No icon".into(),
+                link_label: None,
+                link_href: None,
+            }],
+            cols: None,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(!html.contains("surfdoc-feature-icon"));
+        assert!(!html.contains("<svg"));
+        assert!(html.contains("Plain"));
+    }
+
+    #[test]
+    fn html_features_new_icons_resolve() {
+        // Test all the newly added icons render as SVGs
+        let new_icons = &[
+            "clock", "edit", "pencil", "shield", "zap", "lock", "phone",
+            "map-pin", "calendar", "users", "truck", "message-circle",
+            "image", "briefcase", "award", "layers", "package",
+            "trending-up", "coffee", "scissors", "wrench",
+        ];
+        for icon_name in new_icons {
+            let doc = doc_with(vec![Block::Features {
+                cards: vec![crate::types::FeatureCard {
+                    title: format!("Test {}", icon_name),
+                    icon: Some(icon_name.to_string()),
+                    body: String::new(),
+                    link_label: None,
+                    link_href: None,
+                }],
+                cols: None,
+                span: span(),
+            }]);
+            let html = to_html(&doc);
+            assert!(
+                html.contains("<svg"),
+                "Icon '{}' should render as SVG in features block",
+                icon_name
+            );
+            assert!(
+                html.contains("surfdoc-feature-icon"),
+                "Icon '{}' should have feature-icon wrapper",
+                icon_name
+            );
+        }
+    }
+
+    #[test]
+    fn html_features_edit_and_pencil_are_same() {
+        let doc_edit = doc_with(vec![Block::Features {
+            cards: vec![crate::types::FeatureCard {
+                title: "Edit".into(),
+                icon: Some("edit".into()),
+                body: String::new(),
+                link_label: None,
+                link_href: None,
+            }],
+            cols: None,
+            span: span(),
+        }]);
+        let doc_pencil = doc_with(vec![Block::Features {
+            cards: vec![crate::types::FeatureCard {
+                title: "Edit".into(),
+                icon: Some("pencil".into()),
+                body: String::new(),
+                link_label: None,
+                link_href: None,
+            }],
+            cols: None,
+            span: span(),
+        }]);
+        let html_edit = to_html(&doc_edit);
+        let html_pencil = to_html(&doc_pencil);
+        // Both should produce the same SVG
+        assert!(html_edit.contains("<svg"));
+        assert_eq!(html_edit, html_pencil);
     }
 
     // -- Font preset tests ------------------------------------------------

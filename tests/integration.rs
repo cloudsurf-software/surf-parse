@@ -1,6 +1,6 @@
 //! Integration tests that parse complete fixture files end-to-end.
 
-use surf_parse::{Block, Severity};
+use surf_parse::{Block, Severity, icons::get_icon};
 
 fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -249,4 +249,96 @@ fn validate_malformed() {
         has_error_or_warning,
         "malformed.surf should produce errors or warnings, got: {all_diags:?}"
     );
+}
+
+// -- E2E: Features with icons parse and render correctly ------------------
+
+#[test]
+fn e2e_features_icons_parse_and_render() {
+    let input = r#"---
+title: Icon Test
+---
+
+::features[cols=3]
+### Speed {icon=zap}
+Lightning fast performance.
+
+### Security {icon=shield}
+Enterprise-grade protection.
+
+### Time {icon=clock}
+Automatic time tracking.
+::"#;
+
+    let result = surf_parse::parse(input);
+    let errors: Vec<_> = result.diagnostics.iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "Should parse without errors: {:?}", errors);
+
+    // Should produce a Features block
+    let features = result.doc.blocks.iter().find(|b| matches!(b, Block::Features { .. }));
+    assert!(features.is_some(), "Should contain a Features block");
+
+    if let Some(Block::Features { cards, cols, .. }) = features {
+        assert_eq!(*cols, Some(3));
+        assert_eq!(cards.len(), 3);
+        assert_eq!(cards[0].icon.as_deref(), Some("zap"));
+        assert_eq!(cards[1].icon.as_deref(), Some("shield"));
+        assert_eq!(cards[2].icon.as_deref(), Some("clock"));
+    }
+
+    // Render to HTML and verify SVGs appear (not plain text)
+    let html = result.doc.to_html();
+    assert!(html.contains("<svg"), "HTML should contain inline SVGs");
+    assert!(html.contains("surfdoc-feature-icon"), "Should have icon wrappers");
+    assert!(!html.contains(">zap<"), "Should NOT render 'zap' as text");
+    assert!(!html.contains(">shield<"), "Should NOT render 'shield' as text");
+    assert!(!html.contains(">clock<"), "Should NOT render 'clock' as text");
+    // Titles should still render
+    assert!(html.contains("Speed"));
+    assert!(html.contains("Security"));
+    assert!(html.contains("Time"));
+}
+
+#[test]
+fn e2e_features_unknown_icon_graceful() {
+    let input = r#"---
+title: Unknown Icon Test
+---
+
+::features[cols=2]
+### Valid {icon=star}
+Has a known icon.
+
+### Invalid {icon=banana}
+Has an unknown icon — should be silently omitted.
+::"#;
+
+    let result = surf_parse::parse(input);
+    let html = result.doc.to_html();
+
+    // star should render as SVG
+    assert!(html.contains("<svg"), "Known icon should produce SVG");
+    // banana should NOT appear as text
+    assert!(!html.contains(">banana<"), "Unknown icon should not render as text");
+    // Both titles should render
+    assert!(html.contains("Valid"));
+    assert!(html.contains("Invalid"));
+}
+
+#[test]
+fn e2e_all_icons_resolvable() {
+    // Every icon in the library should resolve to a valid SVG
+    let all = surf_parse::icons::available_icons();
+    assert!(all.len() >= 40, "Should have at least 40 icons, got {}", all.len());
+
+    for name in all {
+        let svg = get_icon(name);
+        assert!(svg.is_some(), "Icon '{}' listed in available_icons() but get_icon() returns None", name);
+        let svg = svg.unwrap();
+        assert!(svg.starts_with("<svg"), "Icon '{}' SVG should start with <svg", name);
+        assert!(svg.ends_with("</svg>"), "Icon '{}' SVG should end with </svg>", name);
+        assert!(svg.contains("currentColor"), "Icon '{}' should use currentColor", name);
+    }
 }
