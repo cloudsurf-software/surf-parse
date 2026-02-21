@@ -1,8 +1,8 @@
 # surf-parse
 
-Parser for the **SurfDoc** format — a markdown superset with typed block directives for structured documents.
+Parser for the **SurfDoc** format — a typed document format with block directives for structured documents. Backward-compatible with Markdown.
 
-SurfDoc extends CommonMark with `::directive` blocks that represent data tables, callouts, decisions, metrics, tasks, code, figures, FAQ, pricing tables, landing page sections, and full multi-page site structures. Every block is typed, validated, and renderable to HTML, markdown, or ANSI terminal output.
+SurfDoc uses `::directive` blocks to represent data tables, callouts, decisions, metrics, tasks, code, figures, FAQ, pricing tables, landing page sections, and full multi-page site structures. Every block is typed, validated, and renderable to HTML, markdown, or ANSI terminal output. A `.surf` file without a renderer is still readable plain text.
 
 ## Usage
 

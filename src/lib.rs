@@ -1,8 +1,9 @@
 //! `surf-parse` — parser for the SurfDoc format.
 //!
-//! SurfDoc is a markdown superset with typed block directives, embedded data,
-//! and presentation hints. This crate provides the foundational parser that
-//! turns `.surf` (or `.md`) source text into a structured `SurfDoc` tree.
+//! SurfDoc is a typed document format with block directives, embedded data,
+//! and presentation hints. Backward-compatible with Markdown. This crate
+//! provides the foundational parser that turns `.surf` source text into a
+//! structured `SurfDoc` tree.
 //!
 //! # Quick start
 //!
