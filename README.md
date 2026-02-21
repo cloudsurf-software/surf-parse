@@ -14,19 +14,19 @@ let config = surf_parse::PageConfig::default();
 let html = result.doc.to_html_page(&config);
 ```
 
-## Block Types (35)
+## Block Types (37)
 
-**Core**: Callout, Data, Code, Tasks, Decision, Metric, Summary, Figure
-**Container**: Columns, Tabs
-**Web**: Cta, HeroImage, Testimonial, Style, Faq, PricingTable, Site, Page, Nav, Embed, Form, Gallery, Footer
-**Landing Page**: Hero, Features, Steps, Stats, Comparison, Logo, Toc
+**Core**: Callout, Code, Data, Decision, Details, Figure, Metric, Quote, Summary, Tasks
+**Layout**: Columns, Divider, Section, Tabs
+**Web**: Cta, Embed, Faq, Footer, Form, Gallery, HeroImage, Nav, PricingTable, Site, Page, Style, Testimonial
+**Landing Page**: BeforeAfter, Comparison, Features, Hero, Logo, Pipeline, ProductCard, Stats, Steps, Toc
 **Passthrough**: Unknown (unrecognized directives preserved)
 
 ## Features
 
-- Full CommonMark support via pulldown-cmark
+- CommonMark-compatible inline text rendering
 - YAML front matter parsing
-- 35 typed block directives with attribute parsing
+- 37 typed block directives with attribute parsing
 - 4 renderers: HTML (with embedded CSS), markdown degradation, ANSI terminal, PDF (feature-gated)
 - SurfDocBuilder for programmatic document construction
 - Round-trip serialization via `to_surf_source()`

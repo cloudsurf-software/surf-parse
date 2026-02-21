@@ -3,6 +3,7 @@ name = "surf-parse"
 version = "0.5.1"
 edition = "2024"
 license = "MIT"
+authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
 description = "Parser for the SurfDoc format — typed document format with block directives, Markdown-compatible"
 repository = "https://github.com/cloudsurf-software/surf-parse"
 homepage = "https://surfcontext.org"
