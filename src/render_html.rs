@@ -1609,6 +1609,8 @@ pub fn render_site_page(
     let mut css_overrides = String::new();
     if let Some(accent) = &site.accent {
         css_overrides.push_str(&format!("--accent: {};\n", escape_html(accent)));
+        let text = accent_text_color(accent);
+        css_overrides.push_str(&format!("--accent-text: {};\n", text));
     }
     let override_block = if css_overrides.is_empty() {
         String::new()
@@ -2752,6 +2754,51 @@ mod tests {
         assert!(html.contains("Hello World"));
         assert!(html.contains("surfdoc-site-footer"));
         assert!(html.contains("#3b82f6")); // accent override
+    }
+
+    #[test]
+    fn render_site_page_sets_accent_text_for_light_accent() {
+        let site = SiteConfig {
+            name: Some("Green Site".into()),
+            accent: Some("#22c55e".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &[], &config);
+
+        // Light accent (#22c55e) must get dark text for WCAG contrast
+        assert!(html.contains("--accent-text: #1a1a2e"), "light accent must set dark --accent-text");
+        assert!(html.contains("--accent: #22c55e"), "accent color must be set");
+    }
+
+    #[test]
+    fn render_site_page_sets_accent_text_for_dark_accent() {
+        let site = SiteConfig {
+            name: Some("Blue Site".into()),
+            accent: Some("#3b82f6".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &[], &config);
+
+        // Dark accent (#3b82f6) must get white text
+        assert!(html.contains("--accent-text: #fff"), "dark accent must set white --accent-text");
     }
 
     #[test]
