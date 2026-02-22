@@ -8,6 +8,8 @@ use crate::icons::get_icon;
 use crate::types::{Block, CalloutType, DecisionStatus, FormFieldType, StyleProperty, SurfDoc, Trend};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
+///
+/// Tables are wrapped in `<div class="surfdoc-table-wrap">` for responsive scrolling.
 fn render_markdown(content: &str) -> String {
     let mut options = pulldown_cmark::Options::empty();
     options.insert(pulldown_cmark::Options::ENABLE_TABLES);
@@ -16,6 +18,9 @@ fn render_markdown(content: &str) -> String {
     let parser = pulldown_cmark::Parser::new_ext(content, options);
     let mut html_output = String::new();
     pulldown_cmark::html::push_html(&mut html_output, parser);
+    // Wrap bare <table> tags in scroll containers for mobile responsiveness
+    html_output = html_output.replace("<table>", "<div class=\"surfdoc-table-wrap\"><table>");
+    html_output = html_output.replace("</table>", "</table></div>");
     html_output
 }
 
@@ -464,7 +469,7 @@ fn render_block(block: &Block) -> String {
         Block::Data {
             headers, rows, ..
         } => {
-            let mut html = String::from("<table class=\"surfdoc-data\">");
+            let mut html = String::from("<div class=\"surfdoc-table-wrap\"><table class=\"surfdoc-data\">");
             if !headers.is_empty() {
                 html.push_str("<thead><tr>");
                 for h in headers {
@@ -480,7 +485,7 @@ fn render_block(block: &Block) -> String {
                 }
                 html.push_str("</tr>");
             }
-            html.push_str("</tbody></table>");
+            html.push_str("</tbody></table></div>");
             html
         }
 
@@ -770,7 +775,7 @@ fn render_block(block: &Block) -> String {
         Block::PricingTable {
             headers, rows, ..
         } => {
-            let mut html = String::from("<table class=\"surfdoc-pricing\" aria-label=\"Pricing comparison\">");
+            let mut html = String::from("<div class=\"surfdoc-table-wrap\"><table class=\"surfdoc-pricing\" aria-label=\"Pricing comparison\">");
             if !headers.is_empty() {
                 html.push_str("<thead><tr>");
                 for h in headers {
@@ -786,7 +791,7 @@ fn render_block(block: &Block) -> String {
                 }
                 html.push_str("</tr>");
             }
-            html.push_str("</tbody></table>");
+            html.push_str("</tbody></table></div>");
             html
         }
 
@@ -1182,7 +1187,7 @@ fn render_block(block: &Block) -> String {
             ..
         } => {
             let mut parts = Vec::new();
-            parts.push("<table class=\"surfdoc-comparison\">".to_string());
+            parts.push("<div class=\"surfdoc-table-wrap\"><table class=\"surfdoc-comparison\">".to_string());
             parts.push("<thead><tr>".to_string());
             for h in headers {
                 let cls = if highlight.as_deref() == Some(h.as_str()) { " class=\"surfdoc-comparison-highlight\"" } else { "" };
@@ -1203,7 +1208,7 @@ fn render_block(block: &Block) -> String {
                 }
                 parts.push("</tr>".to_string());
             }
-            parts.push("</tbody></table>".to_string());
+            parts.push("</tbody></table></div>".to_string());
             parts.join("")
         }
 

@@ -1210,7 +1210,10 @@ dialog.modal h2 {
    22. SURFDOC LAYOUT
    ============================================================ */
 
-.surfdoc { max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem 4rem; line-height: 1.7; font-family: var(--font-body); }
+.surfdoc { max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem 4rem; line-height: 1.7; font-family: var(--font-body); overflow-x: hidden; overflow-wrap: break-word; }
+
+/* Responsive table scroll wrapper — prevents wide tables from causing page-level horizontal scroll */
+.surfdoc-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 1rem 0; border-radius: 8px; }
 
 /* Inline icons */
 .surfdoc-icon { display: inline-flex; align-items: center; vertical-align: middle; line-height: 0; }
@@ -1256,7 +1259,7 @@ dialog.modal h2 {
 .surfdoc code { font-family: var(--font-mono); font-size: 0.85em; background: rgba(255,255,255,0.06); padding: 0.15em 0.4em; border-radius: 4px; }
 .surfdoc pre { background: var(--code-bg) !important; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; }
 .surfdoc pre code { background: transparent; padding: 0; font-size: 0.8rem; line-height: 1.6; }
-.surfdoc table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+.surfdoc table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
 .surfdoc th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border-light); font-weight: 600; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .surfdoc td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
 .surfdoc tr:hover td { background: rgba(255,255,255,0.02); }
@@ -1290,7 +1293,7 @@ dialog.modal h2 {
    26. SURFDOC DATA TABLES
    ============================================================ */
 
-.surfdoc-data { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.surfdoc-data { width: 100%; border-collapse: collapse; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px; }
 .surfdoc-data thead { background: var(--surface); }
 .surfdoc-data th { text-align: left; padding: 0.625rem 0.75rem; font-weight: 600; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid var(--border-light); }
 .surfdoc-data td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
@@ -1446,7 +1449,7 @@ dialog.modal h2 {
    42. SURFDOC PRICING TABLE
    ============================================================ */
 
-.surfdoc-pricing { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.surfdoc-pricing { width: 100%; border-collapse: collapse; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px; }
 .surfdoc-pricing thead { background: var(--surface); }
 .surfdoc-pricing th { text-align: center; padding: 0.75rem; font-weight: 600; color: var(--text); border-bottom: 2px solid var(--border-light); font-size: 0.95rem; }
 .surfdoc-pricing th:first-child { text-align: left; color: var(--text-faint); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -1611,7 +1614,7 @@ dialog.modal h2 {
    54. SURFDOC COMPARISON
    ============================================================ */
 
-.surfdoc-comparison { width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.875rem; }
+.surfdoc-comparison { width: 100%; border: 1px solid var(--border); border-radius: 8px; border-collapse: collapse; font-size: 0.875rem; }
 .surfdoc-comparison thead tr { background: var(--surface); border-bottom: 1px solid var(--border); }
 .surfdoc-comparison th { text-align: center; padding: 0.625rem 1rem; font-weight: 500; color: var(--text); }
 .surfdoc-comparison th:first-child { text-align: left; }
