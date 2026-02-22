@@ -1,14 +1,13 @@
-//! PDF renderer via headless Chromium.
+//! PDF renderer via Typst.
 //!
-//! Reuses the HTML page renderer and pipes the output through headless Chrome's
-//! built-in PDF printer using the Chrome DevTools Protocol.
+//! Converts a SurfDoc to Typst markup using [`render_typst`], then compiles it
+//! through the Typst engine to produce PDF bytes. Pure Rust, no external
+//! dependencies (no Chrome, no system fonts required).
 
-use crate::render_html::PageConfig;
+use crate::render_typst;
 use crate::types::SurfDoc;
 
-use chromiumoxide::browser::{Browser, BrowserConfig};
-use chromiumoxide::cdp::browser_protocol::page::PrintToPdfParams;
-use futures::StreamExt;
+use typst_as_lib::TypstEngine;
 
 /// Paper sizes for PDF output.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,7 +24,7 @@ pub enum PaperSize {
 
 impl PaperSize {
     /// Width in inches.
-    fn width(&self) -> f64 {
+    pub fn width(&self) -> f64 {
         match self {
             Self::Letter => 8.5,
             Self::A4 => 8.27,
@@ -35,12 +34,22 @@ impl PaperSize {
     }
 
     /// Height in inches.
-    fn height(&self) -> f64 {
+    pub fn height(&self) -> f64 {
         match self {
             Self::Letter => 11.0,
             Self::A4 => 11.69,
             Self::Legal => 14.0,
             Self::Custom { height, .. } => *height,
+        }
+    }
+
+    /// Typst paper name, if standard.
+    fn typst_name(&self) -> Option<&'static str> {
+        match self {
+            Self::Letter => Some("us-letter"),
+            Self::A4 => Some("a4"),
+            Self::Legal => Some("us-legal"),
+            Self::Custom { .. } => None,
         }
     }
 }
@@ -74,11 +83,6 @@ pub struct PdfConfig {
     pub margins: Margins,
     /// Landscape orientation (default: false).
     pub landscape: bool,
-    /// Optional HTML header template. Supports `date`, `title`, `url`,
-    /// `pageNumber`, and `totalPages` CSS classes.
-    pub header_template: Option<String>,
-    /// Optional HTML footer template. Same class support as header.
-    pub footer_template: Option<String>,
     /// Print background graphics (default: true).
     pub print_background: bool,
     /// Page title override. Falls back to front matter, then "SurfDoc".
@@ -93,8 +97,6 @@ impl Default for PdfConfig {
             paper_size: PaperSize::A4,
             margins: Margins::default(),
             landscape: false,
-            header_template: None,
-            footer_template: None,
             print_background: true,
             title: None,
             source_path: None,
@@ -105,150 +107,81 @@ impl Default for PdfConfig {
 /// Errors that can occur during PDF generation.
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
-    /// Failed to launch headless Chrome.
-    #[error("Chrome launch failed: {0}")]
-    ChromeLaunch(String),
+    /// Failed to compile Typst markup.
+    #[error("Typst compilation failed: {0}")]
+    Compilation(String),
 
-    /// Failed to load page content.
-    #[error("Page load failed: {0}")]
-    PageLoad(String),
-
-    /// Failed to generate PDF from page.
-    #[error("PDF generation failed: {0}")]
-    PdfGeneration(String),
+    /// Failed to render PDF from compiled document.
+    #[error("PDF rendering failed: {0}")]
+    PdfRendering(String),
 }
 
-/// Render a `SurfDoc` to PDF bytes using headless Chromium.
+/// Render a `SurfDoc` to PDF bytes using the Typst engine.
 ///
-/// This launches a headless Chrome instance, renders the document's HTML page
-/// output, and uses Chrome's built-in PDF printer to produce the output.
+/// This is a synchronous, pure-Rust operation. No Chrome, no external tools.
 ///
 /// # Errors
 ///
-/// Returns [`PdfError`] if Chrome cannot be launched, the page fails to load,
-/// or PDF generation fails.
-pub async fn to_pdf(doc: &SurfDoc, config: &PdfConfig) -> Result<Vec<u8>, PdfError> {
-    let page_config = PageConfig {
-        source_path: config
-            .source_path
-            .clone()
-            .unwrap_or_else(|| "source.surf".to_string()),
-        title: config.title.clone(),
-        canonical_url: None,
-        description: None,
-        lang: None,
-        og_image: None,
-    };
+/// Returns [`PdfError`] if Typst compilation or PDF rendering fails.
+pub fn to_pdf(doc: &SurfDoc, config: &PdfConfig) -> Result<Vec<u8>, PdfError> {
+    // Generate Typst markup from the SurfDoc block tree
+    let mut typst_source = render_typst::to_typst(doc);
 
-    let html = doc.to_html_page(&page_config);
-    let html = inject_print_css(&html, config);
-
-    // Launch headless Chrome
-    let browser_config = BrowserConfig::builder()
-        .no_sandbox()
-        .build()
-        .map_err(|e| PdfError::ChromeLaunch(e.to_string()))?;
-
-    let (mut browser, mut handler) = Browser::launch(browser_config)
-        .await
-        .map_err(|e| PdfError::ChromeLaunch(e.to_string()))?;
-
-    // Drive the handler on a background task
-    let handler_task = tokio::spawn(async move {
-        while let Some(h) = handler.next().await {
-            if h.is_err() {
-                break;
-            }
-        }
-    });
-
-    // Create a new page and set content
-    let page = browser
-        .new_page("about:blank")
-        .await
-        .map_err(|e| PdfError::PageLoad(e.to_string()))?;
-
-    page.set_content(&html)
-        .await
-        .map_err(|e| PdfError::PageLoad(e.to_string()))?;
-
-    // Build PDF params
-    let mut pdf_params = PrintToPdfParams::builder()
-        .paper_width(config.paper_size.width())
-        .paper_height(config.paper_size.height())
-        .margin_top(config.margins.top)
-        .margin_right(config.margins.right)
-        .margin_bottom(config.margins.bottom)
-        .margin_left(config.margins.left)
-        .landscape(config.landscape)
-        .print_background(config.print_background);
-
-    if config.header_template.is_some() || config.footer_template.is_some() {
-        pdf_params = pdf_params.display_header_footer(true);
-        if let Some(ref header) = config.header_template {
-            pdf_params = pdf_params.header_template(header);
-        }
-        if let Some(ref footer) = config.footer_template {
-            pdf_params = pdf_params.footer_template(footer);
-        }
+    // Apply config overrides (paper size, margins) at the top of the document
+    let overrides = build_config_overrides(config);
+    if !overrides.is_empty() {
+        typst_source = format!("{overrides}\n{typst_source}");
     }
 
-    let pdf_bytes = page
-        .pdf(pdf_params.build())
-        .await
-        .map_err(|e| PdfError::PdfGeneration(e.to_string()))?;
+    // Build the Typst engine with our source
+    let engine = TypstEngine::builder()
+        .main_file(typst_source)
+        .build();
 
-    // Clean up
-    let _ = browser.close().await;
-    let _ = handler_task.await;
+    // Compile to a paged document
+    let result = engine.compile::<typst::layout::PagedDocument>();
+
+    let compiled = result
+        .output
+        .map_err(|e| PdfError::Compilation(format!("{e:?}")))?;
+
+    // Render to PDF bytes
+    let pdf_options = typst_pdf::PdfOptions::default();
+    let pdf_bytes = typst_pdf::pdf(&compiled, &pdf_options)
+        .map_err(|e| PdfError::PdfRendering(format!("{e:?}")))?;
 
     Ok(pdf_bytes)
 }
 
-/// Inject print-specific CSS into an HTML page before the closing `</head>` tag.
-///
-/// Adds `@page` rules for paper size and margins, plus `@media print` overrides
-/// to ensure clean PDF output.
-pub fn inject_print_css(html: &str, config: &PdfConfig) -> String {
-    let width = config.paper_size.width();
-    let height = config.paper_size.height();
-    let top = config.margins.top;
-    let right = config.margins.right;
-    let bottom = config.margins.bottom;
-    let left = config.margins.left;
+/// Build Typst `#set page(...)` overrides from PdfConfig.
+fn build_config_overrides(config: &PdfConfig) -> String {
+    let mut parts = Vec::new();
 
-    let print_css = format!(
-        r#"<style>
-    @page {{
-        size: {width}in {height}in;
-        margin: {top}in {right}in {bottom}in {left}in;
-    }}
-    @media print {{
-        body {{
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }}
-        .surfdoc {{
-            max-width: 100%;
-            margin: 0;
-            padding: 0;
-        }}
-    }}
-    </style>"#
-    );
-
-    // Insert before </head>
-    if let Some(pos) = html.find("</head>") {
-        let mut result = String::with_capacity(html.len() + print_css.len() + 1);
-        result.push_str(&html[..pos]);
-        result.push('\n');
-        result.push_str(&print_css);
-        result.push('\n');
-        result.push_str(&html[pos..]);
-        result
+    // Paper size
+    if let Some(name) = config.paper_size.typst_name() {
+        parts.push(format!("paper: \"{}\"", name));
     } else {
-        // No </head> found — prepend the style block
-        format!("{print_css}\n{html}")
+        let w = config.paper_size.width();
+        let h = config.paper_size.height();
+        parts.push(format!("width: {w}in, height: {h}in"));
+    }
+
+    // Margins
+    let m = &config.margins;
+    parts.push(format!(
+        "margin: (top: {}in, right: {}in, bottom: {}in, left: {}in)",
+        m.top, m.right, m.bottom, m.left
+    ));
+
+    // Landscape (swap width/height via flipped)
+    if config.landscape {
+        parts.push("flipped: true".to_string());
+    }
+
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("#set page({})\n", parts.join(", "))
     }
 }
 
@@ -266,8 +199,6 @@ mod tests {
         assert!((config.margins.left - 1.0).abs() < f64::EPSILON);
         assert!(!config.landscape);
         assert!(config.print_background);
-        assert!(config.header_template.is_none());
-        assert!(config.footer_template.is_none());
         assert!(config.title.is_none());
         assert!(config.source_path.is_none());
     }
@@ -292,123 +223,67 @@ mod tests {
     }
 
     #[test]
-    fn inject_print_css_inserts_before_head_close() {
-        let html = r#"<html>
-<head>
-    <title>Test</title>
-</head>
-<body>Hello</body>
-</html>"#;
-
-        let config = PdfConfig::default();
-        let result = inject_print_css(html, &config);
-
-        // The @page rule should appear before </head>
-        let head_close_pos = result.find("</head>").expect("should have </head>");
-        let page_rule_pos = result.find("@page").expect("should have @page rule");
-        assert!(
-            page_rule_pos < head_close_pos,
-            "@page should appear before </head>"
+    fn paper_size_typst_names() {
+        assert_eq!(PaperSize::A4.typst_name(), Some("a4"));
+        assert_eq!(PaperSize::Letter.typst_name(), Some("us-letter"));
+        assert_eq!(PaperSize::Legal.typst_name(), Some("us-legal"));
+        assert_eq!(
+            PaperSize::Custom { width: 5.0, height: 7.0 }.typst_name(),
+            None
         );
-
-        // Should contain paper size
-        assert!(result.contains("8.27in"));
-        assert!(result.contains("11.69in"));
-
-        // Should contain margin values
-        assert!(result.contains("1in"));
-
-        // Should contain print media query
-        assert!(result.contains("@media print"));
-        assert!(result.contains("print-color-adjust: exact"));
     }
 
     #[test]
-    fn inject_print_css_custom_margins() {
-        let html = "<html><head></head><body></body></html>";
+    fn config_overrides_default() {
+        let config = PdfConfig::default();
+        let overrides = build_config_overrides(&config);
+        assert!(overrides.contains("a4"));
+        assert!(overrides.contains("1in"));
+    }
+
+    #[test]
+    fn config_overrides_landscape() {
         let config = PdfConfig {
-            margins: Margins {
-                top: 0.5,
-                right: 0.75,
-                bottom: 0.5,
-                left: 0.75,
-            },
+            landscape: true,
             ..PdfConfig::default()
         };
-
-        let result = inject_print_css(html, &config);
-        assert!(result.contains("0.5in 0.75in 0.5in 0.75in"));
+        let overrides = build_config_overrides(&config);
+        assert!(overrides.contains("flipped: true"));
     }
 
     #[test]
-    fn inject_print_css_letter_size() {
-        let html = "<html><head></head><body></body></html>";
+    fn config_overrides_custom_size() {
         let config = PdfConfig {
-            paper_size: PaperSize::Letter,
+            paper_size: PaperSize::Custom { width: 5.0, height: 7.0 },
             ..PdfConfig::default()
         };
-
-        let result = inject_print_css(html, &config);
-        assert!(result.contains("8.5in 11in"));
-    }
-
-    #[test]
-    fn inject_print_css_no_head_tag() {
-        let html = "<html><body>Hello</body></html>";
-        let config = PdfConfig::default();
-        let result = inject_print_css(html, &config);
-
-        // Should prepend the style
-        assert!(result.starts_with("<style>"));
-        assert!(result.contains("@page"));
-    }
-
-    #[test]
-    fn inject_print_css_preserves_original_content() {
-        let html = r#"<html>
-<head>
-    <title>My Doc</title>
-    <style>.surfdoc { color: red; }</style>
-</head>
-<body>
-<article class="surfdoc">Content here</article>
-</body>
-</html>"#;
-
-        let config = PdfConfig::default();
-        let result = inject_print_css(html, &config);
-
-        // Original content should be preserved
-        assert!(result.contains("<title>My Doc</title>"));
-        assert!(result.contains(".surfdoc { color: red; }"));
-        assert!(result.contains("Content here"));
+        let overrides = build_config_overrides(&config);
+        assert!(overrides.contains("width: 5in"));
+        assert!(overrides.contains("height: 7in"));
     }
 
     #[test]
     fn pdf_error_display() {
-        let err = PdfError::ChromeLaunch("no chrome found".to_string());
-        assert_eq!(err.to_string(), "Chrome launch failed: no chrome found");
+        let err = PdfError::Compilation("syntax error".to_string());
+        assert_eq!(err.to_string(), "Typst compilation failed: syntax error");
 
-        let err = PdfError::PageLoad("timeout".to_string());
-        assert_eq!(err.to_string(), "Page load failed: timeout");
-
-        let err = PdfError::PdfGeneration("out of memory".to_string());
-        assert_eq!(err.to_string(), "PDF generation failed: out of memory");
+        let err = PdfError::PdfRendering("out of memory".to_string());
+        assert_eq!(err.to_string(), "PDF rendering failed: out of memory");
     }
 
-    /// Integration test that requires a working Chrome installation.
-    /// Run with: cargo test --features pdf -- --ignored
-    #[tokio::test]
+    /// Integration test — produces actual PDF bytes.
+    /// Run with: cargo test --features pdf -- --ignored pdf_produces_valid_bytes
+    #[test]
     #[ignore]
-    async fn to_pdf_produces_valid_pdf_bytes() {
+    fn pdf_produces_valid_bytes() {
         let source = "# Hello World\n\nThis is a test document.\n";
         let result = crate::parse(source);
         assert!(result.diagnostics.is_empty());
 
         let config = PdfConfig::default();
-        let pdf_bytes = to_pdf(&result.doc, &config).await.expect("PDF generation should succeed");
+        let pdf_bytes = to_pdf(&result.doc, &config).expect("PDF generation should succeed");
 
-        // PDF files start with the %PDF magic bytes
+        // PDF files start with %PDF magic bytes
         assert!(
             pdf_bytes.len() > 4,
             "PDF should have content, got {} bytes",
@@ -421,10 +296,9 @@ mod tests {
         );
     }
 
-    /// Integration test with landscape orientation.
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn to_pdf_landscape() {
+    fn pdf_landscape_mode() {
         let source = "# Landscape Test\n\nWide content.\n";
         let result = crate::parse(source);
 
@@ -434,7 +308,35 @@ mod tests {
             ..PdfConfig::default()
         };
 
-        let pdf_bytes = to_pdf(&result.doc, &config).await.expect("PDF should generate");
+        let pdf_bytes = to_pdf(&result.doc, &config).expect("PDF should generate");
         assert!(pdf_bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    #[ignore]
+    fn pdf_with_callout_and_table() {
+        let source = r#"---
+title: Test Document
+author: Brady
+---
+
+# Test Document
+
+::callout[type=info]
+This is an informational callout.
+::
+
+::data
+| Name | Value |
+|------|-------|
+| Alpha | 100 |
+| Beta  | 200 |
+::
+"#;
+        let result = crate::parse(source);
+        let config = PdfConfig::default();
+        let pdf_bytes = to_pdf(&result.doc, &config).expect("PDF with blocks should generate");
+        assert!(pdf_bytes.starts_with(b"%PDF-"));
+        assert!(pdf_bytes.len() > 1000, "PDF with content should be substantial");
     }
 }

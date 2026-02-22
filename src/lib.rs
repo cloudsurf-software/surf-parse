@@ -24,6 +24,7 @@ pub mod render_html;
 pub mod render_md;
 #[cfg(feature = "pdf")]
 pub mod render_pdf;
+pub mod render_typst;
 #[cfg(feature = "terminal")]
 pub mod render_term;
 #[cfg(feature = "axum")]
@@ -81,15 +82,23 @@ impl SurfDoc {
         ctx.resolve(&html)
     }
 
-    /// Render this document to PDF bytes using headless Chromium.
+    /// Render this document to PDF bytes using the Typst engine.
     ///
-    /// Requires the `pdf` feature and a Chromium/Chrome installation.
+    /// This is a synchronous, pure-Rust operation — no Chrome or external
+    /// tools required. Requires the `pdf` feature.
     #[cfg(feature = "pdf")]
-    pub async fn to_pdf(
+    pub fn to_pdf(
         &self,
         config: &render_pdf::PdfConfig,
     ) -> Result<Vec<u8>, render_pdf::PdfError> {
-        render_pdf::to_pdf(self, config).await
+        render_pdf::to_pdf(self, config)
+    }
+
+    /// Render this document as Typst markup text.
+    ///
+    /// The output is a valid `.typ` file that can be compiled by Typst.
+    pub fn to_typst(&self) -> String {
+        render_typst::to_typst(self)
     }
 
     /// Render this document as ANSI-colored terminal text.

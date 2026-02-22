@@ -14,19 +14,19 @@ readme = "README.md"
 [features]
 default = ["terminal"]
 terminal = ["colored"]
-pdf = ["chromiumoxide", "tokio", "futures"]
+pdf = ["typst", "typst-pdf", "typst-as-lib"]
 axum = ["dep:axum"]
 
 [dependencies]
-chromiumoxide = { version = "0.8", optional = true, default-features = false, features = ["tokio-runtime"] }
 colored = { version = "3", optional = true }
-futures = { version = "0.3", optional = true }
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 thiserror = "2"
-tokio = { version = "1", optional = true, features = ["rt-multi-thread"] }
+typst = { version = "0.14", optional = true }
+typst-as-lib = { version = "0.15", optional = true }
+typst-pdf = { version = "0.14", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1"] }
 
 [dev-dependencies]
