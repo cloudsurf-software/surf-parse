@@ -1553,10 +1553,11 @@ dialog.modal h2 {
 .surfdoc-hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 .surfdoc-hero:not(.surfdoc-hero-left) .surfdoc-hero-actions { justify-content: center; }
 .surfdoc-hero-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 0.9rem; font-weight: 500; text-decoration: none; transition: all 0.15s; min-height: 44px; }
-.surfdoc-hero-btn-primary { background: var(--accent); color: var(--accent-text, #fff); border: 1px solid var(--accent); }
-.surfdoc-hero-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.surfdoc-hero-btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
-.surfdoc-hero-btn-secondary:hover { border-color: var(--text-faint); background: var(--surface); }
+/* .surfdoc prefix bumps specificity to (0,2,0), beating .surfdoc a (0,1,1) link color */
+.surfdoc .surfdoc-hero-btn-primary { background: var(--accent); color: var(--accent-text, #fff); border: 1px solid var(--accent); }
+.surfdoc .surfdoc-hero-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.surfdoc .surfdoc-hero-btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.surfdoc .surfdoc-hero-btn-secondary:hover { border-color: var(--text-faint); background: var(--surface); }
 .surfdoc-hero-image { margin-bottom: 1.5rem; }
 .surfdoc-hero-image img { max-height: 280px; border-radius: 12px; }
 .surfdoc-hero-image-side { display: flex; align-items: center; justify-content: center; }
@@ -1699,8 +1700,9 @@ dialog.modal h2 {
 .surfdoc-product-features { list-style: none; padding: 0; margin: 0 0 1rem; }
 .surfdoc-product-features li { padding: 0.25rem 0; padding-left: 1.25rem; position: relative; color: var(--text-muted); }
 .surfdoc-product-features li::before { content: "\2713"; position: absolute; left: 0; color: #22c55e; font-weight: 700; }
-.surfdoc-product-cta { display: inline-block; padding: 0.5rem 1.25rem; border-radius: 8px; background: var(--accent, #3b82f6); color: var(--accent-text, #fff); text-decoration: none; font-weight: 600; font-size: 0.875rem; transition: opacity 0.15s; }
-.surfdoc-product-cta:hover { opacity: 0.9; }
+/* .surfdoc prefix bumps specificity to (0,2,0), beating .surfdoc a (0,1,1) link color */
+.surfdoc .surfdoc-product-cta { display: inline-block; padding: 0.5rem 1.25rem; border-radius: 8px; background: var(--accent, #3b82f6); color: var(--accent-text, #fff); text-decoration: none; font-weight: 600; font-size: 0.875rem; transition: opacity 0.15s; }
+.surfdoc .surfdoc-product-cta:hover { opacity: 0.9; text-decoration: none; }
 
 /* ================================================================
    ================================================================

@@ -2896,6 +2896,29 @@ mod tests {
         assert!(SURFDOC_CSS.contains(".surfdoc .surfdoc-cta-primary { background: var(--accent); color: var(--accent-text, #fff);"));
     }
 
+    /// Regression: hero and product-card CTA buttons are `<a>` tags inside
+    /// `.surfdoc`. Without the `.surfdoc` prefix their specificity (0,1,0)
+    /// loses to `.surfdoc a { color: var(--accent) }` (0,1,1), making button
+    /// text the same color as the background — invisible on accent-colored buttons.
+    #[test]
+    fn accent_colored_buttons_beat_link_color_specificity() {
+        // Hero primary button must have .surfdoc prefix
+        assert!(
+            SURFDOC_CSS.contains(".surfdoc .surfdoc-hero-btn-primary {"),
+            "hero primary button needs .surfdoc prefix to beat .surfdoc a specificity"
+        );
+        // Product card CTA must have .surfdoc prefix
+        assert!(
+            SURFDOC_CSS.contains(".surfdoc .surfdoc-product-cta {"),
+            "product-card CTA needs .surfdoc prefix to beat .surfdoc a specificity"
+        );
+        // CTA primary (already correct, guard against regression)
+        assert!(
+            SURFDOC_CSS.contains(".surfdoc .surfdoc-cta-primary {"),
+            "CTA primary needs .surfdoc prefix to beat .surfdoc a specificity"
+        );
+    }
+
     // -- Bug regression: alternating section backgrounds ----------------------
 
     #[test]
