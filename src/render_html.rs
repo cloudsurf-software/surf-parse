@@ -19,6 +19,19 @@ fn render_markdown(content: &str) -> String {
     html_output
 }
 
+/// Render inline markdown (bold, italic, links, code) while escaping raw HTML.
+///
+/// Used for block content (callouts, decisions, etc.) where we want markdown
+/// formatting but must prevent HTML injection. Escapes `<`, `>`, `&` first,
+/// then runs through pulldown-cmark so `*italic*` and `**bold**` still render.
+fn render_inline_markdown(content: &str) -> String {
+    let escaped = content
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    render_markdown(&escaped)
+}
+
 /// Configuration for full-page HTML rendering with SurfDoc discovery metadata.
 #[derive(Debug, Clone)]
 pub struct PageConfig {
@@ -443,8 +456,8 @@ fn render_block(block: &Block) -> String {
                 None => capitalize(type_str).to_string(),
             };
             format!(
-                "<div class=\"surfdoc-callout surfdoc-callout-{type_str}\" role=\"{role}\"><strong>{heading}</strong><p>{}</p></div>",
-                escape_html(content),
+                "<div class=\"surfdoc-callout surfdoc-callout-{type_str}\" role=\"{role}\"><strong>{heading}</strong><div class=\"surfdoc-callout-body\">{}</div></div>",
+                render_inline_markdown(content),
             )
         }
 
@@ -519,8 +532,8 @@ fn render_block(block: &Block) -> String {
                 None => String::new(),
             };
             format!(
-                "<div class=\"surfdoc-decision surfdoc-decision-{status_str}\" role=\"note\" aria-label=\"Decision: {status_str}\"><span class=\"status\">{status_str}</span>{date_html}<p>{}</p></div>",
-                escape_html(content),
+                "<div class=\"surfdoc-decision surfdoc-decision-{status_str}\" role=\"note\" aria-label=\"Decision: {status_str}\"><div class=\"surfdoc-decision-header\"><span class=\"status\">{status_str}</span>{date_html}</div><div class=\"surfdoc-decision-body\">{}</div></div>",
+                render_inline_markdown(content),
             )
         }
 

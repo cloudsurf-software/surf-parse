@@ -46,6 +46,7 @@ pub fn get_icon(name: &str) -> Option<&'static str> {
         "coffee" => Some(ICON_COFFEE),
         "scissors" => Some(ICON_SCISSORS),
         "wrench" => Some(ICON_WRENCH),
+        "target" => Some(ICON_TARGET),
         _ => None,
     }
 }
@@ -59,7 +60,7 @@ pub fn available_icons() -> &'static [&'static str] {
         "clock", "edit", "pencil", "shield", "zap", "lock", "phone",
         "map-pin", "calendar", "users", "truck", "message-circle", "image",
         "briefcase", "award", "layers", "package", "trending-up", "coffee",
-        "scissors", "wrench",
+        "scissors", "wrench", "target",
     ]
 }
 
@@ -145,6 +146,8 @@ const ICON_COFFEE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" 
 const ICON_SCISSORS: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg>"#;
 
 const ICON_WRENCH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg>"#;
+
+const ICON_TARGET: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>"#;
 
 #[cfg(test)]
 mod tests {

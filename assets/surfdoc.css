@@ -1260,7 +1260,7 @@ dialog.modal h2 {
 .surfdoc th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border-light); font-weight: 600; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .surfdoc td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
 .surfdoc tr:hover td { background: rgba(255,255,255,0.02); }
-.surfdoc hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+.surfdoc hr { border: none; border-top: 1px solid var(--border); margin: 3rem 0; }
 .surfdoc img { max-width: 100%; border-radius: 8px; }
 
 /* ============================================================
@@ -1270,6 +1270,9 @@ dialog.modal h2 {
 .surfdoc-callout { border-left: 3px solid; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; background: var(--surface); }
 .surfdoc-callout strong { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .surfdoc-callout p { margin: 0; }
+.surfdoc-callout-body { margin: 0; }
+.surfdoc-callout-body p { margin: 0.25rem 0 0; }
+.surfdoc-callout-body p:first-child { margin-top: 0; }
 .surfdoc-callout-info { border-color: #3b82f6; }
 .surfdoc-callout-info strong { color: #3b82f6; }
 .surfdoc-callout-warning { border-color: #f59e0b; }
@@ -1316,9 +1319,11 @@ dialog.modal h2 {
    ============================================================ */
 
 .surfdoc-decision { border-left: 3px solid; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; background: var(--surface); }
-.surfdoc-decision .status { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 0.5rem; }
+.surfdoc-decision-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.surfdoc-decision .status { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .surfdoc-decision .date { color: var(--text-faint); font-size: 0.8rem; }
-.surfdoc-decision p { margin: 0.5rem 0 0; }
+.surfdoc-decision-body p { margin: 0.25rem 0 0; }
+.surfdoc-decision-body p:first-child { margin-top: 0; }
 .surfdoc-decision-accepted { border-color: #22c55e; }
 .surfdoc-decision-accepted .status { background: rgba(34,197,94,0.15); color: #22c55e; }
 .surfdoc-decision-rejected { border-color: #ef4444; }
@@ -1533,9 +1538,9 @@ dialog.modal h2 {
    49. SURFDOC DIVIDERS
    ============================================================ */
 
-.surfdoc-divider { display: flex; align-items: center; gap: 1rem; margin: 2rem 0; color: var(--text-faint); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.surfdoc-divider { display: flex; align-items: center; gap: 1rem; margin: 3rem 0; color: var(--text-faint); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .surfdoc-divider::before, .surfdoc-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
-.surfdoc-divider-plain { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+.surfdoc-divider-plain { border: none; border-top: 1px solid var(--border); margin: 3rem 0; }
 
 
 /* ============================================================

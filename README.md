@@ -39,6 +39,10 @@ let html = result.doc.to_html_page(&config);
 
 MIT
 
+## Editor Support
+
+- **VS Code**: [SurfDoc extension](https://marketplace.visualstudio.com/items?itemName=CloudSurf.surfdoc) — syntax highlighting, 49 snippets, file icons. Install: `ext install CloudSurf.surfdoc`
+
 ## Links
 
 - [SurfDoc Specification](https://surfcontext.org)
