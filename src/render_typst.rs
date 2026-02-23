@@ -130,15 +130,11 @@ fn render_block(block: &Block, out: &mut String) {
         Block::Code {
             lang, content, ..
         } => {
-            let lang_attr = match lang {
-                Some(l) if !l.is_empty() => format!(", lang: \"{}\"", escape_typst(l)),
-                _ => String::new(),
+            let lang_str = match lang {
+                Some(l) if !l.is_empty() => l.as_str(),
+                _ => "",
             };
-            // Use triple backticks for raw blocks
-            out.push_str(&format!(
-                "#raw(block: true{})\n```\n{}\n```\n",
-                lang_attr, content
-            ));
+            out.push_str(&format!("```{}\n{}\n```\n", lang_str, content));
         }
 
         Block::Tasks { items, .. } => {
@@ -1062,12 +1058,16 @@ pub fn md_to_typst_inline(text: &str) -> String {
 
         // Italic: *text* or _text_
         if chars[i] == '*' && (i + 1 < len && chars[i + 1] != '*') {
-            if let Some((content, end)) = parse_delimited(&chars, i, "*") {
-                out.push('_');
-                out.push_str(&md_to_typst_inline(&content));
-                out.push('_');
-                i = end;
-                continue;
+            // Only treat as italic opener if left-flanking: next char is not whitespace
+            let next_not_space = i + 1 < len && !chars[i + 1].is_whitespace();
+            if next_not_space {
+                if let Some((content, end)) = parse_delimited(&chars, i, "*") {
+                    out.push('_');
+                    out.push_str(&md_to_typst_inline(&content));
+                    out.push('_');
+                    i = end;
+                    continue;
+                }
             }
         }
         if chars[i] == '_' && (i + 1 < len && chars[i + 1] != '_') {
@@ -1100,6 +1100,8 @@ pub fn md_to_typst_inline(text: &str) -> String {
             '<' => out.push_str("\\<"),
             '>' => out.push_str("\\>"),
             '$' => out.push_str("\\$"),
+            '*' => out.push_str("\\*"),
+            '_' => out.push_str("\\_"),
             c => out.push(c),
         }
 
@@ -1259,6 +1261,8 @@ fn escape_typst(s: &str) -> String {
             '<' => out.push_str("\\<"),
             '>' => out.push_str("\\>"),
             '$' => out.push_str("\\$"),
+            '*' => out.push_str("\\*"),
+            '_' => out.push_str("\\_"),
             '\\' => out.push_str("\\\\"),
             '"' if false => out.push_str("\\\""), // Only inside string literals
             _ => out.push(c),
@@ -1305,6 +1309,8 @@ mod tests {
         assert_eq!(escape_typst("a@b"), "a\\@b");
         assert_eq!(escape_typst("x < y > z"), "x \\< y \\> z");
         assert_eq!(escape_typst("cost: $10"), "cost: \\$10");
+        assert_eq!(escape_typst("A* search"), "A\\* search");
+        assert_eq!(escape_typst("snake_case"), "snake\\_case");
     }
 
     #[test]
@@ -1335,6 +1341,21 @@ mod tests {
     #[test]
     fn md_to_typst_inline_strikethrough() {
         assert_eq!(md_to_typst_inline("~~deleted~~"), "#strike[deleted]");
+    }
+
+    #[test]
+    fn md_to_typst_inline_literal_asterisk() {
+        // A* search — the * is not emphasis, it's a literal asterisk
+        let result = md_to_typst_inline("in A* search");
+        assert!(result.contains("A\\*"), "A* should produce escaped asterisk, got: {}", result);
+        assert!(!result.contains("A_"), "A* should not become A_ italic, got: {}", result);
+    }
+
+    #[test]
+    fn md_to_typst_inline_stray_star_escaped() {
+        // Stray * that doesn't match emphasis should be escaped
+        let result = md_to_typst_inline("cost is 5*");
+        assert!(result.contains("5\\*"), "trailing * should be escaped, got: {}", result);
     }
 
     #[test]
@@ -1442,8 +1463,8 @@ mod tests {
             source: String::new(),
         };
         let result = to_typst(&doc);
-        assert!(result.contains("raw(block: true"));
-        assert!(result.contains("rust"));
+        assert!(result.contains("```rust"));
+        assert!(result.contains("fn main() {}"));
     }
 
     #[test]
