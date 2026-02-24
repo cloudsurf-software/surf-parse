@@ -27,6 +27,8 @@ pub mod render_pdf;
 pub mod render_typst;
 #[cfg(feature = "terminal")]
 pub mod render_term;
+#[cfg(feature = "native")]
+pub mod render_native;
 #[cfg(feature = "axum")]
 pub mod serve;
 pub mod template;
@@ -105,6 +107,12 @@ impl SurfDoc {
     #[cfg(feature = "terminal")]
     pub fn to_terminal(&self) -> String {
         render_term::to_terminal(self)
+    }
+
+    /// Convert this document into a list of native blocks for mobile rendering.
+    #[cfg(feature = "native")]
+    pub fn to_native_blocks(&self) -> Vec<render_native::NativeBlock> {
+        render_native::to_native_blocks(self)
     }
 
     /// Serialize this document back to valid `.surf` format text.

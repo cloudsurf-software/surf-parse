@@ -19,7 +19,7 @@ pub fn to_markdown(doc: &SurfDoc) -> String {
     parts.join("\n\n")
 }
 
-fn render_block(block: &Block) -> String {
+pub(crate) fn render_block(block: &Block) -> String {
     match block {
         Block::Markdown { content, .. } => content.clone(),
 
