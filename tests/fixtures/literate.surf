@@ -1,0 +1,85 @@
+---
+title: "Literate Programming Test"
+type: doc
+status: active
+tags: [test, extraction, code]
+created: "2026-02-24"
+author: "K. Brady Davis"
+---
+
+# Literate Programming Example
+
+This fixture exercises the code extraction API with multiple languages,
+file attributes, and edge cases.
+
+## Rust Implementation
+
+::code[lang=rust file=src/main.rs]
+fn main() {
+    println!("Hello from SurfDoc!");
+}
+::
+
+Some explanation between code blocks.
+
+::code[lang=rust file=src/lib.rs]
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+::
+
+## TypeScript Frontend
+
+::code[lang=ts file=src/app.ts]
+export function greet(name: string): string {
+    return `Hello, ${name}!`;
+}
+::
+
+## Python Script
+
+::code[lang=python]
+def main():
+    print("Hello from Python")
+
+if __name__ == "__main__":
+    main()
+::
+
+## Shell Setup
+
+::code[lang=sh file=setup.sh]
+#!/bin/bash
+echo "Setting up environment"
+cargo build --release
+::
+
+## Configuration (no language tag)
+
+::code
+[package]
+name = "example"
+version = "0.1.0"
+::
+
+## Architecture Decision
+
+::decision[status=accepted date="2026-02-24"]
+Use code extraction API for CI verification of embedded snippets.
+::
+
+## Additional Rust Test
+
+::code[lang=rust file=tests/test_add.rs]
+#[test]
+fn test_add() {
+    assert_eq!(example::add(2, 3), 5);
+}
+::
+
+## Summary
+
+::summary
+This document demonstrates literate programming with embedded code in
+Rust, TypeScript, Python, and Shell.
+::

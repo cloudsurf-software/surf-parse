@@ -2,14 +2,18 @@
 //!
 //! Converts a `SurfDoc` into a flat `Vec<NativeBlock>` suitable for export
 //! across the FFI boundary. Web-only block types (Nav, Footer, Site, Page,
-//! Form, Gallery, Embed, Style, Logo, HeroImage, PricingTable, Section,
-//! ProductCard, Unknown) are degraded to their markdown equivalent.
+//! Embed, Style, Logo, HeroImage, PricingTable, ProductCard, Unknown) are
+//! degraded to their markdown equivalent.
 
 use crate::render_md;
-use crate::types::{Block, CalloutType, DecisionStatus, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, DecisionStatus, FormFieldType, SurfDoc, Trend};
+
+/// Maximum nesting depth for SectionContainer children.
+/// At this depth, nested sections fall back to Markdown.
+const MAX_SECTION_DEPTH: u32 = 8;
 
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 25 native variants
+// NativeBlock enum — 28 native variants
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Simplified block representation for native mobile rendering via UniFFI.
@@ -18,9 +22,9 @@ use crate::types::{Block, CalloutType, DecisionStatus, SurfDoc, Trend};
 /// `Option<T>`, `Vec<T>`, and simple structs of the same. No `BTreeMap`,
 /// no `Span`, no serde tags, no `enum` sub-types with complex discriminants.
 ///
-/// Web-only blocks (Nav, Footer, Site, Page, Form, Gallery, Embed, Style,
-/// Logo, HeroImage, PricingTable, Section, ProductCard, Unknown) are
-/// degraded to their markdown equivalent and emitted as `NativeBlock::Markdown`.
+/// Web-only blocks (Nav, Footer, Site, Page, Embed, Style, Logo, HeroImage,
+/// PricingTable, ProductCard, Unknown) are degraded to their markdown
+/// equivalent and emitted as `NativeBlock::Markdown`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NativeBlock {
     /// Plain markdown text. Also the fallback for unsupported block types.
@@ -157,6 +161,29 @@ pub enum NativeBlock {
 
     /// Pipeline flow with labeled steps.
     Pipeline { steps: Vec<NativePipelineStep> },
+
+    /// Form with typed input fields for native rendering.
+    /// No action URL — the native app controls form submission.
+    Form {
+        fields: Vec<NativeFormField>,
+        submit_label: String,
+    },
+
+    /// Image gallery with grid layout and optional category filtering.
+    Gallery {
+        items: Vec<NativeGalleryItem>,
+        columns: u32,
+    },
+
+    /// Page section container with optional background and headline.
+    /// This is the only recursive NativeBlock variant — `children` contains
+    /// nested NativeBlock values. UniFFI supports recursive enums via boxing.
+    SectionContainer {
+        bg: Option<String>,
+        headline: Option<String>,
+        subtitle: Option<String>,
+        children: Vec<NativeBlock>,
+    },
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -227,16 +254,38 @@ pub struct NativePipelineStep {
     pub description: Option<String>,
 }
 
+/// A single field in a native form.
+/// `field_type` is one of: "text", "email", "tel", "date", "number", "select", "textarea".
+/// `options` is non-empty only when `field_type` is "select".
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeFormField {
+    pub label: String,
+    pub name: String,
+    pub field_type: String,
+    pub required: bool,
+    pub placeholder: Option<String>,
+    pub options: Vec<String>,
+}
+
+/// A single image item in a native gallery.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeGalleryItem {
+    pub src: String,
+    pub caption: Option<String>,
+    pub alt: Option<String>,
+    pub category: Option<String>,
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Conversion functions
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Convert a parsed SurfDoc into a Vec<NativeBlock> for native rendering.
 pub fn to_native_blocks(doc: &SurfDoc) -> Vec<NativeBlock> {
-    doc.blocks.iter().map(convert_block).collect()
+    doc.blocks.iter().map(|b| convert_block(b, 0)).collect()
 }
 
-fn convert_block(block: &Block) -> NativeBlock {
+fn convert_block(block: &Block, depth: u32) -> NativeBlock {
     match block {
         // ── Native variants: direct conversion ──────────────────────
 
@@ -508,6 +557,68 @@ fn convert_block(block: &Block) -> NativeBlock {
                 .collect(),
         },
 
+        // ── New native variants: Form, Gallery, SectionContainer ────
+
+        Block::Form {
+            fields,
+            submit_label,
+            ..
+        } => NativeBlock::Form {
+            fields: fields
+                .iter()
+                .map(|f| NativeFormField {
+                    label: f.label.clone(),
+                    name: f.name.clone(),
+                    field_type: form_field_type_str(f.field_type),
+                    required: f.required,
+                    placeholder: f.placeholder.clone(),
+                    options: f.options.clone(),
+                })
+                .collect(),
+            submit_label: submit_label
+                .clone()
+                .unwrap_or_else(|| "Submit".to_string()),
+        },
+
+        Block::Gallery {
+            items, columns, ..
+        } => NativeBlock::Gallery {
+            items: items
+                .iter()
+                .map(|i| NativeGalleryItem {
+                    src: i.src.clone(),
+                    caption: i.caption.clone(),
+                    alt: i.alt.clone(),
+                    category: i.category.clone(),
+                })
+                .collect(),
+            columns: columns.unwrap_or(3),
+        },
+
+        Block::Section {
+            bg,
+            headline,
+            subtitle,
+            children,
+            ..
+        } => {
+            if depth >= MAX_SECTION_DEPTH {
+                // Depth limit reached — fall back to Markdown
+                let md = render_md::render_block(block);
+                NativeBlock::Markdown { content: md }
+            } else {
+                NativeBlock::SectionContainer {
+                    bg: bg.clone(),
+                    headline: headline.clone(),
+                    subtitle: subtitle.clone(),
+                    children: children
+                        .iter()
+                        .map(|child| convert_block(child, depth + 1))
+                        .collect(),
+                }
+            }
+        }
+
         // ── Markdown fallback: web-only / unsupported block types ───
 
         Block::Unknown { .. }
@@ -518,11 +629,8 @@ fn convert_block(block: &Block) -> NativeBlock {
         | Block::Site { .. }
         | Block::Page { .. }
         | Block::Embed { .. }
-        | Block::Form { .. }
-        | Block::Gallery { .. }
         | Block::Footer { .. }
         | Block::Logo { .. }
-        | Block::Section { .. }
         | Block::ProductCard { .. } => {
             let md = render_md::render_block(block);
             NativeBlock::Markdown { content: md }
@@ -565,6 +673,19 @@ fn trend_str(t: Trend) -> String {
     .to_string()
 }
 
+fn form_field_type_str(ft: FormFieldType) -> String {
+    match ft {
+        FormFieldType::Text => "text",
+        FormFieldType::Email => "email",
+        FormFieldType::Tel => "tel",
+        FormFieldType::Date => "date",
+        FormFieldType::Number => "number",
+        FormFieldType::Select => "select",
+        FormFieldType::Textarea => "textarea",
+    }
+    .to_string()
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Unit tests
 // ═══════════════════════════════════════════════════════════════════════
@@ -586,7 +707,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Markdown {
                 content: "# Hello\n\nWorld".to_string()
             }
@@ -602,7 +723,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Callout {
                 callout_type: "info".to_string(),
                 title: Some("Watch out".to_string()),
@@ -628,7 +749,7 @@ mod tests {
                 content: String::new(),
                 span: syn(),
             };
-            match convert_block(&block) {
+            match convert_block(&block, 0) {
                 NativeBlock::Callout { callout_type, .. } => {
                     assert_eq!(callout_type, expected);
                 }
@@ -647,7 +768,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Code {
                 language: Some("rust".to_string()),
                 file_path: Some("main.rs".to_string()),
@@ -666,7 +787,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Code {
                 language: None,
                 file_path: None,
@@ -687,7 +808,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::DataTable {
                 headers: vec!["Name".to_string(), "Age".to_string()],
                 rows: vec![vec!["Alice".to_string(), "30".to_string()]],
@@ -708,7 +829,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::DataTable {
                 headers: vec![],
                 rows: vec![],
@@ -735,7 +856,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Tasks {
                 items: vec![
                     NativeTaskItem {
@@ -763,7 +884,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Decision {
                 status: "accepted".to_string(),
                 date: Some("2026-02-24".to_string()),
@@ -783,7 +904,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Metric {
                 label: "MRR".to_string(),
                 value: "$2K".to_string(),
@@ -803,7 +924,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Metric {
                 label: "Users".to_string(),
                 value: "100".to_string(),
@@ -820,7 +941,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Summary {
                 content: "Executive overview.".to_string()
             }
@@ -837,7 +958,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Figure {
                 src: "diagram.png".to_string(),
                 caption: Some("Arch".to_string()),
@@ -856,7 +977,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Tabs {
                 tabs: vec![NativeTabPanel {
                     label: "Rust".to_string(),
@@ -880,7 +1001,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Columns {
                 columns: vec![
                     NativeColumnContent {
@@ -903,7 +1024,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Quote {
                 content: "To be or not".to_string(),
                 attribution: Some("Shakespeare".to_string()),
@@ -921,7 +1042,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Cta {
                 label: "Sign Up".to_string(),
                 href: "/signup".to_string(),
@@ -940,7 +1061,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Testimonial {
                 content: "Great!".to_string(),
                 author: Some("Jane".to_string()),
@@ -960,7 +1081,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Faq {
                 items: vec![NativeFaqItem {
                     question: "Free?".to_string(),
@@ -979,7 +1100,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Details {
                 title: Some("More info".to_string()),
                 open: true,
@@ -995,7 +1116,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Divider {
                 label: Some("Section".to_string()),
             }
@@ -1009,7 +1130,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Divider { label: None }
         );
     }
@@ -1027,7 +1148,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Hero {
                 headline: Some("Welcome".to_string()),
                 subtitle: Some("To SurfDoc".to_string()),
@@ -1050,7 +1171,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Features {
                 cards: vec![NativeFeatureCard {
                     title: "Fast".to_string(),
@@ -1072,7 +1193,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Steps {
                 steps: vec![NativeStepItem {
                     title: "Step 1".to_string(),
@@ -1094,7 +1215,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Stats {
                 items: vec![NativeStatItem {
                     value: "99%".to_string(),
@@ -1118,7 +1239,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Comparison {
                 headers: vec!["".to_string(), "Free".to_string(), "Pro".to_string()],
                 rows: vec![vec![
@@ -1143,7 +1264,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Toc {
                 depth: 3,
                 entries: vec![NativeTocEntry {
@@ -1170,7 +1291,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::BeforeAfter {
                 before_items: vec![NativeBeforeAfterItem {
                     label: "Old".to_string(),
@@ -1195,7 +1316,7 @@ mod tests {
             span: syn(),
         };
         assert_eq!(
-            convert_block(&block),
+            convert_block(&block, 0),
             NativeBlock::Pipeline {
                 steps: vec![NativePipelineStep {
                     label: "Parse".to_string(),
@@ -1215,7 +1336,7 @@ mod tests {
             content: "some content".to_string(),
             span: syn(),
         };
-        match convert_block(&block) {
+        match convert_block(&block, 0) {
             NativeBlock::Markdown { content } => {
                 assert!(
                     content.contains("custom"),
@@ -1237,7 +1358,7 @@ mod tests {
             logo: None,
             span: syn(),
         };
-        match convert_block(&block) {
+        match convert_block(&block, 0) {
             NativeBlock::Markdown { .. } => {}
             other => panic!("Expected Markdown fallback, got {:?}", other),
         }
@@ -1250,7 +1371,7 @@ mod tests {
             alt: Some("Shot".to_string()),
             span: syn(),
         };
-        match convert_block(&block) {
+        match convert_block(&block, 0) {
             NativeBlock::Markdown { content } => {
                 assert!(content.contains("hero.png"));
             }
@@ -1267,7 +1388,7 @@ mod tests {
             }],
             span: syn(),
         };
-        match convert_block(&block) {
+        match convert_block(&block, 0) {
             NativeBlock::Markdown { .. } => {}
             other => panic!("Expected Markdown fallback, got {:?}", other),
         }
@@ -1312,5 +1433,384 @@ mod tests {
         };
         let native = to_native_blocks(&doc);
         assert!(native.is_empty());
+    }
+
+    // ── Form tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn native_form_basic() {
+        let block = Block::Form {
+            fields: vec![
+                FormField {
+                    label: "Name".to_string(),
+                    name: "name".to_string(),
+                    field_type: FormFieldType::Text,
+                    required: true,
+                    placeholder: Some("Enter your name".to_string()),
+                    options: vec![],
+                },
+                FormField {
+                    label: "Email".to_string(),
+                    name: "email".to_string(),
+                    field_type: FormFieldType::Email,
+                    required: true,
+                    placeholder: None,
+                    options: vec![],
+                },
+            ],
+            submit_label: Some("Send".to_string()),
+            span: syn(),
+        };
+        assert_eq!(
+            convert_block(&block, 0),
+            NativeBlock::Form {
+                fields: vec![
+                    NativeFormField {
+                        label: "Name".to_string(),
+                        name: "name".to_string(),
+                        field_type: "text".to_string(),
+                        required: true,
+                        placeholder: Some("Enter your name".to_string()),
+                        options: vec![],
+                    },
+                    NativeFormField {
+                        label: "Email".to_string(),
+                        name: "email".to_string(),
+                        field_type: "email".to_string(),
+                        required: true,
+                        placeholder: None,
+                        options: vec![],
+                    },
+                ],
+                submit_label: "Send".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn native_form_default_submit_label() {
+        let block = Block::Form {
+            fields: vec![],
+            submit_label: None,
+            span: syn(),
+        };
+        match convert_block(&block, 0) {
+            NativeBlock::Form {
+                submit_label,
+                fields,
+            } => {
+                assert_eq!(submit_label, "Submit");
+                assert!(fields.is_empty());
+            }
+            other => panic!("Expected Form, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn native_form_all_field_types() {
+        let types = [
+            (FormFieldType::Text, "text"),
+            (FormFieldType::Email, "email"),
+            (FormFieldType::Tel, "tel"),
+            (FormFieldType::Date, "date"),
+            (FormFieldType::Number, "number"),
+            (FormFieldType::Select, "select"),
+            (FormFieldType::Textarea, "textarea"),
+        ];
+        for (ft, expected) in types {
+            let block = Block::Form {
+                fields: vec![FormField {
+                    label: "Test".to_string(),
+                    name: "test".to_string(),
+                    field_type: ft,
+                    required: false,
+                    placeholder: None,
+                    options: vec![],
+                }],
+                submit_label: None,
+                span: syn(),
+            };
+            match convert_block(&block, 0) {
+                NativeBlock::Form { fields, .. } => {
+                    assert_eq!(fields[0].field_type, expected);
+                }
+                other => panic!("Expected Form, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
+    fn native_form_select_with_options() {
+        let block = Block::Form {
+            fields: vec![FormField {
+                label: "Country".to_string(),
+                name: "country".to_string(),
+                field_type: FormFieldType::Select,
+                required: false,
+                placeholder: None,
+                options: vec!["US".to_string(), "CA".to_string(), "UK".to_string()],
+            }],
+            submit_label: Some("Go".to_string()),
+            span: syn(),
+        };
+        match convert_block(&block, 0) {
+            NativeBlock::Form { fields, .. } => {
+                assert_eq!(fields[0].field_type, "select");
+                assert_eq!(fields[0].options, vec!["US", "CA", "UK"]);
+            }
+            other => panic!("Expected Form, got {:?}", other),
+        }
+    }
+
+    // ── Gallery tests ──────────────────────────────────────────────
+
+    #[test]
+    fn native_gallery_basic() {
+        let block = Block::Gallery {
+            items: vec![
+                GalleryItem {
+                    src: "photo1.jpg".to_string(),
+                    caption: Some("Sunset".to_string()),
+                    alt: Some("A sunset".to_string()),
+                    category: Some("Nature".to_string()),
+                },
+                GalleryItem {
+                    src: "photo2.jpg".to_string(),
+                    caption: None,
+                    alt: None,
+                    category: None,
+                },
+            ],
+            columns: Some(4),
+            span: syn(),
+        };
+        assert_eq!(
+            convert_block(&block, 0),
+            NativeBlock::Gallery {
+                items: vec![
+                    NativeGalleryItem {
+                        src: "photo1.jpg".to_string(),
+                        caption: Some("Sunset".to_string()),
+                        alt: Some("A sunset".to_string()),
+                        category: Some("Nature".to_string()),
+                    },
+                    NativeGalleryItem {
+                        src: "photo2.jpg".to_string(),
+                        caption: None,
+                        alt: None,
+                        category: None,
+                    },
+                ],
+                columns: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn native_gallery_default_columns() {
+        let block = Block::Gallery {
+            items: vec![],
+            columns: None,
+            span: syn(),
+        };
+        match convert_block(&block, 0) {
+            NativeBlock::Gallery { columns, items } => {
+                assert_eq!(columns, 3);
+                assert!(items.is_empty());
+            }
+            other => panic!("Expected Gallery, got {:?}", other),
+        }
+    }
+
+    // ── SectionContainer tests ─────────────────────────────────────
+
+    #[test]
+    fn native_section_container_basic() {
+        let block = Block::Section {
+            bg: Some("muted".to_string()),
+            headline: Some("Features".to_string()),
+            subtitle: Some("What we offer".to_string()),
+            content: String::new(),
+            children: vec![
+                Block::Markdown {
+                    content: "Hello world".to_string(),
+                    span: syn(),
+                },
+                Block::Callout {
+                    callout_type: CalloutType::Info,
+                    title: None,
+                    content: "A note".to_string(),
+                    span: syn(),
+                },
+            ],
+            span: syn(),
+        };
+        assert_eq!(
+            convert_block(&block, 0),
+            NativeBlock::SectionContainer {
+                bg: Some("muted".to_string()),
+                headline: Some("Features".to_string()),
+                subtitle: Some("What we offer".to_string()),
+                children: vec![
+                    NativeBlock::Markdown {
+                        content: "Hello world".to_string(),
+                    },
+                    NativeBlock::Callout {
+                        callout_type: "info".to_string(),
+                        title: None,
+                        content: "A note".to_string(),
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn native_section_container_empty() {
+        let block = Block::Section {
+            bg: None,
+            headline: None,
+            subtitle: None,
+            content: String::new(),
+            children: vec![],
+            span: syn(),
+        };
+        assert_eq!(
+            convert_block(&block, 0),
+            NativeBlock::SectionContainer {
+                bg: None,
+                headline: None,
+                subtitle: None,
+                children: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn native_section_depth_limit() {
+        let block = Block::Section {
+            bg: None,
+            headline: Some("Deep section".to_string()),
+            subtitle: None,
+            content: String::new(),
+            children: vec![Block::Markdown {
+                content: "deep content".to_string(),
+                span: syn(),
+            }],
+            span: syn(),
+        };
+        // At depth 7 (< 8), should produce SectionContainer
+        match convert_block(&block, 7) {
+            NativeBlock::SectionContainer {
+                headline, children, ..
+            } => {
+                assert_eq!(headline, Some("Deep section".to_string()));
+                assert_eq!(children.len(), 1);
+            }
+            other => panic!("Expected SectionContainer at depth 7, got {:?}", other),
+        }
+        // At depth 8 (== MAX_SECTION_DEPTH), should fall back to Markdown
+        match convert_block(&block, 8) {
+            NativeBlock::Markdown { content } => {
+                assert!(
+                    content.contains("Deep section"),
+                    "Markdown fallback should contain headline: {content}"
+                );
+            }
+            other => panic!("Expected Markdown fallback at depth 8, got {:?}", other),
+        }
+        // At depth 100 (>> MAX_SECTION_DEPTH), should also fall back
+        match convert_block(&block, 100) {
+            NativeBlock::Markdown { .. } => {}
+            other => panic!("Expected Markdown fallback at depth 100, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn native_section_depth_propagates() {
+        // Section containing a Section child — both should convert at depth 0
+        let inner = Block::Section {
+            bg: None,
+            headline: Some("Inner".to_string()),
+            subtitle: None,
+            content: String::new(),
+            children: vec![],
+            span: syn(),
+        };
+        let outer = Block::Section {
+            bg: None,
+            headline: Some("Outer".to_string()),
+            subtitle: None,
+            content: String::new(),
+            children: vec![inner],
+            span: syn(),
+        };
+        match convert_block(&outer, 0) {
+            NativeBlock::SectionContainer {
+                headline,
+                children,
+                ..
+            } => {
+                assert_eq!(headline, Some("Outer".to_string()));
+                assert_eq!(children.len(), 1);
+                match &children[0] {
+                    NativeBlock::SectionContainer {
+                        headline: inner_hl, ..
+                    } => {
+                        assert_eq!(*inner_hl, Some("Inner".to_string()));
+                    }
+                    other => panic!("Expected inner SectionContainer, got {:?}", other),
+                }
+            }
+            other => panic!("Expected outer SectionContainer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn to_native_blocks_with_new_variants() {
+        let doc = SurfDoc {
+            front_matter: None,
+            blocks: vec![
+                Block::Form {
+                    fields: vec![FormField {
+                        label: "Email".to_string(),
+                        name: "email".to_string(),
+                        field_type: FormFieldType::Email,
+                        required: true,
+                        placeholder: None,
+                        options: vec![],
+                    }],
+                    submit_label: Some("Subscribe".to_string()),
+                    span: syn(),
+                },
+                Block::Gallery {
+                    items: vec![GalleryItem {
+                        src: "img.png".to_string(),
+                        caption: None,
+                        alt: None,
+                        category: None,
+                    }],
+                    columns: Some(2),
+                    span: syn(),
+                },
+                Block::Section {
+                    bg: Some("dark".to_string()),
+                    headline: Some("CTA".to_string()),
+                    subtitle: None,
+                    content: String::new(),
+                    children: vec![Block::Markdown {
+                        content: "Sign up now".to_string(),
+                        span: syn(),
+                    }],
+                    span: syn(),
+                },
+            ],
+            source: String::new(),
+        };
+        let native = to_native_blocks(&doc);
+        assert_eq!(native.len(), 3);
+        assert!(matches!(&native[0], NativeBlock::Form { .. }));
+        assert!(matches!(&native[1], NativeBlock::Gallery { .. }));
+        assert!(matches!(&native[2], NativeBlock::SectionContainer { .. }));
     }
 }

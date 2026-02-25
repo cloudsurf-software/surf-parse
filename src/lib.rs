@@ -17,6 +17,7 @@ pub mod attrs;
 pub mod blocks;
 pub mod builder;
 pub mod error;
+pub mod extract;
 pub mod icons;
 pub mod inline;
 pub mod parse;
@@ -47,6 +48,7 @@ pub const SURFDOC_CSS: &str = include_str!("../assets/surfdoc.css");
 
 pub use builder::SurfDocBuilder;
 pub use error::*;
+pub use extract::ExtractedCode;
 pub use parse::parse;
 pub use template::TemplateContext;
 pub use types::*;
@@ -65,6 +67,24 @@ impl SurfDoc {
     /// Render this document as an HTML fragment with `surfdoc-*` CSS classes.
     pub fn to_html(&self) -> String {
         render_html::to_html(self)
+    }
+
+    /// Render this document's blocks as bare HTML without page chrome.
+    ///
+    /// Unlike [`to_html()`], this does not scan for `::site`/`::style` overrides,
+    /// extract nav blocks, or apply auto-section wrapping. Each block is rendered
+    /// individually and joined with newlines.
+    ///
+    /// Use this for streaming, chat rendering, or embedding individual blocks
+    /// where the caller controls the CSS context.
+    pub fn to_html_fragment(&self) -> String {
+        render_html::to_html_fragment(&self.blocks)
+    }
+
+    /// Render this document's blocks as bare HTML with template variable interpolation.
+    pub fn to_html_fragment_with_context(&self, ctx: &TemplateContext) -> String {
+        let html = self.to_html_fragment();
+        ctx.resolve(&html)
     }
 
     /// Render this document as a complete HTML page with SurfDoc discovery metadata.
@@ -126,5 +146,43 @@ impl SurfDoc {
     /// Validate this document and return any diagnostics.
     pub fn validate(&self) -> Vec<crate::error::Diagnostic> {
         validate::validate(self)
+    }
+
+    /// Extract all code blocks from this document.
+    ///
+    /// Returns [`ExtractedCode`] items in document order. Blocks without a
+    /// `[lang=...]` attribute have `language` set to `""`. Blocks without a
+    /// `[file=...]` attribute have `file_path` set to `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let doc = surf_parse::parse("::code[lang=rust]\nfn main() {}\n::\n").doc;
+    /// let code = doc.extract_code();
+    /// assert_eq!(code.len(), 1);
+    /// assert_eq!(code[0].language, "rust");
+    /// ```
+    pub fn extract_code(&self) -> Vec<ExtractedCode> {
+        extract::extract_code_blocks(&self.blocks)
+    }
+
+    /// Extract code blocks filtered by language.
+    ///
+    /// Language matching is case-insensitive with alias normalization:
+    /// `"rs"` matches `"rust"`, `"ts"` matches `"typescript"`, etc.
+    /// See [`extract::normalize_lang`] for the full alias table.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let doc = surf_parse::parse(
+    ///     "::code[lang=rust]\nfn main() {}\n::\n::code[lang=python]\nx = 1\n::\n"
+    /// ).doc;
+    /// let rust_code = doc.extract_code_by_lang("rs");
+    /// assert_eq!(rust_code.len(), 1);
+    /// assert_eq!(rust_code[0].content, "fn main() {}");
+    /// ```
+    pub fn extract_code_by_lang(&self, language: &str) -> Vec<ExtractedCode> {
+        extract::extract_code_blocks_by_lang(&self.blocks, language)
     }
 }

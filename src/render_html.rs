@@ -284,6 +284,29 @@ pub fn to_html(doc: &SurfDoc) -> String {
     parts.join("\n")
 }
 
+/// Render a slice of blocks as bare HTML fragments.
+///
+/// Unlike [`to_html()`], this does NOT:
+/// - Scan for `::site`/`::style` blocks or emit CSS variable overrides
+/// - Extract or render navigation blocks separately
+/// - Wrap content in auto-sectioning (h1/h2 boundary detection)
+///
+/// Each block is rendered through [`render_block()`] and the results are joined
+/// with newlines. The caller controls the CSS context — fragment HTML assumes
+/// `surfdoc-*` class names are available from a parent stylesheet.
+///
+/// Returns an empty string for an empty slice.
+pub fn to_html_fragment(blocks: &[Block]) -> String {
+    if blocks.is_empty() {
+        return String::new();
+    }
+    blocks
+        .iter()
+        .map(render_block)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Render a `SurfDoc` as a complete HTML page with SurfDoc discovery metadata.
 ///
 /// Produces a full `<!DOCTYPE html>` document with:
@@ -1560,6 +1583,47 @@ const SITE_NAV_CSS: &str = r#"
 .surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-faint); font-size: 0.8rem; }
 "#;
 
+/// Build the site-level navigation HTML bar.
+///
+/// Produces a `<nav class="surfdoc-site-nav">` element with:
+/// - Site name as a linked logo
+/// - CSS-only hamburger toggle for mobile
+/// - Navigation links with active-class detection
+///
+/// This is separate from the inline `Block::Nav` rendering in `to_html()`,
+/// which uses `surfdoc-nav` class names and a different data model
+/// (NavItem structs vs route/title pairs).
+fn build_site_nav_html(
+    site_name: &str,
+    nav_items: &[(String, String)],
+    current_route: &str,
+) -> String {
+    let mut nav_html = format!(
+        "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/\" class=\"site-name\">{}</a>\n",
+        escape_html(site_name)
+    );
+    // CSS-only hamburger toggle for mobile
+    nav_html.push_str("  <input type=\"checkbox\" class=\"site-nav-toggle\" id=\"site-nav-toggle\" aria-hidden=\"true\">\n");
+    nav_html.push_str("  <label for=\"site-nav-toggle\" class=\"site-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>\n");
+    nav_html.push_str("  <div class=\"site-nav-links\">\n");
+    for (route, nav_title) in nav_items {
+        let href = route.to_string();
+        let active = if *route == current_route { " active" } else { "" };
+        nav_html.push_str(&format!(
+            "    <a href=\"{}\"{}>{}</a>\n",
+            escape_html(&href),
+            if active.is_empty() {
+                String::new()
+            } else {
+                " class=\"active\"".to_string()
+            },
+            escape_html(nav_title),
+        ));
+    }
+    nav_html.push_str("  </div>\n</nav>");
+    nav_html
+}
+
 /// Render a full HTML page for one route within a multi-page site.
 ///
 /// Produces a `<!DOCTYPE html>` page with site-level `<nav>`, page content,
@@ -1593,29 +1657,7 @@ pub fn render_site_page(
     let source_path = escape_html(&config.source_path);
 
     // Build navigation HTML (clean URLs — no /index.html suffix)
-    let mut nav_html = format!(
-        "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/\" class=\"site-name\">{}</a>\n",
-        escape_html(site_name)
-    );
-    // CSS-only hamburger toggle for mobile
-    nav_html.push_str("  <input type=\"checkbox\" class=\"site-nav-toggle\" id=\"site-nav-toggle\" aria-hidden=\"true\">\n");
-    nav_html.push_str("  <label for=\"site-nav-toggle\" class=\"site-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>\n");
-    nav_html.push_str("  <div class=\"site-nav-links\">\n");
-    for (route, nav_title) in nav_items {
-        let href = route.to_string();
-        let active = if *route == page.route { " active" } else { "" };
-        nav_html.push_str(&format!(
-            "    <a href=\"{}\"{}>{}</a>\n",
-            escape_html(&href),
-            if active.is_empty() {
-                String::new()
-            } else {
-                " class=\"active\"".to_string()
-            },
-            escape_html(nav_title),
-        ));
-    }
-    nav_html.push_str("  </div>\n</nav>");
+    let nav_html = build_site_nav_html(site_name, nav_items, &page.route);
 
     // Build footer
     let footer_html = format!(
@@ -3940,5 +3982,242 @@ About
         assert!(!html.contains("surfdoc-badge"));
         assert!(!html.contains("surfdoc-product-features"));
         assert!(!html.contains("surfdoc-product-cta"));
+    }
+
+    // -- Fragment rendering tests -----------------------------------------
+
+    #[test]
+    fn fragment_no_page_chrome() {
+        let doc = doc_with(vec![
+            Block::Markdown {
+                content: "# Hello".into(),
+                span: span(),
+            },
+            Block::Callout {
+                callout_type: CalloutType::Info,
+                title: None,
+                content: "A note.".into(),
+                span: span(),
+            },
+        ]);
+        let html = to_html_fragment(&doc.blocks);
+
+        // Must contain rendered content
+        assert!(html.contains("<h1>Hello</h1>"), "Should render heading");
+        assert!(html.contains("surfdoc-callout"), "Should render callout");
+
+        // Must NOT contain page chrome
+        assert!(!html.contains("<!DOCTYPE"), "No DOCTYPE in fragment");
+        assert!(!html.contains("<html"), "No <html> wrapper in fragment");
+        assert!(!html.contains("<head"), "No <head> in fragment");
+        assert!(!html.contains("<body"), "No <body> in fragment");
+        assert!(!html.contains("<article"), "No <article> wrapper in fragment");
+    }
+
+    #[test]
+    fn fragment_skips_style_scanning() {
+        let doc = doc_with(vec![
+            Block::Site {
+                domain: Some("example.com".into()),
+                properties: vec![StyleProperty {
+                    key: "accent".into(),
+                    value: "#ff0000".into(),
+                }],
+                span: span(),
+            },
+            Block::Markdown {
+                content: "Hello".into(),
+                span: span(),
+            },
+        ]);
+        let fragment = to_html_fragment(&doc.blocks);
+
+        // Fragment should NOT contain style override injection
+        assert!(!fragment.contains("<style>"), "Fragment must not emit <style> tags");
+        assert!(!fragment.contains("--accent"), "Fragment must not emit CSS variable overrides");
+    }
+
+    #[test]
+    fn fragment_no_auto_section_wrap() {
+        let doc = doc_with(vec![
+            Block::Markdown {
+                content: "# Section One".into(),
+                span: span(),
+            },
+            Block::Markdown {
+                content: "Content.".into(),
+                span: span(),
+            },
+            Block::Markdown {
+                content: "# Section Two".into(),
+                span: span(),
+            },
+        ]);
+        let fragment = to_html_fragment(&doc.blocks);
+
+        // to_html() wraps h1/h2 in <section> tags; fragment must not
+        assert!(
+            !fragment.contains("surfdoc-section"),
+            "Fragment must not add section wrapping"
+        );
+        assert!(
+            !fragment.contains("<section"),
+            "Fragment must not contain <section> elements from auto-wrapping"
+        );
+    }
+
+    #[test]
+    fn fragment_empty_input() {
+        let html = to_html_fragment(&[]);
+        assert_eq!(html, "", "Empty block slice should produce empty string");
+    }
+
+    #[test]
+    fn fragment_single_block() {
+        let blocks = vec![Block::Code {
+            lang: Some("rust".into()),
+            file: None,
+            highlight: vec![],
+            content: "let x = 1;".into(),
+            span: span(),
+        }];
+        let html = to_html_fragment(&blocks);
+
+        assert!(html.contains("surfdoc-code"), "Should render code block");
+        assert!(html.contains("language-rust"), "Should have language class");
+        assert!(html.contains("let x = 1;"), "Should contain code content");
+        // Single block means no newline joiner to worry about, but verify no chrome
+        assert!(!html.contains("<html"), "No page chrome");
+    }
+
+    #[test]
+    fn fragment_escapes_html() {
+        let blocks = vec![Block::Callout {
+            callout_type: CalloutType::Info,
+            title: None,
+            content: "<script>alert('xss')</script>".into(),
+            span: span(),
+        }];
+        let html = to_html_fragment(&blocks);
+
+        assert!(!html.contains("<script>"), "Script tags must be escaped in fragments");
+        assert!(html.contains("&lt;script&gt;"), "Should contain escaped script tag");
+    }
+
+    #[test]
+    fn fragment_renders_nav_inline() {
+        let blocks = vec![
+            Block::Nav {
+                items: vec![crate::types::NavItem {
+                    label: "Home".into(),
+                    href: "/".into(),
+                    icon: None,
+                }],
+                logo: Some("MySite".into()),
+                span: span(),
+            },
+            Block::Markdown {
+                content: "Content after nav.".into(),
+                span: span(),
+            },
+        ];
+        let html = to_html_fragment(&blocks);
+
+        // Nav should render as a regular block in document order
+        // (to_html() extracts nav blocks and renders them first)
+        assert!(html.contains("surfdoc-nav"), "Should render nav block");
+        assert!(html.contains("Content after nav."), "Should render content block");
+    }
+
+    #[test]
+    fn site_nav_helper_basic() {
+        let nav = build_site_nav_html(
+            "My Site",
+            &[
+                ("/".into(), "Home".into()),
+                ("/about".into(), "About".into()),
+            ],
+            "/about",
+        );
+
+        assert!(nav.contains("surfdoc-site-nav"), "Should have site nav class");
+        assert!(nav.contains("My Site"), "Should contain site name");
+        assert!(nav.contains("class=\"active\""), "Active route should be marked");
+        assert!(nav.contains("href=\"/about\""), "Should have about link");
+        assert!(nav.contains("Home"), "Should have home link text");
+    }
+
+    #[test]
+    fn site_nav_helper_active_home() {
+        let nav = build_site_nav_html(
+            "Site",
+            &[
+                ("/".into(), "Home".into()),
+                ("/docs".into(), "Docs".into()),
+            ],
+            "/",
+        );
+
+        // The "/" route link should be active
+        assert!(nav.contains("href=\"/\""), "Should have home link");
+        // Verify active class is applied (check the pattern in the output)
+        // The active link is: <a href="/" class="active">Home</a>
+        assert!(
+            nav.contains("href=\"/\" class=\"active\""),
+            "Home link should be active when current_route is /"
+        );
+    }
+
+    #[test]
+    fn site_page_nav_refactor_stable() {
+        // This test captures that render_site_page() produces identical output
+        // after the nav logic is extracted into build_site_nav_html().
+        // The expected output is validated against known content patterns.
+        let page = PageEntry {
+            route: "/about".into(),
+            layout: None,
+            title: Some("About".into()),
+            sidebar: false,
+            children: vec![Block::Markdown {
+                content: "About content.".into(),
+                span: span(),
+            }],
+        };
+        let site = SiteConfig {
+            name: Some("Test Site".into()),
+            ..Default::default()
+        };
+        let nav_items = vec![
+            ("/".into(), "Home".into()),
+            ("/about".into(), "About".into()),
+        ];
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &nav_items, &config);
+
+        // Verify nav structure is present and correct
+        assert!(html.contains("surfdoc-site-nav"), "Should have site nav");
+        assert!(html.contains("Test Site"), "Should have site name in nav");
+        assert!(
+            html.contains("href=\"/about\" class=\"active\""),
+            "About should be active"
+        );
+        // Verify it is still a full page
+        assert!(html.contains("<!DOCTYPE html>"), "Should be a full page");
+        assert!(html.contains("<article class=\"surfdoc\">"), "Should have article wrapper");
+    }
+
+    #[test]
+    fn fragment_with_context() {
+        let doc = doc_with(vec![Block::Markdown {
+            content: "Hello {= name =}!".into(),
+            span: span(),
+        }]);
+        let ctx = crate::TemplateContext::new();
+        // Note: TemplateContext::new() starts empty.
+        // Variables not found resolve to empty string or are left as-is
+        // depending on the implementation. This test verifies the call chain works.
+        let html = doc.to_html_fragment_with_context(&ctx);
+        assert!(html.contains("Hello"), "Should render content");
     }
 }
