@@ -4,10 +4,11 @@
 //! the block name. Unknown block names pass through unchanged.
 
 use crate::types::{
-    AttrValue, Attrs, BeforeAfterItem, Block, CalloutType, ColumnContent, DataFormat,
-    DecisionStatus, EmbedType, FaqItem, FeatureCard, FooterSection, FormField, FormFieldType,
-    GalleryItem, HeroButton, NavItem, PipelineStep, SocialLink, Span, StatItem, StepItem,
-    StyleProperty, TabPanel, TaskItem, Trend,
+    AttrValue, Attrs, BeforeAfterItem, Block, CalloutType, ChartType, ColumnContent, CrateEntry,
+    DataFormat, DecisionStatus, DomainEntry, EmbedType, EnvEntry, FaqItem, FeatureCard,
+    FilterField, FooterSection, FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod,
+    ListDisplay, ListFilter, NavItem, PipelineStep, SmokeCheck, SocialLink, SortSpec, Span,
+    StatItem, StepItem, StyleProperty, TabPanel, TaskItem, Trend, VolumeEntry,
 };
 
 /// Resolve a `Block::Unknown` into a typed variant, if the name matches a known
@@ -61,6 +62,33 @@ pub fn resolve_block(block: Block) -> Block {
         "pipeline" => parse_pipeline(content, *span),
         "section" => parse_section(attrs, content, *span),
         "product-card" => parse_product_card(attrs, content, *span),
+        // App description blocks
+        "list" => parse_list(attrs, content, *span),
+        "board" => parse_board(attrs, content, *span),
+        "action" => parse_action(attrs, content, *span),
+        "filter-bar" => parse_filter_bar(attrs, content, *span),
+        "search" => parse_search(attrs, *span),
+        "dashboard" => parse_dashboard(attrs, *span),
+        "chat-input" => parse_chat_input(attrs, content, *span),
+        "feed" => parse_feed(attrs, *span),
+        // Compound widget mount points
+        "editor" => parse_editor(attrs, *span),
+        "chart" => parse_chart(attrs, *span),
+        "split-pane" => parse_split_pane(attrs, *span),
+        // Infrastructure manifest blocks
+        "app" => parse_app(attrs, content, *span),
+        "build" => parse_build(attrs, content, *span),
+        "database" => parse_infra_database(attrs, content, *span),
+        "deploy" => parse_deploy(attrs, content, *span),
+        "env" => parse_infra_env(attrs, content, *span),
+        "health" => parse_health(attrs, *span),
+        "concurrency" => parse_concurrency(attrs, *span),
+        "cicd" => parse_cicd(attrs, content, *span),
+        "smoke" => parse_smoke(attrs, content, *span),
+        "domains" => parse_domains(content, *span),
+        "crates" => parse_crates(content, *span),
+        "deploy_urls" | "deploy-urls" => parse_deploy_urls(content, *span),
+        "volumes" => parse_volumes(content, *span),
         _ => block,
     }
 }
@@ -1694,6 +1722,743 @@ fn parse_cta_link(trimmed: &str, cta_label: &mut Option<String>, cta_href: &mut 
 }
 
 // ------------------------------------------------------------------
+// App description block parsers
+// ------------------------------------------------------------------
+
+fn attr_u32(attrs: &Attrs, key: &str) -> Option<u32> {
+    attrs.get(key).and_then(|v| match v {
+        AttrValue::Number(n) => Some(*n as u32),
+        AttrValue::String(s) => s.parse().ok(),
+        _ => None,
+    })
+}
+
+/// Validate a URL-like source/action path.
+///
+/// Only relative paths starting with `/` are allowed. Rejects `javascript:`,
+/// `data:`, external URLs, and path traversal to prevent injection attacks.
+fn validate_source_path(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let lower = trimmed.to_lowercase();
+    // Block dangerous schemes
+    if lower.starts_with("javascript:")
+        || lower.starts_with("data:")
+        || lower.starts_with("vbscript:")
+    {
+        return None;
+    }
+    // Block external URLs — only relative paths allowed
+    if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("//") {
+        return None;
+    }
+    // Block path traversal
+    if trimmed.contains("..") {
+        return None;
+    }
+    // Must start with /
+    if !trimmed.starts_with('/') {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+fn parse_list(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+
+    let display = attr_string(attrs, "display")
+        .and_then(|s| match s.as_str() {
+            "card" => Some(ListDisplay::Card),
+            "table" => Some(ListDisplay::Table),
+            "compact" => Some(ListDisplay::Compact),
+            _ => None,
+        })
+        .unwrap_or(ListDisplay::Card);
+
+    let preload = attr_bool(attrs, "preload");
+
+    let mut item_template = String::new();
+    let mut filters = Vec::new();
+    let mut sort = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(field) = trimmed.strip_prefix("filter:") {
+            filters.push(ListFilter {
+                field: field.trim().to_string(),
+            });
+        } else if let Some(sort_spec) = trimmed.strip_prefix("sort:") {
+            let parts: Vec<&str> = sort_spec.trim().split_whitespace().collect();
+            if let Some(field) = parts.first() {
+                let descending = parts.get(1).is_some_and(|d| d.eq_ignore_ascii_case("desc"));
+                sort = Some(SortSpec {
+                    field: field.to_string(),
+                    descending,
+                });
+            }
+        } else {
+            if !item_template.is_empty() {
+                item_template.push('\n');
+            }
+            item_template.push_str(trimmed);
+        }
+    }
+
+    Block::List {
+        source,
+        display,
+        item_template,
+        filters,
+        sort,
+        preload,
+        span,
+    }
+}
+
+fn parse_board(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+    let preload = attr_bool(attrs, "preload");
+
+    let mut columns = Vec::new();
+    let mut card_template = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(cols) = trimmed.strip_prefix("columns:") {
+            columns = cols.split('|').map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect();
+        } else if let Some(tmpl) = trimmed.strip_prefix("card-template:") {
+            card_template = Some(tmpl.trim().to_string());
+        }
+    }
+
+    Block::Board {
+        source,
+        columns,
+        card_template,
+        preload,
+        span,
+    }
+}
+
+fn parse_action(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let method = attr_string(attrs, "method")
+        .and_then(|s| match s.to_lowercase().as_str() {
+            "get" => Some(HttpMethod::Get),
+            "post" => Some(HttpMethod::Post),
+            "put" => Some(HttpMethod::Put),
+            "patch" => Some(HttpMethod::Patch),
+            "delete" => Some(HttpMethod::Delete),
+            _ => None,
+        })
+        .unwrap_or(HttpMethod::Post);
+
+    let target = attr_string(attrs, "target")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+
+    let label = attr_string(attrs, "label").unwrap_or_else(|| "Submit".to_string());
+    let confirm = attr_string(attrs, "confirm");
+
+    // Reuse form field parsing from parse_form
+    let mut fields = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            let rest = rest.trim();
+            let (label_part, type_part) = if let Some(paren_start) = rest.find('(') {
+                let lbl = rest[..paren_start].trim();
+                let after_paren = &rest[paren_start + 1..];
+                let paren_end = after_paren.find(')').unwrap_or(after_paren.len());
+                let type_str = &after_paren[..paren_end];
+                let remainder = &after_paren[paren_end..].trim_start_matches(')');
+                (lbl, Some((type_str.to_string(), remainder.to_string())))
+            } else {
+                (rest.trim_end_matches(" *").trim_end_matches('*'), None)
+            };
+
+            let required = rest.ends_with('*') || rest.ends_with("* ");
+
+            let (field_type, placeholder, options) = match &type_part {
+                Some((type_str, _)) => {
+                    let type_str = type_str.trim();
+                    if let Some(opts_part) = type_str.strip_prefix("select:") {
+                        let opts: Vec<String> = opts_part
+                            .split('|')
+                            .map(|o| o.trim().to_string())
+                            .filter(|o| !o.is_empty())
+                            .collect();
+                        (FormFieldType::Select, None, opts)
+                    } else {
+                        let (type_name, placeholder) = if let Some((t, p)) = type_str.split_once(',') {
+                            (t.trim(), Some(p.trim().trim_matches('"').to_string()))
+                        } else {
+                            (type_str, None)
+                        };
+                        let ft = match type_name {
+                            "email" => FormFieldType::Email,
+                            "tel" | "phone" => FormFieldType::Tel,
+                            "date" => FormFieldType::Date,
+                            "number" => FormFieldType::Number,
+                            "select" => FormFieldType::Select,
+                            "textarea" | "multiline" => FormFieldType::Textarea,
+                            _ => FormFieldType::Text,
+                        };
+                        (ft, placeholder, Vec::new())
+                    }
+                }
+                None => (FormFieldType::Text, None, Vec::new()),
+            };
+
+            let name = label_part
+                .to_lowercase()
+                .replace(|c: char| !c.is_alphanumeric(), "_")
+                .trim_matches('_')
+                .to_string();
+
+            fields.push(FormField {
+                label: label_part.to_string(),
+                name,
+                field_type,
+                required,
+                placeholder,
+                options,
+            });
+        }
+    }
+
+    Block::Action {
+        method,
+        target,
+        label,
+        fields,
+        confirm,
+        span,
+    }
+}
+
+fn parse_filter_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let target_selector = attr_string(attrs, "target").unwrap_or_default();
+
+    let mut fields = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            let rest = rest.trim();
+            if let Some(paren_start) = rest.find('(') {
+                let label_part = rest[..paren_start].trim().to_string();
+                let after_paren = &rest[paren_start + 1..];
+                let paren_end = after_paren.find(')').unwrap_or(after_paren.len());
+                let type_str = &after_paren[..paren_end];
+
+                if let Some(opts_part) = type_str.strip_prefix("select:") {
+                    let options: Vec<String> = opts_part
+                        .split('|')
+                        .map(|o| o.trim().to_string())
+                        .filter(|o| !o.is_empty())
+                        .collect();
+                    let name = label_part
+                        .to_lowercase()
+                        .replace(|c: char| !c.is_alphanumeric(), "_")
+                        .trim_matches('_')
+                        .to_string();
+                    fields.push(FilterField {
+                        label: label_part,
+                        name,
+                        options,
+                    });
+                }
+            }
+        }
+    }
+
+    Block::FilterBar {
+        target_selector,
+        fields,
+        span,
+    }
+}
+
+fn parse_search(attrs: &Attrs, span: Span) -> Block {
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+    let placeholder = attr_string(attrs, "placeholder");
+
+    Block::Search {
+        source,
+        placeholder,
+        span,
+    }
+}
+
+fn parse_dashboard(attrs: &Attrs, span: Span) -> Block {
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+    let refresh = attr_u32(attrs, "refresh");
+
+    Block::Dashboard {
+        source,
+        refresh,
+        span,
+    }
+}
+
+fn parse_chat_input(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let action = attr_string(attrs, "action")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+    let placeholder = attr_string(attrs, "placeholder");
+
+    let mut modes = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(mode_list) = trimmed.strip_prefix("modes:") {
+            modes = mode_list
+                .split('|')
+                .map(|m| m.trim().to_string())
+                .filter(|m| !m.is_empty())
+                .collect();
+        }
+    }
+
+    Block::ChatInput {
+        action,
+        placeholder,
+        modes,
+        span,
+    }
+}
+
+fn parse_feed(attrs: &Attrs, span: Span) -> Block {
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+    let stream = attr_bool(attrs, "stream");
+
+    Block::Feed {
+        source,
+        stream,
+        span,
+    }
+}
+
+fn parse_editor(attrs: &Attrs, span: Span) -> Block {
+    let source = attr_string(attrs, "source").and_then(|s| validate_source_path(&s));
+    let lang = attr_string(attrs, "lang");
+    let preview = attr_bool(attrs, "preview");
+
+    Block::Editor {
+        source,
+        lang,
+        preview,
+        span,
+    }
+}
+
+fn parse_chart(attrs: &Attrs, span: Span) -> Block {
+    let chart_type = attr_string(attrs, "type")
+        .and_then(|s| match s.as_str() {
+            "line" => Some(ChartType::Line),
+            "bar" => Some(ChartType::Bar),
+            "pie" => Some(ChartType::Pie),
+            "area" => Some(ChartType::Area),
+            _ => None,
+        })
+        .unwrap_or(ChartType::Line);
+
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_source_path(&s))
+        .unwrap_or_default();
+    let period = attr_string(attrs, "period");
+
+    Block::Chart {
+        chart_type,
+        source,
+        period,
+        span,
+    }
+}
+
+fn parse_split_pane(attrs: &Attrs, span: Span) -> Block {
+    let ratio = attr_string(attrs, "ratio").unwrap_or_else(|| "50:50".to_string());
+
+    Block::SplitPane { ratio, span }
+}
+
+// ------------------------------------------------------------------
+// Infrastructure manifest block parsers
+// ------------------------------------------------------------------
+
+/// Container block — recursively parse children (like `parse_page`).
+fn parse_app(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let name = attr_string(attrs, "name").unwrap_or_default();
+    let binary = attr_string(attrs, "binary");
+    let region = attr_string(attrs, "region");
+    let port = attr_u32(attrs, "port");
+    let platform = attr_string(attrs, "platform");
+
+    let children = parse_page_children(content);
+
+    Block::App {
+        name,
+        binary,
+        region,
+        port,
+        platform,
+        content: content.to_string(),
+        children,
+        span,
+    }
+}
+
+fn parse_build(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let base = attr_string(attrs, "base");
+    let runtime = attr_string(attrs, "runtime");
+    let edition = attr_string(attrs, "edition");
+
+    let mut properties = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                properties.push(StyleProperty { key, value });
+            }
+        }
+    }
+
+    Block::Build {
+        base,
+        runtime,
+        edition,
+        properties,
+        span,
+    }
+}
+
+fn parse_infra_database(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let name = attr_string(attrs, "name");
+    let shared_auth = attr_bool(attrs, "shared_auth");
+    let volume_gb = attr_u32(attrs, "volume_gb");
+
+    let mut properties = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                properties.push(StyleProperty { key, value });
+            }
+        }
+    }
+
+    Block::InfraDatabase {
+        name,
+        shared_auth,
+        volume_gb,
+        properties,
+        span,
+    }
+}
+
+fn parse_deploy(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let env = attr_string(attrs, "env");
+    let app = attr_string(attrs, "app");
+    let machines = attr_u32(attrs, "machines");
+    let memory = attr_u32(attrs, "memory");
+    let auto_stop = attr_string(attrs, "auto_stop");
+    let min_machines = attr_u32(attrs, "min_machines");
+    let strategy = attr_string(attrs, "strategy");
+
+    let mut properties = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                properties.push(StyleProperty { key, value });
+            }
+        }
+    }
+
+    Block::Deploy {
+        env,
+        app,
+        machines,
+        memory,
+        auto_stop,
+        min_machines,
+        strategy,
+        properties,
+        span,
+    }
+}
+
+/// Parse `NAME` or `NAME = default_value` lines.
+fn parse_infra_env(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let tier = attr_string(attrs, "tier");
+
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((name, value)) = trimmed.split_once('=') {
+            let name = name.trim().to_string();
+            let value = value.trim().to_string();
+            entries.push(EnvEntry {
+                name,
+                default_value: if value.is_empty() { None } else { Some(value) },
+            });
+        } else {
+            entries.push(EnvEntry {
+                name: trimmed.to_string(),
+                default_value: None,
+            });
+        }
+    }
+
+    Block::InfraEnv {
+        tier,
+        entries,
+        span,
+    }
+}
+
+fn parse_health(attrs: &Attrs, span: Span) -> Block {
+    Block::Health {
+        path: attr_string(attrs, "path"),
+        method: attr_string(attrs, "method"),
+        grace: attr_string(attrs, "grace"),
+        interval: attr_string(attrs, "interval"),
+        timeout: attr_string(attrs, "timeout"),
+        span,
+    }
+}
+
+fn parse_concurrency(attrs: &Attrs, span: Span) -> Block {
+    Block::Concurrency {
+        concurrency_type: attr_string(attrs, "type"),
+        hard_limit: attr_u32(attrs, "hard_limit"),
+        soft_limit: attr_u32(attrs, "soft_limit"),
+        force_https: attr_bool(attrs, "force_https"),
+        span,
+    }
+}
+
+fn parse_cicd(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let provider = attr_string(attrs, "provider");
+
+    let mut properties = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                properties.push(StyleProperty { key, value });
+            }
+        }
+    }
+
+    Block::Cicd {
+        provider,
+        properties,
+        span,
+    }
+}
+
+/// Parse `METHOD /path -> STATUS` lines.
+fn parse_smoke(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let script = attr_string(attrs, "script");
+
+    let mut checks = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Expected format: `GET /path -> 200`
+        let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let method = parts[0].to_string();
+        let rest = parts[1];
+        if let Some((path, status_str)) = rest.rsplit_once("->") {
+            let path = path.trim().to_string();
+            if let Ok(expected) = status_str.trim().parse::<u16>() {
+                checks.push(SmokeCheck {
+                    method,
+                    path,
+                    expected,
+                });
+            }
+        }
+    }
+
+    Block::Smoke {
+        script,
+        checks,
+        span,
+    }
+}
+
+/// Parse `domain.com (description)` lines.
+fn parse_domains(content: &str, span: Span) -> Block {
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((domain, rest)) = trimmed.split_once('(') {
+            let domain = domain.trim().to_string();
+            let description = rest.trim_end_matches(')').trim().to_string();
+            entries.push(DomainEntry {
+                domain,
+                description: if description.is_empty() {
+                    None
+                } else {
+                    Some(description)
+                },
+            });
+        } else {
+            entries.push(DomainEntry {
+                domain: trimmed.to_string(),
+                description: None,
+            });
+        }
+    }
+
+    Block::Domains { entries, span }
+}
+
+/// Parse `name (source: ..., features: ...)` or `name (key: value, ...)` lines.
+fn parse_crates(content: &str, span: Span) -> Block {
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((name, rest)) = trimmed.split_once('(') {
+            let name = name.trim().to_string();
+            let meta = rest.trim_end_matches(')').trim();
+            let mut source = None;
+            let mut features = None;
+            // Parse comma-separated key: value pairs inside parens
+            for part in meta.split(',') {
+                let part = part.trim();
+                if let Some(val) = part.strip_prefix("github:").or_else(|| part.strip_prefix("source:")) {
+                    // Combine with remaining comma-separated parts that are part of the source
+                    source = Some(val.trim().to_string());
+                } else if let Some(val) = part.strip_prefix("features:") {
+                    features = Some(val.trim().to_string());
+                } else if let Some(val) = part.strip_prefix("branch:") {
+                    // Append branch info to source
+                    if let Some(ref mut s) = source {
+                        s.push_str(&format!(", branch: {}", val.trim()));
+                    }
+                } else if source.is_some() && features.is_none() && !part.contains(':') {
+                    // Continue previous source value
+                    if let Some(ref mut s) = source {
+                        s.push_str(&format!(", {}", part));
+                    }
+                }
+            }
+            entries.push(CrateEntry {
+                name,
+                source,
+                features,
+            });
+        } else {
+            entries.push(CrateEntry {
+                name: trimmed.to_string(),
+                source: None,
+                features: None,
+            });
+        }
+    }
+
+    Block::Crates { entries, span }
+}
+
+/// Parse `key: value` lines (same as style).
+fn parse_deploy_urls(content: &str, span: Span) -> Block {
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                entries.push(StyleProperty { key, value });
+            }
+        }
+    }
+
+    Block::DeployUrls { entries, span }
+}
+
+/// Parse `name -> /mount/path` lines.
+fn parse_volumes(content: &str, span: Span) -> Block {
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((name, mount)) = trimmed.split_once("->") {
+            entries.push(VolumeEntry {
+                name: name.trim().to_string(),
+                mount: mount.trim().to_string(),
+            });
+        }
+    }
+
+    Block::Volumes { entries, span }
+}
+
+// ------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------
 
@@ -1961,13 +2726,13 @@ mod tests {
             "decision",
             attrs(&[
                 ("status", AttrValue::String("proposed".into())),
-                ("deciders", AttrValue::String("Brady, Claude".into())),
+                ("deciders", AttrValue::String("Brady, Ryan".into())),
             ]),
             "Consider options.",
         );
         match resolve_block(block) {
             Block::Decision { deciders, .. } => {
-                assert_eq!(deciders, vec!["Brady", "Claude"]);
+                assert_eq!(deciders, vec!["Brady", "Ryan"]);
             }
             other => panic!("Expected Decision, got {other:?}"),
         }
@@ -3701,5 +4466,335 @@ Saturday 7am-4pm, Sunday 8am-2pm.
             }
             other => panic!("Expected ProductCard, got {other:?}"),
         }
+    }
+
+    // ---- App description block tests ----
+
+    #[test]
+    fn resolve_list_with_filters() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/tasks".into())),
+            ("display", AttrValue::String("card".into())),
+        ]);
+        let content = "## {= title =}\nStatus: {= status =}\n\nfilter: status\nfilter: priority\nsort: created_at desc";
+        let block = unknown("list", a, content);
+        match resolve_block(block) {
+            Block::List {
+                source,
+                display,
+                filters,
+                sort,
+                item_template,
+                ..
+            } => {
+                assert_eq!(source, "/api/tasks");
+                assert_eq!(display, ListDisplay::Card);
+                assert_eq!(filters.len(), 2);
+                assert_eq!(filters[0].field, "status");
+                assert_eq!(filters[1].field, "priority");
+                assert!(sort.is_some());
+                let s = sort.unwrap();
+                assert_eq!(s.field, "created_at");
+                assert!(s.descending);
+                assert!(item_template.contains("{= title =}"));
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_board() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/tasks/board".into())),
+        ]);
+        let content = "columns: To Do | In Progress | Done\ncard-template: {= title =} @{= assignee =}";
+        let block = unknown("board", a, content);
+        match resolve_block(block) {
+            Block::Board {
+                source,
+                columns,
+                card_template,
+                ..
+            } => {
+                assert_eq!(source, "/api/tasks/board");
+                assert_eq!(columns, vec!["To Do", "In Progress", "Done"]);
+                assert_eq!(card_template.as_deref(), Some("{= title =} @{= assignee =}"));
+            }
+            other => panic!("Expected Board, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_form() {
+        let a = attrs(&[
+            ("method", AttrValue::String("post".into())),
+            ("target", AttrValue::String("/api/tasks".into())),
+            ("label", AttrValue::String("Add Task".into())),
+        ]);
+        let content = "- Name (text) *\n- Priority (select: Low | Medium | High)";
+        let block = unknown("action", a, content);
+        match resolve_block(block) {
+            Block::Action {
+                method,
+                target,
+                label,
+                fields,
+                ..
+            } => {
+                assert_eq!(method, HttpMethod::Post);
+                assert_eq!(target, "/api/tasks");
+                assert_eq!(label, "Add Task");
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].label, "Name");
+                assert!(fields[0].required);
+                assert_eq!(fields[0].field_type, FormFieldType::Text);
+                assert_eq!(fields[1].label, "Priority");
+                assert_eq!(fields[1].field_type, FormFieldType::Select);
+                assert_eq!(fields[1].options, vec!["Low", "Medium", "High"]);
+            }
+            other => panic!("Expected Action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_filter_bar() {
+        let a = attrs(&[
+            ("target", AttrValue::String("#task-board".into())),
+        ]);
+        let content = "- Status (select: All | To Do | In Progress | Done)\n- Priority (select: All | Low | Medium | High)";
+        let block = unknown("filter-bar", a, content);
+        match resolve_block(block) {
+            Block::FilterBar {
+                target_selector,
+                fields,
+                ..
+            } => {
+                assert_eq!(target_selector, "#task-board");
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].label, "Status");
+                assert_eq!(fields[0].options, vec!["All", "To Do", "In Progress", "Done"]);
+                assert_eq!(fields[1].label, "Priority");
+                assert_eq!(fields[1].name, "priority");
+            }
+            other => panic!("Expected FilterBar, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_search() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/research/search".into())),
+            ("placeholder", AttrValue::String("Search articles...".into())),
+        ]);
+        let block = unknown("search", a, "");
+        match resolve_block(block) {
+            Block::Search {
+                source,
+                placeholder,
+                ..
+            } => {
+                assert_eq!(source, "/api/research/search");
+                assert_eq!(placeholder.as_deref(), Some("Search articles..."));
+            }
+            other => panic!("Expected Search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_dashboard_with_refresh() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/grow/metrics".into())),
+            ("refresh", AttrValue::Number(60.0)),
+        ]);
+        let block = unknown("dashboard", a, "");
+        match resolve_block(block) {
+            Block::Dashboard {
+                source,
+                refresh,
+                ..
+            } => {
+                assert_eq!(source, "/api/grow/metrics");
+                assert_eq!(refresh, Some(60));
+            }
+            other => panic!("Expected Dashboard, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_chat_input() {
+        let a = attrs(&[
+            ("action", AttrValue::String("/chat/message".into())),
+            ("placeholder", AttrValue::String("Ask anything...".into())),
+        ]);
+        let content = "modes: Research | Plan | Build";
+        let block = unknown("chat-input", a, content);
+        match resolve_block(block) {
+            Block::ChatInput {
+                action,
+                placeholder,
+                modes,
+                ..
+            } => {
+                assert_eq!(action, "/chat/message");
+                assert_eq!(placeholder.as_deref(), Some("Ask anything..."));
+                assert_eq!(modes, vec!["Research", "Plan", "Build"]);
+            }
+            other => panic!("Expected ChatInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_feed_streaming() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/chat/messages".into())),
+            ("stream", AttrValue::Bool(true)),
+        ]);
+        let block = unknown("feed", a, "");
+        match resolve_block(block) {
+            Block::Feed {
+                source,
+                stream,
+                ..
+            } => {
+                assert_eq!(source, "/api/chat/messages");
+                assert!(stream);
+            }
+            other => panic!("Expected Feed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_editor() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/docs/123".into())),
+            ("lang", AttrValue::String("surfdoc".into())),
+            ("preview", AttrValue::Bool(true)),
+        ]);
+        let block = unknown("editor", a, "");
+        match resolve_block(block) {
+            Block::Editor {
+                source,
+                lang,
+                preview,
+                ..
+            } => {
+                assert_eq!(source.as_deref(), Some("/api/docs/123"));
+                assert_eq!(lang.as_deref(), Some("surfdoc"));
+                assert!(preview);
+            }
+            other => panic!("Expected Editor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_chart() {
+        let a = attrs(&[
+            ("type", AttrValue::String("line".into())),
+            ("source", AttrValue::String("/api/grow/metrics".into())),
+            ("period", AttrValue::String("30d".into())),
+        ]);
+        let block = unknown("chart", a, "");
+        match resolve_block(block) {
+            Block::Chart {
+                chart_type,
+                source,
+                period,
+                ..
+            } => {
+                assert_eq!(chart_type, ChartType::Line);
+                assert_eq!(source, "/api/grow/metrics");
+                assert_eq!(period.as_deref(), Some("30d"));
+            }
+            other => panic!("Expected Chart, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_split_pane() {
+        let a = attrs(&[
+            ("ratio", AttrValue::String("60:40".into())),
+        ]);
+        let block = unknown("split-pane", a, "");
+        match resolve_block(block) {
+            Block::SplitPane { ratio, .. } => {
+                assert_eq!(ratio, "60:40");
+            }
+            other => panic!("Expected SplitPane, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn source_validation_blocks_javascript() {
+        let a = attrs(&[
+            ("source", AttrValue::String("javascript:alert(1)".into())),
+        ]);
+        let block = unknown("list", a, "");
+        match resolve_block(block) {
+            Block::List { source, .. } => {
+                assert!(source.is_empty(), "javascript: URLs must be rejected");
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn source_validation_blocks_external_url() {
+        let a = attrs(&[
+            ("source", AttrValue::String("https://evil.com/steal".into())),
+        ]);
+        let block = unknown("search", a, "");
+        match resolve_block(block) {
+            Block::Search { source, .. } => {
+                assert!(source.is_empty(), "external URLs must be rejected");
+            }
+            other => panic!("Expected Search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn source_validation_blocks_path_traversal() {
+        let a = attrs(&[
+            ("source", AttrValue::String("/api/../../../etc/passwd".into())),
+        ]);
+        let block = unknown("feed", a, "");
+        match resolve_block(block) {
+            Block::Feed { source, .. } => {
+                assert!(source.is_empty(), "path traversal must be rejected");
+            }
+            other => panic!("Expected Feed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_list_from_full_surf() {
+        let source = "::list[source=\"/api/tasks\" display=card]\n## {= title =}\nfilter: status\nsort: created_at desc\n::";
+        let result = crate::parse(source);
+        assert!(result.diagnostics.is_empty(), "Diagnostics: {:?}", result.diagnostics);
+        let has_list = result.doc.blocks.iter().any(|b| matches!(b, Block::List { .. }));
+        assert!(has_list, "Should contain a List block");
+    }
+
+    #[test]
+    fn parse_board_from_full_surf() {
+        let source = "::board[source=\"/api/tasks/board\"]\ncolumns: To Do | In Progress | Done\n::";
+        let result = crate::parse(source);
+        let has_board = result.doc.blocks.iter().any(|b| matches!(b, Block::Board { .. }));
+        assert!(has_board, "Should contain a Board block");
+    }
+
+    #[test]
+    fn parse_action_from_full_surf() {
+        let source = "::action[method=post target=\"/api/tasks\" label=\"Add Task\"]\n- Name (text) *\n- Priority (select: Low | Medium | High)\n::";
+        let result = crate::parse(source);
+        let has_action = result.doc.blocks.iter().any(|b| matches!(b, Block::Action { .. }));
+        assert!(has_action, "Should contain an Action block");
+    }
+
+    #[test]
+    fn parse_filter_bar_from_full_surf() {
+        let source = "::filter-bar[target=\"#tasks\"]\n- Status (select: All | To Do | Done)\n::";
+        let result = crate::parse(source);
+        let has_filter = result.doc.blocks.iter().any(|b| matches!(b, Block::FilterBar { .. }));
+        assert!(has_filter, "Should contain a FilterBar block");
     }
 }

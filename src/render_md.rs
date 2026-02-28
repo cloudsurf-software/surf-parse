@@ -3,7 +3,7 @@
 //! Converts a `SurfDoc` into standard CommonMark with no `::` directive markers.
 //! Each block type is degraded to the nearest Markdown equivalent.
 
-use crate::types::{Block, CalloutType, DecisionStatus, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, HttpMethod, ListDisplay, SurfDoc, Trend};
 
 /// Render a `SurfDoc` as standard CommonMark markdown.
 ///
@@ -508,6 +508,113 @@ pub(crate) fn render_block(block: &Block) -> String {
         Block::Toc { .. } => {
             "*Table of Contents*".to_string()
         }
+
+        // ----- App description blocks -----
+
+        Block::List {
+            source, display, filters, sort, ..
+        } => {
+            let display_str = match display {
+                ListDisplay::Card => "cards",
+                ListDisplay::Table => "table",
+                ListDisplay::Compact => "compact list",
+            };
+            let mut lines = vec![format!("**Data List** ({display_str})")];
+            lines.push(format!("Source: `{source}`"));
+            if !filters.is_empty() {
+                let filter_names: Vec<&str> = filters.iter().map(|f| f.field.as_str()).collect();
+                lines.push(format!("Filters: {}", filter_names.join(", ")));
+            }
+            if let Some(s) = sort {
+                let dir = if s.descending { "descending" } else { "ascending" };
+                lines.push(format!("Sort: {} {dir}", s.field));
+            }
+            lines.join("\n")
+        }
+
+        Block::Board {
+            source, columns, ..
+        } => {
+            let mut lines = vec!["**Board**".to_string()];
+            if !columns.is_empty() {
+                lines.push(format!("Columns: {}", columns.join(" | ")));
+            }
+            lines.push(format!("Source: `{source}`"));
+            lines.join("\n")
+        }
+
+        Block::Action {
+            method, target, label, fields, ..
+        } => {
+            let method_str = match method {
+                HttpMethod::Get => "GET",
+                HttpMethod::Post => "POST",
+                HttpMethod::Put => "PUT",
+                HttpMethod::Patch => "PATCH",
+                HttpMethod::Delete => "DELETE",
+            };
+            let mut lines = vec![format!("**{label}** ({method_str} `{target}`)")];
+            for field in fields {
+                let req = if field.required { " *" } else { "" };
+                lines.push(format!("- {}{}", field.label, req));
+            }
+            lines.join("\n")
+        }
+
+        Block::FilterBar { fields, .. } => {
+            let mut lines = vec!["**Filters**".to_string()];
+            for field in fields {
+                lines.push(format!("- {}: {}", field.label, field.options.join(" | ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Search { placeholder, .. } => {
+            let ph = placeholder.as_deref().unwrap_or("Search...");
+            format!("**Search**: {ph}")
+        }
+
+        Block::Dashboard { source, refresh, .. } => {
+            let refresh_str = refresh.map(|r| format!(" (refresh every {r}s)")).unwrap_or_default();
+            format!("**Dashboard**{refresh_str}\nSource: `{source}`")
+        }
+
+        Block::ChatInput { modes, placeholder, .. } => {
+            let ph = placeholder.as_deref().unwrap_or("Type a message...");
+            let mut lines = vec![format!("**Chat**: {ph}")];
+            if !modes.is_empty() {
+                lines.push(format!("Modes: {}", modes.join(" | ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Feed { source, stream, .. } => {
+            let mode = if *stream { "streaming" } else { "polling" };
+            format!("**Feed** ({mode})\nSource: `{source}`")
+        }
+
+        Block::Editor { lang, .. } => {
+            let lang_str = lang.as_deref().unwrap_or("text");
+            format!("**Editor** ({lang_str})")
+        }
+
+        Block::Chart { chart_type, source, period, .. } => {
+            let type_str = match chart_type {
+                ChartType::Line => "Line",
+                ChartType::Bar => "Bar",
+                ChartType::Pie => "Pie",
+                ChartType::Area => "Area",
+            };
+            let period_str = period.as_ref().map(|p| format!(" ({p})")).unwrap_or_default();
+            format!("**{type_str} Chart**{period_str}\nSource: `{source}`")
+        }
+
+        Block::SplitPane { ratio, .. } => {
+            format!("**Split Pane** ({ratio})")
+        }
+
+        // Catch-all for newly added block types not yet rendered
+        _ => String::new(),
     }
 }
 

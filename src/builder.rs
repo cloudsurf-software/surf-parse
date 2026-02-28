@@ -6,10 +6,10 @@
 //! through [`crate::parse`].
 
 use crate::types::{
-    Block, CalloutType, ColumnContent, DataFormat, DecisionStatus, EmbedType, FaqItem,
+    Block, CalloutType, ChartType, ColumnContent, DataFormat, DecisionStatus, EmbedType, FaqItem,
     FeatureCard, FooterSection, FormField, FormFieldType, FrontMatter, GalleryItem, HeroButton,
-    NavItem, SocialLink, Span, StatItem, StepItem, StyleProperty, SurfDoc, TabPanel, TaskItem,
-    Trend,
+    HttpMethod, ListDisplay, NavItem, SocialLink, Span, StatItem, StepItem, StyleProperty,
+    SurfDoc, TabPanel, TaskItem, Trend,
 };
 
 // -----------------------------------------------------------------------
@@ -808,6 +808,8 @@ fn doc_type_str(dt: crate::types::DocType) -> &'static str {
         DocType::Proposal => "proposal",
         DocType::Incident => "incident",
         DocType::Review => "review",
+        DocType::App => "app",
+        DocType::Manifest => "manifest",
     }
 }
 
@@ -1685,6 +1687,458 @@ fn serialize_block(block: &Block) -> String {
                 content_lines.push(format!("[{label}]({href})"));
             }
             format!("::product-card{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        // ----- App description blocks -----
+
+        Block::List { source, display, item_template, filters, sort, preload, .. } => {
+            let mut attrs_parts = Vec::new();
+            attrs_parts.push(format!("source=\"{}\"", escape_attr(source)));
+            let display_str = match display {
+                ListDisplay::Card => "card",
+                ListDisplay::Table => "table",
+                ListDisplay::Compact => "compact",
+            };
+            attrs_parts.push(format!("display={display_str}"));
+            if *preload {
+                attrs_parts.push("preload".to_string());
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let mut content_lines = Vec::new();
+            if !item_template.is_empty() {
+                content_lines.push(item_template.clone());
+                content_lines.push(String::new());
+            }
+            for f in filters {
+                content_lines.push(format!("filter: {}", f.field));
+            }
+            if let Some(s) = sort {
+                let dir = if s.descending { " desc" } else { " asc" };
+                content_lines.push(format!("sort: {}{dir}", s.field));
+            }
+            format!("::list{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Board { source, columns, card_template, preload, .. } => {
+            let mut attrs_parts = vec![format!("source=\"{}\"", escape_attr(source))];
+            if *preload {
+                attrs_parts.push("preload".to_string());
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let mut content_lines = Vec::new();
+            if !columns.is_empty() {
+                content_lines.push(format!("columns: {}", columns.join(" | ")));
+            }
+            if let Some(tmpl) = card_template {
+                content_lines.push(format!("card-template: {tmpl}"));
+            }
+            format!("::board{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Action { method, target, label, fields, confirm, .. } => {
+            let method_str = match method {
+                HttpMethod::Get => "get",
+                HttpMethod::Post => "post",
+                HttpMethod::Put => "put",
+                HttpMethod::Patch => "patch",
+                HttpMethod::Delete => "delete",
+            };
+            let mut attrs_parts = vec![
+                format!("method={method_str}"),
+                format!("target=\"{}\"", escape_attr(target)),
+                format!("label=\"{}\"", escape_attr(label)),
+            ];
+            if let Some(c) = confirm {
+                attrs_parts.push(format!("confirm=\"{}\"", escape_attr(c)));
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let mut content_lines = Vec::new();
+            for field in fields {
+                let type_str = match field.field_type {
+                    FormFieldType::Text => "text",
+                    FormFieldType::Email => "email",
+                    FormFieldType::Tel => "tel",
+                    FormFieldType::Date => "date",
+                    FormFieldType::Number => "number",
+                    FormFieldType::Select => "select",
+                    FormFieldType::Textarea => "textarea",
+                };
+                let req = if field.required { " *" } else { "" };
+                if field.field_type == FormFieldType::Select && !field.options.is_empty() {
+                    content_lines.push(format!(
+                        "- {} (select: {}){req}",
+                        field.label,
+                        field.options.join(" | "),
+                    ));
+                } else {
+                    content_lines.push(format!("- {} ({type_str}){req}", field.label));
+                }
+            }
+            format!("::action{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::FilterBar { target_selector, fields, .. } => {
+            let attrs_str = format!("[target=\"{}\"]", escape_attr(target_selector));
+            let mut content_lines = Vec::new();
+            for field in fields {
+                content_lines.push(format!(
+                    "- {} (select: {})",
+                    field.label,
+                    field.options.join(" | "),
+                ));
+            }
+            format!("::filter-bar{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Search { source, placeholder, .. } => {
+            let mut attrs_parts = vec![format!("source=\"{}\"", escape_attr(source))];
+            if let Some(ph) = placeholder {
+                attrs_parts.push(format!("placeholder=\"{}\"", escape_attr(ph)));
+            }
+            format!("::search[{}]\n::", attrs_parts.join(" "))
+        }
+
+        Block::Dashboard { source, refresh, .. } => {
+            let mut attrs_parts = vec![format!("source=\"{}\"", escape_attr(source))];
+            if let Some(r) = refresh {
+                attrs_parts.push(format!("refresh={r}"));
+            }
+            format!("::dashboard[{}]\n::", attrs_parts.join(" "))
+        }
+
+        Block::ChatInput { action, placeholder, modes, .. } => {
+            let mut attrs_parts = vec![format!("action=\"{}\"", escape_attr(action))];
+            if let Some(ph) = placeholder {
+                attrs_parts.push(format!("placeholder=\"{}\"", escape_attr(ph)));
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let mut content_lines = Vec::new();
+            if !modes.is_empty() {
+                content_lines.push(format!("modes: {}", modes.join(" | ")));
+            }
+            format!("::chat-input{attrs_str}\n{}\n::", content_lines.join("\n"))
+        }
+
+        Block::Feed { source, stream, .. } => {
+            let mut attrs_parts = vec![format!("source=\"{}\"", escape_attr(source))];
+            if *stream {
+                attrs_parts.push("stream".to_string());
+            }
+            format!("::feed[{}]\n::", attrs_parts.join(" "))
+        }
+
+        Block::Editor { source, lang, preview, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(s) = source {
+                attrs_parts.push(format!("source=\"{}\"", escape_attr(s)));
+            }
+            if let Some(l) = lang {
+                attrs_parts.push(format!("lang={l}"));
+            }
+            if *preview {
+                attrs_parts.push("preview".to_string());
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            format!("::editor{attrs_str}\n::")
+        }
+
+        Block::Chart { chart_type, source, period, .. } => {
+            let type_str = match chart_type {
+                ChartType::Line => "line",
+                ChartType::Bar => "bar",
+                ChartType::Pie => "pie",
+                ChartType::Area => "area",
+            };
+            let mut attrs_parts = vec![
+                format!("type={type_str}"),
+                format!("source=\"{}\"", escape_attr(source)),
+            ];
+            if let Some(p) = period {
+                attrs_parts.push(format!("period={p}"));
+            }
+            format!("::chart[{}]\n::", attrs_parts.join(" "))
+        }
+
+        Block::SplitPane { ratio, .. } => {
+            format!("::split-pane[ratio=\"{ratio}\"]\n::")
+        }
+
+        // ----- Infrastructure manifest blocks -----
+
+        Block::App { name, binary, region, port, platform, content, .. } => {
+            let mut attrs_parts = vec![format!("name=\"{}\"", escape_attr(name))];
+            if let Some(b) = binary {
+                attrs_parts.push(format!("binary=\"{}\"", escape_attr(b)));
+            }
+            if let Some(r) = region {
+                attrs_parts.push(format!("region=\"{}\"", escape_attr(r)));
+            }
+            if let Some(p) = port {
+                attrs_parts.push(format!("port={p}"));
+            }
+            if let Some(pl) = platform {
+                attrs_parts.push(format!("platform=\"{}\"", escape_attr(pl)));
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            if content.is_empty() {
+                format!("::app{attrs_str}\n::")
+            } else {
+                format!("::app{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Build { base, runtime, edition, properties, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(b) = base {
+                attrs_parts.push(format!("base=\"{}\"", escape_attr(b)));
+            }
+            if let Some(r) = runtime {
+                attrs_parts.push(format!("runtime=\"{}\"", escape_attr(r)));
+            }
+            if let Some(e) = edition {
+                attrs_parts.push(format!("edition=\"{}\"", escape_attr(e)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            for p in properties {
+                content_lines.push(format!("{}: {}", p.key, p.value));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::build{attrs_str}\n::")
+            } else {
+                format!("::build{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::InfraDatabase { name, shared_auth, volume_gb, properties, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(n) = name {
+                attrs_parts.push(format!("name=\"{}\"", escape_attr(n)));
+            }
+            if *shared_auth {
+                attrs_parts.push("shared-auth".to_string());
+            }
+            if let Some(v) = volume_gb {
+                attrs_parts.push(format!("volume-gb={v}"));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            for p in properties {
+                content_lines.push(format!("{}: {}", p.key, p.value));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::database{attrs_str}\n::")
+            } else {
+                format!("::database{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Deploy { env, app, machines, memory, auto_stop, min_machines, strategy, properties, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(e) = env {
+                attrs_parts.push(format!("env=\"{}\"", escape_attr(e)));
+            }
+            if let Some(a) = app {
+                attrs_parts.push(format!("app=\"{}\"", escape_attr(a)));
+            }
+            if let Some(m) = machines {
+                attrs_parts.push(format!("machines={m}"));
+            }
+            if let Some(mem) = memory {
+                attrs_parts.push(format!("memory={mem}"));
+            }
+            if let Some(a) = auto_stop {
+                attrs_parts.push(format!("auto-stop=\"{}\"", escape_attr(a)));
+            }
+            if let Some(min) = min_machines {
+                attrs_parts.push(format!("min-machines={min}"));
+            }
+            if let Some(s) = strategy {
+                attrs_parts.push(format!("strategy=\"{}\"", escape_attr(s)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            for p in properties {
+                content_lines.push(format!("{}: {}", p.key, p.value));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::deploy{attrs_str}\n::")
+            } else {
+                format!("::deploy{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::InfraEnv { tier, entries, .. } => {
+            let attrs_str = tier
+                .as_ref()
+                .map(|t| format!("[tier=\"{}\"]", escape_attr(t)))
+                .unwrap_or_default();
+            let mut content_lines = Vec::new();
+            for e in entries {
+                match &e.default_value {
+                    Some(v) => content_lines.push(format!("{}: {}", e.name, v)),
+                    None => content_lines.push(e.name.clone()),
+                }
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::env{attrs_str}\n::")
+            } else {
+                format!("::env{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Health { path, method, grace, interval, timeout, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(p) = path {
+                attrs_parts.push(format!("path=\"{}\"", escape_attr(p)));
+            }
+            if let Some(m) = method {
+                attrs_parts.push(format!("method=\"{}\"", escape_attr(m)));
+            }
+            if let Some(g) = grace {
+                attrs_parts.push(format!("grace=\"{}\"", escape_attr(g)));
+            }
+            if let Some(i) = interval {
+                attrs_parts.push(format!("interval=\"{}\"", escape_attr(i)));
+            }
+            if let Some(t) = timeout {
+                attrs_parts.push(format!("timeout=\"{}\"", escape_attr(t)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            format!("::health{attrs_str}\n::")
+        }
+
+        Block::Concurrency { concurrency_type, hard_limit, soft_limit, force_https, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(ct) = concurrency_type {
+                attrs_parts.push(format!("type=\"{}\"", escape_attr(ct)));
+            }
+            if let Some(h) = hard_limit {
+                attrs_parts.push(format!("hard-limit={h}"));
+            }
+            if let Some(s) = soft_limit {
+                attrs_parts.push(format!("soft-limit={s}"));
+            }
+            if *force_https {
+                attrs_parts.push("force-https".to_string());
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            format!("::concurrency{attrs_str}\n::")
+        }
+
+        Block::Cicd { provider, properties, .. } => {
+            let attrs_str = provider
+                .as_ref()
+                .map(|p| format!("[provider=\"{}\"]", escape_attr(p)))
+                .unwrap_or_default();
+            let mut content_lines = Vec::new();
+            for p in properties {
+                content_lines.push(format!("{}: {}", p.key, p.value));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::cicd{attrs_str}\n::")
+            } else {
+                format!("::cicd{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Smoke { script, checks, .. } => {
+            let attrs_str = script
+                .as_ref()
+                .map(|s| format!("[script=\"{}\"]", escape_attr(s)))
+                .unwrap_or_default();
+            let mut content_lines = Vec::new();
+            for c in checks {
+                content_lines.push(format!("{} {} {}", c.method, c.path, c.expected));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::smoke{attrs_str}\n::")
+            } else {
+                format!("::smoke{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Domains { entries, .. } => {
+            let mut content_lines = Vec::new();
+            for e in entries {
+                content_lines.push(e.domain.clone());
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                "::domains\n::".to_string()
+            } else {
+                format!("::domains\n{content}\n::")
+            }
+        }
+
+        Block::Crates { entries, .. } => {
+            let mut content_lines = Vec::new();
+            for e in entries {
+                let src = e.source.as_deref().unwrap_or("*");
+                content_lines.push(format!("{} = \"{src}\"", e.name));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                "::crates\n::".to_string()
+            } else {
+                format!("::crates\n{content}\n::")
+            }
+        }
+
+        Block::DeployUrls { entries, .. } => {
+            let mut content_lines = Vec::new();
+            for e in entries {
+                content_lines.push(format!("{}: {}", e.key, e.value));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                "::deploy-urls\n::".to_string()
+            } else {
+                format!("::deploy-urls\n{content}\n::")
+            }
+        }
+
+        Block::Volumes { entries, .. } => {
+            let mut content_lines = Vec::new();
+            for e in entries {
+                content_lines.push(format!("{}: {}", e.name, e.mount));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                "::volumes\n::".to_string()
+            } else {
+                format!("::volumes\n{content}\n::")
+            }
         }
     }
 }

@@ -5,7 +5,7 @@
 //! prevent XSS.
 
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, DecisionStatus, FormFieldType, StyleProperty, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, FormFieldType, HttpMethod, ListDisplay, StyleProperty, SurfDoc, Trend};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -1391,6 +1391,327 @@ fn render_block(block: &Block) -> String {
             parts.join("")
         }
 
+        // ----- App description blocks -----
+
+        Block::List {
+            source,
+            display,
+            item_template,
+            filters,
+            sort,
+            preload,
+            ..
+        } => {
+            let display_cls = match display {
+                ListDisplay::Card => "card",
+                ListDisplay::Table => "table",
+                ListDisplay::Compact => "compact",
+            };
+            let mut html = format!(
+                "<div class=\"surfdoc-list surfdoc-list-{}\" data-surf-source=\"{}\"",
+                display_cls,
+                escape_html(source),
+            );
+            if *preload {
+                html.push_str(" data-surf-preload");
+            }
+            if let Some(s) = sort {
+                html.push_str(&format!(
+                    " data-surf-sort=\"{}\" data-surf-sort-dir=\"{}\"",
+                    escape_html(&s.field),
+                    if s.descending { "desc" } else { "asc" },
+                ));
+            }
+            html.push('>');
+            // Render filter controls
+            if !filters.is_empty() {
+                html.push_str("<div class=\"surfdoc-list-filters\">");
+                for f in filters {
+                    html.push_str(&format!(
+                        "<label class=\"surfdoc-list-filter\">{}</label>",
+                        escape_html(&f.field),
+                    ));
+                }
+                html.push_str("</div>");
+            }
+            // Item template stored as data attribute for runtime
+            if !item_template.is_empty() {
+                html.push_str(&format!(
+                    "<template class=\"surfdoc-list-item-template\">{}</template>",
+                    escape_html(item_template),
+                ));
+            }
+            html.push_str("<div class=\"surfdoc-list-items\" aria-live=\"polite\"><p class=\"surfdoc-list-empty\">Loading...</p></div>");
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Board {
+            source,
+            columns,
+            card_template,
+            preload,
+            ..
+        } => {
+            let mut html = format!(
+                "<div class=\"surfdoc-board\" data-surf-source=\"{}\"",
+                escape_html(source),
+            );
+            if *preload {
+                html.push_str(" data-surf-preload");
+            }
+            html.push('>');
+            if let Some(tmpl) = card_template {
+                html.push_str(&format!(
+                    "<template class=\"surfdoc-board-card-template\">{}</template>",
+                    escape_html(tmpl),
+                ));
+            }
+            html.push_str("<div class=\"surfdoc-board-columns\">");
+            for col in columns {
+                html.push_str(&format!(
+                    "<div class=\"surfdoc-board-column\" data-column=\"{}\"><h3 class=\"surfdoc-board-column-title\">{}</h3><div class=\"surfdoc-board-cards\" aria-live=\"polite\"></div></div>",
+                    escape_html(col),
+                    escape_html(col),
+                ));
+            }
+            html.push_str("</div></div>");
+            html
+        }
+
+        Block::Action {
+            method,
+            target,
+            label,
+            fields,
+            confirm,
+            ..
+        } => {
+            let method_str = match method {
+                HttpMethod::Get => "get",
+                HttpMethod::Post => "post",
+                HttpMethod::Put => "put",
+                HttpMethod::Patch => "patch",
+                HttpMethod::Delete => "delete",
+            };
+            let mut html = format!(
+                "<form class=\"surfdoc-action\" data-surf-method=\"{}\" data-surf-action=\"{}\"",
+                method_str,
+                escape_html(target),
+            );
+            if let Some(c) = confirm {
+                html.push_str(&format!(" data-surf-confirm=\"{}\"", escape_html(c)));
+            }
+            html.push('>');
+            for field in fields {
+                let req = if field.required { " required" } else { "" };
+                let req_star = if field.required { " <span class=\"required\">*</span>" } else { "" };
+                html.push_str(&format!(
+                    "<div class=\"surfdoc-form-field\"><label>{}{}</label>",
+                    escape_html(&field.label),
+                    req_star,
+                ));
+                match field.field_type {
+                    FormFieldType::Textarea => {
+                        let ph = field.placeholder.as_deref().unwrap_or("");
+                        html.push_str(&format!(
+                            "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}></textarea>",
+                            escape_html(&field.name),
+                            escape_html(ph),
+                            req,
+                        ));
+                    }
+                    FormFieldType::Select => {
+                        html.push_str(&format!(
+                            "<select name=\"{}\"{}>",
+                            escape_html(&field.name),
+                            req,
+                        ));
+                        html.push_str("<option value=\"\">Select...</option>");
+                        for opt in &field.options {
+                            html.push_str(&format!(
+                                "<option value=\"{}\">{}</option>",
+                                escape_html(opt),
+                                escape_html(opt),
+                            ));
+                        }
+                        html.push_str("</select>");
+                    }
+                    _ => {
+                        let input_type = match field.field_type {
+                            FormFieldType::Email => "email",
+                            FormFieldType::Tel => "tel",
+                            FormFieldType::Date => "date",
+                            FormFieldType::Number => "number",
+                            _ => "text",
+                        };
+                        let ph = field.placeholder.as_deref().unwrap_or("");
+                        html.push_str(&format!(
+                            "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}/>",
+                            input_type,
+                            escape_html(&field.name),
+                            escape_html(ph),
+                            req,
+                        ));
+                    }
+                }
+                html.push_str("</div>");
+            }
+            html.push_str(&format!(
+                "<button type=\"submit\" class=\"surfdoc-cta surfdoc-cta-primary\">{}</button>",
+                escape_html(label),
+            ));
+            html.push_str("</form>");
+            html
+        }
+
+        Block::FilterBar {
+            target_selector,
+            fields,
+            ..
+        } => {
+            let mut html = format!(
+                "<div class=\"surfdoc-filter-bar\" data-surf-target=\"{}\">",
+                escape_html(target_selector),
+            );
+            for field in fields {
+                html.push_str(&format!(
+                    "<label class=\"surfdoc-filter-field\">{}<select name=\"{}\">",
+                    escape_html(&field.label),
+                    escape_html(&field.name),
+                ));
+                for opt in &field.options {
+                    html.push_str(&format!(
+                        "<option value=\"{}\">{}</option>",
+                        escape_html(opt),
+                        escape_html(opt),
+                    ));
+                }
+                html.push_str("</select></label>");
+            }
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Search {
+            source,
+            placeholder,
+            ..
+        } => {
+            let ph = placeholder.as_deref().unwrap_or("Search...");
+            format!(
+                "<div class=\"surfdoc-search\" data-surf-source=\"{}\"><input type=\"search\" placeholder=\"{}\" aria-label=\"{}\" autocomplete=\"off\"/><div class=\"surfdoc-search-results\" aria-live=\"polite\"></div></div>",
+                escape_html(source),
+                escape_html(ph),
+                escape_html(ph),
+            )
+        }
+
+        Block::Dashboard {
+            source, refresh, ..
+        } => {
+            let mut html = format!(
+                "<div class=\"surfdoc-dashboard\" data-surf-source=\"{}\"",
+                escape_html(source),
+            );
+            if let Some(r) = refresh {
+                html.push_str(&format!(" data-surf-refresh=\"{}\"", r));
+            }
+            html.push_str("><div class=\"surfdoc-dashboard-grid\" aria-live=\"polite\"><p>Loading metrics...</p></div></div>");
+            html
+        }
+
+        Block::ChatInput {
+            action,
+            placeholder,
+            modes,
+            ..
+        } => {
+            let ph = placeholder.as_deref().unwrap_or("Type a message...");
+            let mut html = format!(
+                "<div class=\"surfdoc-chat-input\" data-surf-action=\"{}\">",
+                escape_html(action),
+            );
+            if !modes.is_empty() {
+                html.push_str("<div class=\"surfdoc-chat-modes\">");
+                for (i, mode) in modes.iter().enumerate() {
+                    let active = if i == 0 { " active" } else { "" };
+                    html.push_str(&format!(
+                        "<button type=\"button\" class=\"surfdoc-chat-mode{}\" data-mode=\"{}\">{}</button>",
+                        active,
+                        escape_html(mode),
+                        escape_html(mode),
+                    ));
+                }
+                html.push_str("</div>");
+            }
+            html.push_str(&format!(
+                "<form class=\"surfdoc-chat-form\"><input type=\"text\" placeholder=\"{}\" aria-label=\"{}\" autocomplete=\"off\"/><button type=\"submit\">Send</button></form>",
+                escape_html(ph),
+                escape_html(ph),
+            ));
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Feed {
+            source, stream, ..
+        } => {
+            let stream_attr = if *stream { " data-surf-stream" } else { "" };
+            format!(
+                "<div class=\"surfdoc-feed\" data-surf-source=\"{}\"{}><div class=\"surfdoc-feed-items\" aria-live=\"polite\"><p>Loading...</p></div></div>",
+                escape_html(source),
+                stream_attr,
+            )
+        }
+
+        // Compound widget mount points
+
+        Block::Editor {
+            source, lang, preview, ..
+        } => {
+            let mut html = String::from("<div class=\"surfdoc-editor\"");
+            if let Some(s) = source {
+                html.push_str(&format!(" data-surf-source=\"{}\"", escape_html(s)));
+            }
+            if let Some(l) = lang {
+                html.push_str(&format!(" data-lang=\"{}\"", escape_html(l)));
+            }
+            if *preview {
+                html.push_str(" data-preview");
+            }
+            html.push_str("><p class=\"surfdoc-mount-placeholder\">Editor loading...</p></div>");
+            html
+        }
+
+        Block::Chart {
+            chart_type, source, period, ..
+        } => {
+            let type_str = match chart_type {
+                ChartType::Line => "line",
+                ChartType::Bar => "bar",
+                ChartType::Pie => "pie",
+                ChartType::Area => "area",
+            };
+            let mut html = format!(
+                "<div class=\"surfdoc-chart\" data-chart-type=\"{}\" data-surf-source=\"{}\"",
+                type_str,
+                escape_html(source),
+            );
+            if let Some(p) = period {
+                html.push_str(&format!(" data-period=\"{}\"", escape_html(p)));
+            }
+            html.push_str("><p class=\"surfdoc-mount-placeholder\">Chart loading...</p></div>");
+            html
+        }
+
+        Block::SplitPane { ratio, .. } => {
+            format!(
+                "<div class=\"surfdoc-split-pane\" data-ratio=\"{}\"><div class=\"surfdoc-split-left\"></div><div class=\"surfdoc-split-right\"></div></div>",
+                escape_html(ratio),
+            )
+        }
+
         Block::Unknown {
             name, content, ..
         } => {
@@ -1400,6 +1721,9 @@ fn render_block(block: &Block) -> String {
                 escape_html(content),
             )
         }
+
+        // Catch-all for newly added block types not yet rendered
+        _ => String::new(),
     }
 }
 

@@ -631,7 +631,31 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         | Block::Embed { .. }
         | Block::Footer { .. }
         | Block::Logo { .. }
-        | Block::ProductCard { .. } => {
+        | Block::ProductCard { .. }
+        | Block::List { .. }
+        | Block::Board { .. }
+        | Block::Action { .. }
+        | Block::FilterBar { .. }
+        | Block::Search { .. }
+        | Block::Dashboard { .. }
+        | Block::ChatInput { .. }
+        | Block::Feed { .. }
+        | Block::Editor { .. }
+        | Block::Chart { .. }
+        | Block::SplitPane { .. }
+        | Block::App { .. }
+        | Block::Build { .. }
+        | Block::InfraDatabase { .. }
+        | Block::Deploy { .. }
+        | Block::InfraEnv { .. }
+        | Block::Health { .. }
+        | Block::Concurrency { .. }
+        | Block::Cicd { .. }
+        | Block::Smoke { .. }
+        | Block::Domains { .. }
+        | Block::Crates { .. }
+        | Block::DeployUrls { .. }
+        | Block::Volumes { .. } => {
             let md = render_md::render_block(block);
             NativeBlock::Markdown { content: md }
         }

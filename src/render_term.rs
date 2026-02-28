@@ -610,6 +610,19 @@ fn render_block(block: &Block) -> String {
             }
             lines.join("\n")
         }
+
+        // App description blocks — degrade to markdown for terminal
+        Block::List { .. } | Block::Board { .. } | Block::Action { .. }
+        | Block::FilterBar { .. } | Block::Search { .. } | Block::Dashboard { .. }
+        | Block::ChatInput { .. } | Block::Feed { .. } | Block::Editor { .. }
+        | Block::Chart { .. } | Block::SplitPane { .. }
+        | Block::App { .. } | Block::Build { .. } | Block::InfraDatabase { .. }
+        | Block::Deploy { .. } | Block::InfraEnv { .. } | Block::Health { .. }
+        | Block::Concurrency { .. } | Block::Cicd { .. } | Block::Smoke { .. }
+        | Block::Domains { .. } | Block::Crates { .. } | Block::DeployUrls { .. }
+        | Block::Volumes { .. } => {
+            crate::render_md::render_block(block)
+        }
     }
 }
 

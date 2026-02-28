@@ -747,6 +747,32 @@ fn render_block(block: &Block, out: &mut String) {
         // Metadata blocks — skip (no visual representation in PDF)
         Block::Site { .. } | Block::Style { .. } | Block::Page { .. } => {}
 
+        // App description blocks — descriptive placeholders in PDF
+        Block::List { source, .. } => {
+            out.push_str(&format!(
+                "#block(stroke: 0.5pt + luma(180), radius: 4pt, inset: 10pt, width: 100%)[\n  #text(fill: luma(120))[Data List — source: {}]\n]\n",
+                escape_typst(source)
+            ));
+        }
+        Block::Board { columns, .. } => {
+            let cols = columns.join(", ");
+            out.push_str(&format!(
+                "#block(stroke: 0.5pt + luma(180), radius: 4pt, inset: 10pt, width: 100%)[\n  #text(fill: luma(120))[Board — columns: {}]\n]\n",
+                escape_typst(&cols)
+            ));
+        }
+        Block::Action { label, .. } => {
+            out.push_str(&format!(
+                "#block(stroke: 0.5pt + luma(180), radius: 4pt, inset: 10pt, width: 100%)[\n  #text(fill: luma(120))[Action: {}]\n]\n",
+                escape_typst(label)
+            ));
+        }
+        Block::FilterBar { .. } | Block::Search { .. } | Block::Dashboard { .. }
+        | Block::ChatInput { .. } | Block::Feed { .. } | Block::Editor { .. }
+        | Block::Chart { .. } | Block::SplitPane { .. } => {
+            // Interactive widgets — no meaningful PDF representation
+        }
+
         Block::Unknown { name, content, .. } => {
             out.push_str(&format!(
                 "#block(stroke: 0.5pt + luma(180), radius: 4pt, inset: 10pt, width: 100%)[\n  #text(fill: luma(120), size: 0.9em)[Unknown block: {}]\n  \\\n  {}\n]\n",
@@ -754,6 +780,9 @@ fn render_block(block: &Block, out: &mut String) {
                 md_to_typst(content)
             ));
         }
+
+        // Catch-all for newly added block types not yet rendered
+        _ => {}
     }
 }
 

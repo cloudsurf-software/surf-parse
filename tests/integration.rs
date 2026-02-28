@@ -342,3 +342,89 @@ fn e2e_all_icons_resolvable() {
         assert!(svg.contains("currentColor"), "Icon '{}' should use currentColor", name);
     }
 }
+
+// -- E2E: Plan mode app description parses and renders --------------------
+
+#[test]
+fn e2e_plan_app_description() {
+    let content = read_fixture("plan-app.surf");
+    let result = surf_parse::parse(&content);
+
+    // Should parse without errors
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "Unexpected errors: {errors:?}");
+
+    // Should have app-type front matter
+    let fm = result.doc.front_matter.as_ref().expect("Should have front matter");
+    assert_eq!(fm.title.as_deref(), Some("Plan Mode"));
+
+    // Count app blocks
+    let filter_bars: Vec<_> = result.doc.blocks.iter()
+        .filter(|b| matches!(b, Block::FilterBar { .. }))
+        .collect();
+    assert_eq!(filter_bars.len(), 1, "Should have 1 FilterBar block");
+
+    let boards: Vec<_> = result.doc.blocks.iter()
+        .filter(|b| matches!(b, Block::Board { .. }))
+        .collect();
+    assert_eq!(boards.len(), 1, "Should have 1 Board block");
+
+    let actions: Vec<_> = result.doc.blocks.iter()
+        .filter(|b| matches!(b, Block::Action { .. }))
+        .collect();
+    assert_eq!(actions.len(), 1, "Should have 1 Action block");
+
+    let searches: Vec<_> = result.doc.blocks.iter()
+        .filter(|b| matches!(b, Block::Search { .. }))
+        .collect();
+    assert_eq!(searches.len(), 1, "Should have 1 Search block");
+
+    let dashboards: Vec<_> = result.doc.blocks.iter()
+        .filter(|b| matches!(b, Block::Dashboard { .. }))
+        .collect();
+    assert_eq!(dashboards.len(), 1, "Should have 1 Dashboard block");
+
+    let feeds: Vec<_> = result.doc.blocks.iter()
+        .filter(|b| matches!(b, Block::Feed { .. }))
+        .collect();
+    assert_eq!(feeds.len(), 1, "Should have 1 Feed block");
+
+    // Verify Board columns parsed correctly
+    if let Block::Board { columns, source, .. } = &boards[0] {
+        assert_eq!(columns, &["To Do", "In Progress", "Done"]);
+        assert_eq!(source, "/api/tasks/board");
+    }
+
+    // Verify Action fields parsed correctly
+    if let Block::Action { fields, method, target, label, .. } = &actions[0] {
+        assert_eq!(*method, surf_parse::HttpMethod::Post);
+        assert_eq!(target, "/api/tasks");
+        assert_eq!(label, "Add Task");
+        assert_eq!(fields.len(), 3);
+        assert!(fields[0].required);
+    }
+
+    // Verify static HTML rendering works
+    let html = result.doc.to_html();
+    assert!(html.contains("surfdoc-filter-bar"), "HTML should contain filter-bar");
+    assert!(html.contains("surfdoc-board"), "HTML should contain board");
+    assert!(html.contains("surfdoc-action"), "HTML should contain action form");
+    assert!(html.contains("surfdoc-search"), "HTML should contain search");
+    assert!(html.contains("surfdoc-dashboard"), "HTML should contain dashboard");
+    assert!(html.contains("surfdoc-feed"), "HTML should contain feed");
+    assert!(html.contains("data-surf-source"), "HTML should contain data-surf-source attrs");
+    assert!(html.contains("data-surf-stream"), "Feed should have stream flag");
+
+    // Verify markdown degradation works
+    let md = result.doc.to_markdown();
+    assert!(md.contains("**Board**"), "Markdown should contain Board label");
+    assert!(md.contains("To Do | In Progress | Done"), "Markdown should list columns");
+    assert!(md.contains("**Add Task**"), "Markdown should contain action label");
+    assert!(md.contains("**Search**"), "Markdown should contain search label");
+    assert!(md.contains("**Dashboard**"), "Markdown should contain dashboard label");
+    assert!(md.contains("**Feed**"), "Markdown should contain feed label");
+}
