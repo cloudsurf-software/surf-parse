@@ -35,6 +35,7 @@ pub mod serve;
 pub mod template;
 pub mod types;
 pub mod validate;
+pub mod manifest;
 
 /// Unified CSS for app chrome and SurfDoc content rendering.
 ///
@@ -52,6 +53,7 @@ pub use extract::ExtractedCode;
 pub use parse::parse;
 pub use template::TemplateContext;
 pub use types::*;
+pub use manifest::AppManifest;
 
 pub use render_html::{PageConfig, SiteConfig, PageEntry, extract_site, humanize_route, render_site_page};
 
@@ -146,6 +148,16 @@ impl SurfDoc {
     /// Validate this document and return any diagnostics.
     pub fn validate(&self) -> Vec<crate::error::Diagnostic> {
         validate::validate(self)
+    }
+
+    /// Extract the first app manifest from the document.
+    pub fn extract_manifest(&self) -> Option<manifest::AppManifest> {
+        manifest::extract_manifest(self)
+    }
+
+    /// Extract all app manifests from the document.
+    pub fn extract_all_manifests(&self) -> Vec<manifest::AppManifest> {
+        manifest::extract_all_manifests(self)
     }
 
     /// Extract all code blocks from this document.

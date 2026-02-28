@@ -1,0 +1,254 @@
+---
+title: "surf-app — Infrastructure Manifest"
+type: manifest
+status: active
+version: 1
+author: "K. Brady Davis"
+created: "2026-02-27"
+updated: "2026-02-27"
+tags: [infra, fly, rust, manifest]
+scope: workspace
+description: "Declarative infrastructure manifest for surf-app — the unified CloudSurf application (Build Mode + Plan Mode)."
+---
+
+# surf-app
+
+Unified multi-modal web application powering **wave.site** (website builder), **doc.surf** (team docs & tasks), and **surf.new** (public landing). Built on Rust/Axum with HTMX frontend and PostgreSQL backend.
+
+::app[name=surf-app binary=surf-server region=sjc port=8080]
+
+## Build
+
+Rust 1.89, multi-stage Docker build. Migrations embedded at compile time via `sqlx::migrate!()`.
+
+:::build[base=rust:1.89-bookworm runtime=debian:bookworm-slim edition=2024]
+artifacts:
+  - target/release/surf-server -> /app/surf-server
+  - migrate/migrations-pg -> /app/migrate/migrations-pg
+  - server/src/static -> /app/server/src/static
+  - /app/uploads (created)
+runtime_deps:
+  - ca-certificates
+  - libssl3
+:::
+
+## Database
+
+:::database[name=surf_app_db shared_auth volume_gb=1]
+migrations: 64
+migration_path: migrate/migrations-pg
+session_store: postgresql
+connection: cloudsurf-db (retry 5x, 5s delay)
+:::
+
+## Environments
+
+:::deploy[env=develop app=surf-app-develop machines=1 memory=256 auto_stop=suspend min_machines=0]
+RUST_LOG: surf_app_server=debug,tower_http=debug
+:::
+
+:::deploy[env=staging app=surf-app-staging machines=1 memory=512 auto_stop=off min_machines=1]
+RUST_LOG: surf_app_server=info,tower_http=info
+:::
+
+:::deploy[env=production app=surf-app machines=2 memory=512 auto_stop=off min_machines=2 strategy=rolling]
+RUST_LOG: surf_app_server=info,tower_http=info
+:::
+
+## Health & Concurrency
+
+:::health[path=/healthz method=GET grace=15s interval=30s timeout=5s]
+:::
+
+:::concurrency[type=requests hard_limit=250 soft_limit=200 force_https]
+:::
+
+## Secrets
+
+:::env[tier=required]
+DATABASE_URL
+SESSION_SECRET
+:::
+
+:::env[tier=recommended]
+AUTH_DATABASE_URL
+SES_SMTP_USERNAME
+SES_SMTP_PASSWORD
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_ID_MONTHLY
+STRIPE_PRICE_ID_ANNUAL
+STRIPE_PRICE_ID_TEAM_MONTHLY
+STRIPE_PRICE_ID_TEAM_ANNUAL
+STRIPE_PRICE_ID_PRO_MONTHLY
+STRIPE_PRICE_ID_PRO_ANNUAL
+TURNSTILE_SITE_KEY
+TURNSTILE_SECRET_KEY
+:::
+
+:::env[tier=optional]
+ANTHROPIC_API_KEY
+OPENAI_API_KEY
+DEEPSEEK_API_KEY
+GOOGLE_AI_API_KEY
+LLM_PROVIDER
+LLM_MODEL
+OPENSRS_USERNAME
+OPENSRS_API_KEY
+OPENSRS_API_URL
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+TWILIO_VERIFY_SERVICE_SID
+GOOGLE_ADS_CLIENT_ID
+GOOGLE_ADS_CLIENT_SECRET
+GOOGLE_ADS_DEVELOPER_TOKEN
+GOOGLE_ADS_MCC_ID
+GOOGLE_ADS_MCC_REFRESH_TOKEN
+GITHUB_APP_ID
+GITHUB_PRIVATE_KEY
+GITHUB_WEBHOOK_SECRET
+STRIPE_REFERRAL_COUPON_ID
+:::
+
+:::env[tier=defaults]
+HOST = 0.0.0.0
+PORT = 8080
+BASE_DOMAIN = surf.new
+FLY_APP_NAME = surf-app
+LLM_PROVIDER = openai
+:::
+
+## Domains
+
+:::domains
+wave.site (build mode — website builder)
+doc.surf (plan mode — team docs & tasks)
+surf.new (public landing & signup)
+:::
+
+Subdomain routing handled by middleware — requests routed by `Host` header to the appropriate mode.
+
+## CI/CD
+
+:::cicd[provider=github-actions]
+tests: cargo test --workspace
+migration_check: sequential numbering, no empty files, no gaps
+rust_toolchain: 1.89
+cache: swatinem/rust-cache@v2
+flyctl: superfly/flyctl-actions v1.5
+deploy_timeout: 300s
+auto_rollback: true (staging + production)
+:::
+
+### Smoke Tests
+
+:::smoke[script=scripts/smoke-test.sh]
+GET /healthz -> 200
+GET /login -> 200
+GET /signup -> 200
+GET /access -> 200
+GET /privacy -> 308
+GET /terms -> 308
+GET /dashboard -> 303
+GET /account -> 303
+GET /billing -> 303
+GET /api/auth/.well-known/jwks.json -> 200
+GET /nonexistent-page-that-should-404 -> 404
+:::
+
+### Deploy Targets
+
+:::deploy_urls
+develop: https://surf-app-develop.fly.dev
+staging: https://surf-app-staging.fly.dev
+production: https://surf-app.fly.dev
+:::
+
+## Shared Crates
+
+:::crates
+cloudsurf-auth (github: cloudsurf-software/cloudsurf-auth, branch: main)
+cloudsurf-db (github: cloudsurf-software/cloudsurf-db, branch: main)
+cloudsurf-rate-limiter (github: cloudsurf-software/cloudsurf-rate-limiter, branch: main)
+cloudsurf-llm (features: sqlx, stream)
+surf-parse (features: pdf)
+:::
+
+## Rate Limits
+
+:::data[format=table id=rate-limits]
+Limiter | Limit/Hour | Purpose
+rate_limiter | 60 | General requests
+auth_rate_limiter | 10 | Auth attempts
+api_rate_limiter | 60 | API calls
+contact_rate_limiter | 5 | Contact form
+publish_rate_limiter | 5 | Site publishes
+support_rate_limiter | 10 | Support requests
+subscribe_rate_limiter | 10 | Email subscriptions
+visitor_chat_rate_limiter | 20 | Visitor chat
+ads_rate_limiter | 30 | Ads operations
+:::
+
+## Auth Methods
+
+:::data[format=table id=auth-methods]
+Method | Crate/Service | Purpose
+OPAQUE (RFC 9807) | cloudsurf-auth | Password authentication
+Ed25519 JWT | cloudsurf-auth (jsonwebtoken) | API token auth
+Session cookies | tower-sessions + PostgreSQL store | Browser session auth
+Phone/SMS | Twilio Verify | Phone verification (optional)
+Turnstile | Cloudflare | Bot protection (optional)
+:::
+
+## External Integrations
+
+:::data[format=table id=integrations]
+Service | Purpose | Required
+Stripe | Subscription billing & webhooks | Recommended
+AWS SES | Transactional email | Recommended
+Cloudflare | Turnstile CAPTCHA + DNS | Recommended
+OpenSRS | Domain registration | Optional
+Twilio | Phone verification | Optional
+Google Ads | Ad campaign management | Optional
+GitHub | App integration (webhooks) | Optional
+:::
+
+## Architecture Decisions
+
+::decision[status=accepted date="2026-02-25" deciders="Brady"]
+### Unified Application
+
+Merged Build Mode (wavesite) and Plan Mode (tasksurf) into a single binary.
+Reduces operational overhead from 2 apps to 1. Subdomain routing separates
+the modes at the HTTP layer without separate deployments.
+::
+
+::decision[status=accepted date="2026-02-22" deciders="Brady"]
+### Shared Auth Database
+
+Single `cloudsurf-auth-db` PostgreSQL instance shared across all products.
+User accounts created once, synced to product databases on first access.
+Avoids credential duplication and enables single sign-on across wave.site,
+doc.surf, and future products.
+::
+
+::decision[status=accepted date="2026-02-27" deciders="Brady"]
+### Single Region (sjc)
+
+All Fly.io machines in San Jose. Multi-region adds latency complexity
+(read replicas, write forwarding) that isn't justified at current scale.
+Revisit when p95 latency from non-US users becomes a growth bottleneck.
+::
+
+::decision[status=accepted date="2026-02-23" deciders="Brady"]
+### No Direct DDL
+
+All schema changes ONLY through git-committed migration files deployed via
+CI/CD pipeline. Never run DDL via `flyctl ssh` + `psql`. Learned from
+02/23 outage where a manual ALTER TABLE caused migration drift.
+::
+
+::
+

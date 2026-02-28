@@ -661,6 +661,49 @@ impl SurfDocBuilder {
         self
     }
 
+    /// Add an app manifest container block.
+    pub fn app(mut self, name: &str, binary: Option<&str>, region: Option<&str>, port: Option<u32>, children: Vec<Block>) -> Self {
+        self.blocks.push(Block::App {
+            name: name.to_string(),
+            binary: binary.map(|s| s.to_string()),
+            region: region.map(|s| s.to_string()),
+            port,
+            platform: None,
+            content: String::new(),
+            children,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a deploy block.
+    pub fn deploy(mut self, env: &str, app: Option<&str>, machines: Option<u32>, memory: Option<u32>) -> Self {
+        self.blocks.push(Block::Deploy {
+            env: Some(env.to_string()),
+            app: app.map(|s| s.to_string()),
+            machines,
+            memory,
+            auto_stop: None,
+            min_machines: None,
+            strategy: None,
+            properties: Vec::new(),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add an infrastructure database block.
+    pub fn infra_database(mut self, name: Option<&str>, shared_auth: bool) -> Self {
+        self.blocks.push(Block::InfraDatabase {
+            name: name.map(|s| s.to_string()),
+            shared_auth,
+            volume_gb: None,
+            properties: Vec::new(),
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
     /// Consume the builder and produce a `SurfDoc`.
     pub fn build(self) -> SurfDoc {
         let source = to_surf_source_inner(&self.front_matter, &self.blocks);

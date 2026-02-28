@@ -21,6 +21,15 @@ pub fn validate(doc: &SurfDoc) -> Vec<Diagnostic> {
         validate_block(block, &mut diagnostics);
     }
 
+    // Validate ::app children
+    for block in &doc.blocks {
+        if let Block::App { children, .. } = block {
+            for child in children {
+                validate_block(child, &mut diagnostics);
+            }
+        }
+    }
+
     // Cross-block validation: duplicate page routes
     validate_unique_page_routes(&doc.blocks, &mut diagnostics);
 
@@ -304,6 +313,107 @@ fn validate_block(block: &Block, diagnostics: &mut Vec<Diagnostic>) {
                     span: Some(*span),
                     code: Some("V150".into()),
                 });
+            }
+        }
+
+        Block::App { name, span, .. } => {
+            if name.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "App block is missing required attribute: name".into(),
+                    span: Some(*span),
+                    code: Some("V200".into()),
+                });
+            }
+        }
+
+        Block::Deploy { env, span, .. } => {
+            if env.is_none() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Deploy block is missing required attribute: env".into(),
+                    span: Some(*span),
+                    code: Some("V201".into()),
+                });
+            } else if let Some(e) = env {
+                if !["develop", "staging", "production"].contains(&e.as_str()) {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!("Deploy env \"{}\" is not one of: develop, staging, production", e),
+                        span: Some(*span),
+                        code: Some("V202".into()),
+                    });
+                }
+            }
+        }
+
+        Block::InfraEnv { tier, span, .. } => {
+            if tier.is_none() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Warning,
+                    message: "Env block is missing tier attribute".into(),
+                    span: Some(*span),
+                    code: Some("V203".into()),
+                });
+            } else if let Some(t) = tier {
+                if !["required", "recommended", "optional", "defaults"].contains(&t.as_str()) {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!("Env tier \"{}\" is not one of: required, recommended, optional, defaults", t),
+                        span: Some(*span),
+                        code: Some("V204".into()),
+                    });
+                }
+            }
+        }
+
+        Block::Health { path, span, .. } => {
+            if path.is_none() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Health block is missing required attribute: path".into(),
+                    span: Some(*span),
+                    code: Some("V205".into()),
+                });
+            }
+        }
+
+        Block::Smoke { checks, span, .. } => {
+            for (i, check) in checks.iter().enumerate() {
+                if !["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].contains(&check.method.as_str()) {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!("Smoke check {} has unrecognized HTTP method: {}", i + 1, check.method),
+                        span: Some(*span),
+                        code: Some("V206".into()),
+                    });
+                }
+            }
+        }
+
+        Block::Concurrency { hard_limit, soft_limit, span, .. } => {
+            if let (Some(hard), Some(soft)) = (hard_limit, soft_limit) {
+                if hard < soft {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!("Concurrency hard_limit ({}) should be >= soft_limit ({})", hard, soft),
+                        span: Some(*span),
+                        code: Some("V207".into()),
+                    });
+                }
+            }
+        }
+
+        Block::Volumes { entries, span, .. } => {
+            for entry in entries {
+                if entry.name.is_empty() || entry.mount.is_empty() {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Warning,
+                        message: "Volume entry must have both name and mount path".into(),
+                        span: Some(*span),
+                        code: Some("V208".into()),
+                    });
+                }
             }
         }
 

@@ -1712,6 +1712,149 @@ fn render_block(block: &Block) -> String {
             )
         }
 
+        // ----- Infrastructure manifest blocks -----
+
+        Block::App { name, binary, region, port, platform, children, .. } => {
+            let mut meta = vec![format!("<strong>{}</strong>", escape_html(name))];
+            if let Some(b) = binary { meta.push(format!("binary: {}", escape_html(b))); }
+            if let Some(r) = region { meta.push(format!("region: {}", escape_html(r))); }
+            if let Some(p) = port { meta.push(format!("port: {p}")); }
+            if let Some(pl) = platform { meta.push(format!("platform: {}", escape_html(pl))); }
+            let mut html = format!(
+                "<section class=\"surfdoc-app\" aria-label=\"App: {}\"><div class=\"surfdoc-app-header\">{}</div>",
+                escape_html(name), meta.join(" &middot; "),
+            );
+            for child in children { html.push_str(&render_block(child)); }
+            html.push_str("</section>");
+            html
+        }
+
+        Block::Build { base, runtime, edition, properties, .. } => {
+            let mut items = Vec::new();
+            if let Some(b) = base { items.push(format!("<li>base: {}</li>", escape_html(b))); }
+            if let Some(r) = runtime { items.push(format!("<li>runtime: {}</li>", escape_html(r))); }
+            if let Some(e) = edition { items.push(format!("<li>edition: {}</li>", escape_html(e))); }
+            for p in properties { items.push(format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value))); }
+            format!("<div class=\"surfdoc-build\"><h4>Build</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::InfraDatabase { name, shared_auth, volume_gb, properties, .. } => {
+            let mut items = Vec::new();
+            if let Some(n) = name { items.push(format!("<li>name: {}</li>", escape_html(n))); }
+            if *shared_auth { items.push("<li>shared_auth: true</li>".to_string()); }
+            if let Some(v) = volume_gb { items.push(format!("<li>volume: {v} GB</li>")); }
+            for p in properties { items.push(format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value))); }
+            format!("<div class=\"surfdoc-database\"><h4>Database</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Deploy { env, app, machines, memory, auto_stop, min_machines, strategy, properties, .. } => {
+            let env_str = env.as_deref().unwrap_or("unknown");
+            let mut items = Vec::new();
+            if let Some(a) = app { items.push(format!("<li>app: {}</li>", escape_html(a))); }
+            if let Some(m) = machines { items.push(format!("<li>machines: {m}</li>")); }
+            if let Some(m) = memory { items.push(format!("<li>memory: {m} MB</li>")); }
+            if let Some(a) = auto_stop { items.push(format!("<li>auto_stop: {}</li>", escape_html(a))); }
+            if let Some(m) = min_machines { items.push(format!("<li>min_machines: {m}</li>")); }
+            if let Some(s) = strategy { items.push(format!("<li>strategy: {}</li>", escape_html(s))); }
+            for p in properties { items.push(format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value))); }
+            format!(
+                "<div class=\"surfdoc-deploy\"><span class=\"surfdoc-deploy-badge\">{}</span><ul>{}</ul></div>",
+                escape_html(env_str), items.join(""),
+            )
+        }
+
+        Block::InfraEnv { tier, entries, .. } => {
+            let tier_str = tier.as_deref().unwrap_or("env");
+            let items: Vec<String> = entries.iter().map(|e| {
+                match &e.default_value {
+                    Some(v) => format!("<li><code>{}</code> = <code>{}</code></li>", escape_html(&e.name), escape_html(v)),
+                    None => format!("<li><code>{}</code></li>", escape_html(&e.name)),
+                }
+            }).collect();
+            format!("<div class=\"surfdoc-env\"><h4>Env ({})</h4><ul>{}</ul></div>", escape_html(tier_str), items.join(""))
+        }
+
+        Block::Health { path, method, grace, interval, timeout, .. } => {
+            let mut items = Vec::new();
+            if let Some(p) = path { items.push(format!("<li>path: {}</li>", escape_html(p))); }
+            if let Some(m) = method { items.push(format!("<li>method: {}</li>", escape_html(m))); }
+            if let Some(g) = grace { items.push(format!("<li>grace: {}</li>", escape_html(g))); }
+            if let Some(i) = interval { items.push(format!("<li>interval: {}</li>", escape_html(i))); }
+            if let Some(t) = timeout { items.push(format!("<li>timeout: {}</li>", escape_html(t))); }
+            format!("<div class=\"surfdoc-health\"><h4>Health Check</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Concurrency { concurrency_type, hard_limit, soft_limit, force_https, .. } => {
+            let mut items = Vec::new();
+            if let Some(t) = concurrency_type { items.push(format!("<li>type: {}</li>", escape_html(t))); }
+            if let Some(h) = hard_limit { items.push(format!("<li>hard_limit: {h}</li>")); }
+            if let Some(s) = soft_limit { items.push(format!("<li>soft_limit: {s}</li>")); }
+            if *force_https { items.push("<li>force_https: true</li>".to_string()); }
+            format!("<div class=\"surfdoc-concurrency\"><h4>Concurrency</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Cicd { provider, properties, .. } => {
+            let prov = provider.as_deref().unwrap_or("CI/CD");
+            let items: Vec<String> = properties.iter()
+                .map(|p| format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value)))
+                .collect();
+            format!("<div class=\"surfdoc-cicd\"><h4>{}</h4><ul>{}</ul></div>", escape_html(prov), items.join(""))
+        }
+
+        Block::Smoke { script, checks, .. } => {
+            let script_attr = script.as_ref()
+                .map(|s| format!(" data-script=\"{}\"", escape_html(s)))
+                .unwrap_or_default();
+            let rows: Vec<String> = checks.iter().map(|c| {
+                format!(
+                    "<tr><td>{}</td><td><code>{}</code></td><td>{}</td></tr>",
+                    escape_html(&c.method), escape_html(&c.path), c.expected,
+                )
+            }).collect();
+            format!(
+                "<table class=\"surfdoc-smoke\"{}><thead><tr><th>Method</th><th>Path</th><th>Expected</th></tr></thead><tbody>{}</tbody></table>",
+                script_attr, rows.join(""),
+            )
+        }
+
+        Block::Domains { entries, .. } => {
+            let items: Vec<String> = entries.iter().map(|e| {
+                match &e.description {
+                    Some(d) => format!("<li><strong>{}</strong> &mdash; {}</li>", escape_html(&e.domain), escape_html(d)),
+                    None => format!("<li><strong>{}</strong></li>", escape_html(&e.domain)),
+                }
+            }).collect();
+            format!("<div class=\"surfdoc-domains\"><h4>Domains</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Crates { entries, .. } => {
+            let items: Vec<String> = entries.iter().map(|e| {
+                let mut detail = Vec::new();
+                if let Some(s) = &e.source { detail.push(format!("source: {}", escape_html(s))); }
+                if let Some(f) = &e.features { detail.push(format!("features: {}", escape_html(f))); }
+                if detail.is_empty() {
+                    format!("<li><code>{}</code></li>", escape_html(&e.name))
+                } else {
+                    format!("<li><code>{}</code> ({})</li>", escape_html(&e.name), detail.join(", "))
+                }
+            }).collect();
+            format!("<div class=\"surfdoc-crates\"><h4>Crates</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::DeployUrls { entries, .. } => {
+            let items: Vec<String> = entries.iter()
+                .map(|p| format!("<li>{}: <a href=\"{}\">{}</a></li>", escape_html(&p.key), escape_html(&p.value), escape_html(&p.value)))
+                .collect();
+            format!("<div class=\"surfdoc-deploy-urls\"><h4>Deploy URLs</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Volumes { entries, .. } => {
+            let items: Vec<String> = entries.iter()
+                .map(|v| format!("<li><code>{}</code> &rarr; <code>{}</code></li>", escape_html(&v.name), escape_html(&v.mount)))
+                .collect();
+            format!("<div class=\"surfdoc-volumes\"><h4>Volumes</h4><ul>{}</ul></div>", items.join(""))
+        }
+
         Block::Unknown {
             name, content, ..
         } => {
@@ -1722,8 +1865,6 @@ fn render_block(block: &Block) -> String {
             )
         }
 
-        // Catch-all for newly added block types not yet rendered
-        _ => String::new(),
     }
 }
 

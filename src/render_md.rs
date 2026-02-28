@@ -613,8 +613,136 @@ pub(crate) fn render_block(block: &Block) -> String {
             format!("**Split Pane** ({ratio})")
         }
 
-        // Catch-all for newly added block types not yet rendered
-        _ => String::new(),
+        // ----- Infrastructure manifest blocks -----
+
+        Block::App { name, children, .. } => {
+            let mut lines = vec![format!("## App: {name}")];
+            for child in children {
+                let rendered = render_block(child);
+                if !rendered.is_empty() { lines.push(rendered); }
+            }
+            lines.join("\n\n")
+        }
+
+        Block::Build { base, runtime, edition, properties, .. } => {
+            let mut lines = vec!["**Build**".to_string()];
+            if let Some(b) = base { lines.push(format!("- base: {b}")); }
+            if let Some(r) = runtime { lines.push(format!("- runtime: {r}")); }
+            if let Some(e) = edition { lines.push(format!("- edition: {e}")); }
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::InfraDatabase { name, shared_auth, volume_gb, properties, .. } => {
+            let mut lines = vec!["**Database**".to_string()];
+            if let Some(n) = name { lines.push(format!("- name: {n}")); }
+            if *shared_auth { lines.push("- shared_auth: true".to_string()); }
+            if let Some(v) = volume_gb { lines.push(format!("- volume: {v} GB")); }
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::Deploy { env, app, machines, memory, auto_stop, min_machines, strategy, properties, .. } => {
+            let env_str = env.as_deref().unwrap_or("unknown");
+            let mut lines = vec![format!("**Deploy: {env_str}**")];
+            if let Some(a) = app { lines.push(format!("- app: {a}")); }
+            if let Some(m) = machines { lines.push(format!("- machines: {m}")); }
+            if let Some(m) = memory { lines.push(format!("- memory: {m} MB")); }
+            if let Some(a) = auto_stop { lines.push(format!("- auto_stop: {a}")); }
+            if let Some(m) = min_machines { lines.push(format!("- min_machines: {m}")); }
+            if let Some(s) = strategy { lines.push(format!("- strategy: {s}")); }
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::InfraEnv { tier, entries, .. } => {
+            let tier_str = tier.as_deref().unwrap_or("env");
+            let mut lines = vec![format!("**Env ({tier_str})**"), "```".to_string()];
+            for e in entries {
+                match &e.default_value {
+                    Some(v) => lines.push(format!("{} = {}", e.name, v)),
+                    None => lines.push(e.name.clone()),
+                }
+            }
+            lines.push("```".to_string());
+            lines.join("\n")
+        }
+
+        Block::Health { path, method, grace, interval, timeout, .. } => {
+            let mut lines = vec!["**Health Check**".to_string()];
+            if let Some(p) = path { lines.push(format!("- path: {p}")); }
+            if let Some(m) = method { lines.push(format!("- method: {m}")); }
+            if let Some(g) = grace { lines.push(format!("- grace: {g}")); }
+            if let Some(i) = interval { lines.push(format!("- interval: {i}")); }
+            if let Some(t) = timeout { lines.push(format!("- timeout: {t}")); }
+            lines.join("\n")
+        }
+
+        Block::Concurrency { concurrency_type, hard_limit, soft_limit, force_https, .. } => {
+            let mut lines = vec!["**Concurrency**".to_string()];
+            if let Some(t) = concurrency_type { lines.push(format!("- type: {t}")); }
+            if let Some(h) = hard_limit { lines.push(format!("- hard_limit: {h}")); }
+            if let Some(s) = soft_limit { lines.push(format!("- soft_limit: {s}")); }
+            if *force_https { lines.push("- force_https: true".to_string()); }
+            lines.join("\n")
+        }
+
+        Block::Cicd { provider, properties, .. } => {
+            let prov = provider.as_deref().unwrap_or("CI/CD");
+            let mut lines = vec![format!("**{prov}**")];
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::Smoke { checks, .. } => {
+            let mut lines = vec![
+                "| Method | Path | Expected |".to_string(),
+                "| --- | --- | --- |".to_string(),
+            ];
+            for c in checks {
+                lines.push(format!("| {} | `{}` | {} |", c.method, c.path, c.expected));
+            }
+            lines.join("\n")
+        }
+
+        Block::Domains { entries, .. } => {
+            let mut lines = vec!["**Domains**".to_string()];
+            for e in entries {
+                match &e.description {
+                    Some(d) => lines.push(format!("- {} \u{2014} {}", e.domain, d)),
+                    None => lines.push(format!("- {}", e.domain)),
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Crates { entries, .. } => {
+            let mut lines = vec!["**Crates**".to_string()];
+            for e in entries {
+                let mut detail = Vec::new();
+                if let Some(s) = &e.source { detail.push(format!("source: {s}")); }
+                if let Some(f) = &e.features { detail.push(format!("features: {f}")); }
+                if detail.is_empty() {
+                    lines.push(format!("- `{}`", e.name));
+                } else {
+                    lines.push(format!("- `{}` ({})", e.name, detail.join(", ")));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::DeployUrls { entries, .. } => {
+            let mut lines = vec!["**Deploy URLs**".to_string()];
+            for p in entries { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::Volumes { entries, .. } => {
+            let mut lines = vec!["**Volumes**".to_string()];
+            for v in entries { lines.push(format!("- {} \u{2192} {}", v.name, v.mount)); }
+            lines.join("\n")
+        }
+
     }
 }
 
