@@ -4,11 +4,12 @@
 //! the block name. Unknown block names pass through unchanged.
 
 use crate::types::{
-    AttrValue, Attrs, BeforeAfterItem, Block, CalloutType, ChartType, ColumnContent, CrateEntry,
-    DataFormat, DecisionStatus, DomainEntry, EmbedType, EnvEntry, FaqItem, FeatureCard,
-    FilterField, FooterSection, FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod,
-    ListDisplay, ListFilter, NavItem, PipelineStep, SmokeCheck, SocialLink, SortSpec, Span,
-    StatItem, StepItem, StyleProperty, TabPanel, TaskItem, Trend, VolumeEntry,
+    AttrValue, Attrs, AuthProvider, BeforeAfterItem, BindingEvent, Block, CalloutType, ChartType,
+    ColumnContent, CrateEntry, DataFormat, DecisionStatus, DomainEntry, EmbedType, EnvEntry,
+    FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection, FormField, FormFieldType,
+    GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter, ModelField, ModelFieldType,
+    NavItem, PipelineStep, SmokeCheck, SocialLink, SortSpec, Span, StatItem, StepItem,
+    StyleProperty, TabPanel, TaskItem, Trend, VolumeEntry,
 };
 
 /// Resolve a `Block::Unknown` into a typed variant, if the name matches a known
@@ -89,6 +90,11 @@ pub fn resolve_block(block: Block) -> Block {
         "crates" => parse_crates(content, *span),
         "deploy_urls" | "deploy-urls" => parse_deploy_urls(content, *span),
         "volumes" => parse_volumes(content, *span),
+        // App spec blocks (data layer + API)
+        "model" => parse_model(attrs, content, *span),
+        "route" => parse_route(attrs, content, *span),
+        "auth" => parse_auth(attrs, content, *span),
+        "binding" => parse_binding(attrs, content, *span),
         _ => block,
     }
 }
@@ -2456,6 +2462,245 @@ fn parse_volumes(content: &str, span: Span) -> Block {
     }
 
     Block::Volumes { entries, span }
+}
+
+// ------------------------------------------------------------------
+// App spec block parsers
+// ------------------------------------------------------------------
+
+/// Parse `::model[name=Task]` with field definitions like:
+/// `- id: uuid [primary, auto]`
+/// `- title: string [required, max=200]`
+/// `- status: enum(todo, in_progress, done) [default=todo]`
+/// `- assignee_id: ref(User) [optional]`
+fn parse_model(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let name = attr_string(attrs, "name").unwrap_or_default();
+    let mut fields = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('-') {
+            continue;
+        }
+        let rest = trimmed.trim_start_matches('-').trim();
+        // Split on first `:` to get name and type+constraints
+        let Some((field_name, remainder)) = rest.split_once(':') else {
+            continue;
+        };
+        let field_name = field_name.trim().to_string();
+        let remainder = remainder.trim();
+
+        // Extract constraints from [...]
+        let (type_part, constraints) = if let Some(bracket_start) = remainder.find('[') {
+            let type_str = remainder[..bracket_start].trim();
+            let bracket_end = remainder.rfind(']').unwrap_or(remainder.len());
+            let constraint_str = &remainder[bracket_start + 1..bracket_end];
+            (type_str, parse_field_constraints(constraint_str))
+        } else {
+            (remainder, Vec::new())
+        };
+
+        let field_type = parse_model_field_type(type_part);
+
+        fields.push(ModelField {
+            name: field_name,
+            field_type,
+            constraints,
+        });
+    }
+
+    Block::Model { name, fields, span }
+}
+
+fn parse_model_field_type(s: &str) -> ModelFieldType {
+    let s = s.trim();
+    let lower = s.to_lowercase();
+
+    // Check for enum(variant1, variant2, ...)
+    if lower.starts_with("enum(") && s.ends_with(')') {
+        let inner = &s[5..s.len() - 1];
+        let variants: Vec<String> = inner.split(',').map(|v| v.trim().to_string()).collect();
+        return ModelFieldType::Enum(variants);
+    }
+
+    // Check for ref(ModelName)
+    if lower.starts_with("ref(") && s.ends_with(')') {
+        let inner = &s[4..s.len() - 1];
+        return ModelFieldType::Ref(inner.trim().to_string());
+    }
+
+    match lower.as_str() {
+        "uuid" => ModelFieldType::Uuid,
+        "string" | "str" | "varchar" => ModelFieldType::String,
+        "int" | "integer" | "i32" | "i64" => ModelFieldType::Int,
+        "float" | "f32" | "f64" | "decimal" | "numeric" => ModelFieldType::Float,
+        "bool" | "boolean" => ModelFieldType::Bool,
+        "datetime" | "timestamp" | "timestamptz" => ModelFieldType::Datetime,
+        "text" => ModelFieldType::Text,
+        "json" | "jsonb" => ModelFieldType::Json,
+        _ => ModelFieldType::String, // default fallback
+    }
+}
+
+fn parse_field_constraints(s: &str) -> Vec<FieldConstraint> {
+    let mut constraints = Vec::new();
+    for part in s.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let lower = part.to_lowercase();
+        if lower == "primary" {
+            constraints.push(FieldConstraint::Primary);
+        } else if lower == "auto" {
+            constraints.push(FieldConstraint::Auto);
+        } else if lower == "required" {
+            constraints.push(FieldConstraint::Required);
+        } else if lower == "optional" {
+            constraints.push(FieldConstraint::Optional);
+        } else if lower == "unique" {
+            constraints.push(FieldConstraint::Unique);
+        } else if let Some(val) = lower.strip_prefix("max=") {
+            if let Ok(n) = val.parse::<u32>() {
+                constraints.push(FieldConstraint::Max(n));
+            }
+        } else if let Some(val) = lower.strip_prefix("min=") {
+            if let Ok(n) = val.parse::<u32>() {
+                constraints.push(FieldConstraint::Min(n));
+            }
+        } else if let Some(val) = lower.strip_prefix("default=") {
+            constraints.push(FieldConstraint::Default(val.to_string()));
+        } else if part.starts_with("default=") {
+            // Preserve original case for default values
+            constraints.push(FieldConstraint::Default(part[8..].to_string()));
+        }
+    }
+    constraints
+}
+
+/// Parse `::route[method=GET path="/api/tasks"]`
+/// Content lines: `auth: required`, `returns: list(Task)`, `body: Task`
+fn parse_route(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let method_str = attr_string(attrs, "method").unwrap_or_else(|| "get".to_string());
+    let method = match method_str.to_lowercase().as_str() {
+        "get" => HttpMethod::Get,
+        "post" => HttpMethod::Post,
+        "put" => HttpMethod::Put,
+        "patch" => HttpMethod::Patch,
+        "delete" => HttpMethod::Delete,
+        _ => HttpMethod::Get,
+    };
+    let path = attr_string(attrs, "path").unwrap_or_default();
+
+    let mut auth = None;
+    let mut returns = None;
+    let mut body = None;
+    let mut extra_lines = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_lowercase();
+            let value = value.trim().to_string();
+            match key.as_str() {
+                "auth" => auth = Some(value),
+                "returns" => returns = Some(value),
+                "body" => body = Some(value),
+                _ => extra_lines.push(trimmed.to_string()),
+            }
+        } else {
+            extra_lines.push(trimmed.to_string());
+        }
+    }
+
+    Block::Route {
+        method,
+        path,
+        auth,
+        returns,
+        body,
+        content: extra_lines.join("\n"),
+        span,
+    }
+}
+
+/// Parse `::auth[provider=email]`
+/// Content lines: `session: cookie`, `roles: admin, member`, `default_role: member`
+fn parse_auth(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let provider_str = attr_string(attrs, "provider").unwrap_or_else(|| "email".to_string());
+    let provider = match provider_str.to_lowercase().as_str() {
+        "email" => AuthProvider::Email,
+        "oauth" => AuthProvider::OAuth,
+        "api-key" | "api_key" | "apikey" => AuthProvider::ApiKey,
+        "token" => AuthProvider::Token,
+        _ => AuthProvider::Email,
+    };
+
+    let mut session = None;
+    let mut roles = Vec::new();
+    let mut default_role = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_lowercase();
+            let value = value.trim();
+            match key.as_str() {
+                "session" => session = Some(value.to_string()),
+                "roles" => {
+                    roles = value.split(',').map(|r| r.trim().to_string()).filter(|r| !r.is_empty()).collect();
+                }
+                "default_role" | "default-role" => default_role = Some(value.to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    Block::Auth {
+        provider,
+        session,
+        roles,
+        default_role,
+        span,
+    }
+}
+
+/// Parse `::binding[source="/api/tasks" target="#task-list"]`
+/// Content lines: `on_create: refresh`, `on_update: patch`
+fn parse_binding(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let source = attr_string(attrs, "source").unwrap_or_default();
+    let target = attr_string(attrs, "target").unwrap_or_default();
+
+    let mut events = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim().to_string();
+            if !key.is_empty() && !value.is_empty() {
+                events.push(BindingEvent {
+                    event: key,
+                    action: value,
+                });
+            }
+        }
+    }
+
+    Block::Binding {
+        source,
+        target,
+        events,
+        span,
+    }
 }
 
 // ------------------------------------------------------------------

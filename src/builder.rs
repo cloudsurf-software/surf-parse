@@ -2183,6 +2183,97 @@ fn serialize_block(block: &Block) -> String {
                 format!("::volumes\n{content}\n::")
             }
         }
+
+        Block::Model { name, fields, .. } => {
+            let attrs_str = if name.is_empty() {
+                String::new()
+            } else {
+                format!("[name=\"{}\"]", escape_attr(name))
+            };
+            let mut content_lines = Vec::new();
+            for f in fields {
+                let type_str = model_field_type_surf(&f.field_type);
+                let constraints: Vec<String> = f.constraints.iter().map(|c| constraint_surf(c)).collect();
+                if constraints.is_empty() {
+                    content_lines.push(format!("- {}: {}", f.name, type_str));
+                } else {
+                    content_lines.push(format!("- {}: {} [{}]", f.name, type_str, constraints.join(", ")));
+                }
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::model{attrs_str}\n::")
+            } else {
+                format!("::model{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Route { method, path, auth, returns, body, content, .. } => {
+            let method_str = match method {
+                HttpMethod::Get => "GET",
+                HttpMethod::Post => "POST",
+                HttpMethod::Put => "PUT",
+                HttpMethod::Patch => "PATCH",
+                HttpMethod::Delete => "DELETE",
+            };
+            let mut attrs_parts = vec![format!("method={method_str}")];
+            if !path.is_empty() {
+                attrs_parts.push(format!("path=\"{}\"", escape_attr(path)));
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let mut content_lines = Vec::new();
+            if let Some(a) = auth { content_lines.push(format!("auth: {a}")); }
+            if let Some(r) = returns { content_lines.push(format!("returns: {r}")); }
+            if let Some(b) = body { content_lines.push(format!("body: {b}")); }
+            if !content.is_empty() { content_lines.push(content.clone()); }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::route{attrs_str}\n::")
+            } else {
+                format!("::route{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Auth { provider, session, roles, default_role, .. } => {
+            let provider_str = match provider {
+                crate::types::AuthProvider::Email => "email",
+                crate::types::AuthProvider::OAuth => "oauth",
+                crate::types::AuthProvider::ApiKey => "api-key",
+                crate::types::AuthProvider::Token => "token",
+            };
+            let attrs_str = format!("[provider={provider_str}]");
+            let mut content_lines = Vec::new();
+            if let Some(s) = session { content_lines.push(format!("session: {s}")); }
+            if !roles.is_empty() { content_lines.push(format!("roles: {}", roles.join(", "))); }
+            if let Some(dr) = default_role { content_lines.push(format!("default_role: {dr}")); }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::auth{attrs_str}\n::")
+            } else {
+                format!("::auth{attrs_str}\n{content}\n::")
+            }
+        }
+
+        Block::Binding { source, target, events, .. } => {
+            let mut attrs_parts = Vec::new();
+            if !source.is_empty() { attrs_parts.push(format!("source=\"{}\"", escape_attr(source))); }
+            if !target.is_empty() { attrs_parts.push(format!("target=\"{}\"", escape_attr(target))); }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            for e in events {
+                content_lines.push(format!("{}: {}", e.event, e.action));
+            }
+            let content = content_lines.join("\n");
+            if content.is_empty() {
+                format!("::binding{attrs_str}\n::")
+            } else {
+                format!("::binding{attrs_str}\n{content}\n::")
+            }
+        }
     }
 }
 
@@ -2242,6 +2333,36 @@ fn form_field_type_str(ft: FormFieldType) -> &'static str {
 /// Escape a string value for use inside `[key="value"]` attribute brackets.
 fn escape_attr(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn model_field_type_surf(ft: &crate::types::ModelFieldType) -> String {
+    use crate::types::ModelFieldType;
+    match ft {
+        ModelFieldType::Uuid => "uuid".to_string(),
+        ModelFieldType::String => "string".to_string(),
+        ModelFieldType::Int => "int".to_string(),
+        ModelFieldType::Float => "float".to_string(),
+        ModelFieldType::Bool => "bool".to_string(),
+        ModelFieldType::Datetime => "datetime".to_string(),
+        ModelFieldType::Text => "text".to_string(),
+        ModelFieldType::Json => "json".to_string(),
+        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
+        ModelFieldType::Ref(target) => format!("ref({target})"),
+    }
+}
+
+fn constraint_surf(c: &crate::types::FieldConstraint) -> String {
+    use crate::types::FieldConstraint;
+    match c {
+        FieldConstraint::Primary => "primary".to_string(),
+        FieldConstraint::Auto => "auto".to_string(),
+        FieldConstraint::Required => "required".to_string(),
+        FieldConstraint::Optional => "optional".to_string(),
+        FieldConstraint::Unique => "unique".to_string(),
+        FieldConstraint::Max(n) => format!("max={n}"),
+        FieldConstraint::Min(n) => format!("min={n}"),
+        FieldConstraint::Default(v) => format!("default={v}"),
+    }
 }
 
 /// Serialize an `Attrs` map to a string suitable for inside `[...]`.

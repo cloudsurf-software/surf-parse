@@ -620,7 +620,11 @@ fn render_block(block: &Block) -> String {
         | Block::Deploy { .. } | Block::InfraEnv { .. } | Block::Health { .. }
         | Block::Concurrency { .. } | Block::Cicd { .. } | Block::Smoke { .. }
         | Block::Domains { .. } | Block::Crates { .. } | Block::DeployUrls { .. }
-        | Block::Volumes { .. } => {
+        | Block::Volumes { .. }
+        | Block::Model { .. }
+        | Block::Route { .. }
+        | Block::Auth { .. }
+        | Block::Binding { .. } => {
             crate::render_md::render_block(block)
         }
     }

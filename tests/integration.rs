@@ -428,3 +428,180 @@ fn e2e_plan_app_description() {
     assert!(md.contains("**Dashboard**"), "Markdown should contain dashboard label");
     assert!(md.contains("**Feed**"), "Markdown should contain feed label");
 }
+
+#[test]
+fn app_spec_fixture_parses() {
+    let content = read_fixture("app-spec.surf");
+    let result = surf_parse::parse(&content);
+
+    // Should parse without errors
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "Unexpected errors: {errors:?}");
+
+    // Should have front matter
+    let fm = result.doc.front_matter.as_ref().expect("Should have front matter");
+    assert_eq!(fm.title.as_deref(), Some("Task Manager App"));
+
+    // Should have App block with children
+    let app_blocks: Vec<_> = result.doc.blocks.iter().filter(|b| matches!(b, Block::App { .. })).collect();
+    assert_eq!(app_blocks.len(), 1, "Should have exactly 1 app block");
+
+    // Extract manifest
+    let manifest = result.doc.extract_manifest().expect("Should extract manifest");
+    assert_eq!(manifest.name, "task-manager");
+    assert_eq!(manifest.port, Some(8080));
+
+    // Models
+    assert_eq!(manifest.models.len(), 2, "Should have User and Task models");
+    assert_eq!(manifest.models[0].name, "User");
+    assert_eq!(manifest.models[1].name, "Task");
+
+    // Check User model fields
+    let user = &manifest.models[0];
+    assert_eq!(user.fields.len(), 5, "User should have 5 fields");
+    assert_eq!(user.fields[0].name, "id");
+    assert_eq!(user.fields[1].name, "email");
+
+    // Check Task model has ref to User
+    let task = &manifest.models[1];
+    assert_eq!(task.fields.len(), 7, "Task should have 7 fields");
+    let assignee = &task.fields[4];
+    assert_eq!(assignee.name, "assignee_id");
+    assert!(matches!(&assignee.field_type, surf_parse::ModelFieldType::Ref(t) if t == "User"));
+
+    // Routes
+    assert_eq!(manifest.routes.len(), 4, "Should have 4 routes");
+    assert_eq!(manifest.routes[0].path, "/api/tasks");
+    assert_eq!(manifest.routes[0].method, surf_parse::HttpMethod::Get);
+    assert_eq!(manifest.routes[1].method, surf_parse::HttpMethod::Post);
+    assert_eq!(manifest.routes[2].method, surf_parse::HttpMethod::Put);
+    assert_eq!(manifest.routes[3].method, surf_parse::HttpMethod::Delete);
+
+    // Auth
+    assert!(manifest.auth.is_some(), "Should have auth config");
+    let auth = manifest.auth.as_ref().unwrap();
+    assert_eq!(auth.provider, surf_parse::AuthProvider::Email);
+    assert_eq!(auth.roles.len(), 2);
+    assert_eq!(auth.default_role.as_deref(), Some("member"));
+
+    // Bindings
+    assert_eq!(manifest.bindings.len(), 1, "Should have 1 binding");
+    assert_eq!(manifest.bindings[0].source, "/api/tasks");
+    assert_eq!(manifest.bindings[0].target, "#task-list");
+    assert_eq!(manifest.bindings[0].events.len(), 3);
+
+    // Database & Deploy
+    assert!(manifest.database.is_some());
+    assert_eq!(manifest.deploys.len(), 1);
+    assert!(manifest.health.is_some());
+}
+
+#[test]
+fn app_spec_roundtrip() {
+    let content = read_fixture("app-spec.surf");
+    let result1 = surf_parse::parse(&content);
+    let surf_source = result1.doc.to_surf_source();
+    let result2 = surf_parse::parse(&surf_source);
+
+    // Verify manifests match after round-trip
+    let m1 = result1.doc.extract_manifest().expect("manifest 1");
+    let m2 = result2.doc.extract_manifest().expect("manifest 2");
+
+    assert_eq!(m1.name, m2.name);
+    assert_eq!(m1.models.len(), m2.models.len(), "Model count should match");
+    assert_eq!(m1.routes.len(), m2.routes.len(), "Route count should match");
+    assert_eq!(m1.bindings.len(), m2.bindings.len(), "Binding count should match");
+    assert!(m1.auth.is_some() && m2.auth.is_some(), "Auth should round-trip");
+
+    for (a, b) in m1.models.iter().zip(m2.models.iter()) {
+        assert_eq!(a.name, b.name, "Model names should match");
+        assert_eq!(a.fields.len(), b.fields.len(), "Field count should match for model {}", a.name);
+    }
+}
+
+#[test]
+fn app_spec_html_rendering() {
+    let content = read_fixture("app-spec.surf");
+    let result = surf_parse::parse(&content);
+    let html = result.doc.to_html();
+
+    assert!(html.contains("surfdoc-model"), "HTML should contain model rendering");
+    assert!(html.contains("surfdoc-route"), "HTML should contain route rendering");
+    assert!(html.contains("surfdoc-auth"), "HTML should contain auth rendering");
+    assert!(html.contains("surfdoc-binding"), "HTML should contain binding rendering");
+    assert!(html.contains("Model: User"), "HTML should show User model");
+    assert!(html.contains("Model: Task"), "HTML should show Task model");
+    assert!(html.contains("GET"), "HTML should show GET method");
+    assert!(html.contains("/api/tasks"), "HTML should show route path");
+}
+
+#[test]
+fn app_spec_md_rendering() {
+    let content = read_fixture("app-spec.surf");
+    let result = surf_parse::parse(&content);
+    let md = result.doc.to_markdown();
+
+    assert!(md.contains("**Model: User**"), "Markdown should contain User model");
+    assert!(md.contains("**Model: Task**"), "Markdown should contain Task model");
+    assert!(md.contains("**GET `/api/tasks`**"), "Markdown should contain route");
+    assert!(md.contains("**Authentication**"), "Markdown should contain auth");
+    assert!(md.contains("**Binding**"), "Markdown should contain binding");
+}
+
+#[test]
+fn app_spec_validation() {
+    let content = read_fixture("app-spec.surf");
+    let result = surf_parse::parse(&content);
+    let diagnostics = result.doc.validate();
+
+    // No errors expected in the well-formed fixture
+    let errors: Vec<_> = diagnostics.iter().filter(|d| d.severity == Severity::Error).collect();
+    assert!(errors.is_empty(), "Well-formed app spec should have no errors: {errors:?}");
+}
+
+#[test]
+fn model_duplicate_fields_validation() {
+    let src = r#"::model[name=BadModel]
+- id: uuid [primary]
+- name: string [required]
+- name: string [optional]
+::"#;
+    let result = surf_parse::parse(src);
+    let diagnostics = result.doc.validate();
+    let dup_field: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("V302")).collect();
+    assert_eq!(dup_field.len(), 1, "Should detect duplicate field name");
+}
+
+#[test]
+fn model_foreign_key_unresolved_validation() {
+    let src = r#"::model[name=Task]
+- id: uuid [primary]
+- owner_id: ref(NonExistentModel) [optional]
+::"#;
+    let result = surf_parse::parse(src);
+    let diagnostics = result.doc.validate();
+    let ref_warns: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("V303")).collect();
+    assert_eq!(ref_warns.len(), 1, "Should warn about unresolved foreign key ref");
+}
+
+#[test]
+fn route_missing_path_validation() {
+    let src = "::route[method=GET]\nauth: required\n::";
+    let result = surf_parse::parse(src);
+    let diagnostics = result.doc.validate();
+    let path_errors: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("V310")).collect();
+    assert_eq!(path_errors.len(), 1, "Should error on missing route path");
+}
+
+#[test]
+fn binding_missing_source_validation() {
+    let src = "::binding[target=\"#list\"]\n::";
+    let result = surf_parse::parse(src);
+    let diagnostics = result.doc.validate();
+    let source_errors: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("V330")).collect();
+    assert_eq!(source_errors.len(), 1, "Should error on missing binding source");
+}

@@ -589,6 +589,40 @@ pub enum Block {
         entries: Vec<VolumeEntry>,
         span: Span,
     },
+
+    // ----- App spec blocks (data layer + API) -----
+
+    /// Data model definition with typed fields and constraints.
+    Model {
+        name: String,
+        fields: Vec<ModelField>,
+        span: Span,
+    },
+    /// API route/endpoint definition.
+    Route {
+        method: HttpMethod,
+        path: String,
+        auth: Option<String>,
+        returns: Option<String>,
+        body: Option<String>,
+        content: String,
+        span: Span,
+    },
+    /// Authentication configuration.
+    Auth {
+        provider: AuthProvider,
+        session: Option<String>,
+        roles: Vec<String>,
+        default_role: Option<String>,
+        span: Span,
+    },
+    /// Data-to-UI binding connecting a route/model to a UI block.
+    Binding {
+        source: String,
+        target: String,
+        events: Vec<BindingEvent>,
+        span: Span,
+    },
 }
 
 /// Callout/admonition type.
@@ -877,6 +911,65 @@ pub enum ChartType {
     Bar,
     Pie,
     Area,
+}
+
+// ----- App spec supporting types -----
+
+/// A field within a `Model` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelField {
+    pub name: String,
+    pub field_type: ModelFieldType,
+    pub constraints: Vec<FieldConstraint>,
+}
+
+/// Data types for model fields.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelFieldType {
+    Uuid,
+    String,
+    Int,
+    Float,
+    Bool,
+    Datetime,
+    Text,
+    Json,
+    /// Enum with named variants.
+    Enum(Vec<String>),
+    /// Foreign key reference to another model.
+    Ref(String),
+}
+
+/// Constraints on a model field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FieldConstraint {
+    Primary,
+    Auto,
+    Required,
+    Optional,
+    Unique,
+    Max(u32),
+    Min(u32),
+    Default(String),
+}
+
+/// Authentication provider type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthProvider {
+    Email,
+    OAuth,
+    ApiKey,
+    Token,
+}
+
+/// An event in a `Binding` block (on_create, on_update, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BindingEvent {
+    pub event: String,
+    pub action: String,
 }
 
 /// Inline extension found within text content.

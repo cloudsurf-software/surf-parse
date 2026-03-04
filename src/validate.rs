@@ -33,6 +33,9 @@ pub fn validate(doc: &SurfDoc) -> Vec<Diagnostic> {
     // Cross-block validation: duplicate page routes
     validate_unique_page_routes(&doc.blocks, &mut diagnostics);
 
+    // Cross-block validation: model foreign key references
+    validate_model_refs(&doc.blocks, &mut diagnostics);
+
     diagnostics
 }
 
@@ -53,6 +56,58 @@ fn validate_unique_page_routes(blocks: &[Block], diagnostics: &mut Vec<Diagnosti
                 });
             } else {
                 seen.push((route.as_str(), span));
+            }
+        }
+    }
+}
+
+/// Check that `ref(ModelName)` fields point to existing `::model` blocks.
+fn validate_model_refs(blocks: &[Block], diagnostics: &mut Vec<Diagnostic>) {
+    use crate::types::ModelFieldType;
+
+    // Collect all model names (including those nested inside ::app children)
+    let mut model_names: Vec<String> = Vec::new();
+    for block in blocks {
+        if let Block::Model { name, .. } = block {
+            model_names.push(name.clone());
+        }
+        if let Block::App { children, .. } = block {
+            for child in children {
+                if let Block::Model { name, .. } = child {
+                    model_names.push(name.clone());
+                }
+            }
+        }
+    }
+
+    // Check all ref() targets
+    let check_fields = |fields: &[crate::types::ModelField], model_name: &str, span: &crate::types::Span, diagnostics: &mut Vec<Diagnostic>| {
+        for field in fields {
+            if let ModelFieldType::Ref(target) = &field.field_type {
+                if !model_names.contains(target) {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!(
+                            "Model \"{}\" field \"{}\" references unknown model \"{}\"",
+                            model_name, field.name, target
+                        ),
+                        span: Some(*span),
+                        code: Some("V303".into()),
+                    });
+                }
+            }
+        }
+    };
+
+    for block in blocks {
+        if let Block::Model { name, fields, span, .. } = block {
+            check_fields(fields, name, span, diagnostics);
+        }
+        if let Block::App { children, .. } = block {
+            for child in children {
+                if let Block::Model { name, fields, span, .. } = child {
+                    check_fields(fields, name, span, diagnostics);
+                }
             }
         }
     }
@@ -414,6 +469,87 @@ fn validate_block(block: &Block, diagnostics: &mut Vec<Diagnostic>) {
                         code: Some("V208".into()),
                     });
                 }
+            }
+        }
+
+        Block::Model { name, fields, span, .. } => {
+            if name.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Model block is missing required attribute: name".into(),
+                    span: Some(*span),
+                    code: Some("V300".into()),
+                });
+            }
+            if fields.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Warning,
+                    message: format!("Model \"{}\" has no fields defined", name),
+                    span: Some(*span),
+                    code: Some("V301".into()),
+                });
+            }
+            // Check for duplicate field names
+            let mut seen_fields: Vec<&str> = Vec::new();
+            for field in fields {
+                if seen_fields.contains(&field.name.as_str()) {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Error,
+                        message: format!("Model \"{}\" has duplicate field name: {}", name, field.name),
+                        span: Some(*span),
+                        code: Some("V302".into()),
+                    });
+                } else {
+                    seen_fields.push(&field.name);
+                }
+            }
+        }
+
+        Block::Route { path, span, .. } => {
+            if path.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Route block is missing required attribute: path".into(),
+                    span: Some(*span),
+                    code: Some("V310".into()),
+                });
+            } else if !path.starts_with('/') {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Warning,
+                    message: format!("Route path \"{}\" should start with /", path),
+                    span: Some(*span),
+                    code: Some("V311".into()),
+                });
+            }
+        }
+
+        Block::Auth { roles, span, .. } => {
+            if roles.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Warning,
+                    message: "Auth block has no roles defined".into(),
+                    span: Some(*span),
+                    code: Some("V320".into()),
+                });
+            }
+        }
+
+        Block::Binding { source, target, span, .. } => {
+            if source.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Binding block is missing required attribute: source".into(),
+                    span: Some(*span),
+                    code: Some("V330".into()),
+                });
+            }
+            if target.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Binding block is missing required attribute: target".into(),
+                    span: Some(*span),
+                    code: Some("V331".into()),
+                });
             }
         }
 

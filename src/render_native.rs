@@ -655,7 +655,11 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         | Block::Domains { .. }
         | Block::Crates { .. }
         | Block::DeployUrls { .. }
-        | Block::Volumes { .. } => {
+        | Block::Volumes { .. }
+        | Block::Model { .. }
+        | Block::Route { .. }
+        | Block::Auth { .. }
+        | Block::Binding { .. } => {
             let md = render_md::render_block(block);
             NativeBlock::Markdown { content: md }
         }

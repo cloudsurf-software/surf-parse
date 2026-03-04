@@ -743,6 +743,97 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.join("\n")
         }
 
+        Block::Model { name, fields, .. } => {
+            let mut lines = vec![format!("**Model: {name}**"), String::new()];
+            lines.push("| Field | Type | Constraints |".to_string());
+            lines.push("|-------|------|-------------|".to_string());
+            for f in fields {
+                let type_str = model_field_type_md(&f.field_type);
+                let constraints: Vec<String> = f.constraints.iter().map(|c| constraint_md(c)).collect();
+                lines.push(format!("| {} | {} | {} |", f.name, type_str, constraints.join(", ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Route { method, path, auth, returns, body, content, .. } => {
+            let method_str = http_method_md(*method);
+            let mut lines = vec![format!("**{method_str} `{path}`**")];
+            if let Some(a) = auth { lines.push(format!("- auth: {a}")); }
+            if let Some(r) = returns { lines.push(format!("- returns: `{r}`")); }
+            if let Some(b) = body { lines.push(format!("- body: `{b}`")); }
+            if !content.is_empty() { lines.push(content.clone()); }
+            lines.join("\n")
+        }
+
+        Block::Auth { provider, session, roles, default_role, .. } => {
+            let provider_str = auth_provider_md(*provider);
+            let mut lines = vec!["**Authentication**".to_string()];
+            lines.push(format!("- provider: {provider_str}"));
+            if let Some(s) = session { lines.push(format!("- session: {s}")); }
+            if !roles.is_empty() { lines.push(format!("- roles: {}", roles.join(", "))); }
+            if let Some(dr) = default_role { lines.push(format!("- default role: {dr}")); }
+            lines.join("\n")
+        }
+
+        Block::Binding { source, target, events, .. } => {
+            let mut lines = vec!["**Binding**".to_string()];
+            lines.push(format!("- source: `{source}`"));
+            lines.push(format!("- target: `{target}`"));
+            for e in events { lines.push(format!("- {}: {}", e.event, e.action)); }
+            lines.join("\n")
+        }
+
+    }
+}
+
+fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
+    use crate::types::ModelFieldType;
+    match ft {
+        ModelFieldType::Uuid => "uuid".to_string(),
+        ModelFieldType::String => "string".to_string(),
+        ModelFieldType::Int => "int".to_string(),
+        ModelFieldType::Float => "float".to_string(),
+        ModelFieldType::Bool => "bool".to_string(),
+        ModelFieldType::Datetime => "datetime".to_string(),
+        ModelFieldType::Text => "text".to_string(),
+        ModelFieldType::Json => "json".to_string(),
+        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
+        ModelFieldType::Ref(target) => format!("ref({target})"),
+    }
+}
+
+fn constraint_md(c: &crate::types::FieldConstraint) -> String {
+    use crate::types::FieldConstraint;
+    match c {
+        FieldConstraint::Primary => "primary".to_string(),
+        FieldConstraint::Auto => "auto".to_string(),
+        FieldConstraint::Required => "required".to_string(),
+        FieldConstraint::Optional => "optional".to_string(),
+        FieldConstraint::Unique => "unique".to_string(),
+        FieldConstraint::Max(n) => format!("max={n}"),
+        FieldConstraint::Min(n) => format!("min={n}"),
+        FieldConstraint::Default(v) => format!("default={v}"),
+    }
+}
+
+fn http_method_md(m: crate::types::HttpMethod) -> &'static str {
+    use crate::types::HttpMethod;
+    match m {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+    }
+}
+
+fn auth_provider_md(p: crate::types::AuthProvider) -> &'static str {
+    use crate::types::AuthProvider;
+    match p {
+        AuthProvider::Email => "email",
+        AuthProvider::OAuth => "oauth",
+        AuthProvider::ApiKey => "api-key",
+        AuthProvider::Token => "token",
     }
 }
 

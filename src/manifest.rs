@@ -7,7 +7,10 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{Block, CrateEntry, DomainEntry, EnvEntry, SmokeCheck, SurfDoc, VolumeEntry};
+use crate::types::{
+    AuthProvider, BindingEvent, Block, CrateEntry, DomainEntry, EnvEntry, HttpMethod, ModelField,
+    SmokeCheck, SurfDoc, VolumeEntry,
+};
 
 /// Flattened app manifest extracted from `::app` and its children.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +32,54 @@ pub struct AppManifest {
     pub crates: Vec<CrateEntry>,
     pub deploy_urls: Vec<(String, String)>,
     pub volumes: Vec<VolumeEntry>,
+    // App spec fields
+    pub models: Vec<ModelConfig>,
+    pub routes: Vec<RouteConfig>,
+    pub auth: Option<AuthConfig>,
+    pub bindings: Vec<BindingConfig>,
+    pub pages: Vec<PageConfig>,
+}
+
+/// Flattened model definition from `::model` blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelConfig {
+    pub name: String,
+    pub fields: Vec<ModelField>,
+}
+
+/// Flattened route definition from `::route` blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouteConfig {
+    pub method: HttpMethod,
+    pub path: String,
+    pub auth: Option<String>,
+    pub returns: Option<String>,
+    pub body: Option<String>,
+}
+
+/// Flattened auth configuration from `::auth` blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    pub provider: AuthProvider,
+    pub session: Option<String>,
+    pub roles: Vec<String>,
+    pub default_role: Option<String>,
+}
+
+/// Flattened binding from `::binding` blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BindingConfig {
+    pub source: String,
+    pub target: String,
+    pub events: Vec<BindingEvent>,
+}
+
+/// Page reference from `::page` blocks within an app.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageConfig {
+    pub route: String,
+    pub title: Option<String>,
+    pub layout: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +170,11 @@ pub fn extract_all_manifests(doc: &SurfDoc) -> Vec<AppManifest> {
                 crates: Vec::new(),
                 deploy_urls: Vec::new(),
                 volumes: Vec::new(),
+                models: Vec::new(),
+                routes: Vec::new(),
+                auth: None,
+                bindings: Vec::new(),
+                pages: Vec::new(),
             };
 
             for child in children {
@@ -198,6 +254,43 @@ pub fn extract_all_manifests(doc: &SurfDoc) -> Vec<AppManifest> {
                     }
                     Block::Volumes { entries, .. } => {
                         manifest.volumes.extend(entries.clone());
+                    }
+                    Block::Model { name, fields, .. } => {
+                        manifest.models.push(ModelConfig {
+                            name: name.clone(),
+                            fields: fields.clone(),
+                        });
+                    }
+                    Block::Route { method, path, auth, returns, body, .. } => {
+                        manifest.routes.push(RouteConfig {
+                            method: *method,
+                            path: path.clone(),
+                            auth: auth.clone(),
+                            returns: returns.clone(),
+                            body: body.clone(),
+                        });
+                    }
+                    Block::Auth { provider, session, roles, default_role, .. } => {
+                        manifest.auth = Some(AuthConfig {
+                            provider: *provider,
+                            session: session.clone(),
+                            roles: roles.clone(),
+                            default_role: default_role.clone(),
+                        });
+                    }
+                    Block::Binding { source, target, events, .. } => {
+                        manifest.bindings.push(BindingConfig {
+                            source: source.clone(),
+                            target: target.clone(),
+                            events: events.clone(),
+                        });
+                    }
+                    Block::Page { route, title, layout, .. } => {
+                        manifest.pages.push(PageConfig {
+                            route: route.clone(),
+                            title: title.clone(),
+                            layout: layout.clone(),
+                        });
                     }
                     _ => {}
                 }

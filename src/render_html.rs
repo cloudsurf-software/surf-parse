@@ -1855,6 +1855,64 @@ fn render_block(block: &Block) -> String {
             format!("<div class=\"surfdoc-volumes\"><h4>Volumes</h4><ul>{}</ul></div>", items.join(""))
         }
 
+        Block::Model { name, fields, .. } => {
+            let mut rows = String::new();
+            for f in fields {
+                let type_str = model_field_type_str(&f.field_type);
+                let constraints_str: Vec<String> = f.constraints.iter().map(|c| constraint_str(c)).collect();
+                let constraints_html = if constraints_str.is_empty() {
+                    String::new()
+                } else {
+                    format!(" <span class=\"surfdoc-model-constraints\">[{}]</span>", constraints_str.join(", "))
+                };
+                rows.push_str(&format!(
+                    "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>",
+                    escape_html(&f.name), escape_html(&type_str), constraints_html,
+                ));
+            }
+            format!(
+                "<div class=\"surfdoc-model\"><h4>Model: {}</h4><table class=\"surfdoc-model-table\">\
+                 <thead><tr><th>Field</th><th>Type</th><th>Constraints</th></tr></thead>\
+                 <tbody>{}</tbody></table></div>",
+                escape_html(name), rows,
+            )
+        }
+
+        Block::Route { method, path, auth, returns, body, content, .. } => {
+            let method_str = http_method_str(*method);
+            let mut details = Vec::new();
+            if let Some(a) = auth { details.push(format!("<li>auth: {}</li>", escape_html(a))); }
+            if let Some(r) = returns { details.push(format!("<li>returns: <code>{}</code></li>", escape_html(r))); }
+            if let Some(b) = body { details.push(format!("<li>body: <code>{}</code></li>", escape_html(b))); }
+            if !content.is_empty() { details.push(format!("<li>{}</li>", escape_html(content))); }
+            let details_html = if details.is_empty() { String::new() } else { format!("<ul>{}</ul>", details.join("")) };
+            format!(
+                "<div class=\"surfdoc-route\"><span class=\"surfdoc-route-method surfdoc-method-{}\">{}</span> \
+                 <code class=\"surfdoc-route-path\">{}</code>{}</div>",
+                method_str.to_lowercase(), method_str, escape_html(path), details_html,
+            )
+        }
+
+        Block::Auth { provider, session, roles, default_role, .. } => {
+            let provider_str = auth_provider_str(*provider);
+            let mut items = vec![format!("<li>provider: {}</li>", provider_str)];
+            if let Some(s) = session { items.push(format!("<li>session: {}</li>", escape_html(s))); }
+            if !roles.is_empty() { items.push(format!("<li>roles: {}</li>", roles.iter().map(|r| escape_html(r)).collect::<Vec<_>>().join(", "))); }
+            if let Some(dr) = default_role { items.push(format!("<li>default role: {}</li>", escape_html(dr))); }
+            format!("<div class=\"surfdoc-auth\"><h4>Authentication</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Binding { source, target, events, .. } => {
+            let mut items = vec![
+                format!("<li>source: <code>{}</code></li>", escape_html(source)),
+                format!("<li>target: <code>{}</code></li>", escape_html(target)),
+            ];
+            for e in events {
+                items.push(format!("<li>{}: {}</li>", escape_html(&e.event), escape_html(&e.action)));
+            }
+            format!("<div class=\"surfdoc-binding\"><h4>Binding</h4><ul>{}</ul></div>", items.join(""))
+        }
+
         Block::Unknown {
             name, content, ..
         } => {
@@ -1874,6 +1932,57 @@ fn comparison_cell(cell: &str) -> String {
         "yes" | "true" | "✓" | "✔" => "<span class=\"surfdoc-check\">\u{2713}</span>".to_string(),
         "no" | "false" | "✗" | "✘" | "-" | "—" => "<span class=\"surfdoc-dash\">\u{2014}</span>".to_string(),
         _ => escape_html(cell),
+    }
+}
+
+fn model_field_type_str(ft: &crate::types::ModelFieldType) -> String {
+    use crate::types::ModelFieldType;
+    match ft {
+        ModelFieldType::Uuid => "uuid".to_string(),
+        ModelFieldType::String => "string".to_string(),
+        ModelFieldType::Int => "int".to_string(),
+        ModelFieldType::Float => "float".to_string(),
+        ModelFieldType::Bool => "bool".to_string(),
+        ModelFieldType::Datetime => "datetime".to_string(),
+        ModelFieldType::Text => "text".to_string(),
+        ModelFieldType::Json => "json".to_string(),
+        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
+        ModelFieldType::Ref(target) => format!("ref({target})"),
+    }
+}
+
+fn constraint_str(c: &crate::types::FieldConstraint) -> String {
+    use crate::types::FieldConstraint;
+    match c {
+        FieldConstraint::Primary => "primary".to_string(),
+        FieldConstraint::Auto => "auto".to_string(),
+        FieldConstraint::Required => "required".to_string(),
+        FieldConstraint::Optional => "optional".to_string(),
+        FieldConstraint::Unique => "unique".to_string(),
+        FieldConstraint::Max(n) => format!("max={n}"),
+        FieldConstraint::Min(n) => format!("min={n}"),
+        FieldConstraint::Default(v) => format!("default={v}"),
+    }
+}
+
+fn http_method_str(m: crate::types::HttpMethod) -> &'static str {
+    use crate::types::HttpMethod;
+    match m {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+    }
+}
+
+fn auth_provider_str(p: crate::types::AuthProvider) -> &'static str {
+    use crate::types::AuthProvider;
+    match p {
+        AuthProvider::Email => "email",
+        AuthProvider::OAuth => "oauth",
+        AuthProvider::ApiKey => "api-key",
+        AuthProvider::Token => "token",
     }
 }
 

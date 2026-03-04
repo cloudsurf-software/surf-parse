@@ -53,9 +53,127 @@ pub use extract::ExtractedCode;
 pub use parse::parse;
 pub use template::TemplateContext;
 pub use types::*;
-pub use manifest::AppManifest;
+pub use manifest::{
+    AppManifest, AuthConfig, BindingConfig, ModelConfig, RouteConfig,
+    PageConfig as ManifestPageConfig,
+};
 
 pub use render_html::{PageConfig, SiteConfig, PageEntry, extract_site, humanize_route, render_site_page};
+
+/// Parse a `.surf` source string and extract the first app manifest.
+///
+/// Convenience wrapper: parses the source, extracts the manifest, and returns
+/// a `Result` suitable for pipeline error handling.
+pub fn parse_app_manifest(source: &str) -> Result<manifest::AppManifest, String> {
+    let result = parse::parse(source);
+
+    // Surface any fatal parse errors.
+    let fatal: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == error::Severity::Error)
+        .collect();
+    if !fatal.is_empty() {
+        let msgs: Vec<String> = fatal.iter().map(|d| d.message.clone()).collect();
+        return Err(format!("Parse errors: {}", msgs.join("; ")));
+    }
+
+    result
+        .doc
+        .extract_manifest()
+        .ok_or_else(|| "No ::app block found in spec source".to_string())
+}
+
+/// Validate an extracted app manifest for codegen readiness.
+///
+/// Checks structural rules required before code generation:
+/// - Must have at least one model
+/// - Must have a User model with id + email fields
+/// - Must have an ::auth block
+/// - ref() fields must reference existing models
+/// - Route returns/accepts must reference existing models
+///
+/// Returns `Ok(())` if valid, or `Err(errors)` with a list of problems.
+pub fn validate_app_manifest(manifest: &manifest::AppManifest) -> Result<(), Vec<String>> {
+    let mut errors = Vec::new();
+
+    // Must have at least one model.
+    if manifest.models.is_empty() {
+        errors.push("App spec must define at least one ::model".to_string());
+    }
+
+    // Must have auth.
+    if manifest.auth.is_none() {
+        errors.push("App spec must include an ::auth block".to_string());
+    }
+
+    // Collect model names for reference checking.
+    let model_names: std::collections::HashSet<&str> = manifest
+        .models
+        .iter()
+        .map(|m| m.name.as_str())
+        .collect();
+
+    // Must have a User model.
+    if !model_names.contains("User") {
+        errors.push("App spec must include a ::model[name=User]".to_string());
+    }
+
+    // Check User model has id and email fields.
+    if let Some(user_model) = manifest.models.iter().find(|m| m.name == "User") {
+        let field_names: Vec<&str> = user_model.fields.iter().map(|f| f.name.as_str()).collect();
+        if !field_names.contains(&"id") {
+            errors.push("User model must have an 'id' field".to_string());
+        }
+        if !field_names.contains(&"email") {
+            errors.push("User model must have an 'email' field".to_string());
+        }
+    }
+
+    // Check ref() fields point to existing models.
+    for model in &manifest.models {
+        for field in &model.fields {
+            if let types::ModelFieldType::Ref(ref target) = field.field_type {
+                if !model_names.contains(target.as_str()) {
+                    errors.push(format!(
+                        "Field {}.{} references unknown model '{}'",
+                        model.name, field.name, target
+                    ));
+                }
+            }
+        }
+    }
+
+    // Check route returns/accepts reference existing models.
+    for route in &manifest.routes {
+        if let Some(ref returns) = route.returns {
+            let model_ref = returns
+                .strip_prefix("list(")
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(returns);
+            if model_ref != "none" && !model_names.contains(model_ref) {
+                errors.push(format!(
+                    "Route {:?} {} returns unknown model '{}'",
+                    route.method, route.path, model_ref
+                ));
+            }
+        }
+        if let Some(ref body) = route.body {
+            if !model_names.contains(body.as_str()) {
+                errors.push(format!(
+                    "Route {:?} {} accepts unknown model '{}'",
+                    route.method, route.path, body
+                ));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
 
 #[cfg(feature = "pdf")]
 pub use render_pdf::{PdfConfig, PdfError};
