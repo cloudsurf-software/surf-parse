@@ -935,6 +935,14 @@ pub enum ModelFieldType {
     Datetime,
     Text,
     Json,
+    /// Monetary value stored as i64 cents (e.g. 1999 = $19.99).
+    Money,
+    /// Image URL/path — stored as String, triggers upload codegen.
+    Image,
+    /// Email address — stored as String, auto-capped at 254 chars per RFC 5321.
+    Email,
+    /// URL — stored as String, auto-capped at 2048 chars.
+    Url,
     /// Enum with named variants.
     Enum(Vec<String>),
     /// Foreign key reference to another model.
@@ -953,6 +961,8 @@ pub enum FieldConstraint {
     Max(u32),
     Min(u32),
     Default(String),
+    /// Database index hint for query performance.
+    Index,
 }
 
 /// Authentication provider type.

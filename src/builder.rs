@@ -2346,6 +2346,10 @@ fn model_field_type_surf(ft: &crate::types::ModelFieldType) -> String {
         ModelFieldType::Datetime => "datetime".to_string(),
         ModelFieldType::Text => "text".to_string(),
         ModelFieldType::Json => "json".to_string(),
+        ModelFieldType::Money => "money".to_string(),
+        ModelFieldType::Image => "image".to_string(),
+        ModelFieldType::Email => "email".to_string(),
+        ModelFieldType::Url => "url".to_string(),
         ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
         ModelFieldType::Ref(target) => format!("ref({target})"),
     }
@@ -2359,6 +2363,7 @@ fn constraint_surf(c: &crate::types::FieldConstraint) -> String {
         FieldConstraint::Required => "required".to_string(),
         FieldConstraint::Optional => "optional".to_string(),
         FieldConstraint::Unique => "unique".to_string(),
+        FieldConstraint::Index => "index".to_string(),
         FieldConstraint::Max(n) => format!("max={n}"),
         FieldConstraint::Min(n) => format!("min={n}"),
         FieldConstraint::Default(v) => format!("default={v}"),

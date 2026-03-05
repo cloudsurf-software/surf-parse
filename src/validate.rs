@@ -4,7 +4,7 @@
 //! Returns a list of `Diagnostic` items (non-fatal).
 
 use crate::error::{Diagnostic, Severity};
-use crate::types::{Block, SurfDoc};
+use crate::types::{Block, FieldConstraint, ModelFieldType, SurfDoc};
 
 /// Validate a parsed `SurfDoc` and return any diagnostics.
 ///
@@ -503,6 +503,86 @@ fn validate_block(block: &Block, diagnostics: &mut Vec<Diagnostic>) {
                     seen_fields.push(&field.name);
                 }
             }
+
+            // V340-V343: Semantic validation for marketplace field types
+            for field in fields {
+                match &field.field_type {
+                    // V340: Money fields should have required or optional constraint
+                    ModelFieldType::Money => {
+                        let has_req_opt = field.constraints.iter().any(|c|
+                            matches!(c, FieldConstraint::Required | FieldConstraint::Optional)
+                        );
+                        if !has_req_opt {
+                            diagnostics.push(Diagnostic {
+                                severity: Severity::Warning,
+                                message: format!(
+                                    "Model \"{}\" field \"{}\" is type money but has no required/optional constraint — defaults to optional",
+                                    name, field.name
+                                ),
+                                span: Some(*span),
+                                code: Some("V340".into()),
+                            });
+                        }
+                    }
+                    // V341: Image fields default to optional (info if no required/optional)
+                    ModelFieldType::Image => {
+                        let has_required = field.constraints.iter().any(|c|
+                            matches!(c, FieldConstraint::Required)
+                        );
+                        let has_optional = field.constraints.iter().any(|c|
+                            matches!(c, FieldConstraint::Optional)
+                        );
+                        if !has_required && !has_optional {
+                            diagnostics.push(Diagnostic {
+                                severity: Severity::Info,
+                                message: format!(
+                                    "Model \"{}\" field \"{}\" is type image with no required/optional — defaults to optional",
+                                    name, field.name
+                                ),
+                                span: Some(*span),
+                                code: Some("V341".into()),
+                            });
+                        }
+                    }
+                    // V342: Email fields auto-capped at 254 (RFC 5321) — warn if max > 254
+                    ModelFieldType::Email => {
+                        for c in &field.constraints {
+                            if let FieldConstraint::Max(n) = c {
+                                if *n > 254 {
+                                    diagnostics.push(Diagnostic {
+                                        severity: Severity::Warning,
+                                        message: format!(
+                                            "Model \"{}\" field \"{}\" has max={} but email addresses cannot exceed 254 characters (RFC 5321) — capping to 254",
+                                            name, field.name, n
+                                        ),
+                                        span: Some(*span),
+                                        code: Some("V342".into()),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    // V343: URL fields auto-capped at 2048 — warn if max > 2048
+                    ModelFieldType::Url => {
+                        for c in &field.constraints {
+                            if let FieldConstraint::Max(n) = c {
+                                if *n > 2048 {
+                                    diagnostics.push(Diagnostic {
+                                        severity: Severity::Warning,
+                                        message: format!(
+                                            "Model \"{}\" field \"{}\" has max={} but URLs should not exceed 2048 characters — capping to 2048",
+                                            name, field.name, n
+                                        ),
+                                        span: Some(*span),
+                                        code: Some("V343".into()),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
 
         Block::Route { path, span, .. } => {
@@ -787,5 +867,147 @@ mod tests {
             .collect();
         assert_eq!(code_diags.len(), 1);
         assert_eq!(code_diags[0].severity, Severity::Warning);
+    }
+
+    // --- V340-V343 unit tests ---
+
+    fn model_doc(field: ModelField) -> SurfDoc {
+        SurfDoc {
+            front_matter: Some(FrontMatter {
+                title: Some("Test".into()),
+                doc_type: Some(DocType::App),
+                ..FrontMatter::default()
+            }),
+            blocks: vec![Block::Model {
+                name: "Test".into(),
+                fields: vec![field],
+                span: span(),
+            }],
+            source: String::new(),
+        }
+    }
+
+    #[test]
+    fn validate_v340_money_no_required_optional() {
+        let doc = model_doc(ModelField {
+            name: "price".into(),
+            field_type: ModelFieldType::Money,
+            constraints: vec![],
+        });
+        let diags = validate(&doc);
+        let v340: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V340")).collect();
+        assert_eq!(v340.len(), 1);
+        assert_eq!(v340[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn validate_v340_money_with_required() {
+        let doc = model_doc(ModelField {
+            name: "price".into(),
+            field_type: ModelFieldType::Money,
+            constraints: vec![FieldConstraint::Required],
+        });
+        let diags = validate(&doc);
+        let v340: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V340")).collect();
+        assert!(v340.is_empty());
+    }
+
+    #[test]
+    fn validate_v340_money_with_optional() {
+        let doc = model_doc(ModelField {
+            name: "price".into(),
+            field_type: ModelFieldType::Money,
+            constraints: vec![FieldConstraint::Optional],
+        });
+        let diags = validate(&doc);
+        let v340: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V340")).collect();
+        assert!(v340.is_empty());
+    }
+
+    #[test]
+    fn validate_v341_image_no_constraints() {
+        let doc = model_doc(ModelField {
+            name: "photo".into(),
+            field_type: ModelFieldType::Image,
+            constraints: vec![],
+        });
+        let diags = validate(&doc);
+        let v341: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V341")).collect();
+        assert_eq!(v341.len(), 1);
+        assert_eq!(v341[0].severity, Severity::Info);
+    }
+
+    #[test]
+    fn validate_v341_image_with_optional() {
+        let doc = model_doc(ModelField {
+            name: "photo".into(),
+            field_type: ModelFieldType::Image,
+            constraints: vec![FieldConstraint::Optional],
+        });
+        let diags = validate(&doc);
+        let v341: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V341")).collect();
+        assert!(v341.is_empty());
+    }
+
+    #[test]
+    fn validate_v342_email_max_over_254() {
+        let doc = model_doc(ModelField {
+            name: "email".into(),
+            field_type: ModelFieldType::Email,
+            constraints: vec![FieldConstraint::Required, FieldConstraint::Max(500)],
+        });
+        let diags = validate(&doc);
+        let v342: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V342")).collect();
+        assert_eq!(v342.len(), 1);
+        assert_eq!(v342[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn validate_v342_email_max_under_254() {
+        let doc = model_doc(ModelField {
+            name: "email".into(),
+            field_type: ModelFieldType::Email,
+            constraints: vec![FieldConstraint::Required, FieldConstraint::Max(200)],
+        });
+        let diags = validate(&doc);
+        let v342: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V342")).collect();
+        assert!(v342.is_empty());
+    }
+
+    #[test]
+    fn validate_v342_email_no_max() {
+        let doc = model_doc(ModelField {
+            name: "email".into(),
+            field_type: ModelFieldType::Email,
+            constraints: vec![FieldConstraint::Required],
+        });
+        let diags = validate(&doc);
+        let v342: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V342")).collect();
+        assert!(v342.is_empty());
+    }
+
+    #[test]
+    fn validate_v343_url_max_over_2048() {
+        let doc = model_doc(ModelField {
+            name: "website".into(),
+            field_type: ModelFieldType::Url,
+            constraints: vec![FieldConstraint::Optional, FieldConstraint::Max(5000)],
+        });
+        let diags = validate(&doc);
+        let v343: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V343")).collect();
+        assert_eq!(v343.len(), 1);
+        assert_eq!(v343[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn validate_v343_url_max_under_2048() {
+        let doc = model_doc(ModelField {
+            name: "website".into(),
+            field_type: ModelFieldType::Url,
+            constraints: vec![FieldConstraint::Optional, FieldConstraint::Max(1000)],
+        });
+        let diags = validate(&doc);
+        let v343: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("V343")).collect();
+        assert!(v343.is_empty());
     }
 }

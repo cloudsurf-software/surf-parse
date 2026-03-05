@@ -2538,6 +2538,10 @@ fn parse_model_field_type(s: &str) -> ModelFieldType {
         "datetime" | "timestamp" | "timestamptz" => ModelFieldType::Datetime,
         "text" => ModelFieldType::Text,
         "json" | "jsonb" => ModelFieldType::Json,
+        "money" | "currency" | "price" => ModelFieldType::Money,
+        "image" | "photo" | "picture" | "img" => ModelFieldType::Image,
+        "email" | "email_address" => ModelFieldType::Email,
+        "url" | "uri" | "link" | "href" => ModelFieldType::Url,
         _ => ModelFieldType::String, // default fallback
     }
 }
@@ -2560,6 +2564,8 @@ fn parse_field_constraints(s: &str) -> Vec<FieldConstraint> {
             constraints.push(FieldConstraint::Optional);
         } else if lower == "unique" {
             constraints.push(FieldConstraint::Unique);
+        } else if lower == "index" || lower == "indexed" {
+            constraints.push(FieldConstraint::Index);
         } else if let Some(val) = lower.strip_prefix("max=") {
             if let Ok(n) = val.parse::<u32>() {
                 constraints.push(FieldConstraint::Max(n));
