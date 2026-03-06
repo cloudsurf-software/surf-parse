@@ -995,13 +995,16 @@ fn render_block(block: &Block) -> String {
                 html.push_str("</div>");
             }
             html.push_str("<div class=\"surfdoc-gallery-grid\">");
-            for item in items {
+            for (i, item) in items.iter().enumerate() {
                 let alt = item.alt.as_deref().unwrap_or("");
                 let cat_attr = match &item.category {
                     Some(c) => format!(" data-category=\"{}\"", escape_html(c)),
                     None => String::new(),
                 };
-                html.push_str(&format!("<figure class=\"surfdoc-gallery-item\"{cat_attr}>"));
+                html.push_str(&format!(
+                    "<figure class=\"surfdoc-gallery-item\" data-index=\"{}\" style=\"cursor:pointer\"{cat_attr}>",
+                    i
+                ));
                 html.push_str(&format!(
                     "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" />",
                     escape_html(&item.src),
@@ -1013,10 +1016,23 @@ fn render_block(block: &Block) -> String {
                 html.push_str("</figure>");
             }
             html.push_str("</div>");
+            // Lightbox overlay
+            html.push_str(concat!(
+                "<div class=\"surfdoc-lightbox\" hidden>",
+                "<button class=\"sl-close\" aria-label=\"Close\">&times;</button>",
+                "<button class=\"sl-prev\" aria-label=\"Previous\">&#8249;</button>",
+                "<button class=\"sl-next\" aria-label=\"Next\">&#8250;</button>",
+                "<div class=\"sl-img-wrap\"><img class=\"sl-img\" src=\"\" alt=\"\" /></div>",
+                "<div class=\"sl-caption\"></div>",
+                "<div class=\"sl-counter\"></div>",
+                "</div>",
+            ));
             // Gallery filter JS
             if !categories.is_empty() {
                 html.push_str(r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(g=>{g.querySelectorAll('.filter-btn').forEach(b=>{b.onclick=()=>{g.querySelectorAll('.filter-btn').forEach(e=>e.classList.remove('active'));b.classList.add('active');var f=b.dataset.filter;g.querySelectorAll('.surfdoc-gallery-item').forEach(i=>{i.style.display=f==='all'||i.dataset.category===f?'':'none'})}})})</script>"#);
             }
+            // Lightbox JS
+            html.push_str(r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(function(g){var lb=g.querySelector('.surfdoc-lightbox');if(!lb)return;var si=lb.querySelector('.sl-img'),sc=lb.querySelector('.sl-caption'),sn=lb.querySelector('.sl-counter'),items,idx;function vis(){return Array.prototype.filter.call(g.querySelectorAll('.surfdoc-gallery-item'),function(i){return i.style.display!=='none'})}function show(i){items=vis();idx=i;var f=items[idx],im=f.querySelector('img'),fc=f.querySelector('figcaption');si.src=im.src;si.alt=im.alt||'';sc.textContent=fc?fc.textContent:'';sn.textContent=(idx+1)+' / '+items.length;lb.hidden=false;document.body.style.overflow='hidden'}function hide(){lb.hidden=true;document.body.style.overflow=''}function nav(d){show((idx+d+items.length)%items.length)}g.querySelectorAll('.surfdoc-gallery-item').forEach(function(f){f.onclick=function(){var v=vis();show(v.indexOf(f))}});lb.querySelector('.sl-close').onclick=hide;lb.querySelector('.sl-prev').onclick=function(){nav(-1)};lb.querySelector('.sl-next').onclick=function(){nav(1)};lb.onclick=function(e){if(e.target===lb)hide()};document.addEventListener('keydown',function(e){if(lb.hidden)return;if(e.key==='Escape')hide();if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1)});var tx;lb.addEventListener('touchstart',function(e){tx=e.touches[0].clientX});lb.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)nav(dx>0?-1:1)})})</script>"#);
             html.push_str("</div>");
             html
         }

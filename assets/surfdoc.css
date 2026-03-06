@@ -1512,6 +1512,22 @@ dialog.modal h2 {
 .surfdoc-gallery-item:hover img { transform: scale(1.03); }
 .surfdoc-gallery-item figcaption { padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--text-muted); background: var(--surface); }
 
+/* Gallery Lightbox */
+.surfdoc-lightbox { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.surfdoc-lightbox[hidden] { display: none; }
+.surfdoc-lightbox .sl-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: #fff; font-size: 2rem; cursor: pointer; z-index: 2; width: 44px; height: 44px; line-height: 44px; text-align: center; }
+.surfdoc-lightbox .sl-prev, .surfdoc-lightbox .sl-next { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 2.5rem; cursor: pointer; z-index: 2; width: 48px; height: 64px; border-radius: 8px; transition: background 0.15s; }
+.surfdoc-lightbox .sl-prev:hover, .surfdoc-lightbox .sl-next:hover { background: rgba(255,255,255,0.2); }
+.surfdoc-lightbox .sl-prev { left: 1rem; }
+.surfdoc-lightbox .sl-next { right: 1rem; }
+.surfdoc-lightbox .sl-img-wrap { max-width: 90vw; max-height: 80vh; display: flex; align-items: center; justify-content: center; }
+.surfdoc-lightbox .sl-img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 4px; }
+.surfdoc-lightbox .sl-caption { color: #fff; text-align: center; padding: 0.75rem 1rem; font-size: 0.9rem; max-width: 600px; opacity: 0.85; }
+.surfdoc-lightbox .sl-counter { color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-top: 0.25rem; }
+@media (max-width: 640px) {
+  .surfdoc-lightbox .sl-prev, .surfdoc-lightbox .sl-next { display: none; }
+}
+
 /* ============================================================
    47. SURFDOC FOOTER
    ============================================================ */
