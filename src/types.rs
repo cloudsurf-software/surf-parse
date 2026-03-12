@@ -101,6 +101,8 @@ pub enum DocType {
     Proposal,
     Incident,
     Review,
+    App,
+    Manifest,
 }
 
 /// Document lifecycle status.
@@ -407,6 +409,220 @@ pub enum Block {
         cta_href: Option<String>,
         span: Span,
     },
+
+    // ----- App description blocks (data-bound) -----
+
+    /// Dynamic data list with filtering and sorting.
+    List {
+        source: String,
+        display: ListDisplay,
+        item_template: String,
+        filters: Vec<ListFilter>,
+        sort: Option<SortSpec>,
+        preload: bool,
+        span: Span,
+    },
+    /// Kanban board with draggable cards.
+    Board {
+        source: String,
+        columns: Vec<String>,
+        card_template: Option<String>,
+        preload: bool,
+        span: Span,
+    },
+    /// CRUD form that submits via HTMX (extends ::form with action).
+    Action {
+        method: HttpMethod,
+        target: String,
+        label: String,
+        fields: Vec<FormField>,
+        confirm: Option<String>,
+        span: Span,
+    },
+    /// Filter controls for data views.
+    FilterBar {
+        target_selector: String,
+        fields: Vec<FilterField>,
+        span: Span,
+    },
+    /// Search input with typeahead results.
+    Search {
+        source: String,
+        placeholder: Option<String>,
+        span: Span,
+    },
+    /// Metrics dashboard with auto-refresh.
+    Dashboard {
+        source: String,
+        refresh: Option<u32>,
+        span: Span,
+    },
+    /// Smart-routed chat input.
+    ChatInput {
+        action: String,
+        placeholder: Option<String>,
+        modes: Vec<String>,
+        span: Span,
+    },
+    /// Real-time content feed (SSE or polling).
+    Feed {
+        source: String,
+        stream: bool,
+        span: Span,
+    },
+
+    // ----- Compound widget mount points -----
+
+    /// Code/SurfDoc editor mount point.
+    Editor {
+        source: Option<String>,
+        lang: Option<String>,
+        preview: bool,
+        span: Span,
+    },
+    /// Data visualization mount point.
+    Chart {
+        chart_type: ChartType,
+        source: String,
+        period: Option<String>,
+        span: Span,
+    },
+    /// Resizable side-by-side layout mount point.
+    SplitPane {
+        ratio: String,
+        span: Span,
+    },
+
+    // ----- Infrastructure manifest blocks -----
+
+    /// Top-level app manifest container (like Page — recursively parses children).
+    App {
+        name: String,
+        binary: Option<String>,
+        region: Option<String>,
+        port: Option<u32>,
+        platform: Option<String>,
+        content: String,
+        children: Vec<Block>,
+        span: Span,
+    },
+    /// Build configuration (base image, runtime, edition).
+    Build {
+        base: Option<String>,
+        runtime: Option<String>,
+        edition: Option<String>,
+        properties: Vec<StyleProperty>,
+        span: Span,
+    },
+    /// Infrastructure database configuration.
+    InfraDatabase {
+        name: Option<String>,
+        shared_auth: bool,
+        volume_gb: Option<u32>,
+        properties: Vec<StyleProperty>,
+        span: Span,
+    },
+    /// Deployment environment configuration.
+    Deploy {
+        env: Option<String>,
+        app: Option<String>,
+        machines: Option<u32>,
+        memory: Option<u32>,
+        auto_stop: Option<String>,
+        min_machines: Option<u32>,
+        strategy: Option<String>,
+        properties: Vec<StyleProperty>,
+        span: Span,
+    },
+    /// Environment variable group (required/recommended/optional/defaults).
+    InfraEnv {
+        tier: Option<String>,
+        entries: Vec<EnvEntry>,
+        span: Span,
+    },
+    /// Health check configuration.
+    Health {
+        path: Option<String>,
+        method: Option<String>,
+        grace: Option<String>,
+        interval: Option<String>,
+        timeout: Option<String>,
+        span: Span,
+    },
+    /// Concurrency/connection limits.
+    Concurrency {
+        concurrency_type: Option<String>,
+        hard_limit: Option<u32>,
+        soft_limit: Option<u32>,
+        force_https: bool,
+        span: Span,
+    },
+    /// CI/CD pipeline configuration.
+    Cicd {
+        provider: Option<String>,
+        properties: Vec<StyleProperty>,
+        span: Span,
+    },
+    /// Smoke test checks (HTTP method + path + expected status).
+    Smoke {
+        script: Option<String>,
+        checks: Vec<SmokeCheck>,
+        span: Span,
+    },
+    /// Domain entries for the app.
+    Domains {
+        entries: Vec<DomainEntry>,
+        span: Span,
+    },
+    /// Shared crate dependencies.
+    Crates {
+        entries: Vec<CrateEntry>,
+        span: Span,
+    },
+    /// Per-environment deploy URLs.
+    DeployUrls {
+        entries: Vec<StyleProperty>,
+        span: Span,
+    },
+    /// Named volume mounts.
+    Volumes {
+        entries: Vec<VolumeEntry>,
+        span: Span,
+    },
+
+    // ----- App spec blocks (data layer + API) -----
+
+    /// Data model definition with typed fields and constraints.
+    Model {
+        name: String,
+        fields: Vec<ModelField>,
+        span: Span,
+    },
+    /// API route/endpoint definition.
+    Route {
+        method: HttpMethod,
+        path: String,
+        auth: Option<String>,
+        returns: Option<String>,
+        body: Option<String>,
+        content: String,
+        span: Span,
+    },
+    /// Authentication configuration.
+    Auth {
+        provider: AuthProvider,
+        session: Option<String>,
+        roles: Vec<String>,
+        default_role: Option<String>,
+        span: Span,
+    },
+    /// Data-to-UI binding connecting a route/model to a UI block.
+    Binding {
+        source: String,
+        target: String,
+        events: Vec<BindingEvent>,
+        span: Span,
+    },
 }
 
 /// Callout/admonition type.
@@ -603,6 +819,167 @@ pub struct BeforeAfterItem {
 pub struct PipelineStep {
     pub label: String,
     pub description: Option<String>,
+}
+
+// ----- Infrastructure manifest supporting types -----
+
+/// An environment variable entry within an `InfraEnv` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvEntry {
+    pub name: String,
+    pub default_value: Option<String>,
+}
+
+/// A smoke test check: HTTP method, path, expected status code.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmokeCheck {
+    pub method: String,
+    pub path: String,
+    pub expected: u16,
+}
+
+/// A domain entry with optional description.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DomainEntry {
+    pub domain: String,
+    pub description: Option<String>,
+}
+
+/// A shared crate dependency entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrateEntry {
+    pub name: String,
+    pub source: Option<String>,
+    pub features: Option<String>,
+}
+
+/// A named volume mount.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VolumeEntry {
+    pub name: String,
+    pub mount: String,
+}
+
+// ----- App description language supporting types -----
+
+/// Display style for a `List` block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListDisplay {
+    Card,
+    Table,
+    Compact,
+}
+
+/// A filter declared inside a `List` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListFilter {
+    pub field: String,
+}
+
+/// Sort specification: field name + direction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SortSpec {
+    pub field: String,
+    pub descending: bool,
+}
+
+/// HTTP method for `Action` blocks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+/// A filter field in a `FilterBar` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterField {
+    pub label: String,
+    pub name: String,
+    pub options: Vec<String>,
+}
+
+/// Chart visualization type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChartType {
+    Line,
+    Bar,
+    Pie,
+    Area,
+}
+
+// ----- App spec supporting types -----
+
+/// A field within a `Model` block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelField {
+    pub name: String,
+    pub field_type: ModelFieldType,
+    pub constraints: Vec<FieldConstraint>,
+}
+
+/// Data types for model fields.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelFieldType {
+    Uuid,
+    String,
+    Int,
+    Float,
+    Bool,
+    Datetime,
+    Text,
+    Json,
+    /// Monetary value stored as i64 cents (e.g. 1999 = $19.99).
+    Money,
+    /// Image URL/path — stored as String, triggers upload codegen.
+    Image,
+    /// Email address — stored as String, auto-capped at 254 chars per RFC 5321.
+    Email,
+    /// URL — stored as String, auto-capped at 2048 chars.
+    Url,
+    /// Enum with named variants.
+    Enum(Vec<String>),
+    /// Foreign key reference to another model.
+    Ref(String),
+}
+
+/// Constraints on a model field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FieldConstraint {
+    Primary,
+    Auto,
+    Required,
+    Optional,
+    Unique,
+    Max(u32),
+    Min(u32),
+    Default(String),
+    /// Database index hint for query performance.
+    Index,
+}
+
+/// Authentication provider type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthProvider {
+    Email,
+    OAuth,
+    ApiKey,
+    Token,
+}
+
+/// An event in a `Binding` block (on_create, on_update, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BindingEvent {
+    pub event: String,
+    pub action: String,
 }
 
 /// Inline extension found within text content.

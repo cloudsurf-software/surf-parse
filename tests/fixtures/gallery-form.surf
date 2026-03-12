@@ -1,0 +1,35 @@
+---
+title: "Gallery & Form Test"
+type: doc
+status: active
+tags: [test, gallery, form]
+created: "2026-02-24"
+author: "K. Brady Davis"
+---
+
+# Contact Form
+
+::form[submit=Contact Us]
+- Name (text, "Your name") *
+- Email (email) *
+- Message (textarea)
+::
+
+# Photo Gallery
+
+::gallery
+![Sunset](sunset.jpg) Nature: A golden sunset
+![City](city.jpg) Urban: Downtown skyline
+![](abstract.png)
+::
+
+# Feature Section
+
+::section[bg=muted]
+## Our Mission
+Building the future of documentation.
+
+::callout[type=info]
+This is a callout inside a section.
+::
+::

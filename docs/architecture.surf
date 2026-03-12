@@ -1,0 +1,472 @@
+---
+title: "surf-parse: Architecture Guide"
+type: doc
+status: active
+scope: public
+created: 2026-02-19
+version: 1
+tags: [surf-parse, architecture, rust, parser, surfdoc]
+description: "How surf-parse works — from raw text to rendered document. This page is itself a SurfDoc, parsed by the system it describes."
+---
+
+# surf-parse Architecture
+
+::summary
+surf-parse is a Rust library that parses SurfDoc (.surf) files — a typed document format with block directives — into a structured AST, then renders to HTML, Markdown, PDF, or terminal output. Compatible with CommonMark for inline text. This document is itself a .surf file, parsed and rendered by the library it describes.
+::
+
+::stats
+14,340 lines of Rust
+344 passing tests
+32 block types
+4 render targets
+0 unsafe blocks
+MIT licensed
+::
+
+---
+
+## Design Philosophy
+
+::quote[by="CloudSurf Engineering"]
+SurfDoc extends Markdown rather than replacing it. Every .surf file is valid Markdown (with extra directives). Every directive degrades gracefully to readable text. The parser never crashes on malformed input — it reports diagnostics and keeps going.
+::
+
+::callout[type=tip title="You're looking at a live demo"]
+Every section of this page uses SurfDoc block types to describe the system that parses them. The `::stats` block above, this `::callout`, the `::quote` — all parsed by `surf-parse` and rendered to what you see now.
+::
+
+---
+
+## Parser Pipeline
+
+The parser runs in three passes. Each pass transforms the document into a more structured representation.
+
+::steps
+1. **Front Matter Extraction** (~50ms) — Detect `---` delimiters at the document start. Parse YAML between them into typed `FrontMatter` struct with 15 known fields plus arbitrary extras. Everything after the closing `---` is the document body.
+
+2. **Block Directive Scanning** (~100ms) — Line-by-line state machine with a nesting stack. Recognizes opening directives (`::name[attrs]`), closing markers (`::`) with depth matching (`::` vs `:::`), and Markdown gaps between directives. Outputs a flat `Vec<Block::Unknown>` with raw attributes and content, each tagged with a `Span` for source location.
+
+3. **Block Type Resolution** (~50ms) — Map each `Unknown { name, attrs, content }` to a typed `Block` variant. 32 block types recognized via `resolve_block()` dispatch. Per-block parser functions extract structured data (e.g., `parse_data()` extracts table headers and rows from CSV/pipe-delimited content). Unrecognized names pass through as `Block::Unknown`.
+::
+
+::callout[type=info title="Non-Fatal Parsing"]
+surf-parse never panics on bad input. Malformed documents produce `Diagnostic` entries (with severity, message, span, and error code) alongside the best-effort parse result. This enables IDE integration, progressive editing, and graceful degradation.
+::
+
+---
+
+## Core Data Structures
+
+### SurfDoc
+
+The top-level document type returned by `parse()`:
+
+::code[lang=rust file="src/types.rs"]
+pub struct SurfDoc {
+    pub front_matter: Option<FrontMatter>,
+    pub blocks: Vec<Block>,
+    pub source: String,
+}
+
+pub struct ParseResult {
+    pub doc: SurfDoc,
+    pub diagnostics: Vec<Diagnostic>,
+}
+::
+
+### Block Enum
+
+Every parsed element is a variant of the `Block` enum. Each carries a `Span` for source location tracking:
+
+::code[lang=rust file="src/types.rs"]
+pub enum Block {
+    Markdown { content: String, span: Span },
+    Callout { callout_type: CalloutType, title: Option<String>, content: String, span: Span },
+    Data { id: Option<String>, format: DataFormat, headers: Vec<String>, rows: Vec<Vec<String>>, .. },
+    Code { lang: Option<String>, file: Option<String>, content: String, span: Span },
+    Metric { label: String, value: String, trend: Option<Trend>, unit: Option<String>, span: Span },
+    Page { route: String, children: Vec<Block>, span: Span },
+    // ... 26 more variants
+}
+::
+
+### Span
+
+Every block carries its exact location in the source file:
+
+::code[lang=rust file="src/types.rs"]
+pub struct Span {
+    pub start_line: usize,   // 1-based
+    pub end_line: usize,     // 1-based, inclusive
+    pub start_offset: usize, // 0-based byte offset
+    pub end_offset: usize,   // 0-based, past-the-end
+}
+::
+
+---
+
+## Block Type Registry
+
+surf-parse supports 32 block types across six categories.
+
+::tabs
+
+## Content
+
+Core document building blocks for structured content.
+
+::data[format=table sortable]
+| Block | Directive | Purpose |
+|-------|-----------|---------|
+| Markdown | (implicit) | Plain markdown between directives |
+| Callout | `::callout[type=info]` | Admonition box (info, warning, danger, tip, note, success) |
+| Code | `::code[lang=rust]` | Syntax-highlighted code with optional file path |
+| Data | `::data[format=table]` | Structured table (CSV, pipe-delimited, or JSON) |
+| Quote | `::quote[by="..."]` | Attributed quotation with optional citation |
+| Summary | `::summary` | Executive summary block |
+| Decision | `::decision[status=accepted]` | Decision record with status and date |
+| Tasks | `::tasks` | Checkbox list with assignees and tags |
+| Figure | `::figure[src="..."]` | Image with caption, alt text, and width |
+::
+
+## Metrics
+
+Single-value displays and stat blocks.
+
+::data[format=table sortable]
+| Block | Directive | Purpose |
+|-------|-----------|---------|
+| Metric | `::metric[label="..." value="..."]` | Single KPI with trend arrow |
+| Stats | `::stats` | Row of metric cards |
+::
+
+## Layout
+
+Structural blocks that organize content.
+
+::data[format=table sortable]
+| Block | Directive | Purpose |
+|-------|-----------|---------|
+| Columns | `::columns[count=2]` | Multi-column layout |
+| Tabs | `::tabs` | Tabbed content panels |
+| Details | `::details[title="..."]` | Collapsible section |
+| Divider | `::divider[label="..."]` | Thematic break with optional label |
+| Page | `::page[route="/about"]` | Route definition with child blocks |
+| Site | `::site[domain="..."]` | Site-level configuration |
+| Footer | `::footer` | Structured page footer |
+::
+
+## Web & Marketing
+
+Blocks designed for websites, landing pages, and marketing content.
+
+::data[format=table sortable]
+| Block | Directive | Purpose |
+|-------|-----------|---------|
+| Hero | `::hero[headline="..."]` | Full hero section with headline and CTA |
+| HeroImage | `::hero-image[src="..."]` | Full-width hero image |
+| Features | `::features[cols=3]` | Feature card grid |
+| Steps | `::steps` | Numbered process timeline |
+| Testimonial | `::testimonial[author="..."]` | Customer quote |
+| PricingTable | `::pricing-table` | Pricing comparison |
+| Comparison | `::comparison` | Feature matrix |
+| Gallery | `::gallery` | Image grid with categories |
+| Faq | `::faq` | Accordion Q&A |
+| Cta | `::cta[label="..." href="..."]` | Call-to-action button |
+| Nav | `::nav` | Navigation bar |
+| Logo | `::logo[src="..."]` | Centered brand logo |
+::
+
+## Interactive
+
+Blocks that accept user input or embed external content.
+
+::data[format=table sortable]
+| Block | Directive | Purpose |
+|-------|-----------|---------|
+| Form | `::form[submit="Send"]` | Contact form with typed fields |
+| Embed | `::embed[src="..." type=video]` | External iframe (map, video, audio) |
+::
+
+## Styling
+
+Blocks that control visual presentation.
+
+::data[format=table sortable]
+| Block | Directive | Purpose |
+|-------|-----------|---------|
+| Style | `::style` | CSS variable overrides (accent, font, theme) |
+| Unknown | (any unrecognized name) | Passthrough for forward compatibility |
+::
+
+::
+
+---
+
+## Rendering Pipeline
+
+surf-parse renders to four output formats from the same AST. No re-parsing needed.
+
+::comparison[highlight="HTML"]
+| Capability | HTML | Markdown | Terminal | PDF |
+|------------|------|----------|----------|-----|
+| Full block support | Yes | Degraded | Simplified | Yes |
+| CSS styling | Yes | No | ANSI codes | Yes |
+| Google Fonts | Yes | No | No | Yes |
+| Syntax highlighting | Yes | Fenced blocks | Colored | Yes |
+| Multi-page sites | Yes | No | No | Yes |
+| Interactive elements | Yes | No | No | Static |
+| SEO metadata | Yes | No | No | No |
+| Size | ~14KB CSS | Zero overhead | Zero overhead | Chromium required |
+::
+
+### HTML Renderer (3,385 lines)
+
+The primary renderer. Produces scoped HTML with CSS variables:
+
+::code[lang=rust file="src/render_html.rs"]
+impl SurfDoc {
+    // Fragment — for embedding in existing pages
+    pub fn to_html(&self) -> String;
+
+    // Full page — standalone with <head>, SEO, fonts
+    pub fn to_html_page(&self, config: &PageConfig) -> String;
+}
+
+// Multi-page site rendering
+pub fn render_site_page(
+    page: &PageEntry,
+    site: &SiteConfig,
+    nav_items: &[NavItem],
+    config: &PageConfig,
+) -> String;
+::
+
+::callout[type=info title="CSS Scoping"]
+All styles are scoped under `.surfdoc` — never pollutes the host page. CSS variables (`--surfdoc-accent`, `--surfdoc-font`) enable theming without overriding global styles. Font presets (system, serif, mono, inter, jetbrains-mono) auto-inject Google Fonts `@import` rules.
+::
+
+### Degradation Renderers
+
+::details[title="Markdown Renderer (758 lines)"]
+Converts every block to its closest Markdown equivalent. Callouts become blockquotes, metrics become bold text, tables stay as tables. Used for README generation and plain-text contexts.
+
+```rust
+impl SurfDoc {
+    pub fn to_markdown(&self) -> String;
+}
+```
+::
+
+::details[title="Terminal Renderer (653 lines)"]
+ANSI-colored output for CLI tools. Callouts get colored borders, metrics get trend arrows, code blocks get syntax labels. Requires the `terminal` feature flag.
+
+```rust
+impl SurfDoc {
+    pub fn to_terminal(&self) -> String; // feature: terminal
+}
+```
+::
+
+::details[title="PDF Renderer (440 lines)"]
+Renders to HTML first, then uses headless Chromium via `chromiumoxide` to generate PDF bytes. Supports page breaks, headers, and print-optimized CSS. Requires the `pdf` feature flag.
+
+```rust
+impl SurfDoc {
+    pub async fn to_pdf(&self, config: &PdfConfig) -> Result<Vec<u8>, PdfError>;
+}
+```
+::
+
+---
+
+## Builder API
+
+Programmatic document construction with a fluent API:
+
+::code[lang=rust file="src/builder.rs"]
+use surf_parse::SurfDocBuilder;
+
+let doc = SurfDocBuilder::new()
+    .title("My Document")
+    .doc_type(DocType::Doc)
+    .markdown("# Hello World\n\nThis is a SurfDoc.")
+    .callout(CalloutType::Tip, "Pro tip: use the builder for tests!")
+    .metric("Users", "1,234", Some(Trend::Up), Some("people"))
+    .code("fn main() {}", Some("rust"), None)
+    .build();
+
+// Render to any format
+let html = doc.to_html();
+let markdown = doc.to_markdown();
+
+// Round-trip: AST back to .surf source
+let source = doc.to_surf_source();
+::
+
+---
+
+## Validation Engine
+
+Schema validation produces diagnostics without blocking the parse:
+
+::code[lang=rust file="src/validate.rs"]
+let result = surf_parse::parse(input);
+let diagnostics = result.doc.validate();
+
+for d in &diagnostics {
+    // E001: Invalid front matter YAML
+    // W001: Unclosed block directive
+    // V001-V141: Schema violations
+    println!("{}: {} (line {})",
+        d.code.as_deref().unwrap_or("???"),
+        d.message,
+        d.span.map(|s| s.start_line).unwrap_or(0),
+    );
+}
+::
+
+::data[format=table]
+| Code Range | Category | Examples |
+|------------|----------|---------|
+| E001-E002 | Parse errors | Invalid YAML, malformed directive |
+| W001-W002 | Warnings | Unclosed block, invalid attributes |
+| V001-V141 | Validation | Missing required attrs, invalid enum values |
+::
+
+---
+
+## Dependency Graph
+
+surf-parse keeps its dependency tree small and auditable:
+
+::code[lang=text]
+surf-parse v0.4.0
+ |-- pulldown-cmark 0.12     (CommonMark + GFM parsing)
+ |-- serde 1.0               (serialization)
+ |-- serde_yaml 0.9          (YAML front matter)
+ |-- serde_json 1.0          (JSON export)
+ |-- thiserror 2.0           (error types)
+ |
+ |-- [optional: terminal]
+ |   `-- colored 3.1         (ANSI terminal colors)
+ |
+ |-- [optional: pdf]
+ |   |-- chromiumoxide 0.8   (headless Chrome)
+ |   |-- tokio 1.49          (async runtime)
+ |   `-- futures 0.3         (async utilities)
+ |
+ `-- [optional: axum]
+     `-- axum 0.8            (CSS route handler)
+::
+
+---
+
+## Architecture Diagram
+
+::code[lang=mermaid]
+graph TB
+    subgraph Input
+        A[".surf file"] --> B["parse()"]
+    end
+
+    subgraph "Pass 1a: Front Matter"
+        B --> C["extract_front_matter()"]
+        C --> D["FrontMatter (15 typed fields)"]
+    end
+
+    subgraph "Pass 1b: Block Scanning"
+        B --> E["scan_blocks()"]
+        E --> F["Nesting Stack"]
+        F --> G["Vec of Block::Unknown"]
+    end
+
+    subgraph "Pass 2: Resolution"
+        G --> H["resolve_block()"]
+        H --> I["32 typed Block variants"]
+    end
+
+    subgraph Output
+        D --> J["SurfDoc"]
+        I --> J
+        J --> K["to_html()"]
+        J --> L["to_markdown()"]
+        J --> M["to_terminal()"]
+        J --> N["to_pdf()"]
+        J --> O["to_surf_source()"]
+        J --> P["validate()"]
+    end
+::
+
+---
+
+## Module Map
+
+::data[format=table sortable]
+| Module | Lines | Responsibility |
+|--------|-------|---------------|
+| `blocks.rs` | 3,313 | Block type resolution and per-block parsers |
+| `render_html.rs` | 3,385 | HTML fragment and full-page rendering |
+| `builder.rs` | 2,745 | Fluent builder API and `.surf` serializer |
+| `parse.rs` | 1,004 | Three-pass parser (front matter, scanning, resolution) |
+| `render_md.rs` | 758 | Markdown degradation renderer |
+| `render_term.rs` | 653 | ANSI terminal renderer |
+| `types.rs` | 609 | Core data structures (SurfDoc, Block, FrontMatter) |
+| `validate.rs` | 545 | Schema validation and diagnostics |
+| `render_pdf.rs` | 440 | Chromium-based PDF generation |
+| `template.rs` | 230 | Variable interpolation (`{= key =}`) |
+| `attrs.rs` | 222 | Attribute string parsing and type coercion |
+| `inline.rs` | 170 | Inline extensions (`:evidence`, `:status`) |
+| `icons.rs` | 117 | Built-in SVG icon set (20 icons) |
+| `lib.rs` | 112 | Public API exports |
+| `serve.rs` | 37 | Axum CSS route handler |
+::
+
+---
+
+## Quick Start
+
+::code[lang=rust]
+// Cargo.toml
+// [dependencies]
+// surf-parse = "0.4"
+
+use surf_parse::parse;
+
+fn main() {
+    let input = r#"---
+title: Hello World
+type: doc
+---
+
+# My First SurfDoc
+
+::callout[type=tip]
+This is a tip!
+::
+
+::metric[label="Status" value="Live" trend=up]
+"#;
+
+    let result = parse(input);
+
+    // Access typed front matter
+    if let Some(fm) = &result.doc.front_matter {
+        println!("Title: {}", fm.title.as_deref().unwrap_or("Untitled"));
+    }
+
+    // Render to HTML
+    let html = result.doc.to_html();
+    println!("{html}");
+
+    // Check for issues
+    for d in &result.diagnostics {
+        eprintln!("{}: {}", d.severity, d.message);
+    }
+}
+::
+
+::cta[label="View on GitHub" href="https://github.com/cloudsurf-software/surf-parse" primary]
+
+::cta[label="SurfDoc Format Spec" href="https://surfcontext.org"]

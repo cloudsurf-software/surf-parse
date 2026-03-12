@@ -5,7 +5,7 @@
 //! prevent XSS.
 
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, DecisionStatus, FormFieldType, StyleProperty, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, FormFieldType, HttpMethod, ListDisplay, StyleProperty, SurfDoc, Trend};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -106,6 +106,14 @@ fn resolve_font_preset(name: &str) -> Option<FontPreset> {
         "jetbrains-mono" | "jetbrains" => Some(FontPreset {
             stack: "'JetBrains Mono', monospace",
             import: Some("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"),
+        }),
+        "playfair" | "playfair-display" => Some(FontPreset {
+            stack: "'Playfair Display', Georgia, serif",
+            import: Some("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap"),
+        }),
+        "lato" => Some(FontPreset {
+            stack: "'Lato', -apple-system, BlinkMacSystemFont, sans-serif",
+            import: Some("https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap"),
         }),
         _ => None,
     }
@@ -301,6 +309,29 @@ pub fn to_html(doc: &SurfDoc) -> String {
     }
 
     parts.join("\n")
+}
+
+/// Render a slice of blocks as bare HTML fragments.
+///
+/// Unlike [`to_html()`], this does NOT:
+/// - Scan for `::site`/`::style` blocks or emit CSS variable overrides
+/// - Extract or render navigation blocks separately
+/// - Wrap content in auto-sectioning (h1/h2 boundary detection)
+///
+/// Each block is rendered through [`render_block()`] and the results are joined
+/// with newlines. The caller controls the CSS context — fragment HTML assumes
+/// `surfdoc-*` class names are available from a parent stylesheet.
+///
+/// Returns an empty string for an empty slice.
+pub fn to_html_fragment(blocks: &[Block]) -> String {
+    if blocks.is_empty() {
+        return String::new();
+    }
+    blocks
+        .iter()
+        .map(render_block)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Render a `SurfDoc` as a complete HTML page with SurfDoc discovery metadata.
@@ -1007,13 +1038,16 @@ fn render_block(block: &Block) -> String {
                 html.push_str("</div>");
             }
             html.push_str("<div class=\"surfdoc-gallery-grid\">");
-            for item in items {
+            for (i, item) in items.iter().enumerate() {
                 let alt = item.alt.as_deref().unwrap_or("");
                 let cat_attr = match &item.category {
                     Some(c) => format!(" data-category=\"{}\"", escape_html(c)),
                     None => String::new(),
                 };
-                html.push_str(&format!("<figure class=\"surfdoc-gallery-item\"{cat_attr}>"));
+                html.push_str(&format!(
+                    "<figure class=\"surfdoc-gallery-item\" data-index=\"{}\" style=\"cursor:pointer\"{cat_attr}>",
+                    i
+                ));
                 html.push_str(&format!(
                     "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" onerror=\"this.classList.add('broken');this.onerror=null\" />",
                     escape_html(&item.src),
@@ -1025,10 +1059,23 @@ fn render_block(block: &Block) -> String {
                 html.push_str("</figure>");
             }
             html.push_str("</div>");
+            // Lightbox overlay
+            html.push_str(concat!(
+                "<div class=\"surfdoc-lightbox\" hidden>",
+                "<button class=\"sl-close\" aria-label=\"Close\">&times;</button>",
+                "<button class=\"sl-prev\" aria-label=\"Previous\">&#8249;</button>",
+                "<button class=\"sl-next\" aria-label=\"Next\">&#8250;</button>",
+                "<div class=\"sl-img-wrap\"><img class=\"sl-img\" src=\"\" alt=\"\" /></div>",
+                "<div class=\"sl-caption\"></div>",
+                "<div class=\"sl-counter\"></div>",
+                "</div>",
+            ));
             // Gallery filter JS
             if !categories.is_empty() {
                 html.push_str(r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(g=>{g.querySelectorAll('.filter-btn').forEach(b=>{b.onclick=()=>{g.querySelectorAll('.filter-btn').forEach(e=>e.classList.remove('active'));b.classList.add('active');var f=b.dataset.filter;g.querySelectorAll('.surfdoc-gallery-item').forEach(i=>{i.style.display=f==='all'||i.dataset.category===f?'':'none'})}})})</script>"#);
             }
+            // Lightbox JS
+            html.push_str(r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(function(g){var lb=g.querySelector('.surfdoc-lightbox');if(!lb)return;var si=lb.querySelector('.sl-img'),sc=lb.querySelector('.sl-caption'),sn=lb.querySelector('.sl-counter'),items,idx;function vis(){return Array.prototype.filter.call(g.querySelectorAll('.surfdoc-gallery-item'),function(i){return i.style.display!=='none'})}function show(i){items=vis();idx=i;var f=items[idx],im=f.querySelector('img'),fc=f.querySelector('figcaption');si.src=im.src;si.alt=im.alt||'';sc.textContent=fc?fc.textContent:'';sn.textContent=(idx+1)+' / '+items.length;lb.hidden=false;document.body.style.overflow='hidden'}function hide(){lb.hidden=true;document.body.style.overflow=''}function nav(d){show((idx+d+items.length)%items.length)}g.querySelectorAll('.surfdoc-gallery-item').forEach(function(f){f.onclick=function(){var v=vis();show(v.indexOf(f))}});lb.querySelector('.sl-close').onclick=hide;lb.querySelector('.sl-prev').onclick=function(){nav(-1)};lb.querySelector('.sl-next').onclick=function(){nav(1)};lb.onclick=function(e){if(e.target===lb)hide()};document.addEventListener('keydown',function(e){if(lb.hidden)return;if(e.key==='Escape')hide();if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1)});var tx;lb.addEventListener('touchstart',function(e){tx=e.touches[0].clientX});lb.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)nav(dx>0?-1:1)})})</script>"#);
             html.push_str("</div>");
             html
         }
@@ -1403,6 +1450,528 @@ fn render_block(block: &Block) -> String {
             parts.join("")
         }
 
+        // ----- App description blocks -----
+
+        Block::List {
+            source,
+            display,
+            item_template,
+            filters,
+            sort,
+            preload,
+            ..
+        } => {
+            let display_cls = match display {
+                ListDisplay::Card => "card",
+                ListDisplay::Table => "table",
+                ListDisplay::Compact => "compact",
+            };
+            let mut html = format!(
+                "<div class=\"surfdoc-list surfdoc-list-{}\" data-surf-source=\"{}\"",
+                display_cls,
+                escape_html(source),
+            );
+            if *preload {
+                html.push_str(" data-surf-preload");
+            }
+            if let Some(s) = sort {
+                html.push_str(&format!(
+                    " data-surf-sort=\"{}\" data-surf-sort-dir=\"{}\"",
+                    escape_html(&s.field),
+                    if s.descending { "desc" } else { "asc" },
+                ));
+            }
+            html.push('>');
+            // Render filter controls
+            if !filters.is_empty() {
+                html.push_str("<div class=\"surfdoc-list-filters\">");
+                for f in filters {
+                    html.push_str(&format!(
+                        "<label class=\"surfdoc-list-filter\">{}</label>",
+                        escape_html(&f.field),
+                    ));
+                }
+                html.push_str("</div>");
+            }
+            // Item template stored as data attribute for runtime
+            if !item_template.is_empty() {
+                html.push_str(&format!(
+                    "<template class=\"surfdoc-list-item-template\">{}</template>",
+                    escape_html(item_template),
+                ));
+            }
+            html.push_str("<div class=\"surfdoc-list-items\" aria-live=\"polite\"><p class=\"surfdoc-list-empty\">Loading...</p></div>");
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Board {
+            source,
+            columns,
+            card_template,
+            preload,
+            ..
+        } => {
+            let mut html = format!(
+                "<div class=\"surfdoc-board\" data-surf-source=\"{}\"",
+                escape_html(source),
+            );
+            if *preload {
+                html.push_str(" data-surf-preload");
+            }
+            html.push('>');
+            if let Some(tmpl) = card_template {
+                html.push_str(&format!(
+                    "<template class=\"surfdoc-board-card-template\">{}</template>",
+                    escape_html(tmpl),
+                ));
+            }
+            html.push_str("<div class=\"surfdoc-board-columns\">");
+            for col in columns {
+                html.push_str(&format!(
+                    "<div class=\"surfdoc-board-column\" data-column=\"{}\"><h3 class=\"surfdoc-board-column-title\">{}</h3><div class=\"surfdoc-board-cards\" aria-live=\"polite\"></div></div>",
+                    escape_html(col),
+                    escape_html(col),
+                ));
+            }
+            html.push_str("</div></div>");
+            html
+        }
+
+        Block::Action {
+            method,
+            target,
+            label,
+            fields,
+            confirm,
+            ..
+        } => {
+            let method_str = match method {
+                HttpMethod::Get => "get",
+                HttpMethod::Post => "post",
+                HttpMethod::Put => "put",
+                HttpMethod::Patch => "patch",
+                HttpMethod::Delete => "delete",
+            };
+            let mut html = format!(
+                "<form class=\"surfdoc-action\" data-surf-method=\"{}\" data-surf-action=\"{}\"",
+                method_str,
+                escape_html(target),
+            );
+            if let Some(c) = confirm {
+                html.push_str(&format!(" data-surf-confirm=\"{}\"", escape_html(c)));
+            }
+            html.push('>');
+            for field in fields {
+                let req = if field.required { " required" } else { "" };
+                let req_star = if field.required { " <span class=\"required\">*</span>" } else { "" };
+                html.push_str(&format!(
+                    "<div class=\"surfdoc-form-field\"><label>{}{}</label>",
+                    escape_html(&field.label),
+                    req_star,
+                ));
+                match field.field_type {
+                    FormFieldType::Textarea => {
+                        let ph = field.placeholder.as_deref().unwrap_or("");
+                        html.push_str(&format!(
+                            "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}></textarea>",
+                            escape_html(&field.name),
+                            escape_html(ph),
+                            req,
+                        ));
+                    }
+                    FormFieldType::Select => {
+                        html.push_str(&format!(
+                            "<select name=\"{}\"{}>",
+                            escape_html(&field.name),
+                            req,
+                        ));
+                        html.push_str("<option value=\"\">Select...</option>");
+                        for opt in &field.options {
+                            html.push_str(&format!(
+                                "<option value=\"{}\">{}</option>",
+                                escape_html(opt),
+                                escape_html(opt),
+                            ));
+                        }
+                        html.push_str("</select>");
+                    }
+                    _ => {
+                        let input_type = match field.field_type {
+                            FormFieldType::Email => "email",
+                            FormFieldType::Tel => "tel",
+                            FormFieldType::Date => "date",
+                            FormFieldType::Number => "number",
+                            _ => "text",
+                        };
+                        let ph = field.placeholder.as_deref().unwrap_or("");
+                        html.push_str(&format!(
+                            "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}/>",
+                            input_type,
+                            escape_html(&field.name),
+                            escape_html(ph),
+                            req,
+                        ));
+                    }
+                }
+                html.push_str("</div>");
+            }
+            html.push_str(&format!(
+                "<button type=\"submit\" class=\"surfdoc-cta surfdoc-cta-primary\">{}</button>",
+                escape_html(label),
+            ));
+            html.push_str("</form>");
+            html
+        }
+
+        Block::FilterBar {
+            target_selector,
+            fields,
+            ..
+        } => {
+            let mut html = format!(
+                "<div class=\"surfdoc-filter-bar\" data-surf-target=\"{}\">",
+                escape_html(target_selector),
+            );
+            for field in fields {
+                html.push_str(&format!(
+                    "<label class=\"surfdoc-filter-field\">{}<select name=\"{}\">",
+                    escape_html(&field.label),
+                    escape_html(&field.name),
+                ));
+                for opt in &field.options {
+                    html.push_str(&format!(
+                        "<option value=\"{}\">{}</option>",
+                        escape_html(opt),
+                        escape_html(opt),
+                    ));
+                }
+                html.push_str("</select></label>");
+            }
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Search {
+            source,
+            placeholder,
+            ..
+        } => {
+            let ph = placeholder.as_deref().unwrap_or("Search...");
+            format!(
+                "<div class=\"surfdoc-search\" data-surf-source=\"{}\"><input type=\"search\" placeholder=\"{}\" aria-label=\"{}\" autocomplete=\"off\"/><div class=\"surfdoc-search-results\" aria-live=\"polite\"></div></div>",
+                escape_html(source),
+                escape_html(ph),
+                escape_html(ph),
+            )
+        }
+
+        Block::Dashboard {
+            source, refresh, ..
+        } => {
+            let mut html = format!(
+                "<div class=\"surfdoc-dashboard\" data-surf-source=\"{}\"",
+                escape_html(source),
+            );
+            if let Some(r) = refresh {
+                html.push_str(&format!(" data-surf-refresh=\"{}\"", r));
+            }
+            html.push_str("><div class=\"surfdoc-dashboard-grid\" aria-live=\"polite\"><p>Loading metrics...</p></div></div>");
+            html
+        }
+
+        Block::ChatInput {
+            action,
+            placeholder,
+            modes,
+            ..
+        } => {
+            let ph = placeholder.as_deref().unwrap_or("Type a message...");
+            let mut html = format!(
+                "<div class=\"surfdoc-chat-input\" data-surf-action=\"{}\">",
+                escape_html(action),
+            );
+            if !modes.is_empty() {
+                html.push_str("<div class=\"surfdoc-chat-modes\">");
+                for (i, mode) in modes.iter().enumerate() {
+                    let active = if i == 0 { " active" } else { "" };
+                    html.push_str(&format!(
+                        "<button type=\"button\" class=\"surfdoc-chat-mode{}\" data-mode=\"{}\">{}</button>",
+                        active,
+                        escape_html(mode),
+                        escape_html(mode),
+                    ));
+                }
+                html.push_str("</div>");
+            }
+            html.push_str(&format!(
+                "<form class=\"surfdoc-chat-form\"><input type=\"text\" placeholder=\"{}\" aria-label=\"{}\" autocomplete=\"off\"/><button type=\"submit\">Send</button></form>",
+                escape_html(ph),
+                escape_html(ph),
+            ));
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Feed {
+            source, stream, ..
+        } => {
+            let stream_attr = if *stream { " data-surf-stream" } else { "" };
+            format!(
+                "<div class=\"surfdoc-feed\" data-surf-source=\"{}\"{}><div class=\"surfdoc-feed-items\" aria-live=\"polite\"><p>Loading...</p></div></div>",
+                escape_html(source),
+                stream_attr,
+            )
+        }
+
+        // Compound widget mount points
+
+        Block::Editor {
+            source, lang, preview, ..
+        } => {
+            let mut html = String::from("<div class=\"surfdoc-editor\"");
+            if let Some(s) = source {
+                html.push_str(&format!(" data-surf-source=\"{}\"", escape_html(s)));
+            }
+            if let Some(l) = lang {
+                html.push_str(&format!(" data-lang=\"{}\"", escape_html(l)));
+            }
+            if *preview {
+                html.push_str(" data-preview");
+            }
+            html.push_str("><p class=\"surfdoc-mount-placeholder\">Editor loading...</p></div>");
+            html
+        }
+
+        Block::Chart {
+            chart_type, source, period, ..
+        } => {
+            let type_str = match chart_type {
+                ChartType::Line => "line",
+                ChartType::Bar => "bar",
+                ChartType::Pie => "pie",
+                ChartType::Area => "area",
+            };
+            let mut html = format!(
+                "<div class=\"surfdoc-chart\" data-chart-type=\"{}\" data-surf-source=\"{}\"",
+                type_str,
+                escape_html(source),
+            );
+            if let Some(p) = period {
+                html.push_str(&format!(" data-period=\"{}\"", escape_html(p)));
+            }
+            html.push_str("><p class=\"surfdoc-mount-placeholder\">Chart loading...</p></div>");
+            html
+        }
+
+        Block::SplitPane { ratio, .. } => {
+            format!(
+                "<div class=\"surfdoc-split-pane\" data-ratio=\"{}\"><div class=\"surfdoc-split-left\"></div><div class=\"surfdoc-split-right\"></div></div>",
+                escape_html(ratio),
+            )
+        }
+
+        // ----- Infrastructure manifest blocks -----
+
+        Block::App { name, binary, region, port, platform, children, .. } => {
+            let mut meta = vec![format!("<strong>{}</strong>", escape_html(name))];
+            if let Some(b) = binary { meta.push(format!("binary: {}", escape_html(b))); }
+            if let Some(r) = region { meta.push(format!("region: {}", escape_html(r))); }
+            if let Some(p) = port { meta.push(format!("port: {p}")); }
+            if let Some(pl) = platform { meta.push(format!("platform: {}", escape_html(pl))); }
+            let mut html = format!(
+                "<section class=\"surfdoc-app\" aria-label=\"App: {}\"><div class=\"surfdoc-app-header\">{}</div>",
+                escape_html(name), meta.join(" &middot; "),
+            );
+            for child in children { html.push_str(&render_block(child)); }
+            html.push_str("</section>");
+            html
+        }
+
+        Block::Build { base, runtime, edition, properties, .. } => {
+            let mut items = Vec::new();
+            if let Some(b) = base { items.push(format!("<li>base: {}</li>", escape_html(b))); }
+            if let Some(r) = runtime { items.push(format!("<li>runtime: {}</li>", escape_html(r))); }
+            if let Some(e) = edition { items.push(format!("<li>edition: {}</li>", escape_html(e))); }
+            for p in properties { items.push(format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value))); }
+            format!("<div class=\"surfdoc-build\"><h4>Build</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::InfraDatabase { name, shared_auth, volume_gb, properties, .. } => {
+            let mut items = Vec::new();
+            if let Some(n) = name { items.push(format!("<li>name: {}</li>", escape_html(n))); }
+            if *shared_auth { items.push("<li>shared_auth: true</li>".to_string()); }
+            if let Some(v) = volume_gb { items.push(format!("<li>volume: {v} GB</li>")); }
+            for p in properties { items.push(format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value))); }
+            format!("<div class=\"surfdoc-database\"><h4>Database</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Deploy { env, app, machines, memory, auto_stop, min_machines, strategy, properties, .. } => {
+            let env_str = env.as_deref().unwrap_or("unknown");
+            let mut items = Vec::new();
+            if let Some(a) = app { items.push(format!("<li>app: {}</li>", escape_html(a))); }
+            if let Some(m) = machines { items.push(format!("<li>machines: {m}</li>")); }
+            if let Some(m) = memory { items.push(format!("<li>memory: {m} MB</li>")); }
+            if let Some(a) = auto_stop { items.push(format!("<li>auto_stop: {}</li>", escape_html(a))); }
+            if let Some(m) = min_machines { items.push(format!("<li>min_machines: {m}</li>")); }
+            if let Some(s) = strategy { items.push(format!("<li>strategy: {}</li>", escape_html(s))); }
+            for p in properties { items.push(format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value))); }
+            format!(
+                "<div class=\"surfdoc-deploy\"><span class=\"surfdoc-deploy-badge\">{}</span><ul>{}</ul></div>",
+                escape_html(env_str), items.join(""),
+            )
+        }
+
+        Block::InfraEnv { tier, entries, .. } => {
+            let tier_str = tier.as_deref().unwrap_or("env");
+            let items: Vec<String> = entries.iter().map(|e| {
+                match &e.default_value {
+                    Some(v) => format!("<li><code>{}</code> = <code>{}</code></li>", escape_html(&e.name), escape_html(v)),
+                    None => format!("<li><code>{}</code></li>", escape_html(&e.name)),
+                }
+            }).collect();
+            format!("<div class=\"surfdoc-env\"><h4>Env ({})</h4><ul>{}</ul></div>", escape_html(tier_str), items.join(""))
+        }
+
+        Block::Health { path, method, grace, interval, timeout, .. } => {
+            let mut items = Vec::new();
+            if let Some(p) = path { items.push(format!("<li>path: {}</li>", escape_html(p))); }
+            if let Some(m) = method { items.push(format!("<li>method: {}</li>", escape_html(m))); }
+            if let Some(g) = grace { items.push(format!("<li>grace: {}</li>", escape_html(g))); }
+            if let Some(i) = interval { items.push(format!("<li>interval: {}</li>", escape_html(i))); }
+            if let Some(t) = timeout { items.push(format!("<li>timeout: {}</li>", escape_html(t))); }
+            format!("<div class=\"surfdoc-health\"><h4>Health Check</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Concurrency { concurrency_type, hard_limit, soft_limit, force_https, .. } => {
+            let mut items = Vec::new();
+            if let Some(t) = concurrency_type { items.push(format!("<li>type: {}</li>", escape_html(t))); }
+            if let Some(h) = hard_limit { items.push(format!("<li>hard_limit: {h}</li>")); }
+            if let Some(s) = soft_limit { items.push(format!("<li>soft_limit: {s}</li>")); }
+            if *force_https { items.push("<li>force_https: true</li>".to_string()); }
+            format!("<div class=\"surfdoc-concurrency\"><h4>Concurrency</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Cicd { provider, properties, .. } => {
+            let prov = provider.as_deref().unwrap_or("CI/CD");
+            let items: Vec<String> = properties.iter()
+                .map(|p| format!("<li>{}: {}</li>", escape_html(&p.key), escape_html(&p.value)))
+                .collect();
+            format!("<div class=\"surfdoc-cicd\"><h4>{}</h4><ul>{}</ul></div>", escape_html(prov), items.join(""))
+        }
+
+        Block::Smoke { script, checks, .. } => {
+            let script_attr = script.as_ref()
+                .map(|s| format!(" data-script=\"{}\"", escape_html(s)))
+                .unwrap_or_default();
+            let rows: Vec<String> = checks.iter().map(|c| {
+                format!(
+                    "<tr><td>{}</td><td><code>{}</code></td><td>{}</td></tr>",
+                    escape_html(&c.method), escape_html(&c.path), c.expected,
+                )
+            }).collect();
+            format!(
+                "<table class=\"surfdoc-smoke\"{}><thead><tr><th>Method</th><th>Path</th><th>Expected</th></tr></thead><tbody>{}</tbody></table>",
+                script_attr, rows.join(""),
+            )
+        }
+
+        Block::Domains { entries, .. } => {
+            let items: Vec<String> = entries.iter().map(|e| {
+                match &e.description {
+                    Some(d) => format!("<li><strong>{}</strong> &mdash; {}</li>", escape_html(&e.domain), escape_html(d)),
+                    None => format!("<li><strong>{}</strong></li>", escape_html(&e.domain)),
+                }
+            }).collect();
+            format!("<div class=\"surfdoc-domains\"><h4>Domains</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Crates { entries, .. } => {
+            let items: Vec<String> = entries.iter().map(|e| {
+                let mut detail = Vec::new();
+                if let Some(s) = &e.source { detail.push(format!("source: {}", escape_html(s))); }
+                if let Some(f) = &e.features { detail.push(format!("features: {}", escape_html(f))); }
+                if detail.is_empty() {
+                    format!("<li><code>{}</code></li>", escape_html(&e.name))
+                } else {
+                    format!("<li><code>{}</code> ({})</li>", escape_html(&e.name), detail.join(", "))
+                }
+            }).collect();
+            format!("<div class=\"surfdoc-crates\"><h4>Crates</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::DeployUrls { entries, .. } => {
+            let items: Vec<String> = entries.iter()
+                .map(|p| format!("<li>{}: <a href=\"{}\">{}</a></li>", escape_html(&p.key), escape_html(&p.value), escape_html(&p.value)))
+                .collect();
+            format!("<div class=\"surfdoc-deploy-urls\"><h4>Deploy URLs</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Volumes { entries, .. } => {
+            let items: Vec<String> = entries.iter()
+                .map(|v| format!("<li><code>{}</code> &rarr; <code>{}</code></li>", escape_html(&v.name), escape_html(&v.mount)))
+                .collect();
+            format!("<div class=\"surfdoc-volumes\"><h4>Volumes</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Model { name, fields, .. } => {
+            let mut rows = String::new();
+            for f in fields {
+                let type_str = model_field_type_str(&f.field_type);
+                let constraints_str: Vec<String> = f.constraints.iter().map(|c| constraint_str(c)).collect();
+                let constraints_html = if constraints_str.is_empty() {
+                    String::new()
+                } else {
+                    format!(" <span class=\"surfdoc-model-constraints\">[{}]</span>", constraints_str.join(", "))
+                };
+                rows.push_str(&format!(
+                    "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>",
+                    escape_html(&f.name), escape_html(&type_str), constraints_html,
+                ));
+            }
+            format!(
+                "<div class=\"surfdoc-model\"><h4>Model: {}</h4><table class=\"surfdoc-model-table\">\
+                 <thead><tr><th>Field</th><th>Type</th><th>Constraints</th></tr></thead>\
+                 <tbody>{}</tbody></table></div>",
+                escape_html(name), rows,
+            )
+        }
+
+        Block::Route { method, path, auth, returns, body, content, .. } => {
+            let method_str = http_method_str(*method);
+            let mut details = Vec::new();
+            if let Some(a) = auth { details.push(format!("<li>auth: {}</li>", escape_html(a))); }
+            if let Some(r) = returns { details.push(format!("<li>returns: <code>{}</code></li>", escape_html(r))); }
+            if let Some(b) = body { details.push(format!("<li>body: <code>{}</code></li>", escape_html(b))); }
+            if !content.is_empty() { details.push(format!("<li>{}</li>", escape_html(content))); }
+            let details_html = if details.is_empty() { String::new() } else { format!("<ul>{}</ul>", details.join("")) };
+            format!(
+                "<div class=\"surfdoc-route\"><span class=\"surfdoc-route-method surfdoc-method-{}\">{}</span> \
+                 <code class=\"surfdoc-route-path\">{}</code>{}</div>",
+                method_str.to_lowercase(), method_str, escape_html(path), details_html,
+            )
+        }
+
+        Block::Auth { provider, session, roles, default_role, .. } => {
+            let provider_str = auth_provider_str(*provider);
+            let mut items = vec![format!("<li>provider: {}</li>", provider_str)];
+            if let Some(s) = session { items.push(format!("<li>session: {}</li>", escape_html(s))); }
+            if !roles.is_empty() { items.push(format!("<li>roles: {}</li>", roles.iter().map(|r| escape_html(r)).collect::<Vec<_>>().join(", "))); }
+            if let Some(dr) = default_role { items.push(format!("<li>default role: {}</li>", escape_html(dr))); }
+            format!("<div class=\"surfdoc-auth\"><h4>Authentication</h4><ul>{}</ul></div>", items.join(""))
+        }
+
+        Block::Binding { source, target, events, .. } => {
+            let mut items = vec![
+                format!("<li>source: <code>{}</code></li>", escape_html(source)),
+                format!("<li>target: <code>{}</code></li>", escape_html(target)),
+            ];
+            for e in events {
+                items.push(format!("<li>{}: {}</li>", escape_html(&e.event), escape_html(&e.action)));
+            }
+            format!("<div class=\"surfdoc-binding\"><h4>Binding</h4><ul>{}</ul></div>", items.join(""))
+        }
+
         Block::Unknown {
             name, content, ..
         } => {
@@ -1412,6 +1981,7 @@ fn render_block(block: &Block) -> String {
                 escape_html(content),
             )
         }
+
     }
 }
 
@@ -1421,6 +1991,62 @@ fn comparison_cell(cell: &str) -> String {
         "yes" | "true" | "✓" | "✔" => "<span class=\"surfdoc-check\">\u{2713}</span>".to_string(),
         "no" | "false" | "✗" | "✘" | "-" | "—" => "<span class=\"surfdoc-dash\">\u{2014}</span>".to_string(),
         _ => escape_html(cell),
+    }
+}
+
+fn model_field_type_str(ft: &crate::types::ModelFieldType) -> String {
+    use crate::types::ModelFieldType;
+    match ft {
+        ModelFieldType::Uuid => "uuid".to_string(),
+        ModelFieldType::String => "string".to_string(),
+        ModelFieldType::Int => "int".to_string(),
+        ModelFieldType::Float => "float".to_string(),
+        ModelFieldType::Bool => "bool".to_string(),
+        ModelFieldType::Datetime => "datetime".to_string(),
+        ModelFieldType::Text => "text".to_string(),
+        ModelFieldType::Json => "json".to_string(),
+        ModelFieldType::Money => "money".to_string(),
+        ModelFieldType::Image => "image".to_string(),
+        ModelFieldType::Email => "email".to_string(),
+        ModelFieldType::Url => "url".to_string(),
+        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
+        ModelFieldType::Ref(target) => format!("ref({target})"),
+    }
+}
+
+fn constraint_str(c: &crate::types::FieldConstraint) -> String {
+    use crate::types::FieldConstraint;
+    match c {
+        FieldConstraint::Primary => "primary".to_string(),
+        FieldConstraint::Auto => "auto".to_string(),
+        FieldConstraint::Required => "required".to_string(),
+        FieldConstraint::Optional => "optional".to_string(),
+        FieldConstraint::Unique => "unique".to_string(),
+        FieldConstraint::Index => "index".to_string(),
+        FieldConstraint::Max(n) => format!("max={n}"),
+        FieldConstraint::Min(n) => format!("min={n}"),
+        FieldConstraint::Default(v) => format!("default={v}"),
+    }
+}
+
+fn http_method_str(m: crate::types::HttpMethod) -> &'static str {
+    use crate::types::HttpMethod;
+    match m {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+    }
+}
+
+fn auth_provider_str(p: crate::types::AuthProvider) -> &'static str {
+    use crate::types::AuthProvider;
+    match p {
+        AuthProvider::Email => "email",
+        AuthProvider::OAuth => "oauth",
+        AuthProvider::ApiKey => "api-key",
+        AuthProvider::Token => "token",
     }
 }
 
@@ -1595,6 +2221,47 @@ const SITE_NAV_CSS: &str = r#"
 .surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-faint); font-size: 0.8rem; }
 "#;
 
+/// Build the site-level navigation HTML bar.
+///
+/// Produces a `<nav class="surfdoc-site-nav">` element with:
+/// - Site name as a linked logo
+/// - CSS-only hamburger toggle for mobile
+/// - Navigation links with active-class detection
+///
+/// This is separate from the inline `Block::Nav` rendering in `to_html()`,
+/// which uses `surfdoc-nav` class names and a different data model
+/// (NavItem structs vs route/title pairs).
+fn build_site_nav_html(
+    site_name: &str,
+    nav_items: &[(String, String)],
+    current_route: &str,
+) -> String {
+    let mut nav_html = format!(
+        "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/\" class=\"site-name\">{}</a>\n",
+        escape_html(site_name)
+    );
+    // CSS-only hamburger toggle for mobile
+    nav_html.push_str("  <input type=\"checkbox\" class=\"site-nav-toggle\" id=\"site-nav-toggle\" aria-hidden=\"true\">\n");
+    nav_html.push_str("  <label for=\"site-nav-toggle\" class=\"site-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>\n");
+    nav_html.push_str("  <div class=\"site-nav-links\">\n");
+    for (route, nav_title) in nav_items {
+        let href = route.to_string();
+        let active = if *route == current_route { " active" } else { "" };
+        nav_html.push_str(&format!(
+            "    <a href=\"{}\"{}>{}</a>\n",
+            escape_html(&href),
+            if active.is_empty() {
+                String::new()
+            } else {
+                " class=\"active\"".to_string()
+            },
+            escape_html(nav_title),
+        ));
+    }
+    nav_html.push_str("  </div>\n</nav>");
+    nav_html
+}
+
 /// Render a full HTML page for one route within a multi-page site.
 ///
 /// Produces a `<!DOCTYPE html>` page with site-level `<nav>`, page content,
@@ -1628,29 +2295,7 @@ pub fn render_site_page(
     let source_path = escape_html(&config.source_path);
 
     // Build navigation HTML (clean URLs — no /index.html suffix)
-    let mut nav_html = format!(
-        "<nav class=\"surfdoc-site-nav\" role=\"navigation\" aria-label=\"Site navigation\">\n  <a href=\"/\" class=\"site-name\">{}</a>\n",
-        escape_html(site_name)
-    );
-    // CSS-only hamburger toggle for mobile
-    nav_html.push_str("  <input type=\"checkbox\" class=\"site-nav-toggle\" id=\"site-nav-toggle\" aria-hidden=\"true\">\n");
-    nav_html.push_str("  <label for=\"site-nav-toggle\" class=\"site-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>\n");
-    nav_html.push_str("  <div class=\"site-nav-links\">\n");
-    for (route, nav_title) in nav_items {
-        let href = route.to_string();
-        let active = if *route == page.route { " active" } else { "" };
-        nav_html.push_str(&format!(
-            "    <a href=\"{}\"{}>{}</a>\n",
-            escape_html(&href),
-            if active.is_empty() {
-                String::new()
-            } else {
-                " class=\"active\"".to_string()
-            },
-            escape_html(nav_title),
-        ));
-    }
-    nav_html.push_str("  </div>\n</nav>");
+    let nav_html = build_site_nav_html(site_name, nav_items, &page.route);
 
     // Build footer
     let footer_html = format!(
@@ -1727,10 +2372,16 @@ pub fn render_site_page(
         ));
     }
 
+    // Build data-theme attribute if theme is explicitly set
+    let theme_attr = match &site.theme {
+        Some(t) if !t.is_empty() => format!(" data-theme=\"{}\"", escape_html(t)),
+        _ => String::new(),
+    };
+
     format!(
         r#"<!-- Built with SurfDoc — source: {source_path} -->
 <!DOCTYPE html>
-<html lang="{lang}">
+<html lang="{lang}"{theme_attr}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1749,6 +2400,7 @@ pub fn render_site_page(
 </html>"#,
         source_path = source_path,
         lang = escape_html(lang),
+        theme_attr = theme_attr,
         title = title_escaped,
         meta_extra = meta_extra,
         css = SURFDOC_CSS,
@@ -2811,6 +3463,48 @@ mod tests {
     }
 
     #[test]
+    fn render_site_page_respects_theme_light() {
+        let site = SiteConfig {
+            name: Some("Light Site".into()),
+            theme: Some("light".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &[], &config);
+
+        assert!(html.contains("data-theme=\"light\""), "theme: light must set data-theme attribute on <html>");
+        assert!(!html.contains("<html lang=\"en\">"), "should not have bare <html> without data-theme");
+    }
+
+    #[test]
+    fn render_site_page_no_theme_attr_when_unset() {
+        let site = SiteConfig {
+            name: Some("Default Site".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &[], &config);
+
+        assert!(html.contains("<html lang=\"en\">"), "bare <html> tag when no theme set");
+    }
+
+    #[test]
     fn render_site_page_sets_accent_text_for_light_accent() {
         let site = SiteConfig {
             name: Some("Green Site".into()),
@@ -3353,6 +4047,9 @@ mod tests {
         assert!(resolve_font_preset("inter").unwrap().stack.contains("Inter"));
         assert!(resolve_font_preset("montserrat").unwrap().stack.contains("Montserrat"));
         assert!(resolve_font_preset("jetbrains-mono").unwrap().stack.contains("JetBrains Mono"));
+        assert!(resolve_font_preset("playfair").unwrap().stack.contains("Playfair Display"));
+        assert!(resolve_font_preset("playfair-display").unwrap().stack.contains("Playfair Display"));
+        assert!(resolve_font_preset("lato").unwrap().stack.contains("Lato"));
         assert!(resolve_font_preset("unknown").is_none());
     }
 
@@ -3369,6 +4066,8 @@ mod tests {
         assert!(resolve_font_preset("inter").unwrap().import.is_some());
         assert!(resolve_font_preset("montserrat").unwrap().import.is_some());
         assert!(resolve_font_preset("jetbrains-mono").unwrap().import.is_some());
+        assert!(resolve_font_preset("playfair").unwrap().import.is_some());
+        assert!(resolve_font_preset("lato").unwrap().import.is_some());
         // System fonts have no imports
         assert!(resolve_font_preset("system").unwrap().import.is_none());
         assert!(resolve_font_preset("serif").unwrap().import.is_none());
@@ -3976,5 +4675,242 @@ About
         assert!(!html.contains("surfdoc-badge"));
         assert!(!html.contains("surfdoc-product-features"));
         assert!(!html.contains("surfdoc-product-cta"));
+    }
+
+    // -- Fragment rendering tests -----------------------------------------
+
+    #[test]
+    fn fragment_no_page_chrome() {
+        let doc = doc_with(vec![
+            Block::Markdown {
+                content: "# Hello".into(),
+                span: span(),
+            },
+            Block::Callout {
+                callout_type: CalloutType::Info,
+                title: None,
+                content: "A note.".into(),
+                span: span(),
+            },
+        ]);
+        let html = to_html_fragment(&doc.blocks);
+
+        // Must contain rendered content
+        assert!(html.contains("<h1>Hello</h1>"), "Should render heading");
+        assert!(html.contains("surfdoc-callout"), "Should render callout");
+
+        // Must NOT contain page chrome
+        assert!(!html.contains("<!DOCTYPE"), "No DOCTYPE in fragment");
+        assert!(!html.contains("<html"), "No <html> wrapper in fragment");
+        assert!(!html.contains("<head"), "No <head> in fragment");
+        assert!(!html.contains("<body"), "No <body> in fragment");
+        assert!(!html.contains("<article"), "No <article> wrapper in fragment");
+    }
+
+    #[test]
+    fn fragment_skips_style_scanning() {
+        let doc = doc_with(vec![
+            Block::Site {
+                domain: Some("example.com".into()),
+                properties: vec![StyleProperty {
+                    key: "accent".into(),
+                    value: "#ff0000".into(),
+                }],
+                span: span(),
+            },
+            Block::Markdown {
+                content: "Hello".into(),
+                span: span(),
+            },
+        ]);
+        let fragment = to_html_fragment(&doc.blocks);
+
+        // Fragment should NOT contain style override injection
+        assert!(!fragment.contains("<style>"), "Fragment must not emit <style> tags");
+        assert!(!fragment.contains("--accent"), "Fragment must not emit CSS variable overrides");
+    }
+
+    #[test]
+    fn fragment_no_auto_section_wrap() {
+        let doc = doc_with(vec![
+            Block::Markdown {
+                content: "# Section One".into(),
+                span: span(),
+            },
+            Block::Markdown {
+                content: "Content.".into(),
+                span: span(),
+            },
+            Block::Markdown {
+                content: "# Section Two".into(),
+                span: span(),
+            },
+        ]);
+        let fragment = to_html_fragment(&doc.blocks);
+
+        // to_html() wraps h1/h2 in <section> tags; fragment must not
+        assert!(
+            !fragment.contains("surfdoc-section"),
+            "Fragment must not add section wrapping"
+        );
+        assert!(
+            !fragment.contains("<section"),
+            "Fragment must not contain <section> elements from auto-wrapping"
+        );
+    }
+
+    #[test]
+    fn fragment_empty_input() {
+        let html = to_html_fragment(&[]);
+        assert_eq!(html, "", "Empty block slice should produce empty string");
+    }
+
+    #[test]
+    fn fragment_single_block() {
+        let blocks = vec![Block::Code {
+            lang: Some("rust".into()),
+            file: None,
+            highlight: vec![],
+            content: "let x = 1;".into(),
+            span: span(),
+        }];
+        let html = to_html_fragment(&blocks);
+
+        assert!(html.contains("surfdoc-code"), "Should render code block");
+        assert!(html.contains("language-rust"), "Should have language class");
+        assert!(html.contains("let x = 1;"), "Should contain code content");
+        // Single block means no newline joiner to worry about, but verify no chrome
+        assert!(!html.contains("<html"), "No page chrome");
+    }
+
+    #[test]
+    fn fragment_escapes_html() {
+        let blocks = vec![Block::Callout {
+            callout_type: CalloutType::Info,
+            title: None,
+            content: "<script>alert('xss')</script>".into(),
+            span: span(),
+        }];
+        let html = to_html_fragment(&blocks);
+
+        assert!(!html.contains("<script>"), "Script tags must be escaped in fragments");
+        assert!(html.contains("&lt;script&gt;"), "Should contain escaped script tag");
+    }
+
+    #[test]
+    fn fragment_renders_nav_inline() {
+        let blocks = vec![
+            Block::Nav {
+                items: vec![crate::types::NavItem {
+                    label: "Home".into(),
+                    href: "/".into(),
+                    icon: None,
+                }],
+                logo: Some("MySite".into()),
+                span: span(),
+            },
+            Block::Markdown {
+                content: "Content after nav.".into(),
+                span: span(),
+            },
+        ];
+        let html = to_html_fragment(&blocks);
+
+        // Nav should render as a regular block in document order
+        // (to_html() extracts nav blocks and renders them first)
+        assert!(html.contains("surfdoc-nav"), "Should render nav block");
+        assert!(html.contains("Content after nav."), "Should render content block");
+    }
+
+    #[test]
+    fn site_nav_helper_basic() {
+        let nav = build_site_nav_html(
+            "My Site",
+            &[
+                ("/".into(), "Home".into()),
+                ("/about".into(), "About".into()),
+            ],
+            "/about",
+        );
+
+        assert!(nav.contains("surfdoc-site-nav"), "Should have site nav class");
+        assert!(nav.contains("My Site"), "Should contain site name");
+        assert!(nav.contains("class=\"active\""), "Active route should be marked");
+        assert!(nav.contains("href=\"/about\""), "Should have about link");
+        assert!(nav.contains("Home"), "Should have home link text");
+    }
+
+    #[test]
+    fn site_nav_helper_active_home() {
+        let nav = build_site_nav_html(
+            "Site",
+            &[
+                ("/".into(), "Home".into()),
+                ("/docs".into(), "Docs".into()),
+            ],
+            "/",
+        );
+
+        // The "/" route link should be active
+        assert!(nav.contains("href=\"/\""), "Should have home link");
+        // Verify active class is applied (check the pattern in the output)
+        // The active link is: <a href="/" class="active">Home</a>
+        assert!(
+            nav.contains("href=\"/\" class=\"active\""),
+            "Home link should be active when current_route is /"
+        );
+    }
+
+    #[test]
+    fn site_page_nav_refactor_stable() {
+        // This test captures that render_site_page() produces identical output
+        // after the nav logic is extracted into build_site_nav_html().
+        // The expected output is validated against known content patterns.
+        let page = PageEntry {
+            route: "/about".into(),
+            layout: None,
+            title: Some("About".into()),
+            sidebar: false,
+            children: vec![Block::Markdown {
+                content: "About content.".into(),
+                span: span(),
+            }],
+        };
+        let site = SiteConfig {
+            name: Some("Test Site".into()),
+            ..Default::default()
+        };
+        let nav_items = vec![
+            ("/".into(), "Home".into()),
+            ("/about".into(), "About".into()),
+        ];
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &nav_items, &config);
+
+        // Verify nav structure is present and correct
+        assert!(html.contains("surfdoc-site-nav"), "Should have site nav");
+        assert!(html.contains("Test Site"), "Should have site name in nav");
+        assert!(
+            html.contains("href=\"/about\" class=\"active\""),
+            "About should be active"
+        );
+        // Verify it is still a full page
+        assert!(html.contains("<!DOCTYPE html>"), "Should be a full page");
+        assert!(html.contains("<article class=\"surfdoc\">"), "Should have article wrapper");
+    }
+
+    #[test]
+    fn fragment_with_context() {
+        let doc = doc_with(vec![Block::Markdown {
+            content: "Hello {= name =}!".into(),
+            span: span(),
+        }]);
+        let ctx = crate::TemplateContext::new();
+        // Note: TemplateContext::new() starts empty.
+        // Variables not found resolve to empty string or are left as-is
+        // depending on the implementation. This test verifies the call chain works.
+        let html = doc.to_html_fragment_with_context(&ctx);
+        assert!(html.contains("Hello"), "Should render content");
     }
 }

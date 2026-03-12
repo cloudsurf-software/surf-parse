@@ -672,7 +672,6 @@ author: "Brady Davis"
 confidence: high
 version: 2
 workspace: cloudsurf
-contributors: ["Claude"]
 decision: "Use Rust"
 related:
   - path: plans/example.md

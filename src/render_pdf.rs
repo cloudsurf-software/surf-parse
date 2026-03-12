@@ -7,6 +7,7 @@
 use crate::render_typst;
 use crate::types::SurfDoc;
 
+use typst_as_lib::typst_kit_options::TypstKitFontOptions;
 use typst_as_lib::TypstEngine;
 
 /// Paper sizes for PDF output.
@@ -133,9 +134,14 @@ pub fn to_pdf(doc: &SurfDoc, config: &PdfConfig) -> Result<Vec<u8>, PdfError> {
         typst_source = format!("{overrides}\n{typst_source}");
     }
 
-    // Build the Typst engine with our source
+    // Build the Typst engine with our source and embedded fonts.
+    // Without fonts, Typst renders boxes/lines but no text — the embedded
+    // font set includes Libertinus Serif (the template default).
     let engine = TypstEngine::builder()
         .main_file(typst_source)
+        .search_fonts_with(
+            TypstKitFontOptions::new().include_system_fonts(false),
+        )
         .build();
 
     // Compile to a paged document

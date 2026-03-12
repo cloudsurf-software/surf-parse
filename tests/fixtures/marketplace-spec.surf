@@ -1,0 +1,83 @@
+---
+title: "Guitar Marketplace"
+type: app
+version: 1
+created: 2026-03-04
+author: "CloudSurf Software LLC"
+status: active
+---
+
+# Guitar Marketplace
+
+::app[name=guitar-marketplace binary=guitar-marketplace-server region=sjc port=8080]
+
+:::auth[provider=email]
+session: cookie
+roles: admin, seller, buyer
+default_role: buyer
+:::
+
+:::model[name=User]
+- id: uuid [primary, auto]
+- email: email [required, unique]
+- name: string [required, max=100]
+- role: enum(admin, seller, buyer) [default=buyer]
+- avatar: image [optional]
+- website: url [optional]
+- created_at: datetime [auto]
+:::
+
+:::model[name=Product]
+- id: uuid [primary, auto]
+- title: string [required, max=200, index]
+- description: text [optional]
+- price: money [required]
+- image: image [optional]
+- seller_id: ref(User) [required, index]
+- category: enum(acoustic, electric, bass, accessories) [required, index]
+- status: enum(draft, active, sold) [default=draft]
+- created_at: datetime [auto]
+:::
+
+:::model[name=Order]
+- id: uuid [primary, auto]
+- buyer_id: ref(User) [required, index]
+- product_id: ref(Product) [required, index]
+- total: money [required]
+- status: enum(pending, paid, shipped, delivered, cancelled) [default=pending]
+- contact_email: email [required]
+- tracking_url: url [optional]
+- created_at: datetime [auto]
+:::
+
+:::route[method=GET path="/api/products"]
+auth: optional
+returns: list(Product)
+:::
+
+:::route[method=POST path="/api/products"]
+auth: required
+body: Product
+returns: Product
+:::
+
+:::route[method=POST path="/api/checkout"]
+auth: required
+body: CheckoutRequest
+:::
+
+:::route[method=GET path="/api/orders"]
+auth: required
+returns: list(Order)
+:::
+
+:::database[name=guitar_marketplace_db volume_gb=2]
+:::
+
+:::deploy[env=production app=guitar-marketplace machines=1 memory=512]
+:::
+
+:::health[path=/healthz method=GET]
+:::
+
+::

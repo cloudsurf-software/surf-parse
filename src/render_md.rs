@@ -3,7 +3,7 @@
 //! Converts a `SurfDoc` into standard CommonMark with no `::` directive markers.
 //! Each block type is degraded to the nearest Markdown equivalent.
 
-use crate::types::{Block, CalloutType, DecisionStatus, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, HttpMethod, ListDisplay, SurfDoc, Trend};
 
 /// Render a `SurfDoc` as standard CommonMark markdown.
 ///
@@ -19,7 +19,7 @@ pub fn to_markdown(doc: &SurfDoc) -> String {
     parts.join("\n\n")
 }
 
-fn render_block(block: &Block) -> String {
+pub(crate) fn render_block(block: &Block) -> String {
     match block {
         Block::Markdown { content, .. } => content.clone(),
 
@@ -508,6 +508,337 @@ fn render_block(block: &Block) -> String {
         Block::Toc { .. } => {
             "*Table of Contents*".to_string()
         }
+
+        // ----- App description blocks -----
+
+        Block::List {
+            source, display, filters, sort, ..
+        } => {
+            let display_str = match display {
+                ListDisplay::Card => "cards",
+                ListDisplay::Table => "table",
+                ListDisplay::Compact => "compact list",
+            };
+            let mut lines = vec![format!("**Data List** ({display_str})")];
+            lines.push(format!("Source: `{source}`"));
+            if !filters.is_empty() {
+                let filter_names: Vec<&str> = filters.iter().map(|f| f.field.as_str()).collect();
+                lines.push(format!("Filters: {}", filter_names.join(", ")));
+            }
+            if let Some(s) = sort {
+                let dir = if s.descending { "descending" } else { "ascending" };
+                lines.push(format!("Sort: {} {dir}", s.field));
+            }
+            lines.join("\n")
+        }
+
+        Block::Board {
+            source, columns, ..
+        } => {
+            let mut lines = vec!["**Board**".to_string()];
+            if !columns.is_empty() {
+                lines.push(format!("Columns: {}", columns.join(" | ")));
+            }
+            lines.push(format!("Source: `{source}`"));
+            lines.join("\n")
+        }
+
+        Block::Action {
+            method, target, label, fields, ..
+        } => {
+            let method_str = match method {
+                HttpMethod::Get => "GET",
+                HttpMethod::Post => "POST",
+                HttpMethod::Put => "PUT",
+                HttpMethod::Patch => "PATCH",
+                HttpMethod::Delete => "DELETE",
+            };
+            let mut lines = vec![format!("**{label}** ({method_str} `{target}`)")];
+            for field in fields {
+                let req = if field.required { " *" } else { "" };
+                lines.push(format!("- {}{}", field.label, req));
+            }
+            lines.join("\n")
+        }
+
+        Block::FilterBar { fields, .. } => {
+            let mut lines = vec!["**Filters**".to_string()];
+            for field in fields {
+                lines.push(format!("- {}: {}", field.label, field.options.join(" | ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Search { placeholder, .. } => {
+            let ph = placeholder.as_deref().unwrap_or("Search...");
+            format!("**Search**: {ph}")
+        }
+
+        Block::Dashboard { source, refresh, .. } => {
+            let refresh_str = refresh.map(|r| format!(" (refresh every {r}s)")).unwrap_or_default();
+            format!("**Dashboard**{refresh_str}\nSource: `{source}`")
+        }
+
+        Block::ChatInput { modes, placeholder, .. } => {
+            let ph = placeholder.as_deref().unwrap_or("Type a message...");
+            let mut lines = vec![format!("**Chat**: {ph}")];
+            if !modes.is_empty() {
+                lines.push(format!("Modes: {}", modes.join(" | ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Feed { source, stream, .. } => {
+            let mode = if *stream { "streaming" } else { "polling" };
+            format!("**Feed** ({mode})\nSource: `{source}`")
+        }
+
+        Block::Editor { lang, .. } => {
+            let lang_str = lang.as_deref().unwrap_or("text");
+            format!("**Editor** ({lang_str})")
+        }
+
+        Block::Chart { chart_type, source, period, .. } => {
+            let type_str = match chart_type {
+                ChartType::Line => "Line",
+                ChartType::Bar => "Bar",
+                ChartType::Pie => "Pie",
+                ChartType::Area => "Area",
+            };
+            let period_str = period.as_ref().map(|p| format!(" ({p})")).unwrap_or_default();
+            format!("**{type_str} Chart**{period_str}\nSource: `{source}`")
+        }
+
+        Block::SplitPane { ratio, .. } => {
+            format!("**Split Pane** ({ratio})")
+        }
+
+        // ----- Infrastructure manifest blocks -----
+
+        Block::App { name, children, .. } => {
+            let mut lines = vec![format!("## App: {name}")];
+            for child in children {
+                let rendered = render_block(child);
+                if !rendered.is_empty() { lines.push(rendered); }
+            }
+            lines.join("\n\n")
+        }
+
+        Block::Build { base, runtime, edition, properties, .. } => {
+            let mut lines = vec!["**Build**".to_string()];
+            if let Some(b) = base { lines.push(format!("- base: {b}")); }
+            if let Some(r) = runtime { lines.push(format!("- runtime: {r}")); }
+            if let Some(e) = edition { lines.push(format!("- edition: {e}")); }
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::InfraDatabase { name, shared_auth, volume_gb, properties, .. } => {
+            let mut lines = vec!["**Database**".to_string()];
+            if let Some(n) = name { lines.push(format!("- name: {n}")); }
+            if *shared_auth { lines.push("- shared_auth: true".to_string()); }
+            if let Some(v) = volume_gb { lines.push(format!("- volume: {v} GB")); }
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::Deploy { env, app, machines, memory, auto_stop, min_machines, strategy, properties, .. } => {
+            let env_str = env.as_deref().unwrap_or("unknown");
+            let mut lines = vec![format!("**Deploy: {env_str}**")];
+            if let Some(a) = app { lines.push(format!("- app: {a}")); }
+            if let Some(m) = machines { lines.push(format!("- machines: {m}")); }
+            if let Some(m) = memory { lines.push(format!("- memory: {m} MB")); }
+            if let Some(a) = auto_stop { lines.push(format!("- auto_stop: {a}")); }
+            if let Some(m) = min_machines { lines.push(format!("- min_machines: {m}")); }
+            if let Some(s) = strategy { lines.push(format!("- strategy: {s}")); }
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::InfraEnv { tier, entries, .. } => {
+            let tier_str = tier.as_deref().unwrap_or("env");
+            let mut lines = vec![format!("**Env ({tier_str})**"), "```".to_string()];
+            for e in entries {
+                match &e.default_value {
+                    Some(v) => lines.push(format!("{} = {}", e.name, v)),
+                    None => lines.push(e.name.clone()),
+                }
+            }
+            lines.push("```".to_string());
+            lines.join("\n")
+        }
+
+        Block::Health { path, method, grace, interval, timeout, .. } => {
+            let mut lines = vec!["**Health Check**".to_string()];
+            if let Some(p) = path { lines.push(format!("- path: {p}")); }
+            if let Some(m) = method { lines.push(format!("- method: {m}")); }
+            if let Some(g) = grace { lines.push(format!("- grace: {g}")); }
+            if let Some(i) = interval { lines.push(format!("- interval: {i}")); }
+            if let Some(t) = timeout { lines.push(format!("- timeout: {t}")); }
+            lines.join("\n")
+        }
+
+        Block::Concurrency { concurrency_type, hard_limit, soft_limit, force_https, .. } => {
+            let mut lines = vec!["**Concurrency**".to_string()];
+            if let Some(t) = concurrency_type { lines.push(format!("- type: {t}")); }
+            if let Some(h) = hard_limit { lines.push(format!("- hard_limit: {h}")); }
+            if let Some(s) = soft_limit { lines.push(format!("- soft_limit: {s}")); }
+            if *force_https { lines.push("- force_https: true".to_string()); }
+            lines.join("\n")
+        }
+
+        Block::Cicd { provider, properties, .. } => {
+            let prov = provider.as_deref().unwrap_or("CI/CD");
+            let mut lines = vec![format!("**{prov}**")];
+            for p in properties { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::Smoke { checks, .. } => {
+            let mut lines = vec![
+                "| Method | Path | Expected |".to_string(),
+                "| --- | --- | --- |".to_string(),
+            ];
+            for c in checks {
+                lines.push(format!("| {} | `{}` | {} |", c.method, c.path, c.expected));
+            }
+            lines.join("\n")
+        }
+
+        Block::Domains { entries, .. } => {
+            let mut lines = vec!["**Domains**".to_string()];
+            for e in entries {
+                match &e.description {
+                    Some(d) => lines.push(format!("- {} \u{2014} {}", e.domain, d)),
+                    None => lines.push(format!("- {}", e.domain)),
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Crates { entries, .. } => {
+            let mut lines = vec!["**Crates**".to_string()];
+            for e in entries {
+                let mut detail = Vec::new();
+                if let Some(s) = &e.source { detail.push(format!("source: {s}")); }
+                if let Some(f) = &e.features { detail.push(format!("features: {f}")); }
+                if detail.is_empty() {
+                    lines.push(format!("- `{}`", e.name));
+                } else {
+                    lines.push(format!("- `{}` ({})", e.name, detail.join(", ")));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::DeployUrls { entries, .. } => {
+            let mut lines = vec!["**Deploy URLs**".to_string()];
+            for p in entries { lines.push(format!("- {}: {}", p.key, p.value)); }
+            lines.join("\n")
+        }
+
+        Block::Volumes { entries, .. } => {
+            let mut lines = vec!["**Volumes**".to_string()];
+            for v in entries { lines.push(format!("- {} \u{2192} {}", v.name, v.mount)); }
+            lines.join("\n")
+        }
+
+        Block::Model { name, fields, .. } => {
+            let mut lines = vec![format!("**Model: {name}**"), String::new()];
+            lines.push("| Field | Type | Constraints |".to_string());
+            lines.push("|-------|------|-------------|".to_string());
+            for f in fields {
+                let type_str = model_field_type_md(&f.field_type);
+                let constraints: Vec<String> = f.constraints.iter().map(|c| constraint_md(c)).collect();
+                lines.push(format!("| {} | {} | {} |", f.name, type_str, constraints.join(", ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::Route { method, path, auth, returns, body, content, .. } => {
+            let method_str = http_method_md(*method);
+            let mut lines = vec![format!("**{method_str} `{path}`**")];
+            if let Some(a) = auth { lines.push(format!("- auth: {a}")); }
+            if let Some(r) = returns { lines.push(format!("- returns: `{r}`")); }
+            if let Some(b) = body { lines.push(format!("- body: `{b}`")); }
+            if !content.is_empty() { lines.push(content.clone()); }
+            lines.join("\n")
+        }
+
+        Block::Auth { provider, session, roles, default_role, .. } => {
+            let provider_str = auth_provider_md(*provider);
+            let mut lines = vec!["**Authentication**".to_string()];
+            lines.push(format!("- provider: {provider_str}"));
+            if let Some(s) = session { lines.push(format!("- session: {s}")); }
+            if !roles.is_empty() { lines.push(format!("- roles: {}", roles.join(", "))); }
+            if let Some(dr) = default_role { lines.push(format!("- default role: {dr}")); }
+            lines.join("\n")
+        }
+
+        Block::Binding { source, target, events, .. } => {
+            let mut lines = vec!["**Binding**".to_string()];
+            lines.push(format!("- source: `{source}`"));
+            lines.push(format!("- target: `{target}`"));
+            for e in events { lines.push(format!("- {}: {}", e.event, e.action)); }
+            lines.join("\n")
+        }
+
+    }
+}
+
+fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
+    use crate::types::ModelFieldType;
+    match ft {
+        ModelFieldType::Uuid => "uuid".to_string(),
+        ModelFieldType::String => "string".to_string(),
+        ModelFieldType::Int => "int".to_string(),
+        ModelFieldType::Float => "float".to_string(),
+        ModelFieldType::Bool => "bool".to_string(),
+        ModelFieldType::Datetime => "datetime".to_string(),
+        ModelFieldType::Text => "text".to_string(),
+        ModelFieldType::Json => "json".to_string(),
+        ModelFieldType::Money => "money".to_string(),
+        ModelFieldType::Image => "image".to_string(),
+        ModelFieldType::Email => "email".to_string(),
+        ModelFieldType::Url => "url".to_string(),
+        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
+        ModelFieldType::Ref(target) => format!("ref({target})"),
+    }
+}
+
+fn constraint_md(c: &crate::types::FieldConstraint) -> String {
+    use crate::types::FieldConstraint;
+    match c {
+        FieldConstraint::Primary => "primary".to_string(),
+        FieldConstraint::Auto => "auto".to_string(),
+        FieldConstraint::Required => "required".to_string(),
+        FieldConstraint::Optional => "optional".to_string(),
+        FieldConstraint::Unique => "unique".to_string(),
+        FieldConstraint::Index => "index".to_string(),
+        FieldConstraint::Max(n) => format!("max={n}"),
+        FieldConstraint::Min(n) => format!("min={n}"),
+        FieldConstraint::Default(v) => format!("default={v}"),
+    }
+}
+
+fn http_method_md(m: crate::types::HttpMethod) -> &'static str {
+    use crate::types::HttpMethod;
+    match m {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+    }
+}
+
+fn auth_provider_md(p: crate::types::AuthProvider) -> &'static str {
+    use crate::types::AuthProvider;
+    match p {
+        AuthProvider::Email => "email",
+        AuthProvider::OAuth => "oauth",
+        AuthProvider::ApiKey => "api-key",
+        AuthProvider::Token => "token",
     }
 }
 
