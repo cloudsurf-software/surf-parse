@@ -2329,10 +2329,16 @@ pub fn render_site_page(
         ));
     }
 
+    // Build data-theme attribute if theme is explicitly set
+    let theme_attr = match &site.theme {
+        Some(t) if !t.is_empty() => format!(" data-theme=\"{}\"", escape_html(t)),
+        _ => String::new(),
+    };
+
     format!(
         r#"<!-- Built with SurfDoc — source: {source_path} -->
 <!DOCTYPE html>
-<html lang="{lang}">
+<html lang="{lang}"{theme_attr}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2351,6 +2357,7 @@ pub fn render_site_page(
 </html>"#,
         source_path = source_path,
         lang = escape_html(lang),
+        theme_attr = theme_attr,
         title = title_escaped,
         meta_extra = meta_extra,
         css = SURFDOC_CSS,
@@ -3409,6 +3416,48 @@ mod tests {
         assert!(html.contains("Hello World"));
         assert!(html.contains("surfdoc-site-footer"));
         assert!(html.contains("#3b82f6")); // accent override
+    }
+
+    #[test]
+    fn render_site_page_respects_theme_light() {
+        let site = SiteConfig {
+            name: Some("Light Site".into()),
+            theme: Some("light".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &[], &config);
+
+        assert!(html.contains("data-theme=\"light\""), "theme: light must set data-theme attribute on <html>");
+        assert!(!html.contains("<html lang=\"en\">"), "should not have bare <html> without data-theme");
+    }
+
+    #[test]
+    fn render_site_page_no_theme_attr_when_unset() {
+        let site = SiteConfig {
+            name: Some("Default Site".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![],
+        };
+        let config = PageConfig::default();
+
+        let html = render_site_page(&page, &site, &[], &config);
+
+        assert!(html.contains("<html lang=\"en\">"), "bare <html> tag when no theme set");
     }
 
     #[test]
