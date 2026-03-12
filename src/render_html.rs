@@ -107,6 +107,14 @@ fn resolve_font_preset(name: &str) -> Option<FontPreset> {
             stack: "'JetBrains Mono', monospace",
             import: Some("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"),
         }),
+        "playfair" | "playfair-display" => Some(FontPreset {
+            stack: "'Playfair Display', Georgia, serif",
+            import: Some("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap"),
+        }),
+        "lato" => Some(FontPreset {
+            stack: "'Lato', -apple-system, BlinkMacSystemFont, sans-serif",
+            import: Some("https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap"),
+        }),
         _ => None,
     }
 }
@@ -4003,6 +4011,9 @@ mod tests {
         assert!(resolve_font_preset("inter").unwrap().stack.contains("Inter"));
         assert!(resolve_font_preset("montserrat").unwrap().stack.contains("Montserrat"));
         assert!(resolve_font_preset("jetbrains-mono").unwrap().stack.contains("JetBrains Mono"));
+        assert!(resolve_font_preset("playfair").unwrap().stack.contains("Playfair Display"));
+        assert!(resolve_font_preset("playfair-display").unwrap().stack.contains("Playfair Display"));
+        assert!(resolve_font_preset("lato").unwrap().stack.contains("Lato"));
         assert!(resolve_font_preset("unknown").is_none());
     }
 
@@ -4019,6 +4030,8 @@ mod tests {
         assert!(resolve_font_preset("inter").unwrap().import.is_some());
         assert!(resolve_font_preset("montserrat").unwrap().import.is_some());
         assert!(resolve_font_preset("jetbrains-mono").unwrap().import.is_some());
+        assert!(resolve_font_preset("playfair").unwrap().import.is_some());
+        assert!(resolve_font_preset("lato").unwrap().import.is_some());
         // System fonts have no imports
         assert!(resolve_font_preset("system").unwrap().import.is_none());
         assert!(resolve_font_preset("serif").unwrap().import.is_none());
