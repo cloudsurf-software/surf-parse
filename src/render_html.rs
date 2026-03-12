@@ -261,11 +261,22 @@ pub fn to_html(doc: &SurfDoc) -> String {
 
     let mut in_section = false;
     let mut section_index: usize = 0;
+    let mut cta_group: Vec<String> = Vec::new();
 
     for block in &doc.blocks {
         // Skip nav blocks — already rendered above
         if matches!(block, Block::Nav { .. }) {
             continue;
+        }
+
+        // Group consecutive CTA blocks into a centered wrapper
+        if matches!(block, Block::Cta { .. }) {
+            cta_group.push(render_block(block));
+            continue;
+        }
+        if !cta_group.is_empty() {
+            parts.push(format!("<div class=\"surfdoc-cta-group\">{}</div>", cta_group.join("\n")));
+            cta_group.clear();
         }
 
         let rendered = render_block(block);
@@ -283,6 +294,11 @@ pub fn to_html(doc: &SurfDoc) -> String {
         }
 
         parts.push(rendered);
+    }
+
+    // Flush any trailing CTA group
+    if !cta_group.is_empty() {
+        parts.push(format!("<div class=\"surfdoc-cta-group\">{}</div>", cta_group.join("\n")));
     }
 
     if in_section {
@@ -308,11 +324,23 @@ pub fn to_html_fragment(blocks: &[Block]) -> String {
     if blocks.is_empty() {
         return String::new();
     }
-    blocks
-        .iter()
-        .map(render_block)
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut parts: Vec<String> = Vec::new();
+    let mut cta_group: Vec<String> = Vec::new();
+    for block in blocks {
+        if matches!(block, Block::Cta { .. }) {
+            cta_group.push(render_block(block));
+            continue;
+        }
+        if !cta_group.is_empty() {
+            parts.push(format!("<div class=\"surfdoc-cta-group\">{}</div>", cta_group.join("\n")));
+            cta_group.clear();
+        }
+        parts.push(render_block(block));
+    }
+    if !cta_group.is_empty() {
+        parts.push(format!("<div class=\"surfdoc-cta-group\">{}</div>", cta_group.join("\n")));
+    }
+    parts.join("\n")
 }
 
 /// Render a `SurfDoc` as a complete HTML page with SurfDoc discovery metadata.
@@ -2237,10 +2265,22 @@ pub fn render_site_page(
     nav_items: &[(String, String)], // (route, title) pairs
     config: &PageConfig,
 ) -> String {
-    // Render page children as HTML
+    // Render page children as HTML, grouping consecutive CTAs
     let mut body_parts: Vec<String> = Vec::new();
+    let mut cta_group: Vec<String> = Vec::new();
     for child in &page.children {
+        if matches!(child, Block::Cta { .. }) {
+            cta_group.push(render_block(child));
+            continue;
+        }
+        if !cta_group.is_empty() {
+            body_parts.push(format!("<div class=\"surfdoc-cta-group\">{}</div>", cta_group.join("\n")));
+            cta_group.clear();
+        }
         body_parts.push(render_block(child));
+    }
+    if !cta_group.is_empty() {
+        body_parts.push(format!("<div class=\"surfdoc-cta-group\">{}</div>", cta_group.join("\n")));
     }
     let body = body_parts.join("\n");
 
