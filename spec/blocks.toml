@@ -1,0 +1,342 @@
+# SurfDoc Block Registry — AUTHORITATIVE
+# This file defines the SurfDoc block contract. surf-parse validates against it.
+# The spec is the law. Code follows the spec.
+#
+# To add a block: add it here FIRST, then implement in surf-parse.
+# To implement a planned block: change status here, copy to surf-parse, run tests.
+#
+# Status: "implemented" | "planned" | "deprecated"
+# Category: core | data | container | web | site | advanced | utility
+
+[meta]
+spec_version = "0.1"
+total_blocks = 41
+registry_updated = "2026-02-14"
+
+[blocks.ai-context]
+status = "planned"
+category = "advanced"
+purpose = "AI generation metadata"
+attributes = ["model", "tokens", "loaded"]
+degradation = "fenced code block"
+enum_variant = "AiContext"
+
+[blocks.ai-generated]
+status = "planned"
+category = "advanced"
+purpose = "AI attribution"
+attributes = ["model", "date", "reviewed"]
+degradation = "blockquote with attribution"
+enum_variant = "AiGenerated"
+
+[blocks.alternatives]
+status = "planned"
+category = "data"
+purpose = "Option comparison"
+attributes = []
+degradation = "markdown table"
+enum_variant = "Alternatives"
+
+[blocks.callout]
+status = "implemented"
+category = "core"
+purpose = "Styled callout"
+attributes = ["type", "title"]
+degradation = "blockquote with bold prefix"
+enum_variant = "Callout"
+
+[blocks.chart]
+status = "planned"
+category = "data"
+purpose = "Data visualization"
+attributes = ["type", "title", "x", "y", "stacked"]
+degradation = "data table fallback"
+enum_variant = "Chart"
+
+[blocks.code]
+status = "implemented"
+category = "core"
+purpose = "Enhanced code block"
+attributes = ["lang", "file", "highlight"]
+degradation = "fenced code block"
+enum_variant = "Code"
+
+[blocks.columns]
+status = "implemented"
+category = "container"
+purpose = "Multi-column layout"
+attributes = []
+degradation = "sequential sections with horizontal rules"
+enum_variant = "Columns"
+
+[blocks.countdown]
+status = "planned"
+category = "web"
+purpose = "Event countdown"
+attributes = ["date", "label"]
+degradation = "paragraph with date"
+enum_variant = "Countdown"
+
+[blocks.css]
+status = "planned"
+category = "utility"
+purpose = "Raw CSS escape hatch"
+attributes = []
+degradation = "omitted"
+enum_variant = "Css"
+
+[blocks.cta]
+status = "implemented"
+category = "web"
+purpose = "Call-to-action button"
+attributes = ["label", "href", "primary", "icon"]
+degradation = "markdown link"
+enum_variant = "Cta"
+
+[blocks.data]
+status = "implemented"
+category = "data"
+purpose = "Structured data"
+attributes = ["id", "format", "sortable"]
+degradation = "markdown table"
+enum_variant = "Data"
+
+[blocks.decision]
+status = "implemented"
+category = "core"
+purpose = "Decision record"
+attributes = ["status", "date", "deciders"]
+degradation = "blockquote with status prefix"
+enum_variant = "Decision"
+
+[blocks.details]
+status = "implemented"
+category = "container"
+purpose = "Collapsible section"
+attributes = ["title", "open"]
+degradation = "heading with content"
+enum_variant = "Details"
+
+[blocks.divider]
+status = "implemented"
+category = "utility"
+purpose = "Labeled break"
+attributes = ["label"]
+degradation = "horizontal rule"
+enum_variant = "Divider"
+
+[blocks.embed]
+status = "implemented"
+category = "web"
+purpose = "Embedded external content"
+attributes = ["src", "type", "width", "height", "title"]
+degradation = "link to source"
+enum_variant = "Embed"
+
+[blocks.faq]
+status = "implemented"
+category = "web"
+purpose = "Accordion FAQ"
+attributes = []
+degradation = "heading/answer pairs"
+enum_variant = "Faq"
+
+[blocks.figure]
+status = "implemented"
+category = "core"
+purpose = "Image with caption"
+attributes = ["src", "caption", "alt", "width"]
+degradation = "markdown image with alt text"
+enum_variant = "Figure"
+
+[blocks.footer]
+status = "implemented"
+category = "web"
+purpose = "Structured site footer"
+attributes = []
+degradation = "horizontal rule with links"
+enum_variant = "Footer"
+
+[blocks.footnote]
+status = "planned"
+category = "core"
+purpose = "Citation"
+attributes = ["id"]
+degradation = "inline parenthetical"
+enum_variant = "Footnote"
+
+[blocks.form]
+status = "implemented"
+category = "web"
+purpose = "Form with fields"
+attributes = ["submit"]
+degradation = "labeled list"
+enum_variant = "Form"
+
+[blocks.gallery]
+status = "implemented"
+category = "web"
+purpose = "Image gallery"
+attributes = ["columns"]
+degradation = "sequential images"
+enum_variant = "Gallery"
+
+[blocks.hero-image]
+status = "implemented"
+category = "web"
+purpose = "Hero visual"
+attributes = ["src", "alt"]
+degradation = "markdown image"
+enum_variant = "HeroImage"
+
+[blocks.kernel]
+status = "planned"
+category = "advanced"
+purpose = "Execution environment"
+attributes = ["lang", "env", "runtime", "packages", "sandbox"]
+degradation = "fenced code block with language"
+enum_variant = "Kernel"
+
+[blocks.logo-cloud]
+status = "planned"
+category = "web"
+purpose = "Logo strip"
+attributes = ["title"]
+degradation = "bulleted list of names"
+enum_variant = "LogoCloud"
+
+[blocks.metric]
+status = "implemented"
+category = "data"
+purpose = "Single metric display"
+attributes = ["label", "value", "trend", "unit"]
+degradation = "bold label: value"
+enum_variant = "Metric"
+
+[blocks.nav]
+status = "implemented"
+category = "site"
+purpose = "Navigation bar"
+attributes = ["logo"]
+degradation = "bulleted link list"
+enum_variant = "Nav"
+
+[blocks.output]
+status = "planned"
+category = "advanced"
+purpose = "Execution output"
+attributes = ["for", "timestamp", "exit", "format"]
+degradation = "fenced code block"
+enum_variant = "Output"
+
+[blocks.page]
+status = "implemented"
+category = "site"
+purpose = "Route/layout definition"
+attributes = ["route", "layout", "title", "sidebar"]
+degradation = "heading with content"
+enum_variant = "Page"
+
+[blocks.pricing-table]
+status = "implemented"
+category = "web"
+purpose = "Pricing comparison"
+attributes = []
+degradation = "markdown table"
+enum_variant = "PricingTable"
+
+[blocks.progress]
+status = "planned"
+category = "data"
+purpose = "Progress bar"
+attributes = ["value", "label", "max"]
+degradation = "text percentage"
+enum_variant = "Progress"
+
+[blocks.quote]
+status = "implemented"
+category = "core"
+purpose = "Attributed quotation"
+attributes = ["by", "cite"]
+degradation = "blockquote with attribution"
+enum_variant = "Quote"
+
+[blocks.related]
+status = "planned"
+category = "core"
+purpose = "Cross-references"
+attributes = []
+degradation = "bulleted link list"
+enum_variant = "Related"
+
+[blocks.site]
+status = "implemented"
+category = "site"
+purpose = "Website config"
+attributes = ["domain"]
+degradation = "omitted"
+enum_variant = "Site"
+
+[blocks.style]
+status = "implemented"
+category = "utility"
+purpose = "Presentation overrides"
+attributes = ["accent", "font", "heading-font", "body-font"]
+degradation = "omitted"
+enum_variant = "Style"
+
+[blocks.subscribe]
+status = "planned"
+category = "web"
+purpose = "Email subscription"
+attributes = ["action", "placeholder"]
+degradation = "link to subscription page"
+enum_variant = "Subscribe"
+
+[blocks.summary]
+status = "implemented"
+category = "core"
+purpose = "Token-efficient summary"
+attributes = []
+degradation = "italic blockquote"
+enum_variant = "Summary"
+
+[blocks.tabs]
+status = "implemented"
+category = "container"
+purpose = "Tabbed sections"
+attributes = []
+degradation = "sequential headings with content"
+enum_variant = "Tabs"
+
+[blocks.tasks]
+status = "implemented"
+category = "core"
+purpose = "Task list"
+attributes = []
+degradation = "checkbox list"
+enum_variant = "Tasks"
+
+[blocks.testimonial]
+status = "implemented"
+category = "web"
+purpose = "Customer quote"
+attributes = ["author", "role", "company"]
+degradation = "blockquote with attribution"
+enum_variant = "Testimonial"
+
+[blocks.timeline]
+status = "planned"
+category = "data"
+purpose = "Chronological sequence"
+attributes = []
+degradation = "ordered list with dates"
+enum_variant = "Timeline"
+
+[blocks.turn]
+status = "planned"
+category = "core"
+purpose = "Conversation turn"
+attributes = ["participant", "time", "role", "model"]
+degradation = "blockquote with speaker prefix"
+enum_variant = "Turn"

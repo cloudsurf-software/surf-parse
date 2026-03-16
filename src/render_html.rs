@@ -233,10 +233,26 @@ pub fn to_html(doc: &SurfDoc) -> String {
             let effective_logo = logo.as_deref().or(site_name.as_deref());
             let mut html = String::from("<nav class=\"surfdoc-nav\" role=\"navigation\" aria-label=\"Page navigation\">");
             if let Some(logo_text) = effective_logo {
-                html.push_str(&format!(
-                    "<span class=\"surfdoc-nav-logo\">{}</span>",
-                    escape_html(logo_text),
-                ));
+                let is_image = logo_text.ends_with(".svg")
+                    || logo_text.ends_with(".png")
+                    || logo_text.ends_with(".jpg")
+                    || logo_text.ends_with(".jpeg")
+                    || logo_text.ends_with(".webp")
+                    || logo_text.ends_with(".gif")
+                    || logo_text.starts_with("http://")
+                    || logo_text.starts_with("https://")
+                    || logo_text.starts_with("data:");
+                if is_image {
+                    html.push_str(&format!(
+                        "<a class=\"surfdoc-nav-logo\" href=\"/\"><img src=\"{}\" alt=\"Logo\" class=\"surfdoc-nav-logo-img\" onerror=\"this.style.display='none';this.parentElement.insertAdjacentText('afterbegin','Surf');this.onerror=null\"></a>",
+                        escape_html(logo_text),
+                    ));
+                } else {
+                    html.push_str(&format!(
+                        "<a class=\"surfdoc-nav-logo\" href=\"/\">{}</a>",
+                        escape_html(logo_text),
+                    ));
+                }
             }
             html.push_str("<input type=\"checkbox\" class=\"surfdoc-nav-toggle\" id=\"surfdoc-nav-toggle\" aria-hidden=\"true\">");
             html.push_str("<label for=\"surfdoc-nav-toggle\" class=\"surfdoc-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>");
@@ -254,7 +270,10 @@ pub fn to_html(doc: &SurfDoc) -> String {
                     escape_html(&item.label),
                 ));
             }
-            html.push_str("</div></nav>");
+            html.push_str("</div>");
+            // Active nav state — match current URL path against nav links
+            html.push_str("<script>document.querySelectorAll('.surfdoc-nav-links a').forEach(a=>{if(location.pathname===a.getAttribute('href')||location.pathname.endsWith(a.getAttribute('href')))a.setAttribute('aria-current','page')})</script>");
+            html.push_str("</nav>");
             parts.push(html);
         }
     }
@@ -656,7 +675,7 @@ fn render_block(block: &Block) -> String {
                 None => String::new(),
             };
             format!(
-                "<figure class=\"surfdoc-figure\"><img src=\"{}\" alt=\"{}\" />{caption_html}</figure>",
+                "<figure class=\"surfdoc-figure\"><img src=\"{}\" alt=\"{}\" onerror=\"this.classList.add('broken');this.onerror=null\" />{caption_html}</figure>",
                 escape_html(src),
                 escape_html(alt_attr),
             )
@@ -764,7 +783,7 @@ fn render_block(block: &Block) -> String {
                 String::new()
             };
             format!(
-                "<div class=\"surfdoc-hero-image\"{}><img src=\"{}\" alt=\"{}\" /></div>",
+                "<div class=\"surfdoc-hero-image\"{}><img src=\"{}\" alt=\"{}\" onerror=\"this.classList.add('broken');this.onerror=null\" /></div>",
                 role_attr,
                 escape_html(src),
                 escape_html(alt_attr),
@@ -893,10 +912,26 @@ fn render_block(block: &Block) -> String {
         Block::Nav { items, logo, .. } => {
             let mut html = String::from("<nav class=\"surfdoc-nav\" role=\"navigation\" aria-label=\"Page navigation\">");
             if let Some(logo_text) = logo {
-                html.push_str(&format!(
-                    "<span class=\"surfdoc-nav-logo\">{}</span>",
-                    escape_html(logo_text),
-                ));
+                let is_image = logo_text.ends_with(".svg")
+                    || logo_text.ends_with(".png")
+                    || logo_text.ends_with(".jpg")
+                    || logo_text.ends_with(".jpeg")
+                    || logo_text.ends_with(".webp")
+                    || logo_text.ends_with(".gif")
+                    || logo_text.starts_with("http://")
+                    || logo_text.starts_with("https://")
+                    || logo_text.starts_with("data:");
+                if is_image {
+                    html.push_str(&format!(
+                        "<a class=\"surfdoc-nav-logo\" href=\"/\"><img src=\"{}\" alt=\"Logo\" class=\"surfdoc-nav-logo-img\" onerror=\"this.style.display='none';this.parentElement.insertAdjacentText('afterbegin','Surf');this.onerror=null\"></a>",
+                        escape_html(logo_text),
+                    ));
+                } else {
+                    html.push_str(&format!(
+                        "<a class=\"surfdoc-nav-logo\" href=\"/\">{}</a>",
+                        escape_html(logo_text),
+                    ));
+                }
             }
             html.push_str("<input type=\"checkbox\" class=\"surfdoc-nav-toggle\" id=\"surfdoc-nav-toggle\" aria-hidden=\"true\">");
             html.push_str("<label for=\"surfdoc-nav-toggle\" class=\"surfdoc-nav-hamburger\" aria-label=\"Toggle menu\"><span></span><span></span><span></span></label>");
@@ -1042,7 +1077,7 @@ fn render_block(block: &Block) -> String {
                     i
                 ));
                 html.push_str(&format!(
-                    "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" />",
+                    "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" onerror=\"this.classList.add('broken');this.onerror=null\" />",
                     escape_html(&item.src),
                     escape_html(alt),
                 ));
@@ -1167,7 +1202,7 @@ fn render_block(block: &Block) -> String {
             // Centered layout: image above text (logo/product image)
             if align != "left" {
                 if let Some(img) = image {
-                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"\"></div>", escape_html(img)));
+                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"\" onerror=\"this.classList.add('broken');this.onerror=null\"></div>", escape_html(img)));
                 }
             }
             if let Some(b) = badge {
@@ -1191,7 +1226,7 @@ fn render_block(block: &Block) -> String {
             // Left-aligned layout: image to the side (side-by-side)
             if align == "left" {
                 if let Some(img) = image {
-                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"\"></div>", escape_html(img)));
+                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"\" onerror=\"this.classList.add('broken');this.onerror=null\"></div>", escape_html(img)));
                 }
             }
             parts.push("</section>".to_string());
@@ -2536,7 +2571,8 @@ mod tests {
         }]);
         let html = to_html(&doc);
         assert!(html.contains("<figure class=\"surfdoc-figure\">"));
-        assert!(html.contains("<img src=\"arch.png\" alt=\"System architecture\" />"));
+        assert!(html.contains("img src=\"arch.png\" alt=\"System architecture\""));
+        assert!(html.contains("onerror="));
         assert!(html.contains("<figcaption>Architecture diagram</figcaption>"));
     }
 
@@ -3854,7 +3890,7 @@ mod tests {
             span: span(),
         }]);
         let html = to_html(&doc);
-        assert!(!html.contains("<script>"));
+        assert!(!html.contains("<script>alert"));
         assert!(!html.contains("<img onerror"));
         assert!(html.contains("&lt;script&gt;"));
     }
