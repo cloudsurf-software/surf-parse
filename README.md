@@ -54,5 +54,5 @@ MIT
 
 ## Links
 
-- [SurfDoc Specification](https://surfcontext.org)
+- [SurfDoc Specification](https://doc.surf/spec)
 - [Repository](https://github.com/cloudsurf-software/surf-parse)
