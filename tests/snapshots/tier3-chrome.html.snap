@@ -1,0 +1,31 @@
+<div class="surfdoc-app-shell surfdoc-layout-sidebar"></div>
+<aside class="surfdoc-sidebar surfdoc-sidebar-left" data-collapsible="true" style="width:240px"></aside>
+<nav class="surfdoc-nav-tree surfdoc-nav-tree-preview" data-source="files"><ul class="surfdoc-tree-list"><li class="surfdoc-tree-folder surfdoc-tree-open"><span class="surfdoc-tree-toggle">&#9660;</span> <span class="surfdoc-tree-name">src</span><ul class="surfdoc-tree-list"><li class="surfdoc-tree-file surfdoc-tree-active"><span class="surfdoc-tree-name">main.rs</span></li><li class="surfdoc-tree-file"><span class="surfdoc-tree-name">render_html.rs</span></li><li class="surfdoc-tree-file"><span class="surfdoc-tree-name">blocks.rs</span></li></ul></li><li class="surfdoc-tree-folder"><span class="surfdoc-tree-toggle">&#9658;</span> <span class="surfdoc-tree-name">assets</span></li><li class="surfdoc-tree-file"><span class="surfdoc-tree-name">Cargo.toml</span></li></ul></nav>
+<div class="surfdoc-toolbar"><button class="surfdoc-toolbar-btn surfdoc-toolbar-btn-primary" data-action="run">Run</button><span class="surfdoc-toolbar-separator"></span><span class="surfdoc-badge surfdoc-badge-green">Live</span></div>
+<nav class="surfdoc-tab-bar" role="tablist"><button role="tab" data-tab="preview" class="active" aria-selected="true">Preview</button><button role="tab" data-tab="edit" aria-selected="false">Edit</button></nav><script>document.querySelectorAll('.surfdoc-tab-bar').forEach(bar=>{bar.querySelectorAll('[role="tab"]').forEach(btn=>{btn.onclick=()=>{const tab=btn.dataset.tab;const parent=bar.parentElement||document;bar.querySelectorAll('[role="tab"]').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-selected','false')});btn.classList.add('active');btn.setAttribute('aria-selected','true');parent.querySelectorAll('.surfdoc-tab-content').forEach(tc=>{if(tc.dataset.tab===tab){tc.classList.add('active');tc.style.display='block'}else{tc.classList.remove('active');tc.style.display='none'}})}})})</script>
+<div class="surfdoc-tab-content" data-tab="preview" role="tabpanel"><p>Preview pane content.</p>
+</div>
+<div class="surfdoc-tab-content" data-tab="edit" role="tabpanel"></div>
+<div class="surfdoc-code-editor" data-lang="surf" data-source="doc" data-line-numbers="true"><pre><code># Editable doc</code></pre></div>
+<div class="surfdoc-panel surfdoc-panel-bottom" data-resizable="false" data-desktop-only="true" style="height:160px"></div>
+<div class="surfdoc-problem-list surfdoc-problem-list-preview" data-source="diagnostics"><div class="surfdoc-problem-empty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No problems detected</div></div>
+<div class="surfdoc-drawer surfdoc-drawer-right" data-name="filters" style="width:320px"><p>Drawer body content.</p>
+</div>
+<dialog class="surfdoc-modal" data-name="confirm"><strong class="surfdoc-modal-title">Confirm shipment</strong><p>Are you sure you want to ship?</p>
+</dialog>
+<div class="surfdoc-command-palette"><input type="search" placeholder="Search commands..." class="surfdoc-command-search"><ul class="surfdoc-command-list"><li class="surfdoc-command-item" data-group="Ops"><span class="surfdoc-command-label">Deploy</span><span class="surfdoc-command-desc">Ship to production</span></li><li class="surfdoc-command-item" data-group="View"><span class="surfdoc-command-label">Toggle theme</span></li></ul></div>
+<span class="surfdoc-badge surfdoc-badge-red">3</span>
+<div class="surfdoc-suggestion-chips" data-source="ai.suggestions" data-dismissible="true" data-max="3"><button class="surfdoc-chip">Show open tasks</button><button class="surfdoc-chip">Summarise last standup</button><button class="surfdoc-chip">What&rsquo;s blocking the team?</button></div>
+<div class="surfdoc-chat-thread" data-source="chat.thread"><div class="surfdoc-chat-msg surfdoc-chat-msg-user">How do I add a new task?</div><div class="surfdoc-chat-msg surfdoc-chat-msg-assistant">Click <strong>+ New Task</strong> in the board toolbar, fill in the title, and assign an owner — it&rsquo;ll appear in the Todo column instantly.</div></div>
+<div class="surfdoc-chat-input"><input type="text" placeholder="Ask Mako…"><button data-action="send">Send</button></div>
+<ol class="surfdoc-progress"><li class="surfdoc-step-done">Parse</li><li class="surfdoc-step-active">Build</li><li class="surfdoc-step-pending">Ship</li></ol>
+<div class="surfdoc-log-stream surfdoc-log-stream-preview" data-source="build.log" data-tail="100"><pre><code><span class="surfdoc-log-info">INFO</span>  [2026-05-26T10:42:01Z] Server listening on :8080
+<span class="surfdoc-log-info">INFO</span>  [2026-05-26T10:42:03Z] GET /healthz 200 1ms
+<span class="surfdoc-log-info">INFO</span>  [2026-05-26T10:42:11Z] POST /api/tasks 201 12ms
+<span class="surfdoc-log-warn">WARN</span>  [2026-05-26T10:42:30Z] DB connection pool at 80%% capacity
+<span class="surfdoc-log-info">INFO</span>  [2026-05-26T10:43:01Z] GET /api/tasks 200 4ms</code></pre></div>
+<div class="surfdoc-terminal surfdoc-terminal-preview" data-shell="zsh" data-cwd="~/code"><div class="surfdoc-terminal-bar"><span class="surfdoc-terminal-dot surfdoc-terminal-dot-red"></span><span class="surfdoc-terminal-dot surfdoc-terminal-dot-yellow"></span><span class="surfdoc-terminal-dot surfdoc-terminal-dot-green"></span><span class="surfdoc-terminal-title">zsh &mdash; ~/code</span></div><pre class="surfdoc-terminal-body"><code><span class="surfdoc-terminal-prompt">$</span> cargo build --release
+<span class="surfdoc-terminal-out">   Compiling surf-parse v1.0.0
+   Finished release [optimized] target(s) in 4.82s</span>
+<span class="surfdoc-terminal-prompt">$</span> <span class="surfdoc-terminal-cursor"> </span></code></pre></div>
+<div class="surfdoc-block-editor surfdoc-block-editor-preview" data-source="doc"><div class="surfdoc-block-editor-block surfdoc-block-editor-h1">Untitled document</div><div class="surfdoc-block-editor-block surfdoc-block-editor-p">Start writing or press <kbd>/</kbd> to add a block&hellip;</div><div class="surfdoc-block-editor-add" aria-label="Add block">+ Add block</div></div>

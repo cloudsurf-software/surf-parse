@@ -1,0 +1,32 @@
+---
+title: Plan Mode
+type: app
+version: 1
+created: 2026-02-27
+status: active
+---
+
+::filter-bar[target="#task-board"]
+- Status (select: All | To Do | In Progress | Done)
+- Priority (select: All | Low | Medium | High)
+::
+
+::board[source="/api/tasks/board"]
+columns: To Do | In Progress | Done
+card-template: {= title =} @{= assignee =}
+::
+
+::action[method=post target="/api/tasks" label="Add Task"]
+- Name (text) *
+- Priority (select: Low | Medium | High)
+- Type (select: Feature | Bug | Chore)
+::
+
+::search[source="/api/research/search" placeholder="Search articles..."]
+::
+
+::dashboard[source="/api/grow/metrics" refresh=60]
+::
+
+::feed[source="/api/chat/messages" stream]
+::

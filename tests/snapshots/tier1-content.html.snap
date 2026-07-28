@@ -1,0 +1,26 @@
+<section class="surfdoc-section">
+<h1 id="content-tier">Content tier</h1>
+<p>Plain paragraph with <strong>bold</strong>, <em>italic</em>, and a <a href="https://surfcontext.org" rel="noopener noreferrer">link</a>.</p>
+
+<div class="surfdoc-summary" role="doc-abstract"><div class="surfdoc-summary-label">Summary</div><p><p>One source, every target — this fixture pins the content tier.</p>
+</p></div>
+<div class="surfdoc-callout surfdoc-callout-warning" role="note"><svg class="surfdoc-callout-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div class="surfdoc-callout-body"><div class="surfdoc-callout-title">Heads up</div><p>Callouts carry their type and title natively.</p>
+</div></div>
+<figure class="surfdoc-code"><figcaption class="surfdoc-code-head"><span class="surfdoc-code-file">src/main.rs</span><span class="surfdoc-code-lang">RUST</span></figcaption><pre aria-label="rust code" data-lang="rust"><code class="language-rust">fn main() {
+    println!(&quot;hello&quot;);
+}</code></pre></figure>
+<div class="surfdoc-table-wrap"><table class="surfdoc-data"><thead><tr><th scope="col" aria-sort="none">Name</th><th scope="col" aria-sort="none">Role</th></tr></thead><tbody><tr><td>Ada</td><td>Engineer</td></tr><tr><td>Grace</td><td>Admiral</td></tr></tbody></table></div>
+<ul class="surfdoc-tasks"><li class="surfdoc-task is-done"><span class="surfdoc-check">✓</span><span class="surfdoc-task-text">Parse the source</span></li><li class="surfdoc-task"><span class="surfdoc-check"></span><span class="surfdoc-task-text">Render it natively</span></li></ul>
+<article class="surfdoc-decision surfdoc-decision-accepted" role="note" aria-label="Decision: accepted"><div class="surfdoc-decision-header"><span class="surfdoc-decision-status surfdoc-decision-status--accepted">Accepted</span><span class="surfdoc-decision-date">2026-06-11</span></div><div class="surfdoc-decision-body"><p>The FFI moves upstream.</p>
+</div></article>
+<div class="surfdoc-metric-row"><div class="surfdoc-metric" role="group" aria-label="Tests: 694 tests, trending up"><div class="surfdoc-metric-value">694 <span class="surfdoc-metric-unit">tests</span></div><div class="surfdoc-metric-label">Tests<span class="surfdoc-trend surfdoc-trend--up">▲</span></div></div></div>
+<figure class="surfdoc-figure"><div class="surfdoc-figure-img"><img src="/assets/wave.png" alt="A wave" onerror="this.style.display='none';this.onerror=null" /></div><figcaption class="surfdoc-figure-cap">The wave</figcaption></figure>
+<blockquote>
+<p>All that is gold does not glitter.</p>
+</blockquote>
+
+<div class="surfdoc-divider" role="separator"><span>SECTION</span></div>
+<details class="surfdoc-details" open><summary class="surfdoc-details-summary">More detail</summary><div class="surfdoc-details-body"><p>Hidden depths.</p>
+</div></details>
+<nav class="surfdoc-toc" data-depth="2"><div class="surfdoc-toc-label">Contents</div><ol><li><a href="#content-tier">Content tier</a></li></ol></nav>
+</section>

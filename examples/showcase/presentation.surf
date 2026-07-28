@@ -1,0 +1,122 @@
+---
+title: "Surfspace Platform Deck"
+type: presentation
+---
+
+::deck
+theme: surf-dark
+accent: #2563eb
+aspect: 16:9
+transition: fade
+footer: Surfspace · Confidential
+numbers: on
+::
+
+::slide[layout=title kicker="Investor Briefing"]
+# Surfspace
+## One source. Every surface.
+Build apps, docs, decks, and sites from a single `.surf` file.
+:::notes
+Open warm. Thank the room, set the frame: this is the 10-minute version.
+Land the one-liner before clicking forward.
+:::
+::
+
+::slide[layout=section kicker="Part One"]
+# The Problem
+:::notes
+Slow down here. The divider gives the audience a beat to reset.
+:::
+::
+
+::slide[layout=bullets kicker="Why now"]
+## Teams drown in tool sprawl
+- Slides live in one tool, docs in another, sites in a third
+- Every export breaks formatting and branding
+- No single source of truth, no determinism
+- AI output lands as throwaway text, not real artifacts
+:::notes
+Hit the pain points fast. The fourth bullet is the bridge to our wedge.
+:::
+::
+
+::slide[layout=two-column kicker="Before / After"]
+## Old way
+- Copy-paste between five apps
+- Manual reformatting
+- Drift across surfaces
+
+## Surfspace way
+- One `.surf` source
+- Deterministic render to any target
+- HTML, PDF, deck, native — identical
+:::notes
+Gesture left then right. Emphasize "identical" — determinism is the moat.
+:::
+::
+
+::slide[layout=image kicker="Product"]
+![Surfspace rendering one source to many surfaces](https://surf.space/img/multi-surface.png)
+:::notes
+Let the visual breathe. Two seconds of silence, then the payoff line.
+:::
+::
+
+::slide[layout=quote kicker="Customer"]
+> Surfspace replaced four tools in our stack. Our entire team writes in one
+> format now, and everything just renders.
+:::notes
+Read the quote slowly. Attribute it to the design lead at the pilot account.
+:::
+::
+
+::slide[layout=code kicker="Developer"]
+```bash
+# one source, every surface
+surf render deck.surf --out deck.html   # HTML deck
+surf render deck.surf --pdf             # Typst PDF, one slide per page
+surf render paper.surf --tex            # real LaTeX
+```
+:::notes
+Show how little it takes. The point: authoring is plain text, version-controlled.
+:::
+::
+
+::slide[layout=bullets kicker="Traction"]
+## Growth is compounding
+:::chart[type=line title="Weekly active users"]
+Week | Web | Mobile
+W1   | 1200 | 800
+W2   | 1500 | 980
+W3   | 1700 | 1240
+W4   | 1980 | 1620
+:::
+:::notes
+Walk the curve left to right. Mobile crossing is the headline number.
+:::
+::
+
+::slide[layout=bullets kicker="How it works"]
+## One pipeline, every surface
+:::diagram[type=flowchart title="Render pipeline"]
+src: .surf source
+parse [rounded]: Parse
+render [diamond]: Target?
+html: HTML deck
+pdf: Typst PDF
+src -> parse
+parse -> render
+render -> html: web
+render -> pdf: print
+:::
+:::notes
+Trace the diamond's two branches. Same model, different renderer.
+:::
+::
+
+::slide[layout=section kicker="Close"]
+# Let's build the future of documents
+:::notes
+End on the vision line. Then stop talking and take questions.
+:::
+::

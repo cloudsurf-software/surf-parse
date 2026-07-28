@@ -1,0 +1,17 @@
+---
+title: "Single Page Test"
+type: doc
+status: active
+---
+
+# Hello World
+
+This is a simple single-page SurfDoc with no site or page blocks.
+
+::callout[type=info]
+This should produce a single index.html with no navigation.
+::
+
+## Section Two
+
+Some more content here with **bold** and *italic* text.

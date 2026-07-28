@@ -1,0 +1,129 @@
+[
+  {
+    "type": "section_container",
+    "bg": null,
+    "headline": null,
+    "subtitle": null,
+    "children": [
+      {
+        "type": "markdown",
+        "content": "Inner section content."
+      }
+    ]
+  },
+  {
+    "type": "steps",
+    "steps": []
+  },
+  {
+    "type": "comparison",
+    "headers": [
+      "Feature",
+      "SurfDoc",
+      "Other"
+    ],
+    "rows": [
+      [
+        "One source",
+        "Yes",
+        "No"
+      ]
+    ],
+    "highlight": "SurfDoc"
+  },
+  {
+    "type": "before_after",
+    "before_items": [
+      {
+        "label": "before:",
+        "detail": ""
+      },
+      {
+        "label": "Hand-synced enums",
+        "detail": ""
+      },
+      {
+        "label": "after:",
+        "detail": ""
+      },
+      {
+        "label": "One enum, compiler-enforced",
+        "detail": ""
+      }
+    ],
+    "after_items": [],
+    "transition": null
+  },
+  {
+    "type": "pipeline",
+    "steps": [
+      {
+        "label": "Parse",
+        "description": null
+      },
+      {
+        "label": "Resolve",
+        "description": null
+      },
+      {
+        "label": "Render",
+        "description": null
+      }
+    ]
+  },
+  {
+    "type": "columns",
+    "columns": [
+      {
+        "content": "::: column\nLeft column.\n::: column\nRight column."
+      }
+    ]
+  },
+  {
+    "type": "tabs",
+    "tabs": [
+      {
+        "label": "Tab 1",
+        "content": "::: tab[title=\"First\"]\nTab one content.\n:::\n::: tab[title=\"Second\"]\nTab two content.\n:::"
+      }
+    ]
+  },
+  {
+    "type": "form",
+    "fields": [
+      {
+        "label": "name text \"Your name\" required",
+        "name": "name_text__your_name__required",
+        "field_type": "text",
+        "required": false,
+        "placeholder": null,
+        "options": []
+      },
+      {
+        "label": "email email \"Email\"",
+        "name": "email_email__email",
+        "field_type": "text",
+        "required": false,
+        "placeholder": null,
+        "options": []
+      }
+    ],
+    "submit_label": "Send"
+  },
+  {
+    "type": "gallery",
+    "items": [],
+    "columns": 2
+  },
+  {
+    "type": "embed",
+    "src": "https://example.com/demo",
+    "title": "Demo",
+    "embed_type": "generic"
+  },
+  {
+    "type": "hero_image",
+    "src": "/img/hero.png",
+    "alt": "Hero image"
+  }
+]

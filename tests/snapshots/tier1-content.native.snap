@@ -1,0 +1,94 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# Content tier\n\nPlain paragraph with **bold**, *italic*, and a [link](https://surfcontext.org)."
+  },
+  {
+    "type": "summary",
+    "content": "One source, every target — this fixture pins the content tier."
+  },
+  {
+    "type": "callout",
+    "callout_type": "warning",
+    "title": "Heads up",
+    "content": "Callouts carry their type and title natively."
+  },
+  {
+    "type": "code",
+    "language": "rust",
+    "file_path": "src/main.rs",
+    "content": "fn main() {\n    println!(\"hello\");\n}"
+  },
+  {
+    "type": "data_table",
+    "headers": [
+      "Name",
+      "Role"
+    ],
+    "rows": [
+      [
+        "Ada",
+        "Engineer"
+      ],
+      [
+        "Grace",
+        "Admiral"
+      ]
+    ],
+    "sortable": true
+  },
+  {
+    "type": "tasks",
+    "items": [
+      {
+        "done": true,
+        "text": "Parse the source",
+        "assignee": null
+      },
+      {
+        "done": false,
+        "text": "Render it natively",
+        "assignee": null
+      }
+    ]
+  },
+  {
+    "type": "decision",
+    "status": "accepted",
+    "date": "2026-06-11",
+    "deciders": [],
+    "content": "The FFI moves upstream."
+  },
+  {
+    "type": "metric",
+    "label": "Tests",
+    "value": "694",
+    "trend": "up",
+    "unit": "tests"
+  },
+  {
+    "type": "figure",
+    "src": "/assets/wave.png",
+    "caption": "The wave",
+    "alt": "A wave"
+  },
+  {
+    "type": "markdown",
+    "content": "\n> All that is gold does not glitter."
+  },
+  {
+    "type": "divider",
+    "label": "SECTION"
+  },
+  {
+    "type": "details",
+    "title": "More detail",
+    "open": true,
+    "content": "Hidden depths."
+  },
+  {
+    "type": "toc",
+    "depth": 2,
+    "entries": []
+  }
+]

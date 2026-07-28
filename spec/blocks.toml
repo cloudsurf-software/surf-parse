@@ -1,0 +1,886 @@
+# SurfDoc Block Registry — AUTHORITATIVE
+# This file defines the SurfDoc block contract. surf-parse validates against it.
+# The spec is the law. Code follows the spec.
+#
+# To add a block: add it here FIRST, then implement in surf-parse.
+# To implement a planned block: change status here, copy to surf-parse, run tests.
+#
+# Status: "implemented" | "planned" | "deprecated"
+# Category: core | data | container | web | site | advanced | utility
+
+[meta]
+spec_version = "0.1"
+total_blocks = 107
+registry_updated = "2026-05-27"
+
+[blocks.ai-context]
+status = "planned"
+category = "advanced"
+purpose = "AI generation metadata"
+attributes = ["model", "tokens", "loaded"]
+degradation = "fenced code block"
+enum_variant = "AiContext"
+
+[blocks.ai-generated]
+status = "planned"
+category = "advanced"
+purpose = "AI attribution"
+attributes = ["model", "date", "reviewed"]
+degradation = "blockquote with attribution"
+enum_variant = "AiGenerated"
+
+[blocks.alternatives]
+status = "planned"
+category = "data"
+purpose = "Option comparison"
+attributes = []
+degradation = "markdown table"
+enum_variant = "Alternatives"
+
+[blocks.callout]
+status = "implemented"
+category = "core"
+purpose = "Styled callout"
+attributes = ["type", "title"]
+degradation = "blockquote with bold prefix"
+enum_variant = "Callout"
+
+[blocks.chart]
+status = "implemented"
+category = "data"
+purpose = "Data visualization mount point"
+attributes = ["type", "source", "period"]
+degradation = "data table fallback"
+enum_variant = "Chart"
+
+[blocks.code]
+status = "implemented"
+category = "core"
+purpose = "Enhanced code block"
+attributes = ["lang", "file", "highlight"]
+degradation = "fenced code block"
+enum_variant = "Code"
+
+[blocks.columns]
+status = "implemented"
+category = "container"
+purpose = "Multi-column layout"
+attributes = []
+degradation = "sequential sections with horizontal rules"
+enum_variant = "Columns"
+
+[blocks.countdown]
+status = "planned"
+category = "web"
+purpose = "Event countdown"
+attributes = ["date", "label"]
+degradation = "paragraph with date"
+enum_variant = "Countdown"
+
+[blocks.css]
+status = "planned"
+category = "utility"
+purpose = "Raw CSS escape hatch"
+attributes = []
+degradation = "omitted"
+enum_variant = "Css"
+
+[blocks.cta]
+status = "implemented"
+category = "web"
+purpose = "Call-to-action button"
+attributes = ["label", "href", "primary", "icon"]
+degradation = "markdown link"
+enum_variant = "Cta"
+
+[blocks.data]
+status = "implemented"
+category = "data"
+purpose = "Structured data"
+attributes = ["id", "format", "sortable"]
+degradation = "markdown table"
+enum_variant = "Data"
+
+[blocks.decision]
+status = "implemented"
+category = "core"
+purpose = "Decision record"
+attributes = ["status", "date", "deciders"]
+degradation = "blockquote with status prefix"
+enum_variant = "Decision"
+
+[blocks.diagram]
+status = "implemented"
+category = "core"
+purpose = "Native diagram (architecture/ERD) rendered as inline SVG"
+attributes = ["type", "title"]
+degradation = "fenced code block with raw DSL"
+enum_variant = "Diagram"
+
+[blocks.details]
+status = "implemented"
+category = "container"
+purpose = "Collapsible section"
+attributes = ["title", "open"]
+degradation = "heading with content"
+enum_variant = "Details"
+
+[blocks.divider]
+status = "implemented"
+category = "utility"
+purpose = "Labeled break"
+attributes = ["label"]
+degradation = "horizontal rule"
+enum_variant = "Divider"
+
+[blocks.embed]
+status = "implemented"
+category = "web"
+purpose = "Embedded external content"
+attributes = ["src", "type", "width", "height", "title"]
+degradation = "link to source"
+enum_variant = "Embed"
+
+[blocks.faq]
+status = "implemented"
+category = "web"
+purpose = "Accordion FAQ"
+attributes = []
+degradation = "heading/answer pairs"
+enum_variant = "Faq"
+
+[blocks.figure]
+status = "implemented"
+category = "core"
+purpose = "Image with caption"
+attributes = ["src", "caption", "alt", "width"]
+degradation = "markdown image with alt text"
+enum_variant = "Figure"
+
+[blocks.footer]
+status = "implemented"
+category = "web"
+purpose = "Structured site footer"
+attributes = []
+degradation = "horizontal rule with links"
+enum_variant = "Footer"
+
+[blocks.footnote]
+status = "planned"
+category = "core"
+purpose = "Citation"
+attributes = ["id"]
+degradation = "inline parenthetical"
+enum_variant = "Footnote"
+
+[blocks.form]
+status = "implemented"
+category = "web"
+purpose = "Form with fields"
+attributes = ["submit"]
+degradation = "labeled list"
+enum_variant = "Form"
+
+[blocks.gallery]
+status = "implemented"
+category = "web"
+purpose = "Image gallery"
+attributes = ["columns"]
+degradation = "sequential images"
+enum_variant = "Gallery"
+
+[blocks.hero-image]
+status = "implemented"
+category = "web"
+purpose = "Hero visual"
+attributes = ["src", "alt"]
+degradation = "markdown image"
+enum_variant = "HeroImage"
+
+[blocks.kernel]
+status = "planned"
+category = "advanced"
+purpose = "Execution environment"
+attributes = ["lang", "env", "runtime", "packages", "sandbox"]
+degradation = "fenced code block with language"
+enum_variant = "Kernel"
+
+[blocks.logo-cloud]
+status = "planned"
+category = "web"
+purpose = "Logo strip"
+attributes = ["title"]
+degradation = "bulleted list of names"
+enum_variant = "LogoCloud"
+
+[blocks.metric]
+status = "implemented"
+category = "data"
+purpose = "Single metric display"
+attributes = ["label", "value", "trend", "unit"]
+degradation = "bold label: value"
+enum_variant = "Metric"
+
+[blocks.nav]
+status = "implemented"
+category = "site"
+purpose = "Navigation bar"
+attributes = ["logo"]
+degradation = "bulleted link list"
+enum_variant = "Nav"
+
+[blocks.output]
+status = "planned"
+category = "advanced"
+purpose = "Execution output"
+attributes = ["for", "timestamp", "exit", "format"]
+degradation = "fenced code block"
+enum_variant = "Output"
+
+[blocks.page]
+status = "implemented"
+category = "site"
+purpose = "Route/layout definition"
+attributes = ["route", "layout", "title", "sidebar"]
+degradation = "heading with content"
+enum_variant = "Page"
+
+[blocks.pricing-table]
+status = "implemented"
+category = "web"
+purpose = "Pricing comparison"
+attributes = []
+degradation = "markdown table"
+enum_variant = "PricingTable"
+
+[blocks.post-grid]
+status = "implemented"
+category = "web"
+purpose = "Card grid for a blog/news/events index"
+attributes = ["title", "subtitle"]
+degradation = "dated link list"
+enum_variant = "PostGrid"
+
+[blocks.gate]
+status = "implemented"
+category = "web"
+purpose = "Access-code card (password + submit)"
+attributes = ["title", "subtitle", "action", "field", "submit", "error"]
+degradation = "password form"
+enum_variant = "Gate"
+
+[blocks.progress]
+status = "implemented"
+category = "advanced"
+purpose = "Step/progress indicator with named steps and statuses"
+attributes = ["source"]
+degradation = "ordered list of step labels"
+enum_variant = "Progress"
+
+[blocks.quote]
+status = "implemented"
+category = "core"
+purpose = "Attributed quotation"
+attributes = ["by", "cite"]
+degradation = "blockquote with attribution"
+enum_variant = "Quote"
+
+[blocks.related]
+status = "planned"
+category = "core"
+purpose = "Cross-references"
+attributes = []
+degradation = "bulleted link list"
+enum_variant = "Related"
+
+[blocks.site]
+status = "implemented"
+category = "site"
+purpose = "Website config"
+attributes = ["domain"]
+degradation = "omitted"
+enum_variant = "Site"
+
+[blocks.style]
+status = "implemented"
+category = "utility"
+purpose = "Presentation overrides"
+attributes = ["accent", "font", "heading-font", "body-font"]
+degradation = "omitted"
+enum_variant = "Style"
+
+[blocks.subscribe]
+status = "planned"
+category = "web"
+purpose = "Email subscription"
+attributes = ["action", "placeholder"]
+degradation = "link to subscription page"
+enum_variant = "Subscribe"
+
+[blocks.summary]
+status = "implemented"
+category = "core"
+purpose = "Token-efficient summary"
+attributes = []
+degradation = "italic blockquote"
+enum_variant = "Summary"
+
+[blocks.tabs]
+status = "implemented"
+category = "container"
+purpose = "Tabbed sections"
+attributes = []
+degradation = "sequential headings with content"
+enum_variant = "Tabs"
+
+[blocks.tasks]
+status = "implemented"
+category = "core"
+purpose = "Task list"
+attributes = []
+degradation = "checkbox list"
+enum_variant = "Tasks"
+
+[blocks.testimonial]
+status = "implemented"
+category = "web"
+purpose = "Customer quote"
+attributes = ["author", "role", "company"]
+degradation = "blockquote with attribution"
+enum_variant = "Testimonial"
+
+[blocks.timeline]
+status = "planned"
+category = "data"
+purpose = "Chronological sequence"
+attributes = []
+degradation = "ordered list with dates"
+enum_variant = "Timeline"
+
+[blocks.turn]
+status = "planned"
+category = "core"
+purpose = "Conversation turn"
+attributes = ["participant", "time", "role", "model"]
+degradation = "blockquote with speaker prefix"
+enum_variant = "Turn"
+
+# ----- Landing-page / marketing blocks -----
+
+[blocks.hero]
+status = "implemented"
+category = "web"
+purpose = "Full hero section with headline, subtitle, badge, and CTA buttons"
+attributes = ["badge", "align", "image"]
+degradation = "heading with subtitle and links"
+enum_variant = "Hero"
+
+[blocks.features]
+status = "implemented"
+category = "web"
+purpose = "Card grid for features, products, or value propositions"
+attributes = ["cols"]
+degradation = "heading/body pairs"
+enum_variant = "Features"
+
+[blocks.steps]
+status = "implemented"
+category = "web"
+purpose = "Numbered process or timeline steps with optional time estimates"
+attributes = []
+degradation = "ordered list with headings"
+enum_variant = "Steps"
+
+[blocks.stats]
+status = "implemented"
+category = "web"
+purpose = "Row of metric/stat cards with value and label"
+attributes = []
+degradation = "bulleted value list"
+enum_variant = "Stats"
+
+[blocks.comparison]
+status = "implemented"
+category = "web"
+purpose = "Feature comparison matrix with check/dash rendering and column highlight"
+attributes = ["highlight"]
+degradation = "markdown table"
+enum_variant = "Comparison"
+
+[blocks.logo]
+status = "implemented"
+category = "web"
+purpose = "Centered brand or product logo display"
+attributes = ["src", "alt", "size"]
+degradation = "markdown image"
+enum_variant = "Logo"
+
+[blocks.toc]
+status = "implemented"
+category = "utility"
+purpose = "Auto-generated table of contents from document headings"
+attributes = ["depth"]
+degradation = "bulleted link list"
+enum_variant = "Toc"
+
+[blocks.before-after]
+status = "implemented"
+category = "web"
+purpose = "Before/after problem-to-solution visualization with bullet lists"
+attributes = ["transition"]
+degradation = "two-column heading/list pairs"
+enum_variant = "BeforeAfter"
+
+[blocks.pipeline]
+status = "implemented"
+category = "web"
+purpose = "Horizontal flow pipeline with labeled steps and arrows"
+attributes = []
+degradation = "ordered list"
+enum_variant = "Pipeline"
+
+[blocks.section]
+status = "implemented"
+category = "container"
+purpose = "Page section container with background control and child blocks"
+attributes = ["bg", "headline", "subtitle"]
+degradation = "heading with content"
+enum_variant = "Section"
+
+[blocks.product-card]
+status = "implemented"
+category = "web"
+purpose = "Rich product card with badge, body text, feature list, and CTA"
+attributes = ["title", "subtitle", "badge", "badge_color", "cta_label", "cta_href"]
+degradation = "heading with bulleted features and link"
+enum_variant = "ProductCard"
+
+# ----- App description blocks (data-bound UI) -----
+
+[blocks.list]
+status = "implemented"
+category = "advanced"
+purpose = "Dynamic data list with filtering, sorting, and display modes"
+attributes = ["source", "display", "preload"]
+degradation = "bulleted list"
+enum_variant = "List"
+
+[blocks.board]
+status = "implemented"
+category = "advanced"
+purpose = "Kanban board with draggable cards grouped by column values"
+attributes = ["source", "columns", "card_template", "preload"]
+degradation = "section-per-column with task list"
+enum_variant = "Board"
+
+[blocks.action]
+status = "implemented"
+category = "advanced"
+purpose = "CRUD form that submits via HTMX with method, target, and confirm prompt"
+attributes = ["method", "target", "label", "confirm"]
+degradation = "labeled form"
+enum_variant = "Action"
+
+[blocks.filter-bar]
+status = "implemented"
+category = "advanced"
+purpose = "Filter controls for data views with named fields and option lists"
+attributes = ["target_selector"]
+degradation = "bulleted filter labels"
+enum_variant = "FilterBar"
+
+[blocks.search]
+status = "implemented"
+category = "advanced"
+purpose = "Search input with typeahead results from a data source"
+attributes = ["source", "placeholder"]
+degradation = "text input description"
+enum_variant = "Search"
+
+[blocks.dashboard]
+status = "implemented"
+category = "advanced"
+purpose = "Metrics dashboard with configurable auto-refresh interval"
+attributes = ["source", "refresh"]
+degradation = "linked data source"
+enum_variant = "Dashboard"
+
+[blocks.chat-input]
+status = "implemented"
+category = "advanced"
+purpose = "Smart-routed chat input with action endpoint and mode switching"
+attributes = ["action", "placeholder", "modes"]
+degradation = "text input description"
+enum_variant = "ChatInput"
+
+[blocks.feed]
+status = "implemented"
+category = "advanced"
+purpose = "Real-time content feed via SSE or polling"
+attributes = ["source", "stream"]
+degradation = "linked data source"
+enum_variant = "Feed"
+
+# ----- Compound widget mount points -----
+
+[blocks.editor]
+status = "implemented"
+category = "advanced"
+purpose = "Code or SurfDoc editor mount point with optional live preview"
+attributes = ["source", "lang", "preview"]
+degradation = "linked document"
+enum_variant = "Editor"
+
+[blocks.split-pane]
+status = "implemented"
+category = "container"
+purpose = "Resizable side-by-side layout mount point with configurable ratio"
+attributes = ["ratio"]
+degradation = "sequential sections"
+enum_variant = "SplitPane"
+
+# ----- Infrastructure manifest blocks -----
+
+[blocks.app]
+status = "implemented"
+category = "advanced"
+purpose = "Top-level app manifest container with name, region, port, and child blocks"
+attributes = ["name", "binary", "region", "port", "platform"]
+degradation = "heading with child blocks"
+enum_variant = "App"
+
+[blocks.build]
+status = "implemented"
+category = "advanced"
+purpose = "Build configuration: base image, runtime, edition"
+attributes = ["base", "runtime", "edition"]
+degradation = "key-value list"
+enum_variant = "Build"
+
+[blocks.database]
+status = "implemented"
+category = "advanced"
+purpose = "Infrastructure database configuration with volume and shared auth"
+attributes = ["name", "shared_auth", "volume_gb"]
+degradation = "key-value list"
+enum_variant = "InfraDatabase"
+
+[blocks.deploy]
+status = "implemented"
+category = "advanced"
+purpose = "Deployment environment configuration: machines, memory, auto-stop, strategy"
+attributes = ["env", "app", "machines", "memory", "auto_stop", "min_machines", "strategy"]
+degradation = "key-value list"
+enum_variant = "Deploy"
+
+[blocks.env]
+status = "implemented"
+category = "advanced"
+purpose = "Environment variable group with tier classification (required/optional/defaults)"
+attributes = ["tier"]
+degradation = "definition list"
+enum_variant = "InfraEnv"
+
+[blocks.health]
+status = "implemented"
+category = "advanced"
+purpose = "Health check configuration: path, method, grace period, interval, timeout"
+attributes = ["path", "method", "grace", "interval", "timeout"]
+degradation = "key-value list"
+enum_variant = "Health"
+
+[blocks.concurrency]
+status = "implemented"
+category = "advanced"
+purpose = "Concurrency and connection limits with hard/soft limits and HTTPS forcing"
+attributes = ["type", "hard_limit", "soft_limit", "force_https"]
+degradation = "key-value list"
+enum_variant = "Concurrency"
+
+[blocks.cicd]
+status = "implemented"
+category = "advanced"
+purpose = "CI/CD pipeline configuration with provider and key-value properties"
+attributes = ["provider"]
+degradation = "key-value list"
+enum_variant = "Cicd"
+
+[blocks.smoke]
+status = "implemented"
+category = "advanced"
+purpose = "Smoke test checks: HTTP method, path, and expected status code per check"
+attributes = ["script"]
+degradation = "definition list of HTTP checks"
+enum_variant = "Smoke"
+
+[blocks.domains]
+status = "implemented"
+category = "advanced"
+purpose = "Domain entries for an app with optional descriptions"
+attributes = []
+degradation = "bulleted list of domains"
+enum_variant = "Domains"
+
+[blocks.crates]
+status = "implemented"
+category = "advanced"
+purpose = "Shared crate dependencies with source and feature flags"
+attributes = []
+degradation = "definition list"
+enum_variant = "Crates"
+
+[blocks.deploy-urls]
+status = "implemented"
+category = "advanced"
+purpose = "Per-environment deploy URLs as key-value pairs"
+attributes = []
+degradation = "definition list"
+enum_variant = "DeployUrls"
+
+[blocks.volumes]
+status = "implemented"
+category = "advanced"
+purpose = "Named volume mounts with mount paths"
+attributes = []
+degradation = "definition list"
+enum_variant = "Volumes"
+
+# ----- App spec blocks (data layer + API) -----
+
+[blocks.model]
+status = "implemented"
+category = "advanced"
+purpose = "Data model definition with typed fields and constraints"
+attributes = ["name"]
+degradation = "definition list of fields"
+enum_variant = "Model"
+
+[blocks.route]
+status = "implemented"
+category = "advanced"
+purpose = "API route/endpoint definition with method, auth, returns, and optional handler"
+attributes = ["method", "path", "auth", "returns", "body"]
+degradation = "heading with method and path"
+enum_variant = "Route"
+
+[blocks.auth]
+status = "implemented"
+category = "advanced"
+purpose = "Authentication configuration with provider, session, and role definitions"
+attributes = ["provider", "session", "default_role"]
+degradation = "key-value list"
+enum_variant = "Auth"
+
+[blocks.binding]
+status = "implemented"
+category = "advanced"
+purpose = "Data-to-UI binding connecting a route or model to a UI block"
+attributes = ["source", "target"]
+degradation = "key-value list"
+enum_variant = "Binding"
+
+# ----- App format blocks -----
+
+[blocks.schema]
+status = "implemented"
+category = "advanced"
+purpose = "Data schema definition with typed fields and constraints"
+attributes = ["name"]
+degradation = "definition list of fields"
+enum_variant = "Schema"
+
+[blocks.use]
+status = "implemented"
+category = "advanced"
+purpose = "Crate/dependency declarations for an app with version and features"
+attributes = []
+degradation = "definition list"
+enum_variant = "Use"
+
+[blocks.app-env]
+status = "implemented"
+category = "advanced"
+purpose = "App-level environment variable declarations with descriptions and required flag"
+attributes = []
+degradation = "definition list"
+enum_variant = "AppEnv"
+
+[blocks.app-deploy]
+status = "implemented"
+category = "advanced"
+purpose = "App-level deployment configuration: region, scale, domain, memory"
+attributes = ["region", "scale", "domain", "memory"]
+degradation = "key-value list"
+enum_variant = "AppDeploy"
+
+# ----- Compact display blocks -----
+
+[blocks.row]
+status = "implemented"
+category = "utility"
+purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states"
+attributes = ["icon", "href", "state"]
+degradation = "single-line description"
+enum_variant = "Row"
+
+[blocks.infocard]
+status = "implemented"
+category = "utility"
+purpose = "Knowledge/info card with title, subtitle, summary, facts table, and optional image"
+attributes = ["intent", "image", "state"]
+degradation = "heading with fact list"
+enum_variant = "InfoCard"
+
+# ----- Interactive / application shell blocks -----
+
+[blocks.app-shell]
+status = "implemented"
+category = "advanced"
+purpose = "Root app container with layout mode and child blocks"
+attributes = ["layout"]
+degradation = "sequential child blocks"
+enum_variant = "AppShell"
+
+[blocks.sidebar]
+status = "implemented"
+category = "advanced"
+purpose = "Collapsible side panel with position, width, and child blocks"
+attributes = ["position", "collapsible", "width"]
+degradation = "sequential child blocks"
+enum_variant = "Sidebar"
+
+[blocks.panel]
+status = "implemented"
+category = "advanced"
+purpose = "Resizable bottom or side panel with height and desktop-only option"
+attributes = ["position", "resizable", "height", "desktop_only"]
+degradation = "sequential child blocks"
+enum_variant = "Panel"
+
+[blocks.tab-bar]
+status = "implemented"
+category = "advanced"
+purpose = "Tab strip navigation with labeled tab items and active tab control"
+attributes = ["active"]
+degradation = "bulleted tab labels"
+enum_variant = "TabBar"
+
+[blocks.tab-content]
+status = "implemented"
+category = "advanced"
+purpose = "Tab-associated content pane rendered when its named tab is active"
+attributes = ["tab"]
+degradation = "heading with content"
+enum_variant = "TabContent"
+
+[blocks.toolbar]
+status = "implemented"
+category = "advanced"
+purpose = "Horizontal toolbar with buttons, separators, badges, dropdowns, and text items"
+attributes = []
+degradation = "bulleted action list"
+enum_variant = "Toolbar"
+
+[blocks.drawer]
+status = "implemented"
+category = "advanced"
+purpose = "Slide-out drawer panel with name, position, width, and optional trigger"
+attributes = ["name", "position", "width", "trigger"]
+degradation = "sequential child blocks"
+enum_variant = "Drawer"
+
+[blocks.modal]
+status = "implemented"
+category = "advanced"
+purpose = "Dialog overlay with name, optional title, and child blocks"
+attributes = ["name", "title"]
+degradation = "heading with content"
+enum_variant = "Modal"
+
+[blocks.command-palette]
+status = "implemented"
+category = "advanced"
+purpose = "Searchable command picker with labeled actions, descriptions, and groups"
+attributes = ["trigger"]
+degradation = "bulleted command list"
+enum_variant = "CommandPalette"
+
+[blocks.code-editor]
+status = "implemented"
+category = "advanced"
+purpose = "Syntax-highlighted code editor with optional data source and line numbers"
+attributes = ["lang", "source", "line_numbers"]
+degradation = "fenced code block"
+enum_variant = "CodeEditor"
+
+[blocks.block-editor]
+status = "implemented"
+category = "advanced"
+purpose = "Visual block editor mount point with optional document source"
+attributes = ["source"]
+degradation = "omitted"
+enum_variant = "BlockEditor"
+
+[blocks.terminal]
+status = "implemented"
+category = "advanced"
+purpose = "Shell/terminal panel with configurable shell and working directory"
+attributes = ["shell", "cwd"]
+degradation = "omitted"
+enum_variant = "Terminal"
+
+[blocks.nav-tree]
+status = "implemented"
+category = "advanced"
+purpose = "File/navigation tree with source and optional select/rename/delete callbacks"
+attributes = ["source", "on_select", "on_rename", "on_delete"]
+degradation = "bulleted file list"
+enum_variant = "NavTree"
+
+[blocks.badge]
+status = "implemented"
+category = "utility"
+purpose = "Status badge pill with value and optional color"
+attributes = ["value", "color"]
+degradation = "inline text label"
+enum_variant = "Badge"
+
+[blocks.suggestion-chips]
+status = "implemented"
+category = "advanced"
+purpose = "Clickable suggestion chips from source with max count and dismissible option"
+attributes = ["source", "max", "dismissible"]
+degradation = "bulleted suggestion list"
+enum_variant = "SuggestionChips"
+
+[blocks.chat-thread]
+status = "implemented"
+category = "advanced"
+purpose = "Chat conversation thread display from source with optional action callback"
+attributes = ["source", "on_action"]
+degradation = "sequential message list"
+enum_variant = "ChatThread"
+
+[blocks.chat-input-simple]
+status = "implemented"
+category = "advanced"
+purpose = "Simple chat message input with placeholder and action (distinct from app-bound chat-input)"
+attributes = ["placeholder", "action"]
+degradation = "text input description"
+enum_variant = "ChatInputSimple"
+
+[blocks.log-stream]
+status = "implemented"
+category = "advanced"
+purpose = "Live log output stream with optional source and tail line count"
+attributes = ["source", "tail"]
+degradation = "fenced code block"
+enum_variant = "LogStream"
+
+[blocks.problem-list]
+status = "implemented"
+category = "advanced"
+purpose = "Error/warning problem list from source, styled as diagnostic output"
+attributes = ["source"]
+degradation = "bulleted error list"
+enum_variant = "ProblemList"

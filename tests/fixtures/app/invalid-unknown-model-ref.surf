@@ -1,0 +1,34 @@
+---
+title: Invalid Unknown Model Ref
+type: app
+status: active
+created: "2026-07-15"
+---
+
+# Invalid: dangling model and route references
+
+`WorkoutSet.exercise_id` references an `Exercise` model that is never
+defined, and the GET route returns an undefined `Workout` model.
+
+::app[name=broken-refs port=8080]
+
+:::model[name=User]
+- id: uuid [primary, auto]
+- email: email [required, unique]
+:::
+
+:::model[name=WorkoutSet]
+- id: uuid [primary, auto]
+- exercise_id: ref(Exercise) [required]
+:::
+
+:::auth[provider=email]
+session: cookie
+:::
+
+:::route[method=GET path=/api/workouts]
+auth: required
+returns: list(Workout)
+:::
+
+::

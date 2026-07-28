@@ -1,0 +1,11 @@
+---
+title: "L005 Fixture"
+type: report
+status: active
+---
+
+# Document
+
+:::column
+A nested-depth opener with no open parent block.
+:::

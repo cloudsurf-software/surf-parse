@@ -1,0 +1,24 @@
+---
+title: Invalid Missing Pieces
+type: app
+status: active
+created: "2026-07-15"
+---
+
+# Invalid: no auth block, User model missing email
+
+There is no `::auth` block anywhere in the app, and the `User` model is
+missing its required `email` field.
+
+::app[name=missing-pieces port=8080]
+
+:::model[name=User]
+- id: uuid [primary, auto]
+- display_name: string [optional]
+:::
+
+:::route[method=GET path=/api/users]
+returns: list(User)
+:::
+
+::

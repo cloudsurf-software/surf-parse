@@ -1,0 +1,70 @@
+[package]
+name = "surf-parse"
+version = "0.10.0"
+edition = "2024"
+license = "MIT"
+authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
+description = "Parser for the SurfDoc format — typed document format with block directives, Markdown-compatible"
+repository = "https://github.com/cloudsurf-software/surf-parse"
+homepage = "https://surfcontext.org"
+keywords = ["surfdoc", "markdown", "parser", "document", "accessibility"]
+categories = ["parser-implementations", "text-processing", "web-programming"]
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# The surf-lint CLI binary. NON-DEFAULT: built only with `--features cli`
+# (e.g. `cargo build --features cli`, `cargo test --features cli`), so
+# `cdylib`/wasm consumers never inherit clap.
+[[bin]]
+name = "surf-lint"
+path = "src/bin/surf-lint.rs"
+required-features = ["cli"]
+
+[features]
+default = ["terminal", "slides"]
+terminal = ["colored"]
+slides = []
+pdf = ["typst", "typst-pdf", "typst-as-lib"]
+native = []
+uniffi = ["dep:uniffi", "native"]
+wasm = ["wasm-bindgen"]
+cli = ["dep:clap"]
+
+[dependencies]
+ammonia = "4"
+colored = { version = "3", optional = true }
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+toml = "0.8"
+uniffi = { version = "0.28", optional = true }
+typst = { version = "0.14", optional = true }
+typst-as-lib = { version = "0.15", optional = true, features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
+typst-pdf = { version = "0.14", optional = true }
+clap = { version = "4", optional = true, features = ["derive"] }
+wasm-bindgen = { version = "0.2", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1"
+proptest = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+# Optimize WASM bundle size for production builds (browser delivery).
+# wasm-pack runs `cargo build --release` and then wasm-opt — this profile
+# tunes the rustc side; wasm-opt -Oz further compresses the artifact.
+[profile.release]
+opt-level = "z"      # optimize for size
+lto = true           # link-time optimization across crates
+codegen-units = 1    # single codegen unit lets LLVM inline more aggressively
+strip = true         # strip debug symbols from the wasm artifact
+panic = "abort"      # smaller panic machinery (no unwinding)
+
+# Local wasm-opt (homebrew) fails validating newer wasm features emitted by the
+# current toolchain; the wasm-bindgen output is valid on its own, so skip the
+# extra optimization pass for local dev builds.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

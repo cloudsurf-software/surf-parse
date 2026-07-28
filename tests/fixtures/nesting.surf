@@ -1,0 +1,73 @@
+---
+title: "Nesting Test"
+type: doc
+status: draft
+---
+
+# Nested Block Directives
+
+This document tests nested block structures using increasing colon depths.
+
+::columns
+:::column
+## Left Column
+
+This is the left column content with some markdown formatting.
+
+- Item one
+- Item two
+- **Bold item**
+:::
+
+:::column
+## Right Column
+
+This is the right column content.
+
+| Key | Value |
+|-----|-------|
+| A   | 1     |
+| B   | 2     |
+:::
+::
+
+## Double Nesting
+
+::layout
+:::section
+::::card
+This is deeply nested content inside a card inside a section inside a layout.
+::::
+:::
+
+:::section
+::::card
+Another deeply nested card.
+::::
+
+::::card
+A second card in the same section.
+::::
+:::
+::
+
+## Mixed Nesting with Known Blocks
+
+::columns
+:::column
+Left side plain text content.
+:::
+
+:::column
+Right side plain text content.
+:::
+::
+
+## Simple Non-Nested Block After Nesting
+
+::callout[type=info]
+This is a regular non-nested callout to verify the parser recovers
+properly after processing nested structures.
+::
+
+The end of the nesting test document.

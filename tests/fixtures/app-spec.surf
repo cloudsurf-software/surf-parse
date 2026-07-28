@@ -1,0 +1,95 @@
+---
+title: "Task Manager App"
+type: app
+version: 1
+created: 2026-03-01
+author: "CloudSurf Software LLC"
+status: active
+---
+
+# Task Manager
+
+A simple task management application built with SurfDoc app specs.
+
+::app[name=task-manager binary=task-manager-server region=sjc port=8080]
+
+:::auth[provider=email]
+session: cookie
+roles: admin, member
+default_role: member
+:::
+
+:::model[name=User]
+- id: uuid [primary, auto]
+- email: string [required, unique]
+- name: string [required, max=100]
+- role: enum(admin, member) [default=member]
+- created_at: datetime [auto]
+:::
+
+:::model[name=Task]
+- id: uuid [primary, auto]
+- title: string [required, max=200]
+- description: text [optional]
+- status: enum(todo, in_progress, done) [default=todo]
+- assignee_id: ref(User) [optional]
+- created_at: datetime [auto]
+- updated_at: datetime [auto]
+:::
+
+:::route[method=GET path="/api/tasks"]
+auth: required
+returns: list(Task)
+:::
+
+:::route[method=POST path="/api/tasks"]
+auth: required
+body: Task
+returns: Task
+:::
+
+:::route[method=PUT path="/api/tasks/:id"]
+auth: required
+body: Task
+returns: Task
+:::
+
+:::route[method=DELETE path="/api/tasks/:id"]
+auth: required
+:::
+
+:::binding[source="/api/tasks" target="#task-list"]
+on_create: refresh
+on_update: patch
+on_delete: remove
+:::
+
+:::page[route="/" title="Tasks"]
+
+:::list[source="/api/tasks" display=card]
+- Status (select: All | Todo | In Progress | Done)
+:::
+
+:::
+
+:::page[route="/new" title="New Task"]
+
+:::action[method=post target="/api/tasks" label="Create Task"]
+- Title (text) *
+- Description (textarea)
+- Status (select: Todo | In Progress | Done)
+- Assignee (text)
+:::
+
+:::
+
+:::database[name=task_manager_db volume_gb=1]
+:::
+
+:::deploy[env=production app=task-manager machines=1 memory=256]
+:::
+
+:::health[path=/healthz method=GET]
+:::
+
+::

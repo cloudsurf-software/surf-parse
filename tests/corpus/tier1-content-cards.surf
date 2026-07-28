@@ -1,0 +1,71 @@
+# Content cards
+
+A corpus fixture exercising the reader-content blocks that render
+structurally on native (A-04 / BR-APP-7): product-card, chart, row,
+info-card, and diagram. Before A-04 these degraded to a markdown
+string on native; this fixture pins the structural native projection.
+
+::product-card[badge="Popular" badge-color="green"]
+## Surf Pro
+For growing teams
+
+Everything in Free, plus unlimited workspaces and priority Mako.
+
+- Unlimited workspaces
+- Priority Mako routing
+- Shared conversation history
+
+[Start free trial](/pricing/pro)
+::
+
+::chart[type=line source="/api/metrics/wau" period=weekly]
+::
+
+::chart[type=bar source="/api/metrics/revenue"]
+::
+
+::row[icon=doc href="/docs/getting-started"]
+Getting started
+Read the five-minute intro guide
+::
+
+::row[icon=clock state=loading]
+Syncing
+Fetching the latest activity
+::
+
+::infocard[intent=success image="/img/onboard.png"]
+# Acme onboarding
+New customer setup
+
+Walk through the first-run checklist to get the workspace ready.
+
+1. Create a workspace
+2. Invite your teammates
+3. Connect a repository
+::
+
+::infocard[intent=info]
+# Release 2.4
+Shipped this week
+
+Highlights from the latest release.
+
+Version: 2.4.0
+Released: 2026-06-14
+Status: Stable
+::
+
+::diagram[type=architecture title="Request flow"]
+web: Web Frontend
+api: API Gateway
+db: Postgres
+web -> api: HTTPS
+api -> db: SQL
+::
+
+::diagram[type=erd title="Core schema"]
+users: id pk, email unique
+docs: id pk, owner_id fk
+users 1--* docs: owns
+::

@@ -1,0 +1,50 @@
+---
+title: "Surfspace — Web showcase"
+type: web
+---
+
+::site
+name: Surfspace
+description: One source. Every surface.
+accent: #2563eb
+font: inter
+::
+
+::nav[logo="Surfspace"]
+- Home /
+- Pricing /pricing
+::
+
+::page[route=/ title="Home"]
+
+::hero
+headline: Build once, render everywhere
+subtitle: Web, iOS, macOS, and PDF from one source
+badge: NEW
+::
+
+# Build once, render everywhere
+
+Surfspace compiles a single typed `.surf` source into web pages, decks, papers,
+and native apps. The `type: web` document routes through the same multipage
+engine as `type: website` — byte-for-byte identical output.
+
+::testimonial[author="Ada" role="Engineer" company="Surfspace"]
+The same source renders themed everywhere.
+::
+
+::cta[label="See pricing" href=/pricing primary=true]
+
+::page[route=/pricing title="Pricing"]
+
+::hero
+headline: Simple, per-seat pricing
+subtitle: Start free, scale when you are ready
+::
+
+# Simple, per-seat pricing
+
+Free to start. Pro is twenty dollars per seat. Premium adds teams and SSO. Every
+plan renders to every surface from the same source.
+
+::cta[label="Back home" href=/ primary=true]

@@ -1,0 +1,30 @@
+---
+title: Invalid Missing Id Field
+type: app
+status: active
+created: "2026-07-15"
+---
+
+# Invalid: model without an id-capable key
+
+The `Tag` model defines no `id` field, so crud generators (whose id column
+defaults to `id`) could not persist it. Validation rejects the spec instead
+of letting generation fail later.
+
+::app[name=missing-id port=8080]
+
+:::model[name=User]
+- id: uuid [primary, auto]
+- email: email [required, unique]
+:::
+
+:::model[name=Tag]
+- label: string [required, max=40]
+- color: string [optional]
+:::
+
+:::auth[provider=email]
+session: cookie
+:::
+
+::

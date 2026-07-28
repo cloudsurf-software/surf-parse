@@ -1,0 +1,34 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# App spec"
+  },
+  {
+    "type": "markdown",
+    "content": "## App: corpus-app"
+  },
+  {
+    "type": "markdown",
+    "content": "**Model: User**\n\n| Field | Type | Constraints |\n|-------|------|-------------|\n| id | string |  |\n| email | string |  |"
+  },
+  {
+    "type": "markdown",
+    "content": "**Authentication**\n- provider: email"
+  },
+  {
+    "type": "markdown",
+    "content": "**GET `/api/users`**"
+  },
+  {
+    "type": "markdown",
+    "content": "**Deploy: unknown**"
+  },
+  {
+    "type": "markdown",
+    "content": ""
+  },
+  {
+    "type": "markdown",
+    "content": "<!-- ::unknown-directive -->\nThis block has no typed parser and degrades to markdown.\n<!-- :: -->"
+  }
+]

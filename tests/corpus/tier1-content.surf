@@ -1,0 +1,56 @@
+---
+title: "Corpus — Tier 1 content blocks"
+type: doc
+---
+
+# Content tier
+
+Plain paragraph with **bold**, *italic*, and a [link](https://surfcontext.org).
+
+::summary
+One source, every target — this fixture pins the content tier.
+::
+
+::callout[type=warning title="Heads up"]
+Callouts carry their type and title natively.
+::
+
+::code[lang=rust file=src/main.rs]
+fn main() {
+    println!("hello");
+}
+::
+
+::data[sortable=true]
+| Name | Role |
+|------|------|
+| Ada | Engineer |
+| Grace | Admiral |
+::
+
+::tasks
+- [x] Parse the source
+- [ ] Render it natively
+::
+
+::decision[status=accepted date=2026-06-11]
+The FFI moves upstream.
+::
+
+::metric[label="Tests" value=694 trend=up unit=tests]
+::
+
+::figure[src=/assets/wave.png alt="A wave" caption="The wave"]
+::
+
+> All that is gold does not glitter.
+
+::divider[label=SECTION]
+::
+
+::details[title="More detail" open=true]
+Hidden depths.
+::
+
+::toc[depth=2]
+::

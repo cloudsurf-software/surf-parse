@@ -1,0 +1,90 @@
+[
+  {
+    "type": "site",
+    "name": "Corpus Co",
+    "description": "A site fixture for the golden corpus",
+    "accent": "#10b981",
+    "font": "inter",
+    "domain": null,
+    "extras": []
+  },
+  {
+    "type": "nav",
+    "logo": "Corpus Co",
+    "items": []
+  },
+  {
+    "type": "page",
+    "route": "/",
+    "title": "Home",
+    "layout": null,
+    "children": [
+      {
+        "type": "hero",
+        "headline": null,
+        "subtitle": null,
+        "badge": null,
+        "align": "center",
+        "image": null,
+        "buttons": [],
+        "content": "headline: Build once, render everywhere\nsubtitle: Web, iOS, and macOS from one source\nbadge: NEW"
+      },
+      {
+        "type": "features",
+        "cards": []
+      },
+      {
+        "type": "stats",
+        "items": []
+      },
+      {
+        "type": "testimonial",
+        "content": "The same doc renders themed everywhere.",
+        "author": "Ada",
+        "role": "Engineer",
+        "company": "Corpus Co"
+      },
+      {
+        "type": "cta",
+        "label": "Get started",
+        "href": "/pricing",
+        "primary": true
+      }
+    ]
+  },
+  {
+    "type": "page",
+    "route": "/pricing",
+    "title": "Pricing",
+    "layout": null,
+    "children": [
+      {
+        "type": "pricing_table",
+        "headers": [
+          "Plan",
+          "Price"
+        ],
+        "rows": [
+          [
+            "Free",
+            "$0"
+          ],
+          [
+            "Pro",
+            "$12/mo"
+          ]
+        ]
+      },
+      {
+        "type": "faq",
+        "items": []
+      }
+    ]
+  },
+  {
+    "type": "footer",
+    "copyright": null,
+    "sections": [],
+    "social": []
+  }
+]

@@ -1,0 +1,204 @@
+[
+  {
+    "type": "app_shell",
+    "layout": "sidebar",
+    "children": []
+  },
+  {
+    "type": "sidebar",
+    "position": "left",
+    "collapsible": true,
+    "width": 240,
+    "children": []
+  },
+  {
+    "type": "nav_tree",
+    "source": "files",
+    "on_select": "open_file",
+    "on_rename": null,
+    "on_delete": null
+  },
+  {
+    "type": "toolbar",
+    "items": [
+      {
+        "kind": "button",
+        "label": "Run",
+        "action": "run",
+        "icon": "play",
+        "style": "primary",
+        "disabled": false,
+        "value": null,
+        "color": null,
+        "options": null
+      },
+      {
+        "kind": "separator",
+        "label": null,
+        "action": null,
+        "icon": null,
+        "style": null,
+        "disabled": false,
+        "value": null,
+        "color": null,
+        "options": null
+      },
+      {
+        "kind": "badge",
+        "label": null,
+        "action": null,
+        "icon": null,
+        "style": null,
+        "disabled": false,
+        "value": "Live",
+        "color": "green",
+        "options": null
+      }
+    ]
+  },
+  {
+    "type": "tab_bar",
+    "active": "preview",
+    "items": [
+      {
+        "id": "preview",
+        "label": "Preview"
+      },
+      {
+        "id": "edit",
+        "label": "Edit"
+      }
+    ]
+  },
+  {
+    "type": "tab_content",
+    "tab": "preview",
+    "children": [
+      {
+        "type": "markdown",
+        "content": "Preview pane content."
+      }
+    ]
+  },
+  {
+    "type": "tab_content",
+    "tab": "edit",
+    "children": []
+  },
+  {
+    "type": "code_editor",
+    "lang": "surf",
+    "source": "doc",
+    "line_numbers": true,
+    "content": "# Editable doc"
+  },
+  {
+    "type": "panel",
+    "position": "bottom",
+    "resizable": false,
+    "height": 160,
+    "desktop_only": true,
+    "children": []
+  },
+  {
+    "type": "problem_list",
+    "source": "diagnostics"
+  },
+  {
+    "type": "drawer",
+    "name": "filters",
+    "position": "right",
+    "width": 320,
+    "trigger": "Filters",
+    "children": [
+      {
+        "type": "markdown",
+        "content": "Drawer body content."
+      }
+    ]
+  },
+  {
+    "type": "modal",
+    "name": "confirm",
+    "title": "Confirm shipment",
+    "children": [
+      {
+        "type": "markdown",
+        "content": "Are you sure you want to ship?"
+      }
+    ]
+  },
+  {
+    "type": "command_palette",
+    "trigger": "cmd+k",
+    "items": [
+      {
+        "label": "Deploy",
+        "description": "Ship to production",
+        "action": "deploy",
+        "icon": "paperplane",
+        "group": "Ops"
+      },
+      {
+        "label": "Toggle theme",
+        "description": null,
+        "action": "theme",
+        "icon": "moon",
+        "group": "View"
+      }
+    ]
+  },
+  {
+    "type": "badge",
+    "value": "3",
+    "color": "red"
+  },
+  {
+    "type": "suggestion_chips",
+    "source": "ai.suggestions",
+    "max": 3,
+    "dismissible": true
+  },
+  {
+    "type": "chat_thread",
+    "source": "chat.thread",
+    "on_action": "run_action"
+  },
+  {
+    "type": "chat_input_simple",
+    "placeholder": "Ask Mako…",
+    "action": "send"
+  },
+  {
+    "type": "progress",
+    "source": "deploy.progress",
+    "steps": [
+      {
+        "label": "Parse",
+        "status": "done"
+      },
+      {
+        "label": "Build",
+        "status": "active"
+      },
+      {
+        "label": "Ship",
+        "status": "pending"
+      }
+    ]
+  },
+  {
+    "type": "log_stream",
+    "source": "build.log",
+    "tail": 100
+  },
+  {
+    "type": "terminal",
+    "shell": "zsh",
+    "cwd": "~/code"
+  },
+  {
+    "type": "block_editor",
+    "source": "doc"
+  }
+]

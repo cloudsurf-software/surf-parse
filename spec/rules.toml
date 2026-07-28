@@ -1,0 +1,163 @@
+# SurfDoc Lint Rule Registry — AUTHORITATIVE
+# This file defines the lint rule contract. surf-parse loads it at compile time
+# (include_str!) and tests/spec_compliance.rs asserts the implemented rule set
+# matches this registry exactly. The spec is the law. Code follows the spec.
+#
+# To add a rule: add it here FIRST, then implement in src/lint.rs (style layer)
+# or src/parse.rs (syntax layer), then run tests.
+#
+# Layer:    "syntax" (P-codes, emitted by the parser) | "style" (L-codes,
+#           emitted by src/lint.rs rules)
+# Severity: "error" | "warning" | "info" — the DEFAULT severity; LintConfig
+#           can override per rule id.
+# Fixable:  whether the fix engine (src/lint.rs, Phase 2) ships a
+#           deterministic fix for this rule.
+#           fix_safety = "safe" (auto-apply) | "suggested" (only with
+#           --fix-suggested). A fixable rule may still emit individual
+#           diagnostics without a fix when no deterministic edit exists for
+#           that instance (e.g. L030 fields with no derivable value).
+#
+# NOTE — V-codes: schema-layer rules V001–V343 live in src/validate.rs and are
+# kept stable there (never renumbered). They are intentionally NOT enumerated
+# in this registry: there is no cheap programmatic enumeration of the V-code
+# set (codes are string literals inside match arms), and duplicating them here
+# would create a hand-maintained drift surface. validate.rs remains their
+# single source of truth.
+#
+# NOTE — P004 (mismatched nesting colons) is OMITTED: over-deep openers and
+# nested mismatches have no parse-layer signal; the style-layer rule L005
+# covers nesting-colon inconsistencies instead. The one parse-layer signal
+# that DOES exist — a top-level closer matching no open block, which the
+# parser now consumes instead of leaking into markdown — is P006 (added
+# 2026-07-03; P004 stays retired to keep ids stable).
+
+[meta]
+spec_version = "0.1"
+total_rules = 15
+registry_updated = "2026-07-03"
+
+# ----------------------------------------------------------------------------
+# Syntax layer (P-codes) — emitted by src/parse.rs
+# ----------------------------------------------------------------------------
+
+[rules.P001]
+layer = "syntax"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "Unclosed block directive '{name}' opened at line {line}"
+description = "A block directive was opened but never closed; the parser force-closes it best-effort"
+
+[rules.P002]
+layer = "syntax"
+severity = "error"
+fixable = true
+fix_safety = "safe"
+message = "Invalid front matter: {message}"
+description = "Front matter opened with --- but never closed, or the YAML inside failed to parse. Fix covers only the unclosed case (inserts the closing --- before the first blank line, when the captured lines are valid YAML); the invalid-YAML case is detection-only"
+
+[rules.P003]
+layer = "syntax"
+severity = "warning"
+fixable = false
+message = "Invalid attributes on '::{name}': {message}"
+description = "The [attr=value] string on a block opener could not be parsed; attributes were dropped"
+
+# P004 omitted — see the NOTE at the top of this file (L005 covers it).
+
+[rules.P005]
+layer = "syntax"
+severity = "warning"
+fixable = false
+message = "Front matter field '{field}' has unrecognized value '{value}'"
+description = "Front matter is valid YAML but a field value is outside the closed schema enums (e.g. type: checkpoint). Genuinely broken YAML stays P002 (error); case-only mismatches additionally get an L031 fix. A .surflint.toml [frontmatter] extra_* list (CLI-side) suppresses listed values"
+
+[rules.P006]
+layer = "syntax"
+severity = "warning"
+fixable = false
+message = "Closing directive with no open block at line {line}"
+description = "A top-level closing directive (`::`) matched no open block; the parser consumes it (outside markdown fences) so it no longer leaks into rendered output as a literal paragraph. L005's remove-fix covers the editor-side cleanup"
+
+# ----------------------------------------------------------------------------
+# Style layer (L-codes) — emitted by src/lint.rs
+# ----------------------------------------------------------------------------
+
+[rules.L001]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "'::section' block used — prefer a markdown '##' heading"
+description = "Sections should be expressed as markdown headings, not ::section blocks"
+
+[rules.L002]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "'::table' block used — prefer a markdown pipe table"
+description = "Tables should be expressed as markdown pipe tables, not ::table blocks"
+
+[rules.L003]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "Block attributes use {curly} braces — use [square] brackets: ::{name}[...]"
+description = "SurfDoc attribute syntax is [square] brackets; {curly} braces are silently ignored by the parser"
+
+[rules.L004]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "Block directive '::{name}' has content on the same line — openers and closers must be on their own line"
+description = "Content on a directive line is silently dropped by the parser; move it to the next line. A displaced '[attrs]' block (space before the bracket) is reattached to the directive instead. '::section' openers are owned by L001, whose fix composes a markdown heading"
+
+[rules.L005]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "Nesting colon count inconsistent with actual depth: {detail}"
+description = "Opener uses more colons than the current nesting depth allows, or a closer matches no open block"
+
+[rules.L010]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "suggested"
+message = "Document of type '{doc_type}' has no '::summary' block"
+description = "doc/plan/guide documents should carry a ::summary block for token-efficient retrieval"
+
+[rules.L011]
+layer = "style"
+severity = "info"
+fixable = false
+message = "'::summary' block starts at line {line} — should appear within the first {limit} lines after front matter"
+description = "Summaries belong near the top of the document so readers and agents see them first"
+
+[rules.L020]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "suggested"
+message = "Unknown block '::{name}'{suggestion}"
+description = "Block name is not registered in spec/blocks.toml; includes a did-you-mean suggestion when a unique spec name is within edit distance 2"
+
+[rules.L030]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "Document of type '{doc_type}' is missing required front matter field: {field}"
+description = "Per-type required front matter beyond the global title/type checks (V001/V002): plan requires status+created, guide requires confidence+updated. Fix only when the value is derivable without a clock: a missing 'updated' mirrors an existing 'created'; other fields are detection-only"
+
+[rules.L031]
+layer = "style"
+severity = "warning"
+fixable = true
+fix_safety = "safe"
+message = "Front matter field '{field}' has value '{value}' — should be '{expected}'"
+description = "Enum-valued front matter field is invalid only by letter case or surrounding whitespace; normalization makes it valid"

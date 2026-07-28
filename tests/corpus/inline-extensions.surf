@@ -1,0 +1,10 @@
+---
+title: "Corpus — inline extensions"
+type: doc
+---
+
+# Inline extensions
+
+The claim holds :evidence[tier=1 source="bench/2026-06.csv"] under load.
+
+Rollout is :status[value=in-progress] as of this writing.

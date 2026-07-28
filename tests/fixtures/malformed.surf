@@ -1,0 +1,42 @@
+---
+title: "Malformed Document"
+type: doc
+status: active
+
+This front matter is never closed, so the parser should produce a diagnostic.
+The entire content will be treated as body text since there is no closing ---.
+
+# Heading After Broken Front Matter
+
+Some normal text here.
+
+::callout[type=warning]
+This callout block is never closed. The parser should produce a warning
+about the unclosed block directive and still parse it best-effort.
+
+::metric[label="" value=""]
+::
+
+The metric above has empty required fields, which validation should catch.
+
+::code[lang=rust]
+::
+
+The code block above is empty, which validation should flag.
+
+::data[format=csv]
+::
+
+The data block above has headers but zero rows.
+
+::figure[src="" caption="Missing source"]
+::
+
+The figure block above has an empty src attribute.
+
+::decision[status=accepted]
+::
+
+The decision block above has an empty body.
+
+Some trailing markdown content.

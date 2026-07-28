@@ -1,0 +1,31 @@
+---
+title: "Corpus — Tier 4 manifest degradation"
+type: manifest
+---
+
+# App spec
+
+::app[name=corpus-app]
+::
+
+::model[name=User]
+- id: uuid pk
+- email: string unique
+::
+
+::auth[provider=email]
+::
+
+::route[method=GET path=/api/users returns=list(User)]
+::
+
+::deploy[target=fly]
+::
+
+::style
+accent: #2563eb
+::
+
+::unknown-directive[foo=bar]
+This block has no typed parser and degrades to markdown.
+::

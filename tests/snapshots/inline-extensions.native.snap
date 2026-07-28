@@ -1,0 +1,6 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# Inline extensions\n\nThe claim holds :evidence[tier=1 source=\"bench/2026-06.csv\"] under load.\n\nRollout is :status[value=in-progress] as of this writing."
+  }
+]

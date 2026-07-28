@@ -1,0 +1,11 @@
+---
+title: "L003 Fixture"
+type: report
+status: active
+---
+
+# Document
+
+::callout[type=info]
+Curly braces are not SurfDoc attribute syntax.
+::

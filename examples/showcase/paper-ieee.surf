@@ -1,0 +1,80 @@
+---
+title: Deterministic Server-Side Rendering for Typed Documents
+type: paper
+format: ieee
+author: Jane Researcher; John Engineer
+affiliation: CloudSurf Software LLC, Research Division
+abstract: We present SurfDoc, a typed document format that compiles a single source to multiple academic artifacts. Our renderer produces byte-identical Typst and LaTeX output, enabling reproducible scientific publishing without external layout engines. We evaluate the approach across IEEE, ACM, and generic article formats and show that deterministic charts and diagrams embed cleanly into both PDF and HTML targets.
+date: 2026-06-27
+---
+
+# Introduction
+
+Reproducible document generation is a recurring need in scientific computing.
+Prior approaches couple authoring tightly to a single backend [@smith2020].
+SurfDoc decouples the source from the target, drawing on the data-science
+tooling tradition surveyed by [@jones2019] and the scaling results of
+[@garcia2022].
+
+# Method
+
+Our pipeline parses one `.surf` source into a typed block tree, then renders it
+through profile-specific templates. The citation engine resolves inline cites
+such as [@smith2020; @garcia2022] and emits a numbered reference list.
+
+::figure[src=architecture.png caption="SurfDoc rendering pipeline" width=80%]
+::
+
+The throughput of the renderer across input sizes is shown below.
+
+::chart[type=line title="Render throughput (docs/sec)"]
+Size | Typst | LaTeX
+S    | 1200  | 1500
+M    | 980   | 1240
+L    | 760   | 1010
+::
+
+# Results
+
+A practitioner overview of transformer-based classification appears in
+[@lee2021, p. 4]. Across all tested formats the output was deterministic.
+
+# References
+
+::cite[key=smith2020 type=article]
+author = Smith, John
+title = Deep Learning for Climate Models
+journal = Journal of Climate AI
+year = 2020
+volume = 12
+issue = 3
+pages = 45-67
+doi = 10.1000/jcai.2020.45
+::
+
+::cite[key=jones2019 type=book]
+author = Jones, Alice; Brown, Bob
+title = Foundations of Data Science
+publisher = MIT Press
+year = 2019
+::
+
+::cite[key=lee2021 type=web]
+author = Lee, Carol
+title = Understanding Transformers
+container = AI Weekly
+year = 2021
+url = https://aiweekly.example/transformers
+accessed = 2021-05-01
+::
+
+::cite[key=garcia2022 type=conference]
+author = Garcia, David; Patel, Esha; Wong, Fang
+title = Scalable Inference
+container = Proceedings of NeurIPS
+year = 2022
+pages = 100-110
+::
+
+::bibliography
+::

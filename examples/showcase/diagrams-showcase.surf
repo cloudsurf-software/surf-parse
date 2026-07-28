@@ -1,0 +1,104 @@
+---
+title: "Diagrams showcase"
+type: doc
+---
+
+# SurfDoc native diagrams
+
+One `.surf` source, deterministic server-side SVG for every diagram kind.
+
+## Architecture
+
+::diagram[type=architecture title="Request flow"]
+web: Web Frontend
+api: API Gateway
+svc: Auth Service
+db: Postgres
+web -> api: HTTPS
+api -> svc: gRPC
+api -> db: SQL
+svc -> db: SQL
+::
+
+## Entity-relationship
+
+::diagram[type=erd title="Core schema"]
+users: id pk, email unique, name
+docs: id pk, owner_id fk, title
+tags: id pk, label unique
+users 1--* docs: owns
+docs *--* tags: labeled
+::
+
+## Flowchart
+
+::diagram[type=flowchart title="Publish pipeline"]
+start [terminator]: Draft
+review [diamond]: Approved?
+publish: Publish
+revise: Request changes
+done [rounded]: Live
+start -> review
+review -> publish: yes
+review -> revise: no
+revise -> start
+publish -> done
+::
+
+## Sequence
+
+::diagram[type=sequence title="Login handshake"]
+actor user: User
+actor app: Web App
+actor api: API
+actor db: Database
+user -> app: Enter credentials
+app -> api: POST /login
+activate api
+api -> db: SELECT user
+db --> api: row
+api --> app: 200 + token
+deactivate api
+app --> user: Welcome
+::
+
+## Gantt
+
+::diagram[type=gantt title="Release plan"]
+section Planning
+Research: 2026-07-01, 5
+Design: 2026-07-06, 4
+section Build
+Backend: 2026-07-10, 8
+Frontend: 2026-07-10, 10
+section Ship
+QA: 2026-07-20, 4
+Launch: 2026-07-24, 1
+::
+
+## State machine
+
+::diagram[type=state title="Order lifecycle"]
+[*] -> Cart
+Cart -> Checkout: submit
+Checkout -> Paid: pay
+Checkout -> Cart: edit
+Paid -> Shipped: fulfill
+Shipped -> [*]
+::
+
+## Mindmap
+
+::diagram[type=mindmap title="Product surface"]
+Surfspace
+  Web
+    Landing
+    Pricing
+    Docs
+  Mobile
+    iOS
+    Android
+  API
+    REST
+    MCP
+::

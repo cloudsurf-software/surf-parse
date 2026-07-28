@@ -1,0 +1,50 @@
+---
+title: Fragment Test Site
+type: doc
+---
+
+# Welcome
+
+Intro paragraph with **bold** and *italic*.
+
+::callout[type=info]
+This is an info callout.
+::
+
+::code[lang=rust]
+fn main() {
+    println!("hello");
+}
+::
+
+::metric
+label: Users
+value: 42K
+trend: up
+::
+
+::site[domain="fragment-test.io"]
+name: Fragment Test
+accent: #3b82f6
+::
+
+::nav
+- [Home](/)
+- [About](/about)
+::
+
+::page[route="/" title="Home"]
+# Home Page
+
+Welcome content.
+
+::callout[type=tip]
+A tip inside a page.
+::
+::
+
+::page[route="/about" title="About"]
+# About
+
+About content with **formatting**.
+::

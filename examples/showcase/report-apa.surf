@@ -1,0 +1,68 @@
+---
+title: A Survey of Reproducible Document Pipelines
+type: report
+format: apa
+author: Alex Author
+institution: State University, Department of Computer Science
+course: CS 480 — Research Methods
+instructor: Prof. R. Mentor
+date: 2026-06-27
+running-head: Reproducible Pipelines
+---
+
+# Introduction
+
+Reproducibility is central to empirical work. Foundational treatments of data
+science establish the methods this survey builds upon [@jones2019]. Domain
+applications, such as climate modeling, demonstrate the stakes of verifiable
+output [@smith2020].
+
+# Discussion
+
+Online resources have made these techniques broadly accessible [@lee2021].
+Conference results confirm that the approach scales [@garcia2022].
+
+# Conclusion
+
+Author-date citation, as used here, pairs naturally with deterministic
+rendering.
+
+# References
+
+::cite[key=jones2019 type=book]
+author = Jones, Alice; Brown, Bob
+title = Foundations of Data Science
+publisher = MIT Press
+year = 2019
+::
+
+::cite[key=smith2020 type=article]
+author = Smith, John
+title = Deep Learning for Climate Models
+journal = Journal of Climate AI
+year = 2020
+volume = 12
+issue = 3
+pages = 45-67
+doi = 10.1000/jcai.2020.45
+::
+
+::cite[key=lee2021 type=web]
+author = Lee, Carol
+title = Understanding Transformers
+container = AI Weekly
+year = 2021
+url = https://aiweekly.example/transformers
+accessed = 2021-05-01
+::
+
+::cite[key=garcia2022 type=conference]
+author = Garcia, David; Patel, Esha; Wong, Fang
+title = Scalable Inference
+container = Proceedings of NeurIPS
+year = 2022
+pages = 100-110
+::
+
+::bibliography
+::

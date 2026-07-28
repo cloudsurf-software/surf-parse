@@ -1,0 +1,11 @@
+---
+title: "P001 Fixture"
+type: report
+status: active
+---
+
+# Document
+
+::callout[type=info]
+This callout is never closed before end of file.
+::

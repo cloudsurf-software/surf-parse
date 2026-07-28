@@ -1,0 +1,22 @@
+Liberation Sans fonts bundled in this directory
+================================================
+
+Files:
+  LiberationSans-Regular.ttf
+  LiberationSans-Bold.ttf
+  LiberationSans-Italic.ttf
+  LiberationSans-BoldItalic.ttf
+
+The Liberation fonts are licensed under the SIL Open Font License,
+Version 1.1 (OFL-1.1). They are libre, redistributable, and may be
+embedded in documents and applications.
+
+  https://github.com/liberationfonts/liberation-fonts
+  https://scripts.sil.org/OFL
+
+These faces are metrically compatible with Arial/Helvetica and are
+bundled here to provide a clean sans-serif body/heading font for PDF
+export, matching the on-screen surfdoc viewer's system sans-serif look.
+The TypstKit embedded font set only provides serif faces (Libertinus
+Serif, New Computer Modern) plus a monospace face (DejaVu Sans Mono),
+so a proportional sans must be supplied explicitly.

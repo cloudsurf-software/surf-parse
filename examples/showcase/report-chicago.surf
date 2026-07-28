@@ -1,0 +1,59 @@
+---
+title: Typed Documents and the Future of Scholarly Output
+type: report
+format: chicago
+author: Casey Scholar
+institution: Riverside College
+course: HIST 305 — Methods of Historical Research
+instructor: Dr. M. Archivist
+date: June 27, 2026
+---
+
+# Overview
+
+Scholarly publishing has always balanced fidelity against flexibility. The data
+science literature provides a useful frame for this tension [@jones2019], while
+applied work in climate science shows why reproducible artifacts matter
+[@smith2020].
+
+# Analysis
+
+Accessible explanations of new methods accelerate adoption [@lee2021]. Chicago
+author-date citation, used throughout this report, keeps sources legible within
+the running prose [@smith2020, p. 50].
+
+# Conclusion
+
+A deterministic toolchain lets historians and scientists alike cite with
+confidence.
+
+# Bibliography
+
+::cite[key=jones2019 type=book]
+author = Jones, Alice; Brown, Bob
+title = Foundations of Data Science
+publisher = MIT Press
+year = 2019
+::
+
+::cite[key=smith2020 type=article]
+author = Smith, John
+title = Deep Learning for Climate Models
+journal = Journal of Climate AI
+year = 2020
+volume = 12
+issue = 3
+pages = 45-67
+::
+
+::cite[key=lee2021 type=web]
+author = Lee, Carol
+title = Understanding Transformers
+container = AI Weekly
+year = 2021
+url = https://aiweekly.example/transformers
+accessed = 2021-05-01
+::
+
+::bibliography
+::

@@ -1,0 +1,103 @@
+---
+title: "Charts showcase"
+type: doc
+---
+
+# SurfDoc native charts
+
+One `.surf` source, deterministic server-side SVG for every chart type. Each
+`::chart` block carries a pipe-delimited dataset in its body: the first column
+is the category / x-axis label, every following column is a named series.
+
+## Line
+
+::chart[type=line title="Weekly active users"]
+Week | Web | Mobile
+W1   | 1200 | 800
+W2   | 1500 | 980
+W3   | 1700 | 1240
+W4   | 1650 | 1560
+W5   | 1980 | 1820
+::
+
+## Area
+
+::chart[type=area title="Monthly revenue ($k)"]
+Month | Revenue
+Jan   | 42
+Feb   | 51
+Mar   | 63
+Apr   | 58
+May   | 74
+Jun   | 89
+::
+
+## Bar
+
+::chart[type=bar title="Signups by plan"]
+Plan    | Q1 | Q2
+Free    | 420 | 510
+Pro     | 180 | 240
+Premium | 60  | 95
+Ultra   | 22  | 38
+::
+
+## Stacked bar
+
+::chart[type=stacked-bar title="Tickets by status"]
+Month | Open | In Progress | Closed
+Jan   | 30   | 18          | 120
+Feb   | 24   | 22          | 140
+Mar   | 28   | 16          | 165
+::
+
+## Scatter
+
+::chart[type=scatter title="Latency vs throughput"]
+Throughput | p50 | p99
+100        | 12  | 40
+250        | 18  | 55
+500        | 26  | 78
+750        | 35  | 110
+1000       | 48  | 160
+::
+
+## Pie
+
+::chart[type=pie title="Traffic sources"]
+Source   | Share
+Organic  | 45
+Direct   | 25
+Referral | 18
+Social   | 12
+::
+
+## Donut
+
+::chart[type=donut title="Revenue by region"]
+Region | Revenue
+NA     | 540
+EMEA   | 310
+APAC   | 220
+LATAM  | 90
+::
+
+## Radar
+
+::chart[type=radar title="Product scorecard"]
+Axis        | Surfspace | Competitor
+Speed       | 9 | 6
+Design      | 8 | 7
+Reliability | 9 | 8
+Price       | 7 | 5
+Support     | 8 | 6
+Ecosystem   | 6 | 9
+::
+
+## Live-data mount point (no inline data)
+
+When a `::chart` has no body it falls back to the `source=` live-data mount
+point with a static preview, so nothing regresses.
+
+::chart[type=line source="/api/metrics/wau" period=weekly]
+::

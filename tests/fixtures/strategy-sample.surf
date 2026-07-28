@@ -1,0 +1,107 @@
+---
+title: "Q1 2026 Product Strategy Review"
+type: plan
+status: active
+scope: workspace
+tags: [strategy, quarterly, product]
+created: "2026-01-15"
+updated: "2026-02-10"
+author: "Brady Davis"
+confidence: high
+version: 2
+related:
+  - path: plans/capital/2026-01-funding-plan.md
+    relationship: references
+---
+
+# Q1 2026 Product Strategy Review
+
+::summary
+CloudSurf is executing a multi-product strategy with TaskSurf as the lead product.
+Revenue target is $5K MRR by end of Q2, driven by TaskSurf subscriptions and
+Wavesite upsells. Patent portfolio provides defensive moat with 16 families filed.
+::
+
+## Current Product Status
+
+::data
+| Product | Stage | MRR | Users | Priority |
+|---------|-------|-----|-------|----------|
+| TaskSurf | Beta | $0 | 12 | P0 |
+| Wavesite | Production | $500 | 45 | P1 |
+| NoteSurf | Alpha | $0 | 8 | P2 |
+| SurfContext | OSS | $0 | 0 | P1 |
+::
+
+::callout[type=tip title="Revenue Priority"]
+Focus engineering effort on TaskSurf billing activation. Every week of delay
+costs approximately $2K in potential MRR based on pipeline conversations.
+::
+
+## Key Decisions
+
+::decision[status=accepted date="2026-02-08"]
+Absorb CloudSurf HQ into TaskSurf. The standalone dashboard adds maintenance
+overhead without differentiated value. AI chat, agent personas, and strategy
+features become TaskSurf premium tier capabilities.
+::
+
+::decision[status=proposed date="2026-02-10"]
+Evaluate SST v3 migration for TaskSurf backend. Amplify Gen 2 is blocking
+custom domain configuration and advanced caching. Migration cost estimated
+at 2-3 engineering days.
+::
+
+## Growth Metrics
+
+::metric[label="MRR" value="$500" trend=up unit="USD"]
+::
+
+::metric[label="Active Users" value="65" trend=up]
+::
+
+::metric[label="Churn Rate" value="2.1%" trend=down unit="monthly"]
+::
+
+## Technical Roadmap
+
+::tasks
+- [x] TaskSurf billing integration
+- [x] Knowledge docs feature
+- [x] GitHub App infrastructure
+- [ ] First paying customer
+- [ ] iOS app submission @brady
+- [ ] SST migration evaluation
+::
+
+## Risk Assessment
+
+::callout[type=danger]
+Single-founder dependency remains the highest operational risk. Brady is the
+sole engineer, designer, and business operator. Any extended absence would
+halt all product development across the portfolio.
+::
+
+::code[lang=toml file="risk-matrix.toml"]
+[risks.founder-dependency]
+severity = "critical"
+likelihood = "medium"
+mitigation = "Document everything, automate CI/CD, maintain ARDS"
+
+[risks.runway]
+severity = "high"
+likelihood = "low"
+mitigation = "Client services revenue covers burn for 12+ months"
+::
+
+## Next Steps
+
+1. Activate TaskSurf billing for first customers
+2. Submit iOS app to App Store
+3. File remaining patent provisionals before public ARDS launch
+4. Apply to StartUpNV accelerator
+
+::callout[type=info]
+Quarterly review scheduled for March 31, 2026. All metrics will be
+re-evaluated against targets at that time.
+::

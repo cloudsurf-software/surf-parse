@@ -1,0 +1,62 @@
+---
+title: "Corpus — Tier 2 site"
+type: website
+---
+
+::site
+name: Corpus Co
+description: A site fixture for the golden corpus
+accent: #10b981
+font: inter
+::
+
+::nav[logo="Corpus Co"]
+- Home /
+- Pricing /pricing
+::
+
+::page[route=/ title="Home"]
+
+::hero
+headline: Build once, render everywhere
+subtitle: Web, iOS, and macOS from one source
+badge: NEW
+::
+
+::features
+- icon=bolt title="Fast" body="Rust-fast parsing"
+- icon=paintbrush title="Themed" body="Style packs resolve once"
+::
+
+::stats
+- value="95" label="Block types"
+- value="3" label="Render targets"
+::
+
+::testimonial[author="Ada" role="Engineer" company="Corpus Co"]
+The same doc renders themed everywhere.
+::
+
+::cta[label="Get started" href=/pricing primary=true]
+::
+
+::
+
+::page[route=/pricing title="Pricing"]
+
+::pricing-table
+| Plan | Price |
+|------|-------|
+| Free | $0 |
+| Pro | $12/mo |
+::
+
+::faq
+- q="Is it fast?" a="Yes."
+- q="Is it themed?" a="Via style packs."
+::
+
+::
+
+::footer[copyright="© 2026 Corpus Co"]
+::

@@ -1,0 +1,13 @@
+<style>.surfdoc { --accent: #2563eb;--accent-text: #fff; }</style>
+<section class="surfdoc-section">
+<h1 id="app-spec">App spec</h1>
+
+<section class="surfdoc-app" aria-label="App: corpus-app"><div class="surfdoc-app-header"><strong>corpus-app</strong></div></section>
+<div class="surfdoc-infra-card surfdoc-model"><strong class="surfdoc-infra-label">Model: User</strong><table class="surfdoc-model-table"><thead><tr><th>Field</th><th>Type</th><th>Constraints</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>string</code></td><td></td></tr><tr><td><code>email</code></td><td><code>string</code></td><td></td></tr></tbody></table></div>
+<div class="surfdoc-infra-card surfdoc-auth"><strong class="surfdoc-infra-label">Authentication</strong><ul><li>provider: email</li></ul></div>
+<div class="surfdoc-infra-card surfdoc-route"><span class="surfdoc-route-method surfdoc-method-get">GET</span> <code class="surfdoc-route-path">/api/users</code></div>
+<div class="surfdoc-infra-card surfdoc-deploy"><strong class="surfdoc-infra-label">Deploy</strong><span class="surfdoc-deploy-badge">unknown</span><ul></ul></div>
+<div class="surfdoc-style" aria-hidden="true" data-properties="accent=#2563eb"></div>
+<div class="surfdoc-unknown" role="note" data-name="unknown-directive"><p>This block has no typed parser and degrades to markdown.</p>
+</div>
+</section>

@@ -1,0 +1,56 @@
+---
+title: The Role of Determinism in Modern Publishing
+type: report
+format: mla
+author: Sam Student
+instructor: Dr. Eleanor Vance
+course: ENG 210 — Writing in the Digital Age
+date: 27 June 2026
+---
+
+# The Role of Determinism in Modern Publishing
+
+Digital publishing has shifted from hand-set type to automated rendering, yet
+reproducibility remains elusive. As one foundational text argues, the science of
+data underpins all reliable computation [@jones2019]. Climate researchers have
+likewise emphasized verifiable pipelines [@smith2020].
+
+A practitioner overview clarifies how these ideas reach everyday tools
+[@lee2021, p. 4]. The result is a publishing model in which the same source can
+be trusted to produce the same artifact every time.
+
+## Conclusion
+
+Determinism is not a luxury but a requirement for scholarship that others can
+reproduce and cite with confidence.
+
+# Works Cited
+
+::cite[key=jones2019 type=book]
+author = Jones, Alice; Brown, Bob
+title = Foundations of Data Science
+publisher = MIT Press
+year = 2019
+::
+
+::cite[key=smith2020 type=article]
+author = Smith, John
+title = Deep Learning for Climate Models
+journal = Journal of Climate AI
+year = 2020
+volume = 12
+issue = 3
+pages = 45-67
+::
+
+::cite[key=lee2021 type=web]
+author = Lee, Carol
+title = Understanding Transformers
+container = AI Weekly
+year = 2021
+url = https://aiweekly.example/transformers
+accessed = 2021-05-01
+::
+
+::bibliography
+::

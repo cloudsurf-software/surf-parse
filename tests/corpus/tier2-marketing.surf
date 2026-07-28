@@ -1,0 +1,67 @@
+---
+title: "Corpus — Tier 2 marketing blocks"
+type: doc
+---
+
+::section[headline="The pitch" subtitle="Why one source wins"]
+Inner section content.
+::
+
+::steps
+1. Write the doc
+2. Render the web
+3. Ship the app
+::
+
+::comparison[highlight="SurfDoc"]
+| Feature | SurfDoc | Other |
+|---------|---------|-------|
+| One source | Yes | No |
+::
+
+::before-after
+before:
+- Hand-synced enums
+after:
+- One enum, compiler-enforced
+::
+
+::pipeline
+- Parse
+- Resolve
+- Render
+::
+
+::columns
+::: column
+Left column.
+:::
+::: column
+Right column.
+:::
+::
+
+::tabs
+::: tab[title="First"]
+Tab one content.
+:::
+::: tab[title="Second"]
+Tab two content.
+:::
+::
+
+::form[submit="Send"]
+- name text "Your name" required
+- email email "Email"
+::
+
+::gallery[columns=2]
+- src=/img/a.png alt="A" caption="First"
+- src=/img/b.png alt="B"
+::
+
+::embed[src="https://example.com/demo" type=iframe title="Demo"]
+::
+
+::hero-image[src=/img/hero.png alt="Hero image"]
+::

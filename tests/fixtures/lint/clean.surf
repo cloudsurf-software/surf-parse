@@ -1,0 +1,25 @@
+---
+title: "Lint Clean Fixture"
+type: doc
+status: active
+created: "2026-06-06"
+---
+
+::summary
+A well-formed document that triggers no diagnostics in any layer.
+::
+
+# Heading
+
+Body text with **markdown** and a [link](https://example.com).
+
+::callout[type=info]
+All good here.
+::
+
+## Tasks
+
+::tasks
+- [x] Implement lint engine
+- [ ] Ship fix engine
+::

@@ -1,0 +1,1065 @@
+//! ANSI terminal renderer.
+//!
+//! Produces colored terminal output using the `colored` crate. Each block type
+//! gets a distinctive visual treatment suitable for CLI display.
+
+use colored::Colorize;
+
+use crate::types::{Block, CalloutType, DecisionStatus, SurfDoc, Trend};
+
+/// Render a `SurfDoc` as ANSI-colored terminal text.
+pub fn to_terminal(doc: &SurfDoc) -> String {
+    let _cite_scope = crate::citation::install_context(crate::citation::build_context(
+        &doc.blocks,
+        doc.front_matter.as_ref().and_then(|fm| fm.format),
+    ));
+    let mut parts: Vec<String> = Vec::new();
+
+    for block in &doc.blocks {
+        parts.push(render_block(block));
+    }
+
+    parts.join("\n\n")
+}
+
+fn render_block(block: &Block) -> String {
+    match block {
+        Block::Markdown { content, .. } => {
+            render_markdown_content(&crate::citation::substitute_text_cites(content))
+        }
+
+        Block::Callout {
+            callout_type,
+            title,
+            content,
+            ..
+        } => {
+            let (border_color, type_label) = callout_style(*callout_type);
+            let border = apply_color("\u{2502}", border_color); // │
+            let label = format!("{}", type_label.bold());
+            let title_part = match title {
+                Some(t) => format!(": {t}"),
+                None => String::new(),
+            };
+            let mut lines = vec![format!("{border} {label}{title_part}")];
+            for line in content.lines() {
+                lines.push(format!("{border} {line}"));
+            }
+            lines.join("\n")
+        }
+
+        Block::Data {
+            headers, rows, ..
+        } => {
+            if headers.is_empty() {
+                return String::new();
+            }
+
+            // Calculate column widths
+            let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+            for row in rows {
+                for (i, cell) in row.iter().enumerate() {
+                    if i < widths.len() {
+                        widths[i] = widths[i].max(cell.len());
+                    }
+                }
+            }
+
+            let separator: String = widths
+                .iter()
+                .map(|&w| "\u{2500}".repeat(w + 2)) // ─
+                .collect::<Vec<_>>()
+                .join("\u{253C}"); // ┼
+
+            // Header row (bold)
+            let header_cells: Vec<String> = headers
+                .iter()
+                .enumerate()
+                .map(|(i, h)| format!(" {:width$} ", h, width = widths[i]))
+                .collect();
+            let header_line = format!(
+                "\u{2502}{}\u{2502}",
+                header_cells.join("\u{2502}")
+            );
+
+            let mut lines = vec![
+                format!("{}", header_line.bold()),
+                format!("\u{2502}{separator}\u{2502}"),
+            ];
+
+            for row in rows {
+                let cells: Vec<String> = row
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let w = widths.get(i).copied().unwrap_or(c.len());
+                        format!(" {:width$} ", c, width = w)
+                    })
+                    .collect();
+                lines.push(format!(
+                    "\u{2502}{}\u{2502}",
+                    cells.join("\u{2502}")
+                ));
+            }
+            lines.join("\n")
+        }
+
+        Block::Code {
+            lang, content, ..
+        } => {
+            let lang_label = match lang {
+                Some(l) => format!(" {}", l.dimmed()),
+                None => String::new(),
+            };
+            let border = format!("{}", "\u{2500}\u{2500}\u{2500}".dimmed()); // ───
+            let mut lines = vec![format!("{border}{lang_label}")];
+            for line in content.lines() {
+                lines.push(format!("  {line}"));
+            }
+            lines.push(border.clone());
+            lines.join("\n")
+        }
+
+        Block::Tasks { items, .. } => {
+            let lines: Vec<String> = items
+                .iter()
+                .map(|item| {
+                    if item.done {
+                        let check = format!("{}", "\u{2713}".green()); // ✓
+                        let text = format!("{}", item.text.strikethrough().green());
+                        let assignee = match &item.assignee {
+                            Some(a) => format!(" {}", format!("@{a}").dimmed()),
+                            None => String::new(),
+                        };
+                        format!("{check} {text}{assignee}")
+                    } else {
+                        let check = "\u{2610}"; // ☐
+                        let assignee = match &item.assignee {
+                            Some(a) => format!(" {}", format!("@{a}").dimmed()),
+                            None => String::new(),
+                        };
+                        format!("{check} {}{assignee}", item.text)
+                    }
+                })
+                .collect();
+            lines.join("\n")
+        }
+
+        Block::Decision {
+            status,
+            date,
+            content,
+            ..
+        } => {
+            let badge = decision_badge(*status);
+            let label = format!("{}", "Decision".bold());
+            let date_part = match date {
+                Some(d) => format!(" ({d})"),
+                None => String::new(),
+            };
+            format!("{badge} {label}{date_part}\n{content}")
+        }
+
+        Block::Metric {
+            label,
+            value,
+            trend,
+            unit,
+            ..
+        } => {
+            let label_str = format!("{}", label.bold());
+            let value_str = format!("{}", value.bold());
+            let unit_part = match unit {
+                Some(u) => format!(" {u}"),
+                None => String::new(),
+            };
+            let trend_part = match trend {
+                Some(Trend::Up) => format!(" {}", "\u{2191}".green()),
+                Some(Trend::Down) => format!(" {}", "\u{2193}".red()),
+                Some(Trend::Flat) => format!(" {}", "\u{2192}".dimmed()),
+                None => String::new(),
+            };
+            format!("{label_str}: {value_str}{unit_part}{trend_part}")
+        }
+
+        Block::Summary { content, .. } => {
+            let border = format!("{}", "\u{2502}".cyan()); // │
+            let lines: Vec<String> = content
+                .lines()
+                .map(|l| format!("{border} {}", l.italic()))
+                .collect();
+            lines.join("\n")
+        }
+
+        Block::Figure {
+            src, caption, ..
+        } => {
+            let cap = caption.as_deref().unwrap_or("Image");
+            format!("{}", format!("[Figure: {cap}] ({src})").dimmed())
+        }
+
+        Block::Tabs { tabs, .. } => {
+            let mut parts = Vec::new();
+            for (i, tab) in tabs.iter().enumerate() {
+                let label = format!("{}", format!("[Tab {}] {}", i + 1, tab.label).bold());
+                parts.push(format!("{label}\n{}", tab.content));
+            }
+            parts.join("\n\n")
+        }
+
+        Block::Columns { columns, .. } => {
+            let parts: Vec<String> = columns
+                .iter()
+                .enumerate()
+                .map(|(i, col)| {
+                    let label = format!("{}", format!("[Col {}]", i + 1).dimmed());
+                    format!("{label}\n{}", col.content)
+                })
+                .collect();
+            parts.join("\n\n")
+        }
+
+        Block::Quote {
+            content,
+            attribution,
+            ..
+        } => {
+            let border = format!("{}", "\u{2502}".dimmed()); // │
+            let mut lines: Vec<String> = content
+                .lines()
+                .map(|l| format!("{border} {}", l.italic()))
+                .collect();
+            if let Some(attr) = attribution {
+                lines.push(format!("{border} {}", format!("\u{2014} {attr}").dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Cta {
+            label, href, primary, ..
+        } => {
+            let badge = if *primary {
+                format!("{}", "[CTA]".blue().bold())
+            } else {
+                format!("{}", "[CTA]".dimmed())
+            };
+            format!("{badge} {} ({href})", label.bold())
+        }
+
+        Block::HeroImage { src, alt, .. } => {
+            let desc = alt.as_deref().unwrap_or("Hero image");
+            format!("{}", format!("[Hero: {desc}] ({src})").dimmed())
+        }
+
+        Block::Testimonial {
+            content,
+            author,
+            role,
+            company,
+            ..
+        } => {
+            let border = format!("{}", "\u{2502}".dimmed()); // │
+            let mut lines: Vec<String> = content
+                .lines()
+                .map(|l| format!("{border} {}", l.italic()))
+                .collect();
+            let details: Vec<&str> = [author.as_deref(), role.as_deref(), company.as_deref()]
+                .iter()
+                .filter_map(|v| *v)
+                .collect();
+            if !details.is_empty() {
+                lines.push(format!("{border} {}", format!("\u{2014} {}", details.join(", ")).dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Style { properties, .. } => {
+            if properties.is_empty() {
+                format!("{}", "[Style: empty]".dimmed())
+            } else {
+                let pairs: Vec<String> = properties
+                    .iter()
+                    .map(|p| format!("  {}: {}", p.key.bold(), p.value))
+                    .collect();
+                format!("{}\n{}", "[Style]".dimmed(), pairs.join("\n"))
+            }
+        }
+
+        Block::Faq { items, .. } => {
+            let mut parts = Vec::new();
+            for (i, item) in items.iter().enumerate() {
+                let q = format!("{}", format!("Q{}: {}", i + 1, item.question).bold());
+                parts.push(format!("{q}\n  {}", item.answer));
+            }
+            parts.join("\n\n")
+        }
+
+        Block::PricingTable {
+            headers, rows, ..
+        } => {
+            // Reuse the same table rendering as Data blocks
+            if headers.is_empty() {
+                return String::new();
+            }
+
+            let label = format!("{}", "[Pricing]".bold().cyan());
+            let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+            for row in rows {
+                for (i, cell) in row.iter().enumerate() {
+                    if i < widths.len() {
+                        widths[i] = widths[i].max(cell.len());
+                    }
+                }
+            }
+
+            let separator: String = widths
+                .iter()
+                .map(|&w| "\u{2500}".repeat(w + 2))
+                .collect::<Vec<_>>()
+                .join("\u{253C}");
+
+            let header_cells: Vec<String> = headers
+                .iter()
+                .enumerate()
+                .map(|(i, h)| format!(" {:width$} ", h, width = widths[i]))
+                .collect();
+            let header_line = format!(
+                "\u{2502}{}\u{2502}",
+                header_cells.join("\u{2502}")
+            );
+
+            let mut lines = vec![
+                label,
+                format!("{}", header_line.bold()),
+                format!("\u{2502}{separator}\u{2502}"),
+            ];
+
+            for row in rows {
+                let cells: Vec<String> = row
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let w = widths.get(i).copied().unwrap_or(c.len());
+                        format!(" {:width$} ", c, width = w)
+                    })
+                    .collect();
+                lines.push(format!(
+                    "\u{2502}{}\u{2502}",
+                    cells.join("\u{2502}")
+                ));
+            }
+            lines.join("\n")
+        }
+
+        Block::Site { domain, properties, .. } => {
+            let label = format!("{}", "[Site Config]".bold().cyan());
+            let mut lines = vec![label];
+            if let Some(d) = domain {
+                lines.push(format!("  {}: {}", "domain".bold(), d));
+            }
+            for p in properties {
+                lines.push(format!("  {}: {}", p.key.bold(), p.value));
+            }
+            lines.join("\n")
+        }
+
+        Block::Page {
+            route,
+            layout,
+            children,
+            content,
+            ..
+        } => {
+            let layout_part = match layout {
+                Some(l) => format!(" layout={l}"),
+                None => String::new(),
+            };
+            let label = format!("{}", format!("[Page {route}{layout_part}]").bold().cyan());
+            if children.is_empty() {
+                if content.is_empty() {
+                    label
+                } else {
+                    format!("{label}\n{content}")
+                }
+            } else {
+                let child_output: Vec<String> = children.iter().map(render_block).collect();
+                format!("{label}\n{}", child_output.join("\n\n"))
+            }
+        }
+
+        Block::Deck { properties, .. } => {
+            let label = format!("{}", "[Deck Config]".bold().cyan());
+            let mut lines = vec![label];
+            for p in properties {
+                lines.push(format!("  {}: {}", p.key.bold(), p.value));
+            }
+            lines.join("\n")
+        }
+
+        Block::Slide {
+            layout,
+            kicker,
+            children,
+            content,
+            ..
+        } => {
+            let layout_part = match layout {
+                Some(l) => format!(" layout={}", l.css_class()),
+                None => String::new(),
+            };
+            let kick = kicker.as_deref().unwrap_or("");
+            let label = format!("{}", format!("[Slide{layout_part}] {kick}").bold().cyan());
+            if children.is_empty() {
+                if content.is_empty() {
+                    label
+                } else {
+                    format!("{label}\n{content}")
+                }
+            } else {
+                let child_output: Vec<String> = children.iter().map(render_block).collect();
+                format!("{label}\n{}", child_output.join("\n\n"))
+            }
+        }
+
+        Block::Nav { items, logo, groups, brand, .. } => {
+            let header = match (brand, logo) {
+                (Some(b), _) => format!("{} ", b.bold()),
+                (None, Some(l)) => format!("{} ", l.bold()),
+                _ => String::new(),
+            };
+            let mut links: Vec<String> = items
+                .iter()
+                .map(|item| format!("{} ({})", item.label.blue(), item.href.dimmed()))
+                .collect();
+            for g in groups {
+                for item in &g.items {
+                    links.push(format!("{} ({})", item.label.blue(), item.href.dimmed()));
+                }
+            }
+            format!("{header}{}", links.join(" | "))
+        }
+
+        Block::Details {
+            title, content, open, ..
+        } => {
+            let state = if *open { "\u{25bc}" } else { "\u{25b6}" }; // ▼ or ▶
+            let heading = title.as_deref().unwrap_or("Details");
+            format!("{} {}\n{content}", state, heading.bold())
+        }
+
+        Block::Divider { label, .. } => {
+            let rule = "\u{2500}".repeat(40); // ─
+            match label {
+                Some(text) => format!(
+                    "{} {} {}",
+                    "\u{2500}".repeat(3).dimmed(),
+                    text.dimmed(),
+                    "\u{2500}".repeat(36usize.saturating_sub(text.len())).dimmed(),
+                ),
+                None => rule.dimmed().to_string(),
+            }
+        }
+
+        Block::Unknown {
+            name, content, ..
+        } => {
+            let label = format!("{}", format!("[{name}]").dimmed());
+            if content.is_empty() {
+                label
+            } else {
+                format!("{label}\n{content}")
+            }
+        }
+
+        Block::Embed { src, title, .. } => {
+            let label = title.as_deref().unwrap_or("Embed");
+            format!("{} {}", format!("[{label}]").cyan(), src.dimmed())
+        }
+
+        Block::Form { fields, submit_label, .. } => {
+            let mut lines = vec![format!("{}", "Form".bold())];
+            for field in fields {
+                let req = if field.required { " *".red().to_string() } else { String::new() };
+                lines.push(format!("  {} {}{}", "•".dimmed(), field.label, req));
+            }
+            if let Some(label) = submit_label {
+                lines.push(format!("  {}", format!("[{label}]").cyan()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Gallery { items, .. } => {
+            let count = items.len();
+            format!("{} ({count} images)", "Gallery".bold())
+        }
+
+        Block::Footer { sections, copyright, .. } => {
+            let mut lines = vec!["\u{2500}".repeat(40).dimmed().to_string()];
+            for section in sections {
+                lines.push(format!("{}", section.heading.bold()));
+                for link in &section.links {
+                    lines.push(format!("  {}", link.label.dimmed()));
+                }
+            }
+            if let Some(cr) = copyright {
+                lines.push(cr.dimmed().to_string());
+            }
+            lines.join("\n")
+        }
+
+        Block::Hero {
+            headline, subtitle, buttons, ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("{}", h.bold()));
+            }
+            if let Some(s) = subtitle {
+                lines.push(s.dimmed().to_string());
+            }
+            for btn in buttons {
+                let marker = if btn.primary { "\u{25b6}" } else { "\u{25b7}" };
+                lines.push(format!("  {} {} {}", marker, btn.label.cyan(), btn.href.dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Banner {
+            headline, subtitle, buttons, ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("{}", h.bold()));
+            }
+            if let Some(s) = subtitle {
+                lines.push(s.dimmed().to_string());
+            }
+            for btn in buttons {
+                let marker = if btn.primary { "\u{25b6}" } else { "\u{25b7}" };
+                lines.push(format!("  {} {} {}", marker, btn.label.cyan(), btn.href.dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::ProductGrid { groups, .. } => {
+            let mut lines = Vec::new();
+            for group in groups {
+                if let Some(label) = &group.label {
+                    lines.push(label.bold().to_string());
+                }
+                for item in &group.items {
+                    let tagline = item
+                        .tagline
+                        .as_deref()
+                        .map(|t| format!(" — {}", t.dimmed()))
+                        .unwrap_or_default();
+                    lines.push(format!("  {} {}{}", item.name.cyan(), item.href.dimmed(), tagline));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Features { cards, .. } => {
+            let mut lines = Vec::new();
+            for card in cards {
+                let icon = card.icon.as_deref().unwrap_or("\u{2022}");
+                lines.push(format!("{} {}", icon, card.title.bold()));
+                if !card.body.is_empty() {
+                    lines.push(format!("  {}", card.body.dimmed()));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Steps { steps, .. } => {
+            let mut lines = Vec::new();
+            for (i, step) in steps.iter().enumerate() {
+                let time_str = step.time.as_ref().map(|t| format!(" ({})", t)).unwrap_or_default();
+                lines.push(format!("{}. {}{}", i + 1, step.title.bold(), time_str.dimmed()));
+                if !step.body.is_empty() {
+                    lines.push(format!("   {}", step.body.dimmed()));
+                }
+            }
+            lines.join("\n")
+        }
+
+        Block::Stats { items, .. } => {
+            items
+                .iter()
+                .map(|item| format!("{} {}", item.value.bold(), item.label.dimmed()))
+                .collect::<Vec<_>>()
+                .join("  \u{2502}  ")
+        }
+
+        Block::Comparison { headers, rows, .. } => {
+            let mut lines = Vec::new();
+            lines.push(headers.join(" | ").bold().to_string());
+            for row in rows {
+                lines.push(row.join(" | "));
+            }
+            lines.join("\n")
+        }
+
+        Block::Logo { src, alt, .. } => {
+            let label = alt.as_deref().unwrap_or("Logo");
+            format!("{} {}", format!("[{label}]").cyan(), src.dimmed())
+        }
+
+        Block::Toc { depth, .. } => {
+            format!("{} (depth: {})", "Table of Contents".bold(), depth)
+        }
+
+        Block::BeforeAfter {
+            before_items,
+            after_items,
+            transition,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            lines.push(format!("{}", "Before".bold().red()));
+            for item in before_items {
+                lines.push(format!("  {} {} {}", "\u{25cf}".red(), item.label.bold(), item.detail.dimmed()));
+            }
+            if let Some(t) = transition {
+                lines.push(format!("  {} {} {}", "\u{2193}".cyan(), t.cyan(), "\u{2193}".cyan()));
+            }
+            lines.push(format!("{}", "After".bold().green()));
+            for item in after_items {
+                lines.push(format!("  {} {} {}", "\u{25cf}".green(), item.label.bold(), item.detail.dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        Block::Pipeline { steps, .. } => {
+            steps
+                .iter()
+                .map(|s| {
+                    if let Some(d) = &s.description {
+                        format!("{} ({})", s.label.bold(), d.dimmed())
+                    } else {
+                        format!("{}", s.label.bold())
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(&format!(" {} ", "\u{2192}".cyan()))
+        }
+
+        Block::Section {
+            headline,
+            subtitle,
+            children,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            if let Some(h) = headline {
+                lines.push(format!("{}", h.bold()));
+            }
+            if let Some(s) = subtitle {
+                lines.push(format!("{}", s.dimmed()));
+            }
+            for child in children {
+                lines.push(render_block(child));
+            }
+            lines.join("\n")
+        }
+
+        Block::ProductCard {
+            title,
+            subtitle,
+            badge,
+            features,
+            cta_label,
+            cta_href,
+            body,
+            ..
+        } => {
+            let mut lines = Vec::new();
+            let badge_str = badge.as_ref().map(|b| format!(" [{}]", b.green())).unwrap_or_default();
+            lines.push(format!("{}{}", title.bold(), badge_str));
+            if let Some(s) = subtitle {
+                lines.push(format!("{}", s.dimmed()));
+            }
+            if !body.is_empty() {
+                lines.push(body.clone());
+            }
+            for f in features {
+                lines.push(format!("  {} {f}", "\u{2713}".green()));
+            }
+            if let (Some(label), Some(href)) = (cta_label, cta_href) {
+                lines.push(format!("{} ({})", label.cyan(), href.dimmed()));
+            }
+            lines.join("\n")
+        }
+
+        // App description blocks — degrade to markdown for terminal
+        Block::Diagram { .. }
+        | Block::List { .. } | Block::Board { .. } | Block::Action { .. }
+        | Block::FilterBar { .. } | Block::Search { .. } | Block::Dashboard { .. }
+        | Block::ChatInput { .. } | Block::Feed { .. } | Block::Booking { .. } | Block::Store { .. } | Block::Editor { .. }
+        | Block::Chart { .. } | Block::SplitPane { .. }
+        | Block::App { .. } | Block::Build { .. } | Block::InfraDatabase { .. }
+        | Block::Deploy { .. } | Block::InfraEnv { .. } | Block::Health { .. }
+        | Block::Concurrency { .. } | Block::Cicd { .. } | Block::Smoke { .. }
+        | Block::Domains { .. } | Block::Crates { .. } | Block::DeployUrls { .. }
+        | Block::Volumes { .. }
+        | Block::Model { .. }
+        | Block::Route { .. }
+        | Block::Auth { .. }
+        | Block::Binding { .. }
+        | Block::Schema { .. }
+        | Block::Use { .. }
+        | Block::AppEnv { .. }
+        | Block::AppDeploy { .. }
+        | Block::Row { .. }
+        | Block::InfoCard { .. }
+        | Block::AppShell { .. }
+        | Block::Sidebar { .. }
+        | Block::Panel { .. }
+        | Block::TabBar { .. }
+        | Block::TabContent { .. }
+        | Block::Toolbar { .. }
+        | Block::Drawer { .. }
+        | Block::Modal { .. }
+        | Block::CommandPalette { .. }
+        | Block::CodeEditor { .. }
+        | Block::BlockEditor { .. }
+        | Block::Terminal { .. }
+        | Block::NavTree { .. }
+        | Block::Badge { .. }
+        | Block::SuggestionChips { .. }
+        | Block::ChatThread { .. }
+        | Block::ChatInputSimple { .. }
+        | Block::Progress { .. }
+        | Block::LogStream { .. }
+        | Block::ProblemList { .. }
+        | Block::PostGrid { .. }
+        | Block::Cite { .. }
+        | Block::Bibliography { .. }
+        | Block::Gate { .. } => {
+            crate::render_md::render_block(block)
+        }
+    }
+}
+
+/// Render markdown content with ANSI terminal styling.
+/// Handles headers, bold, italic, inline code, lists, blockquotes, and links.
+fn render_markdown_content(content: &str) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let mut in_code_block = false;
+    for line in content.lines() {
+        // Code block toggle
+        if line.trim_start().starts_with("```") {
+            if in_code_block {
+                in_code_block = false;
+                lines.push(format!("{}", "───".dimmed()));
+                continue;
+            } else {
+                in_code_block = true;
+                let code_lang = line.trim_start().trim_start_matches('`').to_string();
+                let lang_label = if code_lang.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", code_lang.dimmed())
+                };
+                lines.push(format!("{}{}", "───".dimmed(), lang_label));
+                continue;
+            }
+        }
+
+        if in_code_block {
+            lines.push(format!("  {}", line));
+            continue;
+        }
+
+        let trimmed = line.trim();
+
+        // Empty lines
+        if trimmed.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+
+        // Headers
+        if trimmed.starts_with("#### ") {
+            let text = &trimmed[5..];
+            lines.push(format!("{}", style_inline(text).bold()));
+            continue;
+        }
+        if trimmed.starts_with("### ") {
+            let text = &trimmed[4..];
+            lines.push(format!("{}", style_inline(text).bold()));
+            continue;
+        }
+        if trimmed.starts_with("## ") {
+            let text = &trimmed[3..];
+            lines.push(format!("\n{}", style_inline(text).bold().cyan()));
+            continue;
+        }
+        if trimmed.starts_with("# ") {
+            let text = &trimmed[2..];
+            lines.push(format!("\n{}", style_inline(text).bold().blue()));
+            continue;
+        }
+
+        // Blockquotes
+        if trimmed.starts_with("> ") {
+            let text = &trimmed[2..];
+            let border = format!("{}", "│".dimmed());
+            lines.push(format!("{} {}", border, style_inline(text).italic()));
+            continue;
+        }
+        if trimmed == ">" {
+            let border = format!("{}", "│".dimmed());
+            lines.push(format!("{}", border));
+            continue;
+        }
+
+        // Unordered list items
+        if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+            let indent = line.len() - line.trim_start().len();
+            let text = &trimmed[2..];
+            let pad = " ".repeat(indent);
+            lines.push(format!("{}  {} {}", pad, "•".dimmed(), style_inline(text)));
+            continue;
+        }
+
+        // Numbered list items
+        if let Some(rest) = parse_numbered_list(trimmed) {
+            let indent = line.len() - line.trim_start().len();
+            let pad = " ".repeat(indent);
+            let num_end = trimmed.find(". ").unwrap_or(0);
+            let num = &trimmed[..num_end + 1];
+            lines.push(format!("{}  {} {}", pad, num.dimmed(), style_inline(rest)));
+            continue;
+        }
+
+        // Horizontal rules
+        if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+            lines.push(format!("{}", "────────────────────────────────────────".dimmed()));
+            continue;
+        }
+
+        // Regular paragraph text — apply inline styling
+        lines.push(style_inline(trimmed).to_string());
+    }
+
+    lines.join("\n")
+}
+
+/// Check if a line starts with a numbered list pattern like "1. ", "2. ", etc.
+fn parse_numbered_list(line: &str) -> Option<&str> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i > 0 && i < bytes.len() - 1 && bytes[i] == b'.' && bytes[i + 1] == b' ' {
+        Some(&line[i + 2..])
+    } else {
+        None
+    }
+}
+
+/// Apply inline markdown styling: **bold**, *italic*, `code`, [links](url)
+fn style_inline(text: &str) -> String {
+    let mut result = String::new();
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        // Bold: **text**
+        if i + 1 < len && chars[i] == '*' && chars[i + 1] == '*' {
+            if let Some(end) = find_closing(&chars, i + 2, &['*', '*']) {
+                let inner: String = chars[i + 2..end].iter().collect();
+                result.push_str(&format!("{}", inner.bold()));
+                i = end + 2;
+                continue;
+            }
+        }
+
+        // Italic: *text*
+        if chars[i] == '*' && (i + 1 >= len || chars[i + 1] != '*') {
+            if let Some(end) = find_closing_single(&chars, i + 1, '*') {
+                let inner: String = chars[i + 1..end].iter().collect();
+                result.push_str(&format!("{}", inner.italic()));
+                i = end + 1;
+                continue;
+            }
+        }
+
+        // Inline code: `text`
+        if chars[i] == '`' {
+            if let Some(end) = find_closing_single(&chars, i + 1, '`') {
+                let inner: String = chars[i + 1..end].iter().collect();
+                result.push_str(&format!("{}", inner.cyan()));
+                i = end + 1;
+                continue;
+            }
+        }
+
+        // Links: [text](url)
+        if chars[i] == '[' {
+            if let Some(bracket_end) = find_closing_single(&chars, i + 1, ']') {
+                if bracket_end + 1 < len && chars[bracket_end + 1] == '(' {
+                    if let Some(paren_end) = find_closing_single(&chars, bracket_end + 2, ')') {
+                        let link_text: String = chars[i + 1..bracket_end].iter().collect();
+                        let url: String = chars[bracket_end + 2..paren_end].iter().collect();
+                        result.push_str(&format!("{} {}", link_text.blue(), format!("({url})").dimmed()));
+                        i = paren_end + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        result.push(chars[i]);
+        i += 1;
+    }
+
+    result
+}
+
+/// Find closing pair of two identical chars (e.g., ** for bold)
+fn find_closing(chars: &[char], start: usize, pattern: &[char; 2]) -> Option<usize> {
+    let mut i = start;
+    while i + 1 < chars.len() {
+        if chars[i] == pattern[0] && chars[i + 1] == pattern[1] {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Find closing single char (e.g., * for italic, ` for code)
+fn find_closing_single(chars: &[char], start: usize, closing: char) -> Option<usize> {
+    for i in start..chars.len() {
+        if chars[i] == closing {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn callout_style(ct: CalloutType) -> (&'static str, &'static str) {
+    match ct {
+        CalloutType::Warning => ("yellow", "Warning"),
+        CalloutType::Danger => ("red", "Danger"),
+        CalloutType::Info => ("blue", "Info"),
+        CalloutType::Tip => ("green", "Tip"),
+        CalloutType::Note => ("cyan", "Note"),
+        CalloutType::Success => ("green", "Success"),
+        CalloutType::Context => ("white", "Context"),
+    }
+}
+
+fn apply_color(text: &str, color: &str) -> String {
+    match color {
+        "yellow" => format!("{}", text.yellow()),
+        "red" => format!("{}", text.red()),
+        "blue" => format!("{}", text.blue()),
+        "green" => format!("{}", text.green()),
+        "cyan" => format!("{}", text.cyan()),
+        _ => text.to_string(),
+    }
+}
+
+fn decision_badge(status: DecisionStatus) -> String {
+    match status {
+        DecisionStatus::Accepted => format!("{}", "[ACCEPTED]".green()),
+        DecisionStatus::Rejected => format!("{}", "[REJECTED]".red()),
+        DecisionStatus::Proposed => format!("{}", "[PROPOSED]".yellow()),
+        DecisionStatus::Superseded => format!("{}", "[SUPERSEDED]".dimmed()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::*;
+
+    fn span() -> Span {
+        Span {
+            start_line: 1,
+            end_line: 1,
+            start_offset: 0,
+            end_offset: 0,
+        }
+    }
+
+    fn doc_with(blocks: Vec<Block>) -> SurfDoc {
+        SurfDoc {
+            front_matter: None,
+            blocks,
+            source: String::new(),
+        }
+    }
+
+    #[test]
+    fn term_callout_has_color() {
+        // Force colors on — the colored crate disables them when stdout is not a tty.
+        colored::control::set_override(true);
+
+        let doc = doc_with(vec![Block::Callout {
+            callout_type: CalloutType::Warning,
+            title: None,
+            content: "Watch out!".into(),
+            span: span(),
+        }]);
+        let output = to_terminal(&doc);
+        // ANSI escape codes start with \x1b[
+        assert!(
+            output.contains("\x1b["),
+            "Terminal output should contain ANSI escape codes, got: {output:?}"
+        );
+        assert!(output.contains("Watch out!"));
+
+        colored::control::unset_override();
+    }
+
+    #[test]
+    fn term_tasks_symbols() {
+        let doc = doc_with(vec![Block::Tasks {
+            items: vec![
+                TaskItem {
+                    done: true,
+                    text: "Done".into(),
+                    assignee: None,
+                },
+                TaskItem {
+                    done: false,
+                    text: "Pending".into(),
+                    assignee: None,
+                },
+            ],
+            span: span(),
+        }]);
+        let output = to_terminal(&doc);
+        assert!(output.contains("\u{2713}"), "Should contain checkmark"); // ✓
+        assert!(output.contains("\u{2610}"), "Should contain empty checkbox"); // ☐
+    }
+
+    #[test]
+    fn term_metric_trend() {
+        let doc = doc_with(vec![
+            Block::Metric {
+                label: "MRR".into(),
+                value: "$2K".into(),
+                trend: Some(Trend::Up),
+                unit: None,
+                span: span(),
+            },
+            Block::Metric {
+                label: "Churn".into(),
+                value: "5%".into(),
+                trend: Some(Trend::Down),
+                unit: None,
+                span: span(),
+            },
+        ]);
+        let output = to_terminal(&doc);
+        assert!(output.contains("\u{2191}"), "Should contain up arrow"); // ↑
+        assert!(output.contains("\u{2193}"), "Should contain down arrow"); // ↓
+    }
+}

@@ -1,0 +1,79 @@
+---
+title: "Corpus — Tier 3 app chrome"
+type: app
+---
+
+::app-shell[layout=sidebar]
+
+::sidebar[position=left collapsible=true width=240]
+::nav-tree[source=files on-select=open_file]
+::
+::
+
+::toolbar
+- button[label="Run" action=run icon=play style=primary]
+- separator
+- badge[value="Live" color=green]
+::
+
+::tab-bar[active=preview]
+- preview "Preview"
+- edit "Edit"
+::
+
+::tab-content[tab=preview]
+Preview pane content.
+::
+
+::tab-content[tab=edit]
+::code-editor[lang=surf source=doc line-numbers=true]
+# Editable doc
+::
+::
+
+::panel[position=bottom height=160 desktop-only=true]
+::problem-list[source=diagnostics]
+::
+::
+
+::
+
+::drawer[name=filters position=right width=320 trigger="Filters"]
+Drawer body content.
+::
+
+::modal[name=confirm title="Confirm shipment"]
+Are you sure you want to ship?
+::
+
+::command-palette[trigger=cmd+k]
+- "Deploy" description="Ship to production" action=deploy icon=paperplane group=Ops
+- "Toggle theme" action=theme icon=moon group=View
+::
+
+::badge[value=3 color=red]
+::
+
+::suggestion-chips[source=ai.suggestions max=3 dismissible=true]
+::
+
+::chat-thread[source=chat.thread on-action=run_action]
+::
+
+::chat-input-simple[placeholder="Ask Mako…" action=send]
+::
+
+::progress[source=deploy.progress]
+- Parse ✓
+- Build ●
+- Ship ○
+::
+
+::log-stream[source=build.log tail=100]
+::
+
+::terminal[shell=zsh cwd=~/code]
+::
+
+::block-editor[source=doc]
+::

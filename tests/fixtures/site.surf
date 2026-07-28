@@ -1,0 +1,40 @@
+---
+title: "Test Multi-Page Site"
+type: doc
+---
+
+# Welcome to the Test Site
+
+This loose block should appear on the index page.
+
+::site[domain="testsite.io"]
+name: Test Site
+tagline: A test site for surf build
+theme: dark
+accent: #6366f1
+font: inter
+::
+
+::page[route="/" layout="hero" title="Home"]
+# Welcome
+
+The fastest way to build your site.
+
+Get started today with our amazing tools.
+::
+
+::page[route="/about" title="About Us"]
+# About
+
+We build great tools for developers.
+
+Founded in 2026, we are on a mission to make the web better.
+::
+
+::page[route="/pricing" title="Pricing"]
+# Pricing
+
+Choose the plan that works for you.
+
+Free tier available for individual developers.
+::

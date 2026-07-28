@@ -1,0 +1,11 @@
+---
+title: "L020 Fixture"
+type: report
+status: active
+---
+
+# Document
+
+::callout[type=info]
+Misspelled block name — should suggest ::callout.
+::

@@ -1,0 +1,63 @@
+---
+title: Citations & Bibliography Showcase
+type: report
+format: apa
+author: SurfDoc Engine
+---
+
+# Citations Showcase
+
+This document exercises the SurfDoc citation engine: `::cite` reference
+definitions, inline `[@key]` citations, and a `::bibliography` list rendered in
+the active style (APA here; switch the front-matter `format:` to `mla`, `chicago`,
+or `ieee`).
+
+## Reference definitions
+
+::cite[key=smith2020 type=article]
+author = Smith, John
+title = Deep Learning for Climate Models
+journal = Journal of Climate AI
+year = 2020
+volume = 12
+issue = 3
+pages = 45-67
+doi = 10.1000/jcai.2020.45
+::
+
+::cite[key=jones2019 type=book]
+author = Jones, Alice; Brown, Bob
+title = Foundations of Data Science
+publisher = MIT Press
+year = 2019
+::
+
+::cite[key=lee2021 type=web]
+author = Lee, Carol
+title = Understanding Transformers
+container = AI Weekly
+year = 2021
+url = https://aiweekly.example/transformers
+accessed = 2021-05-01
+::
+
+::cite[key=garcia2022 type=conference]
+author = Garcia, David; Patel, Esha; Wong, Fang
+title = Scalable Inference
+container = Proceedings of NeurIPS
+year = 2022
+pages = 100-110
+::
+
+## Discussion
+
+Recent work on climate modelling with deep nets [@smith2020] builds on the data
+science foundations laid out by [@jones2019]. A practitioner overview is given by
+[@lee2021, p. 4], and scaling results appear in [@garcia2022]. Several of these
+threads converge [@smith2020; @garcia2022].
+
+## References
+
+::bibliography
+::
+</content>

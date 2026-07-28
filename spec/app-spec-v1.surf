@@ -1,0 +1,292 @@
+---
+title: SurfDoc App Spec v1
+type: doc
+version: 1
+created: "2026-07-15"
+status: active
+---
+
+::summary
+Authoritative reference for the app-spec surface of surf-parse v0.9: which
+blocks and attributes the parser actually honors today, the two parallel
+extraction paths (`extract_app` over top-level blocks vs `extract_all_manifests`
+over `::app` children), the field-type and constraint grammars, and the JSON
+wire shape of structured validation errors from `validate_app_spec`.
+::
+
+This document describes implemented behavior, not aspiration. Anything not
+listed as honored below is ignored by the parser even if it appears in a
+document.
+
+## Two Extraction Paths
+
+surf-parse has two parallel, non-overlapping app extraction paths. They walk
+different blocks and produce different intermediate types.
+
+| Path | Entry point | Walks | Produces |
+| --- | --- | --- | --- |
+| A (app format) | `extract_app` (src/extract.rs) | Top-level blocks only: `::schema`, `::route`, `::use`, `::app-env`, `::app-deploy` | `ExtractedApp` |
+| B (app spec) | `extract_all_manifests` (src/manifest.rs) | Children of `::app` only: `::model`, `::route`, `::auth`, `::binding`, `::page`, plus infra blocks | `AppManifest` |
+
+Path A ignores `::app`, `::model`, `::auth`, and `::deploy`. Path B ignores
+everything outside an `::app` container. A `::route` is honored by both paths,
+but only when placed at the matching level.
+
+The `From<ExtractedApp>` bridge (src/manifest.rs) converts Path A output into
+an `AppManifest`: schemas map to models, the app-level `auth=` marker (when
+captured) flows into `app_auth`, but the structured `auth` (`AuthConfig`) is
+always `None` and `pages`/`bindings` are always empty. Bridged manifests
+therefore never pass `validate_app_manifest` without a separate auth source.
+
+## The ::app Block
+
+Path B starts at a top-level `::app` container. Honored attributes:
+
+| Attribute | Type | Required | Notes |
+| --- | --- | --- | --- |
+| name | string | yes (defaults to empty) | App identifier |
+| binary | string | no | Binary/server name |
+| region | string | no | Primary region |
+| port | u32 | no | Listen port |
+| platform | string | no | Target platform |
+| auth | string | no | App-level auth marker (e.g. `auth=password`); carried verbatim into `AppManifest.app_auth` |
+
+`name`, `binary`, `region`, `port`, `platform`, and `auth` are the only
+attributes `parse_app` reads. The `auth=` attribute is a free-form app-level
+marker and is distinct from the structured `AuthConfig` produced by a child
+`::auth` block: the attribute flows into the additive `app_auth` field on
+`AppManifest` (omitted from JSON when absent), while `AppManifest.auth`
+continues to come exclusively from the child `::auth` block.
+
+## Models (::model, Path B child)
+
+Honored attribute: `name` (string). Each field is one dash line inside the
+block body using the colon grammar:
+
+| Grammar element | Form | Example |
+| --- | --- | --- |
+| Field line | dash, name, colon, type, optional bracket list | `- title: string [required, max=200]` |
+| Constraint list | comma-separated inside square brackets | `[primary, auto]` |
+| Enum type | parenthesized variants | `- status: enum(todo, done) [default=todo]` |
+| Reference type | parenthesized target model | `- owner_id: ref(User) [required]` |
+
+Unknown field types silently coerce to `string` and unrecognized constraint
+tokens are silently dropped by the parser; use `validate_app_spec` to surface
+them as `unknown-field-type` / `invalid-constraint` errors.
+
+::callout[type=warning]
+Every model must carry a field literally named `id`: downstream crud
+generators default their id column to `id`, so a model without one cannot be
+persisted. `validate_app_spec` rejects such a model with a `missing-id-field`
+error at validation time instead of letting generation fail later. A `User`
+model lacking `id` is reported as `missing-user-field` (never both codes).
+::
+
+## Routes (::route)
+
+Honored attributes: `method` (GET, POST, PUT, PATCH, DELETE; anything else
+falls back to GET) and `path`. Body lines are key-colon-value:
+
+| Body line | Meaning |
+| --- | --- |
+| `auth: required` | Auth requirement marker (free-form string) |
+| `returns: list(Task)` | Response model; `list(...)` wraps a collection; `none` allowed |
+| `body: Task` | Request body model |
+
+A fenced code block inside the route body is captured verbatim as the
+`handler` field (used for embedded Rust handlers). Routes are honored both as
+`::app` children (Path B, no handler field on `RouteConfig`) and at top level
+(Path A, `ExtractedRoute` keeps `handler`).
+
+## Auth (::auth, Path B child)
+
+The honored auth marker is a child `::auth` block. Honored attribute:
+`provider` with these values (anything else falls back to `email`):
+
+| Provider value | Variant |
+| --- | --- |
+| email | Email |
+| oauth | OAuth |
+| api-key (also api_key, apikey) | ApiKey |
+| token | Token |
+
+Body lines: `session:` (string), `roles:` (comma-separated list),
+`default_role:` (also accepts `default-role:`).
+
+## Schemas (::schema, Path A top level)
+
+The separate top-level app format uses `::schema` with a `name` attribute and
+a paren grammar — note this is NOT the `::model` grammar:
+
+| Grammar element | Form | Example |
+| --- | --- | --- |
+| Field line | dash, name, parenthesized type, whitespace-separated constraints | `- email (email) required unique` |
+| Sized constraint | colon form | `max:200`, `min:1` |
+| Default | colon form | `default:todo` |
+| Enum type | colon form | `- status (enum:todo,done)` |
+| Reference type | colon form | `- owner_id (ref:User)` |
+
+Unlike the `::model` path, `parse_schema_field_type` and
+`parse_schema_constraint` return errors for unknown input (the schema parser
+then falls back to `string` / drops the constraint when embedding).
+
+## Field Types
+
+Both grammars share the same `ModelFieldType` set. Accepted spellings differ
+by path:
+
+| Type | ::model spellings | ::schema spellings |
+| --- | --- | --- |
+| uuid | uuid | uuid |
+| string | string, str, varchar | string, str, varchar |
+| int | int, integer, i32, i64 | int, integer, i64 |
+| float | float, f32, f64, decimal, numeric | float, f64, double |
+| bool | bool, boolean | bool, boolean |
+| datetime | datetime, timestamp, timestamptz | datetime, timestamp |
+| text | text | text |
+| json | json, jsonb | json, jsonb |
+| money | money, currency, price | money, cents, price |
+| image | image, photo, picture, img | image, img, photo |
+| email | email, email_address | email |
+| url | url, uri, link, href | url, uri, link |
+| enum | enum(a, b) | enum:a,b |
+| ref | ref(Model) | ref:Model |
+
+## Constraints
+
+| Constraint | ::model form (bracket list) | ::schema form (whitespace tokens) |
+| --- | --- | --- |
+| primary | primary | primary |
+| auto | auto | auto |
+| required | required | required |
+| optional | optional | optional |
+| unique | unique | unique |
+| index | index, indexed | index |
+| max | max=200 | max:200 |
+| min | min=1 | min:1 |
+| default | default=todo | default:todo |
+
+## Deploy Blocks
+
+Two distinct deploy blocks exist, one per path.
+
+`::deploy` (Path B child of `::app`) honored attributes — a deploy entry is
+only recorded when `env` is present:
+
+| Attribute | Type |
+| --- | --- |
+| env | string (required for the entry to be kept) |
+| app | string |
+| machines | u32 |
+| memory | u32 |
+| auto_stop | string |
+| min_machines | u32 |
+| strategy | string |
+
+`::app-deploy` (Path A top level) honored attributes — only the FIRST
+`::app-deploy` block in a document is captured:
+
+| Attribute | Type |
+| --- | --- |
+| region | string |
+| scale | u32 |
+| domain | string |
+| memory | string (e.g. 512mb) |
+
+Both deploy blocks also collect key-colon-value body lines as free-form
+properties.
+
+## Other Honored Blocks
+
+| Block | Path | Payload |
+| --- | --- | --- |
+| ::use | A | Crate deps: `- serde 1 [derive]` lines, or inline attr names |
+| ::app-env | A | Env vars: `- NAME * "description"` lines; star marks required |
+| ::binding | B | `source`/`target` attrs plus event body lines |
+| ::page | B | `route`, `title`, `layout`, `sidebar` (bool) attrs |
+| ::build, ::database, ::env, ::health, ::concurrency, ::cicd, ::smoke, ::domains, ::crates, ::deploy_urls, ::volumes | B | Infra manifest children of `::app` |
+
+## Validation Error Wire Shape
+
+`validate_app_spec(doc)` returns the extracted `AppManifest` on success or a
+list of structured `AppSpecError` values. JSON serialization:
+
+| Key | Type | Presence |
+| --- | --- | --- |
+| code | string (kebab-case error code) | always |
+| block | string: app, model, route, or auth | always |
+| span | object: start_line, end_line, start_offset, end_offset | omitted when unavailable |
+| message | string | always |
+| hint | string | omitted when absent |
+
+Error codes:
+
+| Code | Meaning |
+| --- | --- |
+| missing-model | No `::model` blocks (or no `::app` block at all) |
+| missing-user-model | No model named User |
+| missing-user-field | User model lacks `id` or `email` |
+| missing-id-field | A non-User model has no `id` field (crud id column defaults to `id`) |
+| unknown-model-ref | A `ref(...)` field targets an undefined model |
+| unknown-route-model | Route `returns:`/`body:` names an undefined model |
+| missing-auth | No `::auth` block |
+| unknown-field-type | Model field type not in the table above |
+| invalid-constraint | Model constraint token not in the table above |
+
+Example error for an `unknown-model-ref`:
+
+```json
+{
+  "code": "unknown-model-ref",
+  "block": "model",
+  "span": {
+    "start_line": 20,
+    "end_line": 23,
+    "start_offset": 342,
+    "end_offset": 431
+  },
+  "message": "field WorkoutSet.exercise_id references unknown model 'Exercise'",
+  "hint": "define a ::model named Exercise or fix the reference"
+}
+```
+
+## Complete Example
+
+The following live `::app` block parses with today's grammar and passes
+`validate_app_spec`:
+
+::app[name=example-app port=8080]
+
+:::model[name=User]
+- id: uuid [primary, auto]
+- email: email [required, unique]
+:::
+
+:::model[name=Task]
+- id: uuid [primary, auto]
+- title: string [required, max=200]
+- status: enum(todo, doing, done) [default=todo]
+- owner_id: ref(User) [required]
+:::
+
+:::auth[provider=email]
+session: cookie
+roles: admin, member
+default_role: member
+:::
+
+:::route[method=GET path=/api/tasks]
+auth: required
+returns: list(Task)
+:::
+
+:::route[method=POST path=/api/tasks]
+auth: required
+returns: Task
+body: Task
+:::
+
+:::deploy[env=production app=example-app machines=1 memory=512]
+:::
+
+::

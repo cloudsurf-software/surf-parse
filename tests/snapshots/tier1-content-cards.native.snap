@@ -1,0 +1,100 @@
+[
+  {
+    "type": "markdown",
+    "content": "# Content cards\n\nA corpus fixture exercising the reader-content blocks that render\nstructurally on native (A-04 / BR-APP-7): product-card, chart, row,\ninfo-card, and diagram. Before A-04 these degraded to a markdown\nstring on native; this fixture pins the structural native projection."
+  },
+  {
+    "type": "product_card",
+    "title": "Surf Pro",
+    "subtitle": "For growing teams",
+    "badge": "Popular",
+    "badge_color": "green",
+    "body": "Everything in Free, plus unlimited workspaces and priority Mako.",
+    "features": [
+      "Unlimited workspaces",
+      "Priority Mako routing",
+      "Shared conversation history"
+    ],
+    "cta_label": "Start free trial",
+    "cta_href": "/pricing/pro"
+  },
+  {
+    "type": "chart",
+    "chart_type": "line",
+    "source": "/api/metrics/wau",
+    "period": "weekly"
+  },
+  {
+    "type": "chart",
+    "chart_type": "bar",
+    "source": "/api/metrics/revenue",
+    "period": null
+  },
+  {
+    "type": "row",
+    "icon": "doc",
+    "title": "Getting started",
+    "description": "Read the five-minute intro guide",
+    "href": "/docs/getting-started",
+    "state": "default"
+  },
+  {
+    "type": "row",
+    "icon": "clock",
+    "title": "Syncing",
+    "description": "Fetching the latest activity",
+    "href": null,
+    "state": "loading"
+  },
+  {
+    "type": "info_card",
+    "intent": "success",
+    "title": "Acme onboarding",
+    "subtitle": "New customer setup",
+    "summary": "Walk through the first-run checklist to get the workspace ready.",
+    "image": "/img/onboard.png",
+    "facts": [],
+    "steps": [
+      "Create a workspace",
+      "Invite your teammates",
+      "Connect a repository"
+    ],
+    "state": "default"
+  },
+  {
+    "type": "info_card",
+    "intent": "info",
+    "title": "Release 2.4",
+    "subtitle": "Shipped this week",
+    "summary": "Highlights from the latest release.",
+    "image": null,
+    "facts": [
+      {
+        "label": "Version",
+        "value": "2.4.0"
+      },
+      {
+        "label": "Released",
+        "value": "2026-06-14"
+      },
+      {
+        "label": "Status",
+        "value": "Stable"
+      }
+    ],
+    "steps": [],
+    "state": "default"
+  },
+  {
+    "type": "diagram",
+    "diagram_type": "architecture",
+    "title": "Request flow",
+    "content": "web: Web Frontend\napi: API Gateway\ndb: Postgres\nweb -> api: HTTPS\napi -> db: SQL"
+  },
+  {
+    "type": "diagram",
+    "diagram_type": "erd",
+    "title": "Core schema",
+    "content": "users: id pk, email unique\ndocs: id pk, owner_id fk\nusers 1--* docs: owns"
+  }
+]

@@ -1,0 +1,10 @@
+---
+title: "L004 Fixture"
+type: report
+status: active
+---
+
+# Document
+
+::callout[type=warning] Danger on the same line!
+::

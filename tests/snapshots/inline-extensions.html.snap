@@ -1,0 +1,6 @@
+<section class="surfdoc-section">
+<h1 id="inline-extensions">Inline extensions</h1>
+<p>The claim holds :evidence[tier=1 source="bench/2026-06.csv"] under load.</p>
+<p>Rollout is :status[value=in-progress] as of this writing.</p>
+
+</section>
