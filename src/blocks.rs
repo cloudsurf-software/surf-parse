@@ -1521,10 +1521,11 @@ fn parse_divider(attrs: &Attrs, span: Span) -> Block {
 
 /// Scan forward from `start` looking for a closing directive matching `open_depth`.
 ///
-/// Tracks nesting so that `:::column` / `:::` inside a `::columns` block are
-/// skipped correctly. If a sibling opening directive at the same depth is
-/// encountered (e.g. `::callout` while scanning for `::hero-image`'s closer),
-/// we bail out — the original block has no closer and should be treated as a leaf.
+/// Balance-aware since 0.11 (mirrors `parse.rs::is_leaf_before_sibling`):
+/// same-depth openers after ours count as nested children owed one closer
+/// each — chrome-in-chrome nesting is real nesting. Our closer is the first
+/// SURPLUS closer at `open_depth`. If EOF arrives without it, the block has
+/// no closer and is treated as a leaf (return None).
 ///
 /// Returns `(collected_content, closing_line_index)`.
 fn scan_container_close(lines: &[&str], start: usize, open_depth: usize) -> Option<(String, usize)> {
@@ -1565,11 +1566,8 @@ fn scan_container_close(lines: &[&str], start: usize, open_depth: usize) -> Opti
             !in_fence || crate::parse::directive_name_start(trimmed, *depth) == *depth
         });
         if let Some((nested_depth, _, _)) = opener {
-            if nested_depth == open_depth && nesting == 0 {
-                // Sibling block at same depth — our block has no closer
-                return None;
-            }
-            if nested_depth > open_depth {
+            // Same-or-deeper opener — a nested child owed one closer.
+            if nested_depth >= open_depth {
                 nesting += 1;
             }
         }
@@ -4189,18 +4187,33 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     for line in content.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("- ") {
-            // Expected format: id "Label"
-            let rest = rest.trim();
+            // Expected format: id "Label" {icon=token}
+            let mut rest = rest.trim();
+            let mut icon = None;
+            if let Some(brace_start) = rest.rfind('{')
+                && let Some(brace) = rest[brace_start + 1..].strip_suffix('}')
+            {
+                for tok in brace.split_whitespace() {
+                    if let Some(v) = tok.strip_prefix("icon=") {
+                        icon = Some(v.trim_matches('"').to_string());
+                    }
+                }
+                if icon.is_some() {
+                    rest = rest[..brace_start].trim_end();
+                }
+            }
             if let Some((id, label_part)) = rest.split_once(' ') {
                 let label = label_part.trim().trim_matches('"').to_string();
                 items.push(TabBarItem {
                     id: id.to_string(),
                     label,
+                    icon,
                 });
             } else {
                 items.push(TabBarItem {
                     id: rest.to_string(),
                     label: rest.to_string(),
+                    icon,
                 });
             }
         }
@@ -7746,6 +7759,123 @@ Saturday 7am-4pm, Sunday 8am-2pm.
         }
     }
 
+    /// Chrome-in-chrome nesting is real nesting: same-depth balanced child
+    /// containers belong to the parent when a surplus closer follows them.
+    /// This is the v0.11 nesting fix — previously the first same-depth child
+    /// opener misclassified the parent as a leaf, emitting it with empty
+    /// children and the chrome as top-level siblings.
+    #[test]
+    fn parse_app_shell_nested_chrome() {
+        let source = "\
+::app-shell[layout=tabs]
+
+::tab-bar[active=docs]
+- docs \"Docs\"
+- tasks \"Tasks\"
+::
+
+::tab-content[tab=docs]
+::nav-tree[source=docsViewModel on-select=open_doc]
+::
+::
+
+::chat-thread[source=surfy]
+::
+
+::
+
+::drawer[name=main position=left width=320]
+::sidebar[position=left width=320]
+::nav-tree[source=drawerDestinations on-select=switch_root]
+::
+::
+::
+";
+        let result = crate::parse(source);
+        assert!(
+            result.diagnostics.is_empty(),
+            "nested chrome must parse clean: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(result.doc.blocks.len(), 2, "blocks: {:?}", result.doc.blocks);
+
+        match &result.doc.blocks[0] {
+            Block::AppShell { layout, children, .. } => {
+                assert_eq!(layout, "tabs");
+                let kinds: Vec<&'static str> = children
+                    .iter()
+                    .map(|b| match b {
+                        Block::TabBar { .. } => "tab-bar",
+                        Block::TabContent { .. } => "tab-content",
+                        Block::ChatThread { .. } => "chat-thread",
+                        other => panic!("unexpected app-shell child: {other:?}"),
+                    })
+                    .collect();
+                assert_eq!(kinds, ["tab-bar", "tab-content", "chat-thread"]);
+                match &children[1] {
+                    Block::TabContent { tab, children, .. } => {
+                        assert_eq!(tab, "docs");
+                        assert!(
+                            matches!(children[0], Block::NavTree { .. }),
+                            "tab-content child: {:?}",
+                            children
+                        );
+                    }
+                    other => panic!("expected TabContent, got {other:?}"),
+                }
+            }
+            other => panic!("Expected AppShell, got {other:?}"),
+        }
+
+        match &result.doc.blocks[1] {
+            Block::Drawer { name, children, .. } => {
+                assert_eq!(name, "main");
+                match &children[0] {
+                    Block::Sidebar { children, .. } => {
+                        assert!(
+                            matches!(children[0], Block::NavTree { .. }),
+                            "sidebar child: {:?}",
+                            children
+                        );
+                    }
+                    other => panic!("expected Sidebar, got {other:?}"),
+                }
+            }
+            other => panic!("Expected Drawer, got {other:?}"),
+        }
+    }
+
+    /// The nesting fix must not reclassify true leaves: a closer-less
+    /// directive followed by sibling blocks stays a leaf, and sibling
+    /// containers stay siblings.
+    #[test]
+    fn leaf_directives_stay_leaves_after_nesting_fix() {
+        let source = "\
+::metric[label=Users value=42]
+
+::hero
+headline: H
+::
+
+::callout[type=info]
+Note
+::
+";
+        let result = crate::parse(source);
+        let kinds: Vec<&'static str> = result
+            .doc
+            .blocks
+            .iter()
+            .map(|b| match b {
+                Block::Metric { .. } => "metric",
+                Block::Hero { .. } => "hero",
+                Block::Callout { .. } => "callout",
+                other => panic!("unexpected block: {other:?}"),
+            })
+            .collect();
+        assert_eq!(kinds, ["metric", "hero", "callout"]);
+    }
+
     #[test]
     fn parse_sidebar_block() {
         let source = "::sidebar[position=left collapsible=true width=250]\nContent here\n::";
@@ -7788,9 +7918,28 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(items.len(), 3);
                 assert_eq!(items[0].id, "preview");
                 assert_eq!(items[0].label, "Preview");
+                assert_eq!(items[0].icon, None);
                 assert_eq!(items[2].id, "source");
             }
             other => panic!("Expected TabBar, got {:?}", other),
+        }
+    }
+
+    /// 0.11: tab items take an optional trailing `{icon=token}` brace, same
+    /// shape as nav rows. Icon-less items and label-less ids still parse.
+    #[test]
+    fn parse_tab_bar_item_icons() {
+        let source = "::tab-bar[active=docs]\n- docs \"Docs\" {icon=doc.text}\n- tasks \"Tasks\" {icon=\"checklist\"}\n- apps \"Apps\"\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::TabBar { items, .. } => {
+                assert_eq!(items.len(), 3);
+                assert_eq!(items[0].icon.as_deref(), Some("doc.text"));
+                assert_eq!(items[0].label, "Docs");
+                assert_eq!(items[1].icon.as_deref(), Some("checklist"));
+                assert_eq!(items[2].icon, None);
+            }
+            other => panic!("Expected TabBar, got {other:?}"),
         }
     }
 

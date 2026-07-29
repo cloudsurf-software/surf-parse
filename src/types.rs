@@ -1112,6 +1112,9 @@ pub enum RowState {
 pub struct TabBarItem {
     pub id: String,
     pub label: String,
+    /// Optional icon token (SF-symbol-ish, e.g. "doc.text"); native clients
+    /// map it to an SFSymbol/Material icon, the web emits it as `data-icon`.
+    pub icon: Option<String>,
 }
 
 /// An item within a `Toolbar` block.

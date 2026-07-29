@@ -1,0 +1,52 @@
+---
+title: "Corpus — FFI-hole closure (0.11): banner, cite, bibliography, gate, product-grid, post-grid, slide"
+type: doc
+---
+
+::banner[id=announce]
+# Surfspace 1.4 is here
+One file, two native clients.
+[Get the update](/download) {primary}
+[Release notes](/notes)
+::
+
+::cite[key=davis2026 type=article]
+author = Davis, K. Brady
+title = SurfDoc: A Typed Document Format
+journal = CloudSurf Engineering
+year = 2026
+::
+
+::cite[key=surf2025 type=web]
+author = CloudSurf Software
+title = The Surf Platform
+url = https://surf.space
+year = 2025
+::
+
+Inline citation [@davis2026] backs the claim.
+
+::bibliography
+::
+
+::gate[title="Private preview" action="/verify" field="Access code" submit="Enter"]
+Enter the code from your invite email.
+::
+
+::product-grid[tiles]
+### Platforms {cols=2}
+- Surfspace | /assets/surfspace.svg | /surfspace | Your team's surf HQ | color:#2e8ad8 dark | [Try it](/signup)
+- WaveSite | /assets/wavesite.svg | /wavesite | Websites that write themselves
+::
+
+::post-grid[title="News" subtitle="What shipped"]
+- [Surfspace ships on iOS](/news/ios){external} | Product · July 2026 | The native client arrives. | /assets/ios.png
+- [SurfDoc v0.11](/news/v011) | Format · July 2026 | Chrome nesting is real nesting.
+::
+
+::slide[layout=bullets kicker="Roadmap"]
+## What's next
+
+- One spec, two clients
+- Parity harness
+::

@@ -1,0 +1,29 @@
+---
+title: "Corpus — Tier 3 app data views (0.11 promotions)"
+type: app
+---
+
+::search[source="/api/search" placeholder="Search docs…"]
+::
+
+::filter-bar[target="#tasks"]
+- Status (select: All | To Do | In Progress | Done)
+- Priority (select: All | Low | Medium | High)
+::
+
+::list[source="/api/tasks" display=card preload=true]
+## {= title =}
+{= summary =}
+filter: status
+filter: assignee
+sort: created_at desc
+::
+
+::list[source="/api/docs" display=compact]
+{= title =}
+::
+
+::board[source="/api/tasks/board" preload=true]
+columns: To Do | In Progress | Done
+### {= title =}
+::

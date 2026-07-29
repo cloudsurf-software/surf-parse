@@ -2822,7 +2822,17 @@ fn serialize_block(block: &Block) -> String {
             };
             let mut lines = Vec::new();
             for item in items {
-                lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)));
+                match &item.icon {
+                    Some(icon) => lines.push(format!(
+                        "- {} \"{}\" {{icon={}}}",
+                        item.id,
+                        escape_attr(&item.label),
+                        icon
+                    )),
+                    None => {
+                        lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)))
+                    }
+                }
             }
             let content = lines.join("\n");
             if content.is_empty() {

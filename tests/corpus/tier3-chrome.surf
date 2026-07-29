@@ -17,8 +17,8 @@ type: app
 ::
 
 ::tab-bar[active=preview]
-- preview "Preview"
-- edit "Edit"
+- preview "Preview" {icon=eye}
+- edit "Edit" {icon=pencil}
 ::
 
 ::tab-content[tab=preview]

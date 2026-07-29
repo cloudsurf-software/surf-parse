@@ -4570,9 +4570,15 @@ pub(crate) fn render_block(block: &Block) -> String {
             for item in items {
                 let is_active = active.as_ref().is_some_and(|a| a == &item.id);
                 let active_cls = if is_active { " class=\"active\"" } else { "" };
+                let icon_attr = item
+                    .icon
+                    .as_ref()
+                    .map(|i| format!(" data-icon=\"{}\"", escape_html(i)))
+                    .unwrap_or_default();
                 html.push_str(&format!(
-                    "<button role=\"tab\" data-tab=\"{}\"{} aria-selected=\"{}\">{}</button>",
+                    "<button role=\"tab\" data-tab=\"{}\"{}{} aria-selected=\"{}\">{}</button>",
                     escape_html(&item.id),
+                    icon_attr,
                     active_cls,
                     is_active,
                     escape_html(&item.label),
@@ -10601,8 +10607,8 @@ About
         let doc = doc_with(vec![Block::TabBar {
             active: Some("preview".into()),
             items: vec![
-                TabBarItem { id: "preview".into(), label: "Preview".into() },
-                TabBarItem { id: "edit".into(), label: "Edit".into() },
+                TabBarItem { id: "preview".into(), label: "Preview".into(), icon: None },
+                TabBarItem { id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()) },
             ],
             span: span(),
         }]);
@@ -10612,6 +10618,7 @@ About
         assert!(html.contains("data-tab=\"preview\""));
         assert!(html.contains("class=\"active\""));
         assert!(html.contains("Preview"));
+        assert!(html.contains("data-icon=\"pencil\""));
     }
 
     #[test]

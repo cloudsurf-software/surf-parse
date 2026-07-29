@@ -1,0 +1,127 @@
+[
+  {
+    "type": "banner",
+    "headline": "Surfspace 1.4 is here",
+    "subtitle": "One file, two native clients.",
+    "anchor_id": "announce",
+    "buttons": [
+      {
+        "label": "Get the update",
+        "href": "/download",
+        "primary": true
+      },
+      {
+        "label": "Release notes",
+        "href": "/notes",
+        "primary": false
+      }
+    ],
+    "content": ""
+  },
+  {
+    "type": "cite",
+    "key": "davis2026",
+    "formatted": "Davis, K. B. (2026). SurfDoc: A Typed Document Format. *CloudSurf Engineering*."
+  },
+  {
+    "type": "cite",
+    "key": "surf2025",
+    "formatted": "Software, C. (2025). The Surf Platform. https://surf.space"
+  },
+  {
+    "type": "markdown",
+    "content": "\nInline citation [@davis2026] backs the claim."
+  },
+  {
+    "type": "bibliography",
+    "heading": "References",
+    "entries": [
+      {
+        "key": "davis2026",
+        "formatted": "Davis, K. B. (2026). SurfDoc: A Typed Document Format. *CloudSurf Engineering*."
+      },
+      {
+        "key": "surf2025",
+        "formatted": "Software, C. (2025). The Surf Platform. https://surf.space"
+      }
+    ]
+  },
+  {
+    "type": "gate",
+    "title": "Private preview",
+    "subtitle": "Enter the code from your invite email.",
+    "action": "/verify",
+    "field_label": "Access code",
+    "submit_label": "Enter",
+    "error": null
+  },
+  {
+    "type": "product_grid",
+    "tiles": true,
+    "groups": [
+      {
+        "label": "Platforms",
+        "cols": 2,
+        "items": [
+          {
+            "name": "Surfspace",
+            "href": "/surfspace",
+            "emblem": "/assets/surfspace.svg",
+            "tagline": "Your team's surf HQ",
+            "cta1_label": null,
+            "cta1_href": null,
+            "cta2_label": "Try it",
+            "cta2_href": "/signup",
+            "bg": "color:#2e8ad8 dark"
+          },
+          {
+            "name": "WaveSite",
+            "href": "/wavesite",
+            "emblem": "/assets/wavesite.svg",
+            "tagline": "Websites that write themselves",
+            "cta1_label": null,
+            "cta1_href": null,
+            "cta2_label": null,
+            "cta2_href": null,
+            "bg": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "post_grid",
+    "title": "News",
+    "subtitle": "What shipped",
+    "items": [
+      {
+        "title": "Surfspace ships on iOS",
+        "href": "/news/ios",
+        "meta": "Product · July 2026",
+        "excerpt": "The native client arrives.",
+        "image": "/assets/ios.png",
+        "external": true
+      },
+      {
+        "title": "SurfDoc v0.11",
+        "href": "/news/v011",
+        "meta": "Format · July 2026",
+        "excerpt": "Chrome nesting is real nesting.",
+        "image": null,
+        "external": false
+      }
+    ]
+  },
+  {
+    "type": "slide",
+    "layout": "bullets",
+    "kicker": "Roadmap",
+    "notes": null,
+    "children": [
+      {
+        "type": "markdown",
+        "content": "## What's next\n\n- One spec, two clients\n- Parity harness"
+      }
+    ]
+  }
+]

@@ -527,36 +527,38 @@ fn flush_markdown(
 // ------------------------------------------------------------------
 
 /// Returns true if a top-level opening directive at `depth` (whose line is at
-/// `after_idx - 1`) is a LEAF: a same-depth sibling opening directive appears
-/// before any matching closer. Returns false if its own closer comes first
-/// (container) OR if neither is found before EOF (preserve existing unclosed-
-/// container force-close behavior at EOF).
+/// `after_idx - 1`) is a LEAF. Balance-aware since 0.11: same-depth openers
+/// after ours are counted as nested children (each owed one closer) instead of
+/// immediately reclassifying us as a leaf — chrome-in-chrome nesting
+/// (`::app-shell` containing `::tab-bar` … `::` … `::`) is real nesting. We
+/// are a container iff a SURPLUS closer at our depth arrives (one more closer
+/// than opened children). At EOF without our closer: same-depth openers were
+/// siblings after all → leaf; no openers seen → keep the old unclosed-
+/// container force-close behavior (return false; caller pushes + P001s).
 ///
-/// Mirrors the sibling-detection semantics of
-/// `crate::blocks::scan_container_close`.
+/// Mirrors the semantics of `crate::blocks::scan_container_close`.
 fn is_leaf_before_sibling(lines: &[&str], after_idx: usize, depth: usize) -> bool {
-    let mut nesting = 0usize;
+    let mut pending = 0usize; // unmatched same-or-deeper openers
+    let mut saw_same_depth = false;
     for line in lines.iter().skip(after_idx) {
         let trimmed = line.trim();
         if let Some(close_depth) = closing_directive_depth(trimmed) {
-            if nesting == 0 && close_depth == depth {
-                return false; // own closer first → container
+            if pending == 0 && close_depth == depth {
+                return false; // surplus closer is ours → container
             }
-            if nesting > 0 {
-                nesting -= 1;
-            }
+            pending = pending.saturating_sub(1);
             continue;
         }
-        if let Some((nd, _, _)) = opening_directive(trimmed) {
-            if nd == depth && nesting == 0 {
-                return true; // sibling first → leaf
-            }
-            if nd > depth {
-                nesting += 1;
+        if let Some((nd, _, _)) = opening_directive(trimmed)
+            && nd >= depth
+        {
+            pending += 1;
+            if nd == depth {
+                saw_same_depth = true;
             }
         }
     }
-    false // EOF, no closer, no sibling → keep old behavior (push; force-closed at EOF)
+    saw_same_depth // EOF without our closer: openers were siblings → leaf
 }
 
 /// If the line is a closing directive (`::`, `:::`, …), return the depth (colon count).

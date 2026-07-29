@@ -289,9 +289,9 @@ pub enum NativeBlock {
     /// File/navigation tree.
     NavTree {
         source: Option<String>,
-        on_select: Option<String>,
-        on_rename: Option<String>,
-        on_delete: Option<String>,
+        on_select: Option<NativeAction>,
+        on_rename: Option<NativeAction>,
+        on_delete: Option<NativeAction>,
     },
     /// Status badge pill.
     Badge {
@@ -307,12 +307,12 @@ pub enum NativeBlock {
     /// Chat conversation thread display.
     ChatThread {
         source: Option<String>,
-        on_action: Option<String>,
+        on_action: Option<NativeAction>,
     },
     /// Simple chat message input.
     ChatInputSimple {
         placeholder: Option<String>,
-        action: Option<String>,
+        action: Option<NativeAction>,
     },
     /// Step/progress indicator.
     Progress {
@@ -327,6 +327,38 @@ pub enum NativeBlock {
     /// Error/warning problem list.
     ProblemList {
         source: Option<String>,
+    },
+
+    // ── App data views promoted from tier 4 (0.11) ─────────────────
+
+    /// Data-bound list view (::list).
+    /// `display` is one of: "card", "table", "compact".
+    List {
+        source: String,
+        display: String,
+        item_template: String,
+        /// Filterable field names declared on the list.
+        filters: Vec<String>,
+        sort_field: Option<String>,
+        sort_descending: bool,
+        preload: bool,
+    },
+    /// Kanban board with cards grouped into columns (::board).
+    Board {
+        source: String,
+        columns: Vec<String>,
+        card_template: Option<String>,
+        preload: bool,
+    },
+    /// Filter controls for data views (::filter-bar).
+    FilterBar {
+        target_selector: String,
+        fields: Vec<NativeFilterField>,
+    },
+    /// Search input with typeahead results (::search).
+    Search {
+        source: String,
+        placeholder: Option<String>,
     },
 
     // ── Wavesite site-format variants (7 new) ──────────────────────
@@ -453,6 +485,72 @@ pub enum NativeBlock {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         scene: Option<NativeDiagramScene>,
     },
+
+    // ── FFI-hole closure (0.11): tier-1–3 kinds that previously degraded ──
+
+    /// Full-width banner strip (::banner) — headline + subtitle + action
+    /// buttons over free-form body content. `anchor_id` is the optional
+    /// in-page anchor (`#contact`).
+    Banner {
+        headline: Option<String>,
+        subtitle: Option<String>,
+        anchor_id: Option<String>,
+        buttons: Vec<NativeHeroButton>,
+        content: String,
+    },
+
+    /// A single reference definition (::cite). Renders as nothing or as a
+    /// compact reference chip; the formatted entry is resolved in Rust with
+    /// the document's active citation style so clients never reimplement
+    /// citation formatting.
+    Cite {
+        key: String,
+        formatted: String,
+    },
+
+    /// Rendered reference list (::bibliography / ::references). Entries are
+    /// pre-formatted in Rust (same string on every platform) in the active
+    /// citation style, numbered/ordered per that style's rules.
+    Bibliography {
+        heading: String,
+        entries: Vec<NativeReferenceEntry>,
+    },
+
+    /// Access-code card (::gate) — password field + submit button. The
+    /// native app controls submission (like `Form`); `action` names the
+    /// POST target for the client to bind.
+    Gate {
+        title: Option<String>,
+        subtitle: Option<String>,
+        action: String,
+        field_label: Option<String>,
+        submit_label: Option<String>,
+        error: Option<String>,
+    },
+
+    /// Grid of product link-cards (::product-grid), optionally grouped.
+    /// `tiles` selects the full-bleed promo-tile rendering.
+    ProductGrid {
+        tiles: bool,
+        groups: Vec<NativeProductGroup>,
+    },
+
+    /// Card grid for a blog/news/events index (::post-grid).
+    PostGrid {
+        title: Option<String>,
+        subtitle: Option<String>,
+        items: Vec<NativePostItem>,
+    },
+
+    /// Presentation slide (::slide) rendered outside the deck renderer.
+    /// `layout` is the SlideLayout css-class token ("cover", "bullets", …).
+    /// Recursive like `SectionContainer` (UniFFI boxes recursive enums).
+    Slide {
+        layout: String,
+        kicker: Option<String>,
+        notes: Option<String>,
+        children: Vec<NativeBlock>,
+    },
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -570,6 +668,9 @@ pub struct NativeGalleryItem {
 pub struct NativeTabBarItem {
     pub id: String,
     pub label: String,
+    /// Optional icon token (SF-symbol-ish, e.g. "doc.text"); clients map it
+    /// to an SFSymbol (iOS/macOS) or Material icon (Android).
+    pub icon: Option<String>,
 }
 
 /// An item within a native `Toolbar`.
@@ -579,7 +680,7 @@ pub struct NativeTabBarItem {
 pub struct NativeToolbarItem {
     pub kind: String,
     pub label: Option<String>,
-    pub action: Option<String>,
+    pub action: Option<NativeAction>,
     pub icon: Option<String>,
     pub style: Option<String>,
     pub disabled: bool,
@@ -594,9 +695,122 @@ pub struct NativeToolbarItem {
 pub struct NativeCommandItem {
     pub label: String,
     pub description: Option<String>,
-    pub action: Option<String>,
+    pub action: Option<NativeAction>,
     pub icon: Option<String>,
     pub group: Option<String>,
+}
+
+/// A typed action parsed from a spec `on*=` / `action=` string (0.11).
+///
+/// The minimal action grammar — `verb:target[:payload]`, bare name =
+/// `invoke` — makes mutations spec-expressible without clients parsing
+/// strings themselves:
+///
+/// - `open:/docs/123` — navigate to a route. verb `open`, target the route.
+/// - `invoke:open_doc` (or bare `open_doc`) — call a named binding-registry
+///   action. verb `invoke`, target the registry name.
+/// - `mutate:tasks.set_stage:stage` — run a named mutation against a data
+///   source; the optional third segment names the payload key the client
+///   supplies at call time.
+///
+/// `raw` always preserves the exact authored string, so registries keyed by
+/// the legacy bare names keep working unchanged. Anything richer than these
+/// three verbs is deliberately deferred until spec-driven surfaces prove the
+/// need (V-C evidence rule).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeAction {
+    /// One of: "open", "invoke", "mutate".
+    pub verb: String,
+    /// Route (open), registry action name (invoke), or mutation name (mutate).
+    pub target: String,
+    /// Payload key for `mutate` actions; None otherwise.
+    pub payload: Option<String>,
+    /// The exact authored action string.
+    pub raw: String,
+}
+
+/// Parse an authored action string into a [`NativeAction`] per the minimal
+/// grammar above. Never fails: unknown shapes become `invoke` on the whole
+/// string, so authoring mistakes degrade to a registry miss (caught by the
+/// build-step validator), not a parse crash.
+pub fn parse_native_action(raw: &str) -> NativeAction {
+    let raw_trim = raw.trim();
+    let (verb, rest) = match raw_trim.split_once(':') {
+        Some((v @ ("open" | "invoke" | "mutate"), rest)) if !rest.is_empty() => (v, rest),
+        _ => ("invoke", raw_trim),
+    };
+    let (target, payload) = if verb == "mutate" {
+        match rest.rsplit_once(':') {
+            Some((t, p)) if !t.is_empty() && !p.is_empty() => (t, Some(p.to_string())),
+            _ => (rest, None),
+        }
+    } else {
+        (rest, None)
+    };
+    NativeAction {
+        verb: verb.to_string(),
+        target: target.to_string(),
+        payload,
+        raw: raw_trim.to_string(),
+    }
+}
+
+/// A single formatted entry within a native `Bibliography`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeReferenceEntry {
+    pub key: String,
+    pub formatted: String,
+}
+
+/// A labelled group of product cards within a native `ProductGrid`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeProductGroup {
+    pub label: Option<String>,
+    /// Max columns for this group's tile row (clamped 1–3 upstream); None →
+    /// the 2-column default.
+    pub cols: Option<u32>,
+    pub items: Vec<NativeProductItem>,
+}
+
+/// A single product link-card within a native `ProductGrid`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeProductItem {
+    pub name: String,
+    pub href: String,
+    pub emblem: Option<String>,
+    pub tagline: Option<String>,
+    pub cta1_label: Option<String>,
+    pub cta1_href: Option<String>,
+    pub cta2_label: Option<String>,
+    pub cta2_href: Option<String>,
+    /// Tile background spec, raw author value ("image:…", "color:…",
+    /// "gradient:…", "transparent", optional trailing " dark").
+    pub bg: Option<String>,
+}
+
+/// A single card within a native `PostGrid`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativePostItem {
+    pub title: String,
+    pub href: String,
+    pub meta: Option<String>,
+    pub excerpt: Option<String>,
+    pub image: Option<String>,
+    pub external: bool,
+}
+
+/// A single filter control within a native `FilterBar`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeFilterField {
+    pub label: String,
+    pub name: String,
+    pub options: Vec<String>,
 }
 
 /// A step within a native `Progress` indicator.
@@ -814,7 +1028,12 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// Schema version carried by every [`NativeDoc`]. Bump when the NativeBlock
 /// or NativeTheme shape changes incompatibly; older app binaries render
 /// unknown future content via the markdown degradation strings.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 1;
+///
+/// v2 (0.11): real chrome nesting (appShell/drawer children populated),
+/// list/board/filterBar/search promoted native, TabBarItem.icon, the seven
+/// former FFI-hole kinds (banner/cite/bibliography/gate/productGrid/postGrid/
+/// slide) structured, and `on*=`/`action=` strings typed as `NativeAction`.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 2;
 
 /// A parsed document plus its resolved theme — the unit that crosses the
 /// FFI for themed native rendering.
@@ -1528,6 +1747,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .map(|i| NativeTabBarItem {
                     id: i.id.clone(),
                     label: i.label.clone(),
+                    icon: i.icon.clone(),
                 })
                 .collect(),
         },
@@ -1577,7 +1797,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .map(|i| NativeCommandItem {
                     label: i.label.clone(),
                     description: i.description.clone(),
-                    action: i.action.clone(),
+                    action: i.action.as_deref().map(parse_native_action),
                     icon: i.icon.clone(),
                     group: i.group.clone(),
                 })
@@ -1616,9 +1836,9 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             ..
         } => NativeBlock::NavTree {
             source: source.clone(),
-            on_select: on_select.clone(),
-            on_rename: on_rename.clone(),
-            on_delete: on_delete.clone(),
+            on_select: on_select.as_deref().map(parse_native_action),
+            on_rename: on_rename.as_deref().map(parse_native_action),
+            on_delete: on_delete.as_deref().map(parse_native_action),
         },
 
         Block::Badge { value, color, .. } => NativeBlock::Badge {
@@ -1641,7 +1861,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             source, on_action, ..
         } => NativeBlock::ChatThread {
             source: source.clone(),
-            on_action: on_action.clone(),
+            on_action: on_action.as_deref().map(parse_native_action),
         },
 
         Block::ChatInputSimple {
@@ -1650,7 +1870,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             ..
         } => NativeBlock::ChatInputSimple {
             placeholder: placeholder.clone(),
-            action: action.clone(),
+            action: action.as_deref().map(parse_native_action),
         },
 
         Block::Progress {
@@ -1673,6 +1893,64 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
 
         Block::ProblemList { source, .. } => NativeBlock::ProblemList {
             source: source.clone(),
+        },
+
+        // ── App data views promoted from tier 4 (0.11) ──────────────
+
+        Block::List {
+            source,
+            display,
+            item_template,
+            filters,
+            sort,
+            preload,
+            ..
+        } => NativeBlock::List {
+            source: source.clone(),
+            display: list_display_str(*display),
+            item_template: item_template.clone(),
+            filters: filters.iter().map(|f| f.field.clone()).collect(),
+            sort_field: sort.as_ref().map(|s| s.field.clone()),
+            sort_descending: sort.as_ref().is_some_and(|s| s.descending),
+            preload: *preload,
+        },
+
+        Block::Board {
+            source,
+            columns,
+            card_template,
+            preload,
+            ..
+        } => NativeBlock::Board {
+            source: source.clone(),
+            columns: columns.clone(),
+            card_template: card_template.clone(),
+            preload: *preload,
+        },
+
+        Block::FilterBar {
+            target_selector,
+            fields,
+            ..
+        } => NativeBlock::FilterBar {
+            target_selector: target_selector.clone(),
+            fields: fields
+                .iter()
+                .map(|f| NativeFilterField {
+                    label: f.label.clone(),
+                    name: f.name.clone(),
+                    options: f.options.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Search {
+            source,
+            placeholder,
+            ..
+        } => NativeBlock::Search {
+            source: source.clone(),
+            placeholder: placeholder.clone(),
         },
 
         // ── Wavesite site-format blocks: native conversion ──────────
@@ -1724,19 +2002,23 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             content: String::new(),
         },
 
-        // A `::slide` rendered outside the deck renderer degrades to a
-        // section container of its child blocks, with the kicker as headline.
+        // A `::slide` rendered outside the deck renderer is a real Slide
+        // (0.11) — layout token + kicker + notes + child blocks.
         Block::Slide {
-            kicker, children, ..
+            layout,
+            kicker,
+            notes,
+            children,
+            ..
         } => {
             if depth >= MAX_SECTION_DEPTH {
                 let md = render_md::render_block(block);
                 NativeBlock::Markdown { content: md }
             } else {
-                NativeBlock::SectionContainer {
-                    bg: None,
-                    headline: kicker.clone(),
-                    subtitle: None,
+                NativeBlock::Slide {
+                    layout: layout.unwrap_or_default().css_class().to_string(),
+                    kicker: kicker.clone(),
+                    notes: notes.clone(),
                     children: convert_children(children, depth + 1),
                 }
             }
@@ -1806,22 +2088,140 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             rows: rows.clone(),
         },
 
+        // ── FFI-hole closure (0.11) ─────────────────────────────────
+
+        Block::Banner {
+            headline,
+            subtitle,
+            buttons,
+            id,
+            content,
+            ..
+        } => NativeBlock::Banner {
+            headline: headline.clone(),
+            subtitle: subtitle.clone(),
+            anchor_id: id.clone(),
+            buttons: buttons
+                .iter()
+                .map(|b| NativeHeroButton {
+                    label: b.label.clone(),
+                    href: b.href.clone(),
+                    primary: b.primary,
+                })
+                .collect(),
+            content: content.clone(),
+        },
+
+        // Formatted with the document's active citation style — the context
+        // is installed by `to_native_blocks` before conversion runs.
+        Block::Cite { reference, .. } => {
+            let style = crate::citation::with_active(|ctx| {
+                crate::citation::active_style(ctx.map(|c| c.style))
+            });
+            NativeBlock::Cite {
+                key: reference.key.clone(),
+                formatted: crate::citation::format_reference(reference, style, None),
+            }
+        }
+
+        Block::Bibliography { style, .. } => {
+            let (heading, entries) = crate::citation::with_active(|ctx| {
+                let Some(ctx) = ctx else {
+                    return (String::new(), Vec::new());
+                };
+                if ctx.references.is_empty() {
+                    return (String::new(), Vec::new());
+                }
+                let active = style.unwrap_or(ctx.style);
+                // Mirrors render_bibliography_html: citation-number order for
+                // the document style, definition order under an override.
+                let refs = if style.is_some() {
+                    ctx.references.clone()
+                } else {
+                    crate::citation::ordered_references(ctx)
+                };
+                let entries = crate::citation::reference_list_keyed(&refs, active)
+                    .into_iter()
+                    .map(|(key, formatted)| NativeReferenceEntry { key, formatted })
+                    .collect();
+                (
+                    crate::citation::bibliography_heading(active).to_string(),
+                    entries,
+                )
+            });
+            NativeBlock::Bibliography { heading, entries }
+        }
+
+        Block::Gate {
+            title,
+            subtitle,
+            action,
+            field_label,
+            submit_label,
+            error,
+            ..
+        } => NativeBlock::Gate {
+            title: title.clone(),
+            subtitle: subtitle.clone(),
+            action: action.clone(),
+            field_label: field_label.clone(),
+            submit_label: submit_label.clone(),
+            error: error.clone(),
+        },
+
+        Block::ProductGrid { groups, tiles, .. } => NativeBlock::ProductGrid {
+            tiles: *tiles,
+            groups: groups
+                .iter()
+                .map(|g| NativeProductGroup {
+                    label: g.label.clone(),
+                    cols: g.cols.map(u32::from),
+                    items: g
+                        .items
+                        .iter()
+                        .map(|i| NativeProductItem {
+                            name: i.name.clone(),
+                            href: i.href.clone(),
+                            emblem: i.emblem.clone(),
+                            tagline: i.tagline.clone(),
+                            cta1_label: i.cta1_label.clone(),
+                            cta1_href: i.cta1_href.clone(),
+                            cta2_label: i.cta2_label.clone(),
+                            cta2_href: i.cta2_href.clone(),
+                            bg: i.bg.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        },
+
+        Block::PostGrid {
+            title,
+            subtitle,
+            items,
+            ..
+        } => NativeBlock::PostGrid {
+            title: title.clone(),
+            subtitle: subtitle.clone(),
+            items: items
+                .iter()
+                .map(|i| NativePostItem {
+                    title: i.title.clone(),
+                    href: i.href.clone(),
+                    meta: i.meta.clone(),
+                    excerpt: i.excerpt.clone(),
+                    image: i.image.clone(),
+                    external: i.external,
+                })
+                .collect(),
+        },
+
         // ── Markdown fallback: web-only / unsupported block types ───
 
         Block::Unknown { .. }
-        | Block::Cite { .. }
-        | Block::Bibliography { .. }
         | Block::Style { .. }
         | Block::Logo { .. }
-        | Block::Banner { .. }
-        | Block::ProductGrid { .. }
-        | Block::PostGrid { .. }
-        | Block::Gate { .. }
-        | Block::List { .. }
-        | Block::Board { .. }
         | Block::Action { .. }
-        | Block::FilterBar { .. }
-        | Block::Search { .. }
         | Block::Dashboard { .. }
         | Block::ChatInput { .. }
         | Block::Feed { .. }
@@ -1903,7 +2303,7 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
         } => NativeToolbarItem {
             kind: "button".to_string(),
             label: label.clone(),
-            action: action.clone(),
+            action: action.as_deref().map(parse_native_action),
             icon: icon.clone(),
             style: style.clone(),
             disabled: *disabled,
@@ -1951,7 +2351,7 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
         } => NativeToolbarItem {
             kind: "dropdown".to_string(),
             label: Some(label.clone()),
-            action: action.clone(),
+            action: action.as_deref().map(parse_native_action),
             icon: None,
             style: None,
             disabled: false,
@@ -1971,6 +2371,15 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             options: None,
         },
     }
+}
+
+fn list_display_str(d: crate::types::ListDisplay) -> String {
+    match d {
+        crate::types::ListDisplay::Card => "card",
+        crate::types::ListDisplay::Table => "table",
+        crate::types::ListDisplay::Compact => "compact",
+    }
+    .to_string()
 }
 
 fn embed_type_str(et: EmbedType) -> String {
@@ -2103,17 +2512,18 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::ChatInputSimple { .. }
         | Block::Progress { .. }
         | Block::LogStream { .. }
-        | Block::ProblemList { .. } => BlockTier::Chrome,
+        | Block::ProblemList { .. }
+        // App data views promoted from tier 4 (0.11).
+        | Block::List { .. }
+        | Block::Board { .. }
+        | Block::FilterBar { .. }
+        | Block::Search { .. } => BlockTier::Chrome,
 
         // ── Tier 4: explicit markdown degradation ────────────────────
         Block::Unknown { .. }
         | Block::Style { .. }
         | Block::Logo { .. }
-        | Block::List { .. }
-        | Block::Board { .. }
         | Block::Action { .. }
-        | Block::FilterBar { .. }
-        | Block::Search { .. }
         | Block::Dashboard { .. }
         | Block::ChatInput { .. }
         | Block::Feed { .. }
@@ -2156,6 +2566,64 @@ mod tests {
     use super::*;
     use crate::types::*;
     use std::collections::BTreeMap;
+
+    /// V-A5: the minimal action grammar — bare = invoke, open:/route,
+    /// mutate:name:payload — and its never-fail degradation rules.
+    #[test]
+    fn native_action_grammar() {
+        let a = parse_native_action("open_doc");
+        assert_eq!((a.verb.as_str(), a.target.as_str(), a.payload, a.raw.as_str()),
+                   ("invoke", "open_doc", None, "open_doc"));
+
+        let a = parse_native_action("open:/docs/123");
+        assert_eq!((a.verb.as_str(), a.target.as_str()), ("open", "/docs/123"));
+
+        let a = parse_native_action("invoke:switch_root");
+        assert_eq!((a.verb.as_str(), a.target.as_str()), ("invoke", "switch_root"));
+
+        let a = parse_native_action("mutate:tasks.set_stage:stage");
+        assert_eq!(
+            (a.verb.as_str(), a.target.as_str(), a.payload.as_deref()),
+            ("mutate", "tasks.set_stage", Some("stage"))
+        );
+
+        let a = parse_native_action("mutate:messages.send");
+        assert_eq!(
+            (a.verb.as_str(), a.target.as_str(), a.payload),
+            ("mutate", "messages.send", None)
+        );
+
+        // Unknown verb prefix degrades to invoke-on-the-whole-string.
+        let a = parse_native_action("frobnicate:thing");
+        assert_eq!((a.verb.as_str(), a.target.as_str()), ("invoke", "frobnicate:thing"));
+        assert_eq!(a.raw, "frobnicate:thing");
+
+        // Trailing colon with empty rest also degrades whole.
+        let a = parse_native_action("open:");
+        assert_eq!((a.verb.as_str(), a.target.as_str()), ("invoke", "open:"));
+    }
+
+    /// Actions on parsed blocks cross the FFI typed: registry-bound bare
+    /// names keep their raw form while gaining verb/target structure.
+    #[test]
+    fn nav_tree_actions_cross_typed() {
+        let source = "::nav-tree[source=docs on-select=open_doc on-delete=\"mutate:docs.delete:id\"]\n::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::NavTree { on_select, on_delete, .. } => {
+                let sel = on_select.as_ref().expect("on_select");
+                assert_eq!(sel.verb, "invoke");
+                assert_eq!(sel.target, "open_doc");
+                assert_eq!(sel.raw, "open_doc");
+                let del = on_delete.as_ref().expect("on_delete");
+                assert_eq!(del.verb, "mutate");
+                assert_eq!(del.target, "docs.delete");
+                assert_eq!(del.payload.as_deref(), Some("id"));
+            }
+            other => panic!("expected NavTree, got {other:?}"),
+        }
+    }
 
     fn syn() -> Span {
         Span::SYNTHETIC
@@ -3653,8 +4121,9 @@ mod tests {
         assert_eq!(n.doc_page_bg, "var(--surface)");
         assert_eq!(n.drawer_link_size, "0.9375rem");
         assert_eq!(n.drawer_link_weight, "500");
-        // Additive growth: the FFI schema version is unchanged.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 1);
+        // 0.11: the NativeBlock shape changed incompatibly (typed actions,
+        // real chrome nesting) — schema v2.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 2);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

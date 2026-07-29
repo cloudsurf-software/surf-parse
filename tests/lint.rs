@@ -141,15 +141,16 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
         &[Severity::Warning, Severity::Warning, Severity::Warning],
     ),
     ("fragment-site.surf", &[]),
-    // The trailing `::` after the leaf-classified `::section` is an orphan
-    // closer: consumed with a P006 warning (p3-copy-sweep) instead of leaking
-    // into rendered markdown as a literal `::` paragraph.
-    ("gallery-form.surf", &[Severity::Warning]),
+    // 0.11 nesting fix: `::section` containing a balanced `::callout` is a
+    // real container (surplus-closer rule), so the file parses clean — the
+    // former P006 orphan-closer warning was the flat-emission bug.
+    ("gallery-form.surf", &[]),
     ("literate.surf", &[]),
     ("malformed.surf", &[Severity::Error]),
-    // Trailing stray `::` at EOF: orphan closer consumed with a P006 warning
-    // (p3-copy-sweep).
-    ("manifest.surf", &[Severity::Warning]),
+    // 0.11 nesting fix: the trailing `::` at EOF is `::app`'s own closer
+    // (surplus-closer rule) — the manifest's build/deploy/decision blocks are
+    // App children, and the former P006 "stray closer" warning is gone.
+    ("manifest.surf", &[]),
     ("marketplace-spec.surf", &[]),
     ("nesting.surf", &[]),
     ("plan-app.surf", &[]),
