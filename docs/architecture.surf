@@ -365,38 +365,34 @@ surf-parse v0.4.0
 
 ## Architecture Diagram
 
-::code[lang=mermaid]
-graph TB
-    subgraph Input
-        A[".surf file"] --> B["parse()"]
-    end
+This diagram is a native `::diagram[type=flowchart]` block — parsed, laid
+out and serialized to SVG by the very pipeline it depicts.
 
-    subgraph "Pass 1a: Front Matter"
-        B --> C["extract_front_matter()"]
-        C --> D["FrontMatter (15 typed fields)"]
-    end
-
-    subgraph "Pass 1b: Block Scanning"
-        B --> E["scan_blocks()"]
-        E --> F["Nesting Stack"]
-        F --> G["Vec of Block::Unknown"]
-    end
-
-    subgraph "Pass 2: Resolution"
-        G --> H["resolve_block()"]
-        H --> I["32 typed Block variants"]
-    end
-
-    subgraph Output
-        D --> J["SurfDoc"]
-        I --> J
-        J --> K["to_html()"]
-        J --> L["to_markdown()"]
-        J --> M["to_terminal()"]
-        J --> N["to_pdf()"]
-        J --> O["to_surf_source()"]
-        J --> P["validate()"]
-    end
+::diagram[type=flowchart title="Parse pipeline"]
+src [rounded]: .surf file
+parse: parse()
+fm: extract_front_matter()
+scan: scan_blocks()
+stack: Nesting stack
+resolve: resolve_block()
+doc [rounded]: SurfDoc
+html: to_html()
+md: to_markdown()
+term: to_terminal()
+pdf: to_pdf()
+validate: validate()
+src -> parse
+parse -> fm
+parse -> scan
+scan -> stack
+stack -> resolve
+fm -> doc
+resolve -> doc
+doc -> html
+doc -> md
+doc -> term
+doc -> pdf
+doc -> validate
 ::
 
 ---

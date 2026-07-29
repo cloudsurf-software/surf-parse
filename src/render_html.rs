@@ -2058,12 +2058,41 @@ pub(crate) fn render_block(block: &Block) -> String {
                 ),
                 None => String::new(),
             };
-            match crate::diagram::parse_diagram_source(diagram_type, content) {
+            // Mermaid-syntax bodies (sniffed, or explicit `type=mermaid`)
+            // translate to the native DSL first; the translated type and
+            // body then flow through the exact same pipeline below. The
+            // prose fallback always shows the AUTHOR'S source, never the
+            // translation.
+            let translated = crate::mermaid_compat::translate(diagram_type, content);
+            let (eff_type, eff_content) = match &translated {
+                Some(t) => (t.diagram_type, t.content.as_str()),
+                None => (diagram_type.as_str(), content.as_str()),
+            };
+            // Chart-alias types (pie/donut/radar/xychart) forward the body to
+            // the `::chart` pipeline — the body is the same pipe-delimited
+            // table `::chart` accepts. An unusable body degrades to the same
+            // prose fallback as any other diagram.
+            if let Some(chart_type) = crate::diagram::chart_alias(eff_type) {
+                return match crate::blocks::parse_chart_data(eff_content) {
+                    Some(data) => {
+                        let svg = crate::chart::render_svg(chart_type, &data, title.as_deref());
+                        format!(
+                            "<figure class=\"surfdoc-diagram surfdoc-diagram-{}\">{caption_html}{svg}</figure>",
+                            escape_html(eff_type),
+                        )
+                    }
+                    None => format!(
+                        "<figure class=\"surfdoc-diagram surfdoc-diagram-fallback\">{caption_html}<pre class=\"surfdoc-diagram-src\">{}</pre></figure>",
+                        escape_html(content),
+                    ),
+                };
+            }
+            match crate::diagram::parse_diagram_source(eff_type, eff_content) {
                 Ok(model) => {
                     let svg = crate::diagram::render_svg(&model, title.as_deref());
                     format!(
                         "<figure class=\"surfdoc-diagram surfdoc-diagram-{}\">{caption_html}{svg}</figure>",
-                        escape_html(diagram_type),
+                        escape_html(eff_type),
                     )
                 }
                 // Malformed DSL or empty/unknown type NEVER fails the render —
@@ -6372,6 +6401,74 @@ mod tests {
         let html = to_html(&doc);
         assert!(html.contains("surfdoc-diagram-fallback"));
         assert!(html.contains("<pre class=\"surfdoc-diagram-src\">this is not a node or an edge</pre>"));
+    }
+
+    #[test]
+    fn html_diagram_chart_alias_renders_chart_svg() {
+        // pie/donut/radar/xychart inside ::diagram forward to the ::chart
+        // pipeline: diagram figure wrapper, chart SVG inside.
+        for (alias, marker) in [
+            ("pie", "surfdoc-chart-svg"),
+            ("donut", "surfdoc-chart-svg"),
+            ("radar", "surfdoc-chart-svg"),
+            // xychart is an alias for the line chart.
+            ("xychart", "surfdoc-chart-svg"),
+        ] {
+            let html = render_block(&Block::Diagram {
+                diagram_type: alias.into(),
+                title: Some("Share".into()),
+                content: "Segment | Value\nA | 40\nB | 60".into(),
+                span: span(),
+            });
+            assert!(
+                html.contains(&format!("<figure class=\"surfdoc-diagram surfdoc-diagram-{alias}\">")),
+                "{alias} keeps the diagram figure wrapper"
+            );
+            assert!(html.contains("<figcaption class=\"surfdoc-diagram-cap\">Share</figcaption>"));
+            assert!(html.contains(marker), "{alias} renders through the chart pipeline");
+            assert!(!html.contains("surfdoc-diagram-svg"), "{alias} is not a geometry scene");
+            assert!(!html.contains("surfdoc-diagram-fallback"));
+        }
+    }
+
+    #[test]
+    fn html_diagram_chart_alias_bad_body_falls_back() {
+        // A body the chart pipeline cannot use degrades to prose, exactly
+        // like malformed geometry DSL.
+        let html = render_block(&Block::Diagram {
+            diagram_type: "pie".into(),
+            title: None,
+            content: "not a table".into(),
+            span: span(),
+        });
+        assert!(html.contains("<figure class=\"surfdoc-diagram surfdoc-diagram-fallback\">"));
+        assert!(html.contains("<pre class=\"surfdoc-diagram-src\">not a table</pre>"));
+        assert!(!html.contains("<svg"));
+    }
+
+    #[test]
+    fn html_diagram_stage2_kinds_render_svg() {
+        for (kind, body, marker) in [
+            ("timeline", "2026-01: Kickoff\n2026-02: Beta", "surfdoc-diagram-spine"),
+            ("journey", "section S\nSign up: 3", "surfdoc-diagram-lane"),
+            ("quadrant", "x-axis L --> R\nA: 0.4, 0.6", "surfdoc-diagram-frame"),
+            ("kanban", "column Todo\n  Card", "surfdoc-diagram-column"),
+            ("usecase", "actor u: User\nusecase c: Case\nu -> c", "surfdoc-diagram-boundary"),
+        ] {
+            let html = render_block(&Block::Diagram {
+                diagram_type: kind.into(),
+                title: None,
+                content: body.into(),
+                span: span(),
+            });
+            assert!(
+                html.contains(&format!("<figure class=\"surfdoc-diagram surfdoc-diagram-{kind}\">")),
+                "{kind} renders a diagram figure"
+            );
+            assert!(html.contains("<svg class=\"surfdoc-diagram-svg\""), "{kind} renders SVG");
+            assert!(html.contains(marker), "{kind} missing its structural marker");
+            assert!(!html.contains("surfdoc-diagram-fallback"));
+        }
     }
 
     #[test]

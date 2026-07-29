@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::diagram_scene::NativeDiagramScene;
 use crate::render_md;
 use crate::types::{
     Block, CalloutType, DecisionStatus, EmbedType, FormFieldType, RowState, SurfDoc,
@@ -403,13 +404,17 @@ pub enum NativeBlock {
         cta_href: Option<String>,
     },
 
-    /// Chart preview (::chart). Like the web, the native client shows a
-    /// labelled preview (no live data binding): `chart_type` is one of
-    /// "line"/"bar"/"pie"/"area", `source` names the data series.
+    /// Chart (::chart). `chart_type` is the chart kind (line/bar/pie/…),
+    /// `source` names the data series for live-data mount points. `scene`
+    /// carries the typed chart geometry for blocks with an inline dataset
+    /// (same layout math as the web SVG); source-only charts stay `None`
+    /// and keep the labelled-preview path.
     Chart {
         chart_type: String,
         source: String,
         period: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scene: Option<NativeDiagramScene>,
     },
 
     /// Compact navigable list row (::row) — icon + title + description, an
@@ -436,13 +441,17 @@ pub enum NativeBlock {
         state: String,
     },
 
-    /// Diagram (::diagram) — the native client shows a titled diagram card
-    /// carrying the raw DSL; `diagram_type` is e.g. "architecture"/"erd".
-    /// The deterministic inline SVG (B-09) is a web-only rendering.
+    /// Diagram (::diagram) — `diagram_type` is e.g. "architecture"/"erd".
+    /// `scene` carries the laid-out geometry (same layout the web SVG is
+    /// serialized from) so native clients draw typed shapes; it is `None`
+    /// when the DSL fails to parse, and the raw `content` remains for the
+    /// titled-card fallback either way.
     Diagram {
         diagram_type: String,
         title: Option<String>,
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scene: Option<NativeDiagramScene>,
     },
 }
 
@@ -1123,8 +1132,9 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             alt: alt.clone(),
         },
 
-        // Native shows a titled diagram card carrying the raw DSL (the
-        // deterministic SVG is a web-only rendering, B-09).
+        // Native gets the laid-out geometry scene (typed shapes, same
+        // layout the web SVG is serialized from) plus the raw DSL for the
+        // titled-card fallback; `scene` is None when the DSL fails to parse.
         Block::Diagram {
             diagram_type,
             title,
@@ -1134,6 +1144,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             diagram_type: diagram_type.clone(),
             title: title.clone(),
             content: content.clone(),
+            scene: crate::diagram::native_scene(diagram_type, content, title.as_deref()),
         },
 
         Block::ProductCard {
@@ -1161,11 +1172,19 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             chart_type,
             source,
             period,
+            title,
+            data,
             ..
         } => NativeBlock::Chart {
             chart_type: crate::render_html::chart_type_str(*chart_type).to_string(),
             source: source.clone(),
             period: period.clone(),
+            // Inline datasets carry their laid-out geometry scene (the same
+            // layout math the web SVG uses); source-only charts stay `None`
+            // and keep the live-data mount-point path.
+            scene: data
+                .as_ref()
+                .map(|d| crate::chart::build_scene(*chart_type, d, title.as_deref())),
         },
 
         Block::Row {
@@ -2215,6 +2234,71 @@ mod tests {
         assert!(matches!(natives[4], NativeBlock::Diagram { ref diagram_type, .. } if diagram_type == "erd"));
         // None silently degraded.
         assert!(!natives.iter().any(|n| matches!(n, NativeBlock::Markdown { .. })));
+    }
+
+    /// Diagram blocks carry the laid-out geometry scene across the FFI:
+    /// a parseable DSL yields `Some` scene with shapes, a malformed DSL
+    /// yields `None` (the raw DSL stays either way). Charts with an inline
+    /// dataset carry a scene too; source-only charts stay `None` (they keep
+    /// the live-data mount-point path).
+    #[test]
+    fn diagram_native_scene_population() {
+        let source = "\
+::diagram[type=erd title=\"M\"]\na: id pk\n::\n
+::diagram[type=architecture]\nnot ! a % statement\n::\n
+::chart[type=bar source=\"/api/rev\"]\n::\n
+::chart[type=bar title=\"Rev\"]\nMonth | Rev\nJan | 10\nFeb | 20\n::\n
+::diagram[type=pie]\nSlice | Share\nA | 60\nB | 40\n::\n
+::diagram[type=mermaid]\nflowchart LR\nA --> B\n::\n";
+        let result = crate::parse(source);
+        let natives: Vec<NativeBlock> = result
+            .doc
+            .blocks
+            .iter()
+            .map(|b| convert_block(b, 0))
+            .collect();
+
+        match &natives[0] {
+            NativeBlock::Diagram { scene: Some(scene), content, .. } => {
+                assert!(scene.width > 0.0 && scene.height > 0.0);
+                assert!(!scene.shapes.is_empty(), "erd scene must carry shapes");
+                assert_eq!(content, "a: id pk");
+            }
+            other => panic!("expected Diagram with scene, got {other:?}"),
+        }
+        match &natives[1] {
+            NativeBlock::Diagram { scene: None, content, .. } => {
+                assert_eq!(content, "not ! a % statement");
+            }
+            other => panic!("expected Diagram without scene, got {other:?}"),
+        }
+        assert!(matches!(&natives[2], NativeBlock::Chart { scene: None, .. }));
+        // Inline-data chart: scene populated from the same layout math as
+        // the SVG (canvas is the fixed 680×380 chart frame).
+        match &natives[3] {
+            NativeBlock::Chart { scene: Some(scene), .. } => {
+                assert_eq!(scene.width, 680.0);
+                assert_eq!(scene.height, 380.0);
+                assert!(!scene.shapes.is_empty());
+            }
+            other => panic!("expected Chart with scene, got {other:?}"),
+        }
+        // Chart-alias diagram (pie) gets a chart scene through the same path.
+        match &natives[4] {
+            NativeBlock::Diagram { scene: Some(scene), diagram_type, .. } => {
+                assert_eq!(diagram_type, "pie");
+                assert_eq!(scene.width, 680.0);
+            }
+            other => panic!("expected pie Diagram with chart scene, got {other:?}"),
+        }
+        // Mermaid bodies translate before scene layout.
+        match &natives[5] {
+            NativeBlock::Diagram { scene: Some(scene), content, .. } => {
+                assert!(!scene.shapes.is_empty(), "mermaid flowchart must lay out");
+                assert!(content.contains("flowchart LR"), "raw source is preserved");
+            }
+            other => panic!("expected mermaid Diagram with scene, got {other:?}"),
+        }
     }
 
     #[test]

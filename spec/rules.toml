@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 15
-registry_updated = "2026-07-03"
+total_rules = 16
+registry_updated = "2026-07-28"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -161,3 +161,10 @@ fixable = true
 fix_safety = "safe"
 message = "Front matter field '{field}' has value '{value}' — should be '{expected}'"
 description = "Enum-valued front matter field is invalid only by letter case or surrounding whitespace; normalization makes it valid"
+
+[rules.L040]
+layer = "style"
+severity = "info"
+fixable = false
+message = "Mermaid construct not translated (diagram line {line}): {construct}"
+description = "A ::diagram body in mermaid syntax used a construct outside the supported translation subset; that line was skipped and the rest of the diagram rendered normally"

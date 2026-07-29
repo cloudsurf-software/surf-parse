@@ -102,3 +102,178 @@ Surfspace
     REST
     MCP
 ::
+
+## Class
+
+::diagram[type=class title="Billing domain"]
+Account: +id, -email, +plan, +suspend(), +reactivate()
+Subscription: +id, +status, +renew(), -prorate()
+Invoice: +id, +total, +issue()
+PlanTier: enum, Free, Pro, Team
+Billable: trait, +bill()
+Account *-> Subscription: owns
+Subscription o-> Invoice: issues
+Subscription ^-> Billable
+Account -> PlanTier: selects
+::
+
+## Timeline
+
+::diagram[type=timeline title="Product roadmap"]
+2026-01: Kickoff
+2026-02: Design lock
+2026-04: Private beta
+2026-06: Public launch
+2026-09: Mobile apps
+::
+
+## User journey
+
+::diagram[type=journey title="First-week experience"]
+section Onboarding
+Sign up: 3
+Verify email: 2
+Import data: 4
+section Daily use
+Open app: 5
+Share doc: 4
+::
+
+## Quadrant
+
+::diagram[type=quadrant title="Effort vs impact"]
+x-axis Low effort --> High effort
+y-axis Low impact --> High impact
+quadrant-1: Big bets
+quadrant-2: Quick wins
+quadrant-3: Fill-ins
+quadrant-4: Money pits
+Dark mode: 0.2, 0.65
+Realtime sync: 0.85, 0.9
+New icon set: 0.15, 0.2
+Full rewrite: 0.9, 0.3
+::
+
+## Kanban
+
+::diagram[type=kanban title="Sprint board"]
+column To do
+  Write spec
+  Review API surface
+Doing:
+  Build parser
+  Wire snapshots
+Done:
+  Ship v1
+::
+
+## Use case
+
+::diagram[type=usecase title="Checkout"]
+actor customer: Customer
+actor support: Support
+usecase browse: Browse catalog
+usecase buy: Purchase item
+usecase pay: Enter payment
+customer -> browse
+customer -> buy
+support -> buy
+buy ^-> pay: includes
+::
+
+## Git graph
+
+::diagram[type=gitgraph title="Release history"]
+commit: init
+commit: parser
+branch feature
+commit: draft scenes
+commit: polish
+checkout main
+commit: hotfix
+merge feature: ship scenes
+::
+
+## C4 context
+
+::diagram[type=c4 title="Platform context"]
+person user: Customer
+boundary Platform {
+container api: API App: Rust
+container db: Database: Postgres
+}
+system mail: Mail Provider [ext]
+user -> api: Uses
+api -> db: SQL
+api -> mail: SMTP
+::
+
+## Requirement
+
+::diagram[type=requirement title="Render budget"]
+requirement r1: Fast render: SVG in under 5ms
+requirement r2: Stable output: byte-identical across runs
+element parser: surf-parse
+element suite: corpus tests
+parser -> r1: satisfies
+suite -> r2: verifies
+r2 -> r1: derives
+::
+
+## Sankey
+
+::diagram[type=sankey title="Energy flow"]
+Wind -> Grid: 40
+Solar -> Grid: 30
+Hydro -> Grid: 15
+Grid -> Homes: 50
+Grid -> Industry: 35
+::
+
+## Mermaid syntax
+
+Bodies written in mermaid are detected by their header line and translated
+to the native DSL — same deterministic SVG, no client-side JavaScript.
+
+::diagram[type=mermaid title="Mermaid flowchart"]
+flowchart LR
+  A[Author writes mermaid] --> B{Header known?}
+  B -->|yes| C[Translate to native DSL]
+  B -->|no| D[Prose fallback]
+  C --> E([Deterministic SVG])
+::
+
+## Chart aliases
+
+`pie`, `donut`, `radar` and `xychart` bodies forward to the `::chart`
+pipeline (`xychart` renders as a line chart).
+
+::diagram[type=pie title="Traffic sources"]
+Source | Share
+Organic | 52
+Referral | 26
+Paid | 22
+::
+
+::diagram[type=donut title="Plan mix"]
+Plan | Seats
+Free | 61
+Pro | 27
+Team | 12
+::
+
+::diagram[type=radar title="Team skills"]
+Skill | Current | Target
+Rust | 4 | 5
+Swift | 3 | 4
+Design | 2 | 4
+Infra | 4 | 4
+::
+
+::diagram[type=xychart title="Weekly actives"]
+Week | Users
+W1 | 120
+W2 | 180
+W3 | 260
+W4 | 330
+::

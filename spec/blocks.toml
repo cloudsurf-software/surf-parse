@@ -48,8 +48,8 @@ enum_variant = "Callout"
 [blocks.chart]
 status = "implemented"
 category = "data"
-purpose = "Data visualization mount point"
-attributes = ["type", "source", "period"]
+purpose = "Data visualization — 8 types (line, area, bar, stacked-bar, scatter, pie, donut, radar) rendered as deterministic SVG from an inline pipe-delimited dataset, or a live-data mount point via source="
+attributes = ["type", "source", "period", "title"]
 degradation = "data table fallback"
 enum_variant = "Chart"
 
@@ -112,7 +112,7 @@ enum_variant = "Decision"
 [blocks.diagram]
 status = "implemented"
 category = "core"
-purpose = "Native diagram (architecture/ERD) rendered as inline SVG"
+purpose = "Native diagram rendered as inline SVG — 17 types (architecture, erd, flowchart, sequence, gantt, state, mindmap, class, timeline, journey, quadrant, kanban, usecase, gitgraph, c4, requirement, sankey) plus 4 chart aliases (pie, donut, radar, xychart); mermaid-syntax bodies are auto-detected (or forced with type=mermaid) and translated to the native DSL"
 attributes = ["type", "title"]
 degradation = "fenced code block with raw DSL"
 enum_variant = "Diagram"

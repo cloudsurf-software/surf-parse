@@ -1019,6 +1019,21 @@ fn diagrams_showcase_renders_all_kinds() {
         "gantt",
         "state",
         "mindmap",
+        "class",
+        "timeline",
+        "journey",
+        "quadrant",
+        "kanban",
+        "usecase",
+        "gitgraph",
+        "c4",
+        "requirement",
+        "sankey",
+        // Chart aliases render as diagram figures wrapping chart SVG.
+        "pie",
+        "donut",
+        "radar",
+        "xychart",
     ] {
         assert!(
             html.contains(&format!("surfdoc-diagram-{kind}")),
@@ -1030,10 +1045,42 @@ fn diagrams_showcase_renders_all_kinds() {
         !html.contains("surfdoc-diagram-fallback"),
         "a diagram fell back to prose instead of rendering SVG"
     );
-    // Each kind produced an <svg> element.
-    assert_eq!(html.matches("<svg class=\"surfdoc-diagram-svg\"").count(), 7);
+    // Each geometry kind produced a diagram <svg> (17 native types + the
+    // mermaid-syntax block, which translates to a native flowchart); each
+    // chart alias produced a chart <svg> through the ::chart pipeline.
+    assert_eq!(html.matches("<svg class=\"surfdoc-diagram-svg\"").count(), 18);
+    assert_eq!(html.matches("<svg class=\"surfdoc-chart-svg\"").count(), 4);
 
     // Determinism: byte-identical across two renders.
+    assert_eq!(html, result.doc.to_html());
+}
+
+/// L5: the public diagram reference (docs/diagrams.surf) renders every one
+/// of its example diagrams to real SVG — the reference never ships a prose
+/// fallback.
+#[test]
+fn diagrams_reference_doc_renders_clean() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/diagrams.surf");
+    let content = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+
+    let result = surf_parse::parse(&content);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "reference doc has parse errors: {errors:?}");
+
+    let html = result.doc.to_html();
+    assert!(
+        !html.contains("surfdoc-diagram-fallback"),
+        "a reference diagram fell back to prose"
+    );
+    // 17 native examples + the mermaid example render as diagram SVG; the
+    // pie chart-alias example renders as chart SVG.
+    assert_eq!(html.matches("<svg class=\"surfdoc-diagram-svg\"").count(), 18);
+    assert_eq!(html.matches("<svg class=\"surfdoc-chart-svg\"").count(), 1);
     assert_eq!(html, result.doc.to_html());
 }
 

@@ -3274,6 +3274,48 @@ ol.surfdoc-steps { padding-left: 1rem; }
     color: var(--text-muted);
 }
 
+/* ::diagram — figure shell for the deterministic diagram SVGs.
+   max-width scales wide diagrams (gantt, grids) into the column instead of
+   clipping them at the content edge; intrinsic width is kept otherwise. */
+.surfdoc-diagram { margin: 1.5rem 0; }
+.surfdoc-diagram-svg { display: block; max-width: 100%; height: auto; }
+.surfdoc-diagram-cap {
+    margin-bottom: 8px;
+    font-size: var(--font-size-caption);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+/* Dark-theme diagram palette. The SVG bakes the fixed light palette
+   (role → hex, src/diagram.rs role_color) so bytes stay deterministic;
+   dark themes restyle the paints here by value. Shape-scoped so text
+   fills are never touched (labels ride currentColor / their own hex). */
+[data-theme="dark"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#f8fafc"] { fill: #161616; }
+[data-theme="dark"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#e2e8f0"] { fill: #262626; }
+[data-theme="dark"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#ffffff"] { fill: #0d0d0d; }
+[data-theme="dark"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#cbd5e1"] { fill: #262626; }
+[data-theme="dark"] .surfdoc-diagram-svg [stroke="#e2e8f0"] { stroke: #2a2a2a; }
+[data-theme="dark"] .surfdoc-diagram-svg [stroke="#cbd5e1"] { stroke: #3f3f46; }
+[data-theme="dark"] .surfdoc-diagram-svg text[fill="#64748b"] { fill: #8b8b8b; }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#f8fafc"] { fill: #161616; }
+    :root:not([data-theme]) .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#e2e8f0"] { fill: #262626; }
+    :root:not([data-theme]) .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#ffffff"] { fill: #0d0d0d; }
+    :root:not([data-theme]) .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#cbd5e1"] { fill: #262626; }
+    :root:not([data-theme]) .surfdoc-diagram-svg [stroke="#e2e8f0"] { stroke: #2a2a2a; }
+    :root:not([data-theme]) .surfdoc-diagram-svg [stroke="#cbd5e1"] { stroke: #3f3f46; }
+    :root:not([data-theme]) .surfdoc-diagram-svg text[fill="#64748b"] { fill: #8b8b8b; }
+}
+/* Explicit light theme pins the baked palette back (mirrors the token
+   pattern above: an explicit choice always beats the OS preference). */
+[data-theme="light"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#f8fafc"] { fill: #f8fafc; }
+[data-theme="light"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#e2e8f0"] { fill: #e2e8f0; }
+[data-theme="light"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#ffffff"] { fill: #ffffff; }
+[data-theme="light"] .surfdoc-diagram-svg :is(rect, polygon, ellipse, circle, path)[fill="#cbd5e1"] { fill: #cbd5e1; }
+[data-theme="light"] .surfdoc-diagram-svg [stroke="#e2e8f0"] { stroke: #e2e8f0; }
+[data-theme="light"] .surfdoc-diagram-svg [stroke="#cbd5e1"] { stroke: #cbd5e1; }
+[data-theme="light"] .surfdoc-diagram-svg text[fill="#64748b"] { fill: #64748b; }
+
 /* Board preview — sample cards */
 .surfdoc-board-card-sample {
     padding: 8px 10px;

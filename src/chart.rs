@@ -708,6 +708,505 @@ fn render_radar(data: &ChartData, title: Option<&str>) -> String {
 }
 
 // ------------------------------------------------------------------
+// Geometry scenes (native feature)
+// ------------------------------------------------------------------
+//
+// Charts cross the FFI as the same typed [`NativeDiagramScene`] diagrams
+// use, computed from the SAME layout math as the SVG renderer above (the
+// SVG output itself is untouched and stays byte-identical). Colors map to
+// semantic roles instead of the hex PALETTE:
+//
+// SERIES PALETTE DECISION: the scene records are frozen and carry no hex
+// colors or series indices, so series are role-cycled — a single series
+// paints `Accent`, and multi-series charts cycle
+// `Accent → AccentSoft → Muted → Stroke → TextSecondary` by series (or
+// slice) index. Native clients that want the web's exact categorical hues
+// can recover the index by counting series shapes in paint order; everyone
+// else gets a theme-correct monochrome ramp for free.
+//
+// Chrome mapping: GRID (#e2e8f0) → SurfaceAlt, AXIS (#94a3b8) → Muted,
+// MUTED tick text (#64748b) → TextSecondary, on-slice text (#ffffff) →
+// OnAccent, title (currentColor) → TextPrimary. Pie/donut slices and the
+// `fill="none"` radar rings have no arc/unfilled-polygon record, so slices
+// become arc-sampled polygons (6° steps) and rings closed polylines.
+
+#[cfg(feature = "native")]
+use crate::diagram_scene::{NativeAnchor, NativeDiagramScene, NativeMarker, NativePoint, NativeRole, NativeShape};
+
+/// Role for series/slice `i`: `Accent` when the chart has one series,
+/// otherwise a 5-role cycle (see the palette decision above).
+#[cfg(feature = "native")]
+fn series_role(i: usize, series_count: usize) -> NativeRole {
+    const CYCLE: [NativeRole; 5] = [
+        NativeRole::Accent,
+        NativeRole::AccentSoft,
+        NativeRole::Muted,
+        NativeRole::Stroke,
+        NativeRole::TextSecondary,
+    ];
+    if series_count <= 1 {
+        NativeRole::Accent
+    } else {
+        CYCLE[i % CYCLE.len()]
+    }
+}
+
+#[cfg(feature = "native")]
+struct SceneOut {
+    shapes: Vec<NativeShape>,
+}
+
+#[cfg(feature = "native")]
+impl SceneOut {
+    fn new() -> Self {
+        SceneOut { shapes: Vec::new() }
+    }
+    fn label(&mut self, x: f64, y: f64, text: &str, role: NativeRole, size: f64, bold: bool, anchor: NativeAnchor) {
+        self.shapes.push(NativeShape::Label {
+            x,
+            y,
+            text: text.to_string(),
+            role,
+            size,
+            bold,
+            mono: false,
+            anchor,
+        });
+    }
+    fn line(&mut self, points: Vec<NativePoint>, role: NativeRole, width: f64) {
+        self.shapes.push(NativeShape::Line {
+            points,
+            stroke: role,
+            stroke_width: width,
+            dashed: false,
+            marker_start: NativeMarker::None,
+            marker_end: NativeMarker::None,
+        });
+    }
+    fn seg(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, role: NativeRole, width: f64) {
+        self.line(vec![NativePoint { x: x1, y: y1 }, NativePoint { x: x2, y: y2 }], role, width);
+    }
+    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, corner: f64, fill: NativeRole) {
+        self.shapes.push(NativeShape::Rect {
+            x,
+            y,
+            w,
+            h,
+            corner,
+            fill,
+            stroke: fill,
+            stroke_width: 1.0,
+        });
+    }
+    fn dot(&mut self, cx: f64, cy: f64, r: f64, fill: NativeRole) {
+        self.shapes.push(NativeShape::Ellipse {
+            cx,
+            cy,
+            rx: r,
+            ry: r,
+            fill: Some(fill),
+            stroke: None,
+        });
+    }
+    fn polygon(&mut self, points: Vec<NativePoint>, fill: NativeRole, stroke: NativeRole) {
+        self.shapes.push(NativeShape::Polygon { points, fill, stroke });
+    }
+}
+
+#[cfg(feature = "native")]
+fn p(x: f64, y: f64) -> NativePoint {
+    NativePoint { x, y }
+}
+
+/// Build the FFI geometry scene for a chart — the scene twin of
+/// [`render_svg`], sharing its constants and layout math.
+#[cfg(feature = "native")]
+pub(crate) fn build_scene(chart_type: ChartType, data: &ChartData, title: Option<&str>) -> NativeDiagramScene {
+    let mut out = SceneOut::new();
+    if let Some(t) = title {
+        out.label(W as f64 / 2.0, 24.0, t, NativeRole::TextPrimary, 15.0, true, NativeAnchor::Middle);
+    }
+    match chart_type {
+        ChartType::Line => scene_line(&mut out, data, false),
+        ChartType::Area => scene_line(&mut out, data, true),
+        ChartType::Bar => scene_bar(&mut out, data, false),
+        ChartType::StackedBar => scene_bar(&mut out, data, true),
+        ChartType::Scatter => scene_scatter(&mut out, data),
+        ChartType::Pie => scene_pie(&mut out, data, false),
+        ChartType::Donut => scene_pie(&mut out, data, true),
+        ChartType::Radar => scene_radar(&mut out, data),
+    }
+    NativeDiagramScene {
+        width: W as f64,
+        height: H as f64,
+        shapes: out.shapes,
+    }
+}
+
+/// Scene twin of [`push_y_axis`].
+#[cfg(feature = "native")]
+#[allow(clippy::too_many_arguments)]
+fn scene_y_axis(out: &mut SceneOut, x0: f64, y0: f64, plot_w: f64, plot_h: f64, lo: f64, hi: f64, step: f64) {
+    let y_bottom = y0 + plot_h;
+    let span = (hi - lo).max(1e-9);
+    let count = ((hi - lo) / step).round().max(1.0) as i64;
+    for i in 0..=count {
+        let t = lo + i as f64 * step;
+        let y = y_bottom - (t - lo) / span * plot_h;
+        out.seg(x0, y, x0 + plot_w, y, NativeRole::SurfaceAlt, 1.0);
+        out.label(x0 - 8.0, y + 3.0, &fnum(t), NativeRole::TextSecondary, 10.0, false, NativeAnchor::End);
+    }
+    out.seg(x0, y0, x0, y_bottom, NativeRole::Muted, 1.0);
+    out.seg(x0, y_bottom, x0 + plot_w, y_bottom, NativeRole::Muted, 1.0);
+}
+
+/// Scene twin of [`push_legend`] (horizontal, centred at `y`).
+#[cfg(feature = "native")]
+fn scene_legend(out: &mut SceneOut, names: &[String], y: f64, series_count: usize) {
+    let item_w = |n: &str| 18 + n.chars().count() as i64 * 7 + 18;
+    let total: i64 = names.iter().map(|n| item_w(n)).sum();
+    let mut x = ((W - total) / 2) as f64;
+    for (i, n) in names.iter().enumerate() {
+        out.rect(x, y - 10.0, 12.0, 12.0, 2.0, series_role(i, series_count));
+        out.label(x + 16.0, y, n, NativeRole::TextPrimary, 11.0, false, NativeAnchor::Start);
+        x += item_w(n) as f64;
+    }
+}
+
+/// Scene twin of [`push_legend_vertical`].
+#[cfg(feature = "native")]
+fn scene_legend_vertical(out: &mut SceneOut, names: &[String], x: f64, y_start: f64, series_count: usize) {
+    for (i, n) in names.iter().enumerate() {
+        let y = y_start + i as f64 * 22.0;
+        out.rect(x, y, 12.0, 12.0, 2.0, series_role(i, series_count));
+        out.label(x + 18.0, y + 11.0, n, NativeRole::TextPrimary, 11.0, false, NativeAnchor::Start);
+    }
+}
+
+#[cfg(feature = "native")]
+fn scene_line(out: &mut SceneOut, data: &ChartData, fill: bool) {
+    let x0 = PAD_L as f64;
+    let y0 = PAD_T as f64;
+    let plot_w = (W - PAD_L - PAD_R) as f64;
+    let plot_h = (H - PAD_T - PAD_B) as f64;
+    let y_bottom = y0 + plot_h;
+    let n = data.categories.len();
+    if n == 0 {
+        return;
+    }
+
+    let mut dmin = 0.0f64;
+    let mut dmax = 0.0f64;
+    for s in &data.series {
+        for &v in &s.values {
+            dmin = dmin.min(v);
+            dmax = dmax.max(v);
+        }
+    }
+    if dmax <= dmin {
+        dmax = dmin + 1.0;
+    }
+    let (lo, hi, step) = nice_ticks(dmin, dmax, 5);
+    let span = (hi - lo).max(1e-9);
+    scene_y_axis(out, x0, y0, plot_w, plot_h, lo, hi, step);
+
+    let x_at = |i: usize| -> f64 {
+        if n == 1 {
+            x0 + plot_w / 2.0
+        } else {
+            x0 + i as f64 / (n - 1) as f64 * plot_w
+        }
+    };
+    let y_at = |v: f64| -> f64 { y_bottom - (v - lo) / span * plot_h };
+
+    for (i, cat) in data.categories.iter().enumerate() {
+        out.label(x_at(i), y_bottom + 16.0, cat, NativeRole::TextSecondary, 10.0, false, NativeAnchor::Middle);
+    }
+
+    let m = data.series.len();
+    for (si, s) in data.series.iter().enumerate() {
+        let role = series_role(si, m);
+        let pts: Vec<(f64, f64)> = s
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| (x_at(i), y_at(v)))
+            .collect();
+        if fill && !pts.is_empty() {
+            let mut poly: Vec<NativePoint> = pts.iter().map(|&(x, y)| p(x, y)).collect();
+            poly.push(p(pts[pts.len() - 1].0, y_bottom));
+            poly.push(p(pts[0].0, y_bottom));
+            out.polygon(poly, role, role);
+        }
+        out.line(pts.iter().map(|&(x, y)| p(x, y)).collect(), role, 2.0);
+        for &(x, y) in &pts {
+            out.dot(x, y, 2.5, role);
+        }
+    }
+
+    if m > 1 {
+        scene_legend(out, &series_names(data), (H - 14) as f64, m);
+    }
+}
+
+#[cfg(feature = "native")]
+fn scene_bar(out: &mut SceneOut, data: &ChartData, stacked: bool) {
+    let x0 = PAD_L as f64;
+    let y0 = PAD_T as f64;
+    let plot_w = (W - PAD_L - PAD_R) as f64;
+    let plot_h = (H - PAD_T - PAD_B) as f64;
+    let y_bottom = y0 + plot_h;
+    let n = data.categories.len();
+    let m = data.series.len();
+    if n == 0 || m == 0 {
+        return;
+    }
+
+    let dmax = if stacked {
+        (0..n)
+            .map(|i| {
+                data.series
+                    .iter()
+                    .map(|s| s.values.get(i).copied().unwrap_or(0.0).max(0.0))
+                    .sum::<f64>()
+            })
+            .fold(0.0f64, f64::max)
+    } else {
+        data.series
+            .iter()
+            .flat_map(|s| s.values.iter().copied())
+            .fold(0.0f64, f64::max)
+    };
+    let dmax = if dmax <= 0.0 { 1.0 } else { dmax };
+    let (lo, hi, step) = nice_ticks(0.0, dmax, 5);
+    let span = (hi - lo).max(1e-9);
+    scene_y_axis(out, x0, y0, plot_w, plot_h, lo, hi, step);
+
+    let slot = plot_w / n as f64;
+    let h_of = |v: f64| -> f64 { v.max(0.0) / span * plot_h };
+
+    for (i, cat) in data.categories.iter().enumerate() {
+        let slot_left = x0 + i as f64 * slot;
+        out.label(slot_left + slot / 2.0, y_bottom + 16.0, cat, NativeRole::TextSecondary, 10.0, false, NativeAnchor::Middle);
+
+        if stacked {
+            let bw = slot * 0.6;
+            let bx = slot_left + (slot - bw) / 2.0;
+            let mut top = y_bottom;
+            for (si, s) in data.series.iter().enumerate() {
+                let v = s.values.get(i).copied().unwrap_or(0.0).max(0.0);
+                let bh = h_of(v);
+                top -= bh;
+                out.rect(bx, top, bw, bh, 0.0, series_role(si, m));
+                if bh >= 14.0 {
+                    out.label(bx + bw / 2.0, top + bh / 2.0 + 3.0, &fnum(v), NativeRole::OnAccent, 9.0, false, NativeAnchor::Middle);
+                }
+            }
+        } else {
+            let group_w = slot * 0.7;
+            let bw = group_w / m as f64;
+            let group_left = slot_left + (slot - group_w) / 2.0;
+            for (si, s) in data.series.iter().enumerate() {
+                let v = s.values.get(i).copied().unwrap_or(0.0).max(0.0);
+                let bh = h_of(v);
+                let bx = group_left + si as f64 * bw;
+                let by = y_bottom - bh;
+                out.rect(bx, by, bw.max(1.0), bh, 0.0, series_role(si, m));
+                out.label(bx + bw / 2.0, by - 3.0, &fnum(v), NativeRole::TextSecondary, 9.0, false, NativeAnchor::Middle);
+            }
+        }
+    }
+
+    if m > 1 {
+        scene_legend(out, &series_names(data), (H - 14) as f64, m);
+    }
+}
+
+#[cfg(feature = "native")]
+fn scene_scatter(out: &mut SceneOut, data: &ChartData) {
+    let x0 = PAD_L as f64;
+    let y0 = PAD_T as f64;
+    let plot_w = (W - PAD_L - PAD_R) as f64;
+    let plot_h = (H - PAD_T - PAD_B) as f64;
+    let y_bottom = y0 + plot_h;
+
+    let xs: Vec<f64> = data.categories.iter().map(|c| num(c)).collect();
+    if xs.is_empty() {
+        return;
+    }
+
+    let xmin = xs.iter().copied().fold(f64::INFINITY, f64::min);
+    let xmax = xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let mut ymin = f64::INFINITY;
+    let mut ymax = f64::NEG_INFINITY;
+    for s in &data.series {
+        for &v in &s.values {
+            ymin = ymin.min(v);
+            ymax = ymax.max(v);
+        }
+    }
+    if !ymin.is_finite() {
+        ymin = 0.0;
+        ymax = 1.0;
+    }
+    let (xlo, xhi, xstep) = nice_ticks(xmin.min(xmax), xmax.max(xmin), 5);
+    let (ylo, yhi, ystep) = nice_ticks(ymin.min(ymax), ymax.max(ymin), 5);
+    let xspan = (xhi - xlo).max(1e-9);
+    let yspan = (yhi - ylo).max(1e-9);
+    scene_y_axis(out, x0, y0, plot_w, plot_h, ylo, yhi, ystep);
+
+    let xcount = ((xhi - xlo) / xstep).round().max(1.0) as i64;
+    for i in 0..=xcount {
+        let t = xlo + i as f64 * xstep;
+        let x = x0 + (t - xlo) / xspan * plot_w;
+        out.label(x, y_bottom + 16.0, &fnum(t), NativeRole::TextSecondary, 10.0, false, NativeAnchor::Middle);
+    }
+
+    let x_at = |v: f64| x0 + (v - xlo) / xspan * plot_w;
+    let y_at = |v: f64| y_bottom - (v - ylo) / yspan * plot_h;
+
+    let m = data.series.len();
+    for (si, s) in data.series.iter().enumerate() {
+        let role = series_role(si, m);
+        for (i, &v) in s.values.iter().enumerate() {
+            out.dot(x_at(*xs.get(i).unwrap_or(&0.0)), y_at(v), 4.0, role);
+        }
+    }
+
+    if m > 1 {
+        scene_legend(out, &series_names(data), (H - 14) as f64, m);
+    }
+}
+
+#[cfg(feature = "native")]
+fn scene_pie(out: &mut SceneOut, data: &ChartData, donut: bool) {
+    let cx = 220.0f64;
+    let cy = 210.0f64;
+    let r = 130.0f64;
+    let inner = if donut { r * 0.55 } else { 0.0 };
+
+    let values: Vec<f64> = data
+        .series
+        .first()
+        .map(|s| s.values.iter().map(|v| v.max(0.0)).collect())
+        .unwrap_or_default();
+    if values.is_empty() {
+        return;
+    }
+    let angles = slice_angles(&values);
+    let slice_count = values.len();
+
+    // Sample an arc every 6° (deterministic), keeping exact endpoints.
+    let arc = |a0: f64, a1: f64, radius: f64| -> Vec<NativePoint> {
+        let steps = (((a1 - a0).abs() / 6.0).ceil() as usize).max(1);
+        (0..=steps)
+            .map(|k| {
+                let a = (a0 + (a1 - a0) * k as f64 / steps as f64).to_radians();
+                p(cx + radius * a.cos(), cy + radius * a.sin())
+            })
+            .collect()
+    };
+
+    let mut acc = -90.0f64; // start at 12 o'clock
+    for (i, &ang) in angles.iter().enumerate() {
+        let role = series_role(i, slice_count.max(2)); // slices always cycle
+        let mut points = arc(acc, acc + ang, r);
+        if donut {
+            points.extend(arc(acc + ang, acc, inner));
+        } else {
+            points.push(p(cx, cy));
+        }
+        out.polygon(points, role, NativeRole::OnAccent);
+
+        let pct = ang / 360.0 * 100.0;
+        if pct >= 4.0 {
+            let mid = (acc + ang / 2.0).to_radians();
+            let lr = if donut { (r + inner) / 2.0 } else { r * 0.62 };
+            out.label(
+                cx + lr * mid.cos(),
+                cy + lr * mid.sin() + 3.0,
+                &format!("{:.0}%", pct),
+                NativeRole::OnAccent,
+                11.0,
+                false,
+                NativeAnchor::Middle,
+            );
+        }
+        acc += ang;
+    }
+
+    scene_legend_vertical(out, &data.categories, 430.0, 80.0, slice_count.max(2));
+}
+
+#[cfg(feature = "native")]
+fn scene_radar(out: &mut SceneOut, data: &ChartData) {
+    let cx = 230.0f64;
+    let cy = 210.0f64;
+    let r = 130.0f64;
+    let k = data.categories.len();
+    if k == 0 {
+        return;
+    }
+
+    let dmax = data
+        .series
+        .iter()
+        .flat_map(|s| s.values.iter().copied())
+        .fold(0.0f64, f64::max);
+    let dmax = if dmax <= 0.0 { 1.0 } else { dmax };
+
+    let axis_angle = |a: usize| -> f64 { (-90.0 + a as f64 * 360.0 / k as f64).to_radians() };
+    let point = |a: usize, frac: f64| -> (f64, f64) {
+        let ang = axis_angle(a);
+        (cx + r * frac * ang.cos(), cy + r * frac * ang.sin())
+    };
+
+    // Grid rings as closed polylines (the record set has no unfilled polygon).
+    for level in 1..=4 {
+        let frac = level as f64 / 4.0;
+        let mut ring: Vec<NativePoint> = (0..k)
+            .map(|a| {
+                let (x, y) = point(a, frac);
+                p(x, y)
+            })
+            .collect();
+        if let Some(first) = ring.first().cloned() {
+            ring.push(first);
+        }
+        out.line(ring, NativeRole::SurfaceAlt, 1.0);
+    }
+
+    for a in 0..k {
+        let (x, y) = point(a, 1.0);
+        out.seg(cx, cy, x, y, NativeRole::Muted, 1.0);
+        let (lx, ly) = point(a, 1.12);
+        let anchor = if lx > cx + 1.0 {
+            NativeAnchor::Start
+        } else if lx < cx - 1.0 {
+            NativeAnchor::End
+        } else {
+            NativeAnchor::Middle
+        };
+        out.label(lx, ly + 3.0, &data.categories[a], NativeRole::TextSecondary, 10.0, false, anchor);
+    }
+
+    let m = data.series.len();
+    for (si, s) in data.series.iter().enumerate() {
+        let role = series_role(si, m);
+        let poly: Vec<NativePoint> = (0..k)
+            .map(|a| {
+                let v = s.values.get(a).copied().unwrap_or(0.0).max(0.0);
+                let (x, y) = point(a, v / dmax);
+                p(x, y)
+            })
+            .collect();
+        out.polygon(poly, role, role);
+    }
+
+    scene_legend_vertical(out, &series_names(data), 430.0, 80.0, m);
+}
+
+// ------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------
 
@@ -834,5 +1333,76 @@ mod tests {
         assert!(svg.contains("surfdoc-chart-legend-label"));
         assert!(svg.contains("Product A"));
         assert!(svg.contains("Product B"));
+    }
+
+    // ── geometry scenes (native) ────────────────────────────────────
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn every_type_builds_a_scene_on_the_chart_canvas() {
+        let d = data();
+        for &t in ALL {
+            let scene = build_scene(t, &d, Some("Title"));
+            assert_eq!(scene.width, super::W as f64, "canvas width for {t:?}");
+            assert_eq!(scene.height, super::H as f64, "canvas height for {t:?}");
+            assert!(!scene.shapes.is_empty(), "empty scene for {t:?}");
+            // Deterministic: identical input, identical scene.
+            assert_eq!(scene, build_scene(t, &d, Some("Title")), "scene drift for {t:?}");
+            // The title paints as the bold heading label.
+            assert!(
+                scene.shapes.iter().any(|s| matches!(
+                    s,
+                    crate::diagram_scene::NativeShape::Label { text, bold: true, .. } if text == "Title"
+                )),
+                "missing title label for {t:?}"
+            );
+        }
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn scene_series_roles_cycle_for_multi_series() {
+        // Two series → first Accent, second AccentSoft (the role cycle).
+        assert_eq!(series_role(0, 2), crate::diagram_scene::NativeRole::Accent);
+        assert_eq!(series_role(1, 2), crate::diagram_scene::NativeRole::AccentSoft);
+        assert_eq!(series_role(5, 2), crate::diagram_scene::NativeRole::Accent);
+        // Single series is always the plain accent.
+        assert_eq!(series_role(0, 1), crate::diagram_scene::NativeRole::Accent);
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn scene_counts_mirror_svg_counts() {
+        use crate::diagram_scene::NativeShape;
+        let d = data();
+        // Bar: 4 categories × 2 series = 8 bar rects (+ 2 legend swatches).
+        let scene = build_scene(ChartType::Bar, &d, None);
+        let rects = scene.shapes.iter().filter(|s| matches!(s, NativeShape::Rect { .. })).count();
+        assert_eq!(rects, 8 + 2);
+        // Pie: one polygon per slice.
+        let scene = build_scene(ChartType::Pie, &d, None);
+        let polys = scene.shapes.iter().filter(|s| matches!(s, NativeShape::Polygon { .. })).count();
+        assert_eq!(polys, 4);
+        // Scatter: 8 dots.
+        let scene = build_scene(ChartType::Scatter, &d, None);
+        let dots = scene.shapes.iter().filter(|s| matches!(s, NativeShape::Ellipse { .. })).count();
+        assert_eq!(dots, 8);
+        // Radar: one filled polygon per series.
+        let scene = build_scene(ChartType::Radar, &d, None);
+        let polys = scene.shapes.iter().filter(|s| matches!(s, NativeShape::Polygon { .. })).count();
+        assert_eq!(polys, 2);
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn scene_path_leaves_svg_untouched() {
+        // Building scenes must not perturb the SVG renderer (shared math,
+        // separate emission): render, build, render — byte-identical.
+        let d = data();
+        for &t in ALL {
+            let before = render_svg(t, &d, Some("T"));
+            let _ = build_scene(t, &d, Some("T"));
+            assert_eq!(before, render_svg(t, &d, Some("T")));
+        }
     }
 }

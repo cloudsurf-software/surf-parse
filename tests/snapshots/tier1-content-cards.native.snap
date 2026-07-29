@@ -89,12 +89,353 @@
     "type": "diagram",
     "diagram_type": "architecture",
     "title": "Request flow",
-    "content": "web: Web Frontend\napi: API Gateway\ndb: Postgres\nweb -> api: HTTPS\napi -> db: SQL"
+    "content": "web: Web Frontend\napi: API Gateway\ndb: Postgres\nweb -> api: HTTPS\napi -> db: SQL",
+    "scene": {
+      "width": 480.0,
+      "height": 80.0,
+      "shapes": [
+        {
+          "type": "line",
+          "points": [
+            {
+              "x": 140.0,
+              "y": 40.0
+            },
+            {
+              "x": 200.0,
+              "y": 40.0
+            }
+          ],
+          "stroke": "stroke",
+          "stroke_width": 1.5,
+          "dashed": false,
+          "marker_start": "none",
+          "marker_end": "arrow"
+        },
+        {
+          "type": "label",
+          "x": 170.0,
+          "y": 35.0,
+          "text": "HTTPS",
+          "role": "text_secondary",
+          "size": 11.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "line",
+          "points": [
+            {
+              "x": 312.0,
+              "y": 40.0
+            },
+            {
+              "x": 372.0,
+              "y": 40.0
+            }
+          ],
+          "stroke": "stroke",
+          "stroke_width": 1.5,
+          "dashed": false,
+          "marker_start": "none",
+          "marker_end": "arrow"
+        },
+        {
+          "type": "label",
+          "x": 342.0,
+          "y": 35.0,
+          "text": "SQL",
+          "role": "text_secondary",
+          "size": 11.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "rect",
+          "x": 20.0,
+          "y": 20.0,
+          "w": 120.0,
+          "h": 40.0,
+          "corner": 8.0,
+          "fill": "surface",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "label",
+          "x": 80.0,
+          "y": 44.0,
+          "text": "Web Frontend",
+          "role": "text_primary",
+          "size": 13.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "rect",
+          "x": 200.0,
+          "y": 20.0,
+          "w": 112.0,
+          "h": 40.0,
+          "corner": 8.0,
+          "fill": "surface",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "label",
+          "x": 256.0,
+          "y": 44.0,
+          "text": "API Gateway",
+          "role": "text_primary",
+          "size": 13.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "rect",
+          "x": 372.0,
+          "y": 20.0,
+          "w": 88.0,
+          "h": 40.0,
+          "corner": 8.0,
+          "fill": "surface",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "label",
+          "x": 416.0,
+          "y": 44.0,
+          "text": "Postgres",
+          "role": "text_primary",
+          "size": 13.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        }
+      ]
+    }
   },
   {
     "type": "diagram",
     "diagram_type": "erd",
     "title": "Core schema",
-    "content": "users: id pk, email unique\ndocs: id pk, owner_id fk\nusers 1--* docs: owns"
+    "content": "users: id pk, email unique\ndocs: id pk, owner_id fk\nusers 1--* docs: owns",
+    "scene": {
+      "width": 366.0,
+      "height": 112.0,
+      "shapes": [
+        {
+          "type": "line",
+          "points": [
+            {
+              "x": 140.0,
+              "y": 56.0
+            },
+            {
+              "x": 218.0,
+              "y": 56.0
+            }
+          ],
+          "stroke": "stroke",
+          "stroke_width": 1.5,
+          "dashed": false,
+          "marker_start": "none",
+          "marker_end": "none"
+        },
+        {
+          "type": "label",
+          "x": 149.0,
+          "y": 51.0,
+          "text": "1",
+          "role": "text_secondary",
+          "size": 11.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "label",
+          "x": 209.0,
+          "y": 51.0,
+          "text": "∗",
+          "role": "text_secondary",
+          "size": 11.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "label",
+          "x": 179.0,
+          "y": 50.0,
+          "text": "owns",
+          "role": "text_secondary",
+          "size": 11.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "rect",
+          "x": 20.0,
+          "y": 20.0,
+          "w": 120.0,
+          "h": 72.0,
+          "corner": 4.0,
+          "fill": "on_accent",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "rect",
+          "x": 20.0,
+          "y": 20.0,
+          "w": 120.0,
+          "h": 28.0,
+          "corner": 4.0,
+          "fill": "surface_alt",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "label",
+          "x": 80.0,
+          "y": 38.0,
+          "text": "users",
+          "role": "text_primary",
+          "size": 13.0,
+          "bold": true,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "label",
+          "x": 28.0,
+          "y": 63.0,
+          "text": "id",
+          "role": "text_primary",
+          "size": 12.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "start"
+        },
+        {
+          "type": "label",
+          "x": 132.0,
+          "y": 63.0,
+          "text": "PK",
+          "role": "text_secondary",
+          "size": 10.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "end"
+        },
+        {
+          "type": "label",
+          "x": 28.0,
+          "y": 85.0,
+          "text": "email",
+          "role": "text_primary",
+          "size": 12.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "start"
+        },
+        {
+          "type": "label",
+          "x": 132.0,
+          "y": 85.0,
+          "text": "UNQ",
+          "role": "text_secondary",
+          "size": 10.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "end"
+        },
+        {
+          "type": "rect",
+          "x": 218.0,
+          "y": 20.0,
+          "w": 128.0,
+          "h": 72.0,
+          "corner": 4.0,
+          "fill": "on_accent",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "rect",
+          "x": 218.0,
+          "y": 20.0,
+          "w": 128.0,
+          "h": 28.0,
+          "corner": 4.0,
+          "fill": "surface_alt",
+          "stroke": "stroke",
+          "stroke_width": 1.0
+        },
+        {
+          "type": "label",
+          "x": 282.0,
+          "y": 38.0,
+          "text": "docs",
+          "role": "text_primary",
+          "size": 13.0,
+          "bold": true,
+          "mono": false,
+          "anchor": "middle"
+        },
+        {
+          "type": "label",
+          "x": 226.0,
+          "y": 63.0,
+          "text": "id",
+          "role": "text_primary",
+          "size": 12.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "start"
+        },
+        {
+          "type": "label",
+          "x": 338.0,
+          "y": 63.0,
+          "text": "PK",
+          "role": "text_secondary",
+          "size": 10.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "end"
+        },
+        {
+          "type": "label",
+          "x": 226.0,
+          "y": 85.0,
+          "text": "owner_id",
+          "role": "text_primary",
+          "size": 12.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "start"
+        },
+        {
+          "type": "label",
+          "x": 338.0,
+          "y": 85.0,
+          "text": "FK",
+          "role": "text_secondary",
+          "size": 10.0,
+          "bold": false,
+          "mono": false,
+          "anchor": "end"
+        }
+      ]
+    }
   }
 ]

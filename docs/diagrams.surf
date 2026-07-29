@@ -1,0 +1,288 @@
+---
+title: "surf-parse: Diagram Reference"
+type: doc
+status: active
+scope: public
+created: 2026-07-28
+version: 1
+tags: [surf-parse, diagrams, svg, surfdoc, mermaid]
+description: "Every ::diagram type, its grammar, and a working example — plus the mermaid-syntax acceptance rules. This page is itself a SurfDoc; every diagram below is rendered by the parser it documents."
+---
+
+# SurfDoc Diagrams
+
+::summary
+The `::diagram` block renders 17 native diagram types and 4 chart aliases as deterministic, dependency-free inline SVG. Bodies written in mermaid syntax are auto-detected and translated to the native DSL. Malformed input never fails a render — it degrades per line (mermaid) or falls back to the preformatted source (native). Layout is pure integer arithmetic: the same document always produces byte-identical output.
+::
+
+::callout[type=info title="The determinism promise"]
+`::diagram` rendering is a pure function of the block body. No randomness, no timestamps, no hash-map iteration, no text measurement — geometry comes from integer arithmetic over declaration order. Render the same source twice, on any machine, and the SVG bytes are identical. Consumers can (and do) pin exact substrings in tests.
+::
+
+## The block
+
+A diagram is a block directive: an opener line `::diagram[type=flowchart title="Publish pipeline"]`, the DSL body, and the `::` closer. A three-line flowchart body looks like this:
+
+```
+start [terminator]: Draft
+review [diamond]: Approved?
+start -> review
+```
+
+- `type=` selects the diagram kind (17 native types, 4 chart aliases, or `mermaid`). With no `type`, mermaid bodies are still detected by their header line.
+- `title=` becomes the accessible SVG `<title>` and the figure caption.
+- **Degradation rule:** an unknown type or a body the parser rejects renders as a preformatted code block of the raw source — a diagram never breaks a page. Mermaid bodies degrade more gently: unsupported lines are skipped one at a time (each skip is surfaced by lint rule `L040`), and only a body with nothing translatable falls back to prose.
+
+---
+
+## Native types
+
+The DSL is line-oriented: blank lines are ignored, every other line is one statement. Ids are `[A-Za-z0-9_-]`; labels are free text.
+
+### architecture
+
+Nodes `id: Label`; edges `a -> b`, `a <-> b`, optional `: Label`. Left-to-right columns by dependency depth.
+
+::diagram[type=architecture title="Request flow"]
+web: Web Frontend
+api: API Gateway
+db: Postgres
+web -> api: HTTPS
+api -> db: SQL
+::
+
+### erd
+
+Entities `name: field1, field2 pk, ...` with `pk`/`fk`/`unique` modifiers; relations `a 1--* b: label` with `1`/`*` cardinalities.
+
+::diagram[type=erd title="Core schema"]
+users: id pk, email unique
+docs: id pk, owner_id fk
+users 1--* docs: owns
+::
+
+### flowchart
+
+Nodes `id: Label` or `id [shape]: Label` (shapes: `box`, `diamond`/`decision`, `rounded`/`terminator`); edges `a -> b: label`.
+
+::diagram[type=flowchart title="Review loop"]
+draft [terminator]: Draft
+check [diamond]: Approved?
+ship: Publish
+draft -> check
+check -> ship: yes
+check -> draft: no
+::
+
+### sequence
+
+Actors `actor id: Label` (alias `participant`); messages `a -> b: text` (solid) and `a --> b: text` (dashed); lifebars `activate id` / `deactivate id`.
+
+::diagram[type=sequence title="Login"]
+actor user: User
+actor api: API
+user -> api: POST /login
+activate api
+api --> user: 200 OK
+deactivate api
+::
+
+### gantt
+
+Optional `section Name` headers; tasks `Label: start, duration` with numeric units or ISO dates (`Label: 2026-01-05, 7`). One convention per body.
+
+::diagram[type=gantt title="Release plan"]
+section Build
+Backend: 2026-07-10, 8
+Frontend: 2026-07-12, 6
+section Ship
+QA: 2026-07-20, 4
+::
+
+### state
+
+Transitions `a -> b: event`; `[*]` is the initial marker as a source and the final marker as a target; optional `id: Label` declarations.
+
+::diagram[type=state title="Order lifecycle"]
+[*] -> Cart
+Cart -> Paid: pay
+Paid -> [*]
+::
+
+### mindmap
+
+Indentation is hierarchy: the first line is the root, two spaces (or one tab) per level.
+
+::diagram[type=mindmap title="Surface"]
+Product
+  Web
+    Docs
+  Mobile
+::
+
+### class
+
+Classes `Name: member, member()` — optional `+`/`-`/`#` visibility, trailing `()` marks methods, a leading bare `enum`/`trait` member sets the stereotype. Relations `A -> B` (association), `A *-> B` (composition), `A o-> B` (aggregation), `A ^-> B` (inheritance).
+
+::diagram[type=class title="Billing"]
+Account: +id, +suspend()
+PlanTier: enum, Free, Pro
+Account -> PlanTier: selects
+::
+
+### timeline
+
+One event per line: `marker: Label` (all-integer or all-ISO-date markers) or plain `Label` lines for an ordered, unmarked spine.
+
+::diagram[type=timeline title="Roadmap"]
+2026-01: Kickoff
+2026-04: Beta
+2026-06: Launch
+::
+
+### journey
+
+Optional `section Name` lanes; tasks `Label: score` with scores 1–5 drawn as a mood curve.
+
+::diagram[type=journey title="First week"]
+section Onboarding
+Sign up: 3
+Import data: 4
+section Daily use
+Open app: 5
+::
+
+### quadrant
+
+Axis labels `x-axis Low --> High` / `y-axis Low --> High`; cell labels `quadrant-1: Label` … `quadrant-4: Label` (1 = top-right, counter-clockwise); points `Name: x, y` with coordinates in 0–1.
+
+::diagram[type=quadrant title="Effort vs impact"]
+x-axis Low effort --> High effort
+y-axis Low impact --> High impact
+quadrant-2: Quick wins
+Dark mode: 0.2, 0.65
+Full rewrite: 0.9, 0.3
+::
+
+### kanban
+
+Columns `column Name` or flush-left `Name:`; any indented line is a card in the most recent column.
+
+::diagram[type=kanban title="Board"]
+column To do
+  Write spec
+Done:
+  Ship v1
+::
+
+### usecase
+
+Actors `actor id: Label`, use cases `usecase id: Label`, associations `actor -> case`, and dashed dependencies `case ^-> case: includes` / `: extends`.
+
+::diagram[type=usecase title="Checkout"]
+actor customer: Customer
+usecase buy: Purchase item
+usecase pay: Enter payment
+customer -> buy
+buy ^-> pay: includes
+::
+
+### gitgraph
+
+One statement per line: `commit` / `commit: label`, `branch name` (creates and switches), `checkout name`, `merge name` / `merge name: label`. The current branch starts as `main`; each branch is a horizontal lane and merges connect lanes.
+
+::diagram[type=gitgraph title="Release history"]
+commit: init
+branch feature
+commit: draft
+checkout main
+merge feature: ship
+::
+
+### c4
+
+A styled C4 context/container profile. `person id: Label`, `system id: Label` (append ` [ext]` for external/muted), `container id: Label: tech`, one level of `boundary Name { ... }` grouping (dashed), and edges `a -> b: label`.
+
+::diagram[type=c4 title="Platform context"]
+person user: Customer
+boundary Platform {
+container api: API App: Rust
+container db: Database: Postgres
+}
+system mail: Mail Provider [ext]
+user -> api: Uses
+api -> db: SQL
+api -> mail: SMTP
+::
+
+### requirement
+
+SysML-flavoured requirement boxes. `requirement id: Label: text`, `element id: Label`, and mandatory-kind edges `a -> b: satisfies|verifies|refines|traces|contains|derives` drawn dashed with a «kind» label.
+
+::diagram[type=requirement title="Render budget"]
+requirement r1: Fast render: SVG in under 5ms
+element parser: surf-parse
+parser -> r1: satisfies
+::
+
+### sankey
+
+Flows `Source -> Target: value` (positive numbers; node names may contain spaces). Columns come from the flow graph; nodes are bars sized by throughput and flows are straight-edged bands, stacked in declaration order.
+
+::diagram[type=sankey title="Energy"]
+Wind -> Grid: 40
+Solar -> Grid: 30
+Grid -> Homes: 50
+Grid -> Industry: 20
+::
+
+---
+
+## Chart aliases
+
+`type=pie`, `donut`, `radar` and `xychart` accept the same pipe-delimited table body as `::chart` and render through the chart pipeline (`xychart` draws as a line chart):
+
+::diagram[type=pie title="Traffic sources"]
+Source | Share
+Organic | 52
+Referral | 26
+Paid | 22
+::
+
+---
+
+## Mermaid acceptance
+
+Any `::diagram` body whose first significant line is a mermaid header is translated to the native DSL and rendered natively — no client-side JavaScript, same determinism promise. Use `type=mermaid` to say so explicitly; otherwise the sniff alone decides. Thirteen families are accepted:
+
+::data[format=table]
+| Mermaid header | Renders as |
+|----------------|------------|
+| `flowchart` / `graph` (LR/TD/TB/RL/BT) | flowchart |
+| `sequenceDiagram` | sequence |
+| `classDiagram` | class |
+| `stateDiagram-v2` / `stateDiagram` | state |
+| `erDiagram` | erd |
+| `gantt` | gantt |
+| `mindmap` | mindmap |
+| `pie` | pie (chart pipeline) |
+| `timeline` | timeline |
+| `journey` | journey |
+| `kanban` | kanban |
+| `quadrantChart` | quadrant |
+| `gitGraph` | gitgraph |
+::
+
+::diagram[type=mermaid title="Mermaid in, native SVG out"]
+flowchart LR
+  A[Author writes mermaid] --> B{Header known?}
+  B -->|yes| C[Translate to native DSL]
+  B -->|no| D[Prose fallback]
+  C --> E([Deterministic SVG])
+::
+
+Translation covers the common core of each family: node/edge/shape forms with labels for flowcharts, `->>`/`-->>` messages with `participant … as …` and `+`/`-` activation shorthand for sequences, member blocks and the full relation set for class diagrams, `[*]` transitions for state, `||--o{` cardinalities and attribute blocks for ER, dated tasks for gantt, and the straightforward mappings for the rest.
+
+::callout[type=tip title="Per-line degradation"]
+Constructs outside that core — subgraphs, notes, `loop`/`alt` frames, styling directives, `after` dependencies, cherry-picks — never fail the diagram. The translator skips the line, renders everything else, and records each skip; `surf-lint` reports them as info-level `L040` diagnostics with the line number and construct name.
+::

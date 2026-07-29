@@ -183,6 +183,7 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(UnknownBlockName),
         Box::new(MissingRequiredFrontMatter),
         Box::new(FrontMatterEnumCase),
+        Box::new(MermaidConstructSkipped),
     ]
 }
 
@@ -1298,6 +1299,69 @@ impl LintRule for FrontMatterEnumCase {
                 ));
             }
         }
+        out
+    }
+}
+
+// ------------------------------------------------------------------
+// L040 — mermaid construct skipped during translation
+// ------------------------------------------------------------------
+
+/// L040: a `::diagram` body in mermaid syntax used a construct outside the
+/// supported translation subset — the translator skipped that line (info;
+/// the rest of the diagram still renders).
+struct MermaidConstructSkipped;
+
+impl MermaidConstructSkipped {
+    fn walk(blocks: &[Block], out: &mut Vec<Diagnostic>) {
+        for block in blocks {
+            if let Block::Diagram { diagram_type, content, span, .. } = block {
+                if let Some(t) = crate::mermaid_compat::translate(diagram_type, content) {
+                    for note in &t.notes {
+                        out.push(diag(
+                            "L040",
+                            format!(
+                                "Mermaid construct not translated (diagram line {}): {}",
+                                note.line, note.construct
+                            ),
+                            Some(*span),
+                        ));
+                    }
+                }
+            }
+            if let Some(children) = container_children(block) {
+                Self::walk(children, out);
+            }
+        }
+    }
+}
+
+/// Child-block accessor for the container variants a `::diagram` can nest
+/// inside (mirrors the citation walker's container set).
+fn container_children(b: &Block) -> Option<&[Block]> {
+    match b {
+        Block::Page { children, .. }
+        | Block::Section { children, .. }
+        | Block::Slide { children, .. }
+        | Block::App { children, .. }
+        | Block::AppShell { children, .. }
+        | Block::Sidebar { children, .. }
+        | Block::Panel { children, .. }
+        | Block::TabContent { children, .. }
+        | Block::Drawer { children, .. }
+        | Block::Modal { children, .. } => Some(children),
+        _ => None,
+    }
+}
+
+impl LintRule for MermaidConstructSkipped {
+    fn id(&self) -> &'static str {
+        "L040"
+    }
+
+    fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        Self::walk(&doc.blocks, &mut out);
         out
     }
 }
@@ -2879,5 +2943,27 @@ mod tests {
         assert_eq!(envelope["files"].as_array().unwrap().len(), 0);
         assert_eq!(envelope["summary"]["files"], 0);
         assert_eq!(envelope["summary"]["error_count"], 0);
+    }
+
+    // --- L040 ---
+
+    #[test]
+    fn l040_flags_skipped_mermaid_constructs() {
+        let input = "---\ntitle: T\ntype: doc\n---\n\n::diagram\nflowchart LR\nsubgraph One\nA --> B\nend\n::\n";
+        let diags = run_rule(&MermaidConstructSkipped, input);
+        assert_eq!(codes(&diags), vec!["L040", "L040"]); // subgraph + end
+        assert_eq!(diags[0].severity, Severity::Info);
+        assert!(diags[0].message.contains("subgraph"));
+        assert!(diags[0].fix.is_none());
+    }
+
+    #[test]
+    fn l040_silent_for_native_dsl_and_clean_mermaid() {
+        // Native DSL bodies are never translated, so never flagged.
+        let native = "---\ntitle: T\ntype: doc\n---\n\n::diagram[type=architecture]\nweb: Web\nweb -> api\n::\n";
+        assert!(run_rule(&MermaidConstructSkipped, native).is_empty());
+        // A fully-translatable mermaid body has no notes.
+        let clean = "---\ntitle: T\ntype: doc\n---\n\n::diagram\nsequenceDiagram\nA->>B: hi\n::\n";
+        assert!(run_rule(&MermaidConstructSkipped, clean).is_empty());
     }
 }

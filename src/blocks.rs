@@ -3062,7 +3062,7 @@ fn parse_chart(attrs: &Attrs, content: &str, span: Span) -> Block {
 /// Markdown separator rows (`|---|---|`) are skipped. Non-numeric value cells
 /// parse to `0.0`. Returns `None` when there is no usable data (no rows, or
 /// fewer than two columns) so the chart falls back to the mount point.
-fn parse_chart_data(content: &str) -> Option<ChartData> {
+pub(crate) fn parse_chart_data(content: &str) -> Option<ChartData> {
     let (headers, rows) = parse_table_content(content);
     if headers.len() < 2 || rows.is_empty() {
         return None;

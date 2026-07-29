@@ -19,10 +19,12 @@ pub mod builder;
 pub(crate) mod chart;
 pub mod citation;
 pub(crate) mod diagram;
+pub mod diagram_scene;
 pub mod error;
 pub mod icons;
 pub mod inline;
 pub mod lint;
+pub(crate) mod mermaid_compat;
 pub mod parse;
 pub mod render_html;
 pub mod render_latex;
@@ -75,6 +77,9 @@ pub use lint::{
 pub use parse::parse;
 pub use template::TemplateContext;
 pub use types::*;
+pub use diagram_scene::{
+    NativeAnchor, NativeDiagramScene, NativeMarker, NativePoint, NativeRole, NativeShape,
+};
 
 pub use render_html::{
     PageConfig, SiteConfig, PageEntry, extract_site, humanize_route, render_site_page,
