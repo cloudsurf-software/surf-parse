@@ -23,6 +23,22 @@ sort: created_at desc
 {= title =}
 ::
 
+::list[source=conversations display=compact stream=conversation_updated on-select=openThread]
+{= display_name =}
+::
+
+::search[source=userSearch placeholder="Search by username"]
+::
+
+::recipient-picker[source=contacts mode=multi on-submit="invoke:messages.compose"]
+::
+
+::qr[mode=show]
+::
+
+::qr[mode=scan on-resolve="invoke:contacts.add"]
+::
+
 ::board[source="/api/tasks/board" preload=true]
 columns: To Do | In Progress | Done
 ### {= title =}

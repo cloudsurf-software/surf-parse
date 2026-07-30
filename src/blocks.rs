@@ -11,7 +11,7 @@ use crate::types::{
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter,
     ModelField, ModelFieldType, NavGroup, NavItem, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
-    RowState, SchemaField,
+    RowAction, RowState, SchemaField,
     SlideLayout, SmokeCheck, SocialLink, SortSpec, Span, StatItem, StepItem,
     StyleProperty, TabBarItem, TabPanel, TaskItem, ToolbarItem, Trend, VolumeEntry,
 };
@@ -124,7 +124,7 @@ pub fn resolve_block(block: Block) -> Block {
         "panel" => parse_panel(attrs, content, *span),
         "tab-bar" => parse_tab_bar(attrs, content, *span),
         "tab-content" => parse_tab_content(attrs, content, *span),
-        "toolbar" => parse_toolbar(content, *span),
+        "toolbar" => parse_toolbar(attrs, content, *span),
         "drawer" => parse_drawer(attrs, content, *span),
         "modal" => parse_modal(attrs, content, *span),
         "command-palette" => parse_command_palette(attrs, content, *span),
@@ -136,6 +136,8 @@ pub fn resolve_block(block: Block) -> Block {
         "suggestion-chips" => parse_suggestion_chips(attrs, *span),
         "chat-thread" => parse_chat_thread(attrs, *span),
         "chat-input-simple" => parse_chat_input_simple(attrs, *span),
+        "recipient-picker" => parse_recipient_picker(attrs, *span),
+        "qr" => parse_qr(attrs, *span),
         "progress" => parse_progress(attrs, content, *span),
         "log-stream" => parse_log_stream(attrs, *span),
         "problem-list" => parse_problem_list(attrs, *span),
@@ -2691,9 +2693,37 @@ fn validate_source_path(raw: &str) -> Option<String> {
     Some(trimmed.to_string())
 }
 
+/// Validate a data-block `source=` value that may be either a `/`-rooted
+/// path (delegated to [`validate_source_path`]) or a bare binding-registry
+/// name: dotted lowerCamel segments (`conversations`, `chat.thread`,
+/// `contactRequests`). The segment character allowlist (`[a-z]` start,
+/// alphanumeric/`_` body, `.` separator) structurally rejects everything the
+/// strict validator blocks — `javascript:`/`data:`/`vbscript:` schemes (no
+/// `:`), `http(s)://` and protocol-relative URLs (no `/`), and `..`
+/// traversal (empty segments). Wired to `::list`/`::search` only; every
+/// other caller stays on the strict path-only validator.
+fn validate_registry_source(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with('/') {
+        return validate_source_path(trimmed);
+    }
+    let is_registry_name = trimmed.split('.').all(|seg| {
+        seg.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+            && seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    });
+    if is_registry_name {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
 fn parse_list(attrs: &Attrs, content: &str, span: Span) -> Block {
     let source = attr_string(attrs, "source")
-        .and_then(|s| validate_source_path(&s))
+        .and_then(|s| validate_registry_source(&s))
         .unwrap_or_default();
 
     let display = attr_string(attrs, "display")
@@ -2706,6 +2736,8 @@ fn parse_list(attrs: &Attrs, content: &str, span: Span) -> Block {
         .unwrap_or(ListDisplay::Card);
 
     let preload = attr_bool(attrs, "preload");
+    let stream = attr_string(attrs, "stream");
+    let on_select = attr_string(attrs, "on-select");
 
     let mut item_template = String::new();
     let mut filters = Vec::new();
@@ -2744,6 +2776,8 @@ fn parse_list(attrs: &Attrs, content: &str, span: Span) -> Block {
         filters,
         sort,
         preload,
+        stream,
+        on_select,
         span,
     }
 }
@@ -2944,7 +2978,7 @@ fn parse_filter_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
 
 fn parse_search(attrs: &Attrs, span: Span) -> Block {
     let source = attr_string(attrs, "source")
-        .and_then(|s| validate_source_path(&s))
+        .and_then(|s| validate_registry_source(&s))
         .unwrap_or_default();
     let placeholder = attr_string(attrs, "placeholder");
 
@@ -3747,7 +3781,30 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
     let attr_title = attr_string(attrs, "title");
     let attr_description = attr_string(attrs, "description");
 
-    let mut lines = content.lines();
+    // `action:` lines declare per-row actions and are consumed BEFORE the
+    // positional title/description take, so an action line is never
+    // swallowed as row copy. `action: Label | action_string`; without a
+    // pipe the label doubles as the action string.
+    let mut actions = Vec::new();
+    let mut positional = Vec::new();
+    for line in content.lines() {
+        if let Some(rest) = line.trim().strip_prefix("action:") {
+            let rest = rest.trim();
+            if rest.is_empty() {
+                continue;
+            }
+            let (label, action) = match rest.split_once('|') {
+                Some((l, a)) if !l.trim().is_empty() && !a.trim().is_empty() => {
+                    (l.trim().to_string(), a.trim().to_string())
+                }
+                _ => (rest.to_string(), rest.to_string()),
+            };
+            actions.push(RowAction { label, action });
+        } else {
+            positional.push(line);
+        }
+    }
+    let mut lines = positional.into_iter();
     let title = attr_title.unwrap_or_else(|| lines.next().unwrap_or("").trim().to_string());
     let description = attr_description.unwrap_or_else(|| lines.next().unwrap_or("").trim().to_string());
 
@@ -3757,6 +3814,7 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         description,
         href,
         state,
+        actions,
         span,
     }
 }
@@ -4235,7 +4293,13 @@ fn parse_tab_content(attrs: &Attrs, content: &str, span: Span) -> Block {
     }
 }
 
-fn parse_toolbar(content: &str, span: Span) -> Block {
+fn parse_toolbar(attrs: &Attrs, content: &str, span: Span) -> Block {
+    // 0.12: optional static title plus a source-bound dynamic title
+    // (`title-source=thread.display_name` for the thread screen). The
+    // source name is carried verbatim, the `::chat-thread`/`::nav-tree`
+    // convention for registry bindings.
+    let title = attr_string(attrs, "title");
+    let title_source = attr_string(attrs, "title-source");
     let mut items = Vec::new();
     for line in content.lines() {
         let trimmed = line.trim();
@@ -4290,7 +4354,12 @@ fn parse_toolbar(content: &str, span: Span) -> Block {
             }
         }
     }
-    Block::Toolbar { items, span }
+    Block::Toolbar {
+        title,
+        title_source,
+        items,
+        span,
+    }
 }
 
 fn parse_drawer(attrs: &Attrs, content: &str, span: Span) -> Block {
@@ -4411,9 +4480,45 @@ fn parse_suggestion_chips(attrs: &Attrs, span: Span) -> Block {
 fn parse_chat_thread(attrs: &Attrs, span: Span) -> Block {
     let source = attr_string(attrs, "source");
     let on_action = attr_string(attrs, "on-action");
+    let on_react = attr_string(attrs, "on-react");
+    let on_doc_open = attr_string(attrs, "on-doc-open");
     Block::ChatThread {
         source,
         on_action,
+        on_react,
+        on_doc_open,
+        span,
+    }
+}
+
+fn parse_recipient_picker(attrs: &Attrs, span: Span) -> Block {
+    // Source accepts bare registry names or /-rooted paths, like
+    // `::list`/`::search` (the 0.12 registry-source validator).
+    let source = attr_string(attrs, "source")
+        .and_then(|s| validate_registry_source(&s))
+        .unwrap_or_default();
+    // Invalid modes fall back to single-select, never a parse failure.
+    let mode = attr_string(attrs, "mode")
+        .filter(|m| m == "single" || m == "multi")
+        .unwrap_or_else(|| "single".to_string());
+    let on_submit = attr_string(attrs, "on-submit");
+    Block::RecipientPicker {
+        source,
+        mode,
+        on_submit,
+        span,
+    }
+}
+
+fn parse_qr(attrs: &Attrs, span: Span) -> Block {
+    // Invalid modes fall back to show, never a parse failure.
+    let mode = attr_string(attrs, "mode")
+        .filter(|m| m == "show" || m == "scan")
+        .unwrap_or_else(|| "show".to_string());
+    let on_resolve = attr_string(attrs, "on-resolve");
+    Block::Qr {
+        mode,
+        on_resolve,
         span,
     }
 }
@@ -7290,12 +7395,111 @@ Saturday 7am-4pm, Sunday 8am-2pm.
     }
 
     #[test]
+    fn registry_source_bare_name_survives_on_list() {
+        let a = attrs(&[("source", AttrValue::String("conversations".into()))]);
+        match resolve_block(unknown("list", a, "")) {
+            Block::List { source, .. } => assert_eq!(source, "conversations"),
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_source_dotted_name_survives_on_list() {
+        let a = attrs(&[("source", AttrValue::String("chat.thread".into()))]);
+        match resolve_block(unknown("list", a, "")) {
+            Block::List { source, .. } => assert_eq!(source, "chat.thread"),
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_source_bare_name_survives_on_search() {
+        let a = attrs(&[("source", AttrValue::String("userSearch".into()))]);
+        match resolve_block(unknown("search", a, "")) {
+            Block::Search { source, .. } => assert_eq!(source, "userSearch"),
+            other => panic!("Expected Search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_source_dotted_name_survives_on_search() {
+        let a = attrs(&[("source", AttrValue::String("chat.thread".into()))]);
+        match resolve_block(unknown("search", a, "")) {
+            Block::Search { source, .. } => assert_eq!(source, "chat.thread"),
+            other => panic!("Expected Search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_source_still_blocks_traversal_on_list() {
+        let a = attrs(&[("source", AttrValue::String("/api/../secrets".into()))]);
+        match resolve_block(unknown("list", a, "")) {
+            Block::List { source, .. } => {
+                assert!(source.is_empty(), "path traversal must be rejected");
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_source_still_blocks_external_url_on_list() {
+        let a = attrs(&[("source", AttrValue::String("https://evil.com/x".into()))]);
+        match resolve_block(unknown("list", a, "")) {
+            Block::List { source, .. } => {
+                assert!(source.is_empty(), "external URLs must be rejected");
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_source_still_blocks_scheme_and_relative_traversal() {
+        for bad in ["javascript:alert(1)", "data:text/html,x", "../etc/passwd", "//evil.com/x"] {
+            let a = attrs(&[("source", AttrValue::String((*bad).into()))]);
+            match resolve_block(unknown("search", a, "")) {
+                Block::Search { source, .. } => {
+                    assert!(source.is_empty(), "{bad} must be rejected");
+                }
+                other => panic!("Expected Search, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
     fn parse_list_from_full_surf() {
         let source = "::list[source=\"/api/tasks\" display=card]\n## {= title =}\nfilter: status\nsort: created_at desc\n::";
         let result = crate::parse(source);
         assert!(result.diagnostics.is_empty(), "Diagnostics: {:?}", result.diagnostics);
         let has_list = result.doc.blocks.iter().any(|b| matches!(b, Block::List { .. }));
         assert!(has_list, "Should contain a List block");
+    }
+
+    #[test]
+    fn parse_list_stream_and_on_select() {
+        let source = "::list[source=conversations display=compact stream=conversation_updated on-select=openThread]\n{= display_name =}\n::";
+        let result = crate::parse(source);
+        assert!(result.diagnostics.is_empty(), "Diagnostics: {:?}", result.diagnostics);
+        match &result.doc.blocks[0] {
+            Block::List { source, stream, on_select, .. } => {
+                assert_eq!(source, "conversations");
+                assert_eq!(stream.as_deref(), Some("conversation_updated"));
+                assert_eq!(on_select.as_deref(), Some("openThread"));
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_list_without_stream_or_on_select_stays_none() {
+        let source = "::list[source=\"/api/tasks\" display=card]\n{= title =}\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::List { stream, on_select, .. } => {
+                assert_eq!(*stream, None);
+                assert_eq!(*on_select, None);
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
     }
 
     #[test]
@@ -7384,6 +7588,48 @@ Saturday 7am-4pm, Sunday 8am-2pm.
         let result = crate::parse(source);
         let has_row = result.doc.blocks.iter().any(|b| matches!(b, Block::Row { state: RowState::Loading, .. }));
         assert!(has_row, "Should contain a Row block with loading state");
+    }
+
+    #[test]
+    fn parse_row_actions_not_swallowed_as_copy() {
+        let source = "::row[icon=doc]\naction: Accept | invoke:contacts.accept\nJordan Lee\n@jordan\naction: Deny | mutate:contacts.deny:id\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { title, description, actions, .. } => {
+                assert_eq!(title, "Jordan Lee", "action lines must not be taken as title");
+                assert_eq!(description, "@jordan", "action lines must not be taken as description");
+                assert_eq!(actions.len(), 2);
+                assert_eq!(actions[0].label, "Accept");
+                assert_eq!(actions[0].action, "invoke:contacts.accept");
+                assert_eq!(actions[1].label, "Deny");
+                assert_eq!(actions[1].action, "mutate:contacts.deny:id");
+            }
+            other => panic!("Expected Row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_row_action_without_pipe_uses_label_as_action() {
+        let source = "::row[icon=doc]\nJordan Lee\n@jordan\naction: remove\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { actions, .. } => {
+                assert_eq!(actions.len(), 1);
+                assert_eq!(actions[0].label, "remove");
+                assert_eq!(actions[0].action, "remove");
+            }
+            other => panic!("Expected Row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_row_without_actions_stays_empty() {
+        let source = "::row[icon=doc]\nTitle\nDesc\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { actions, .. } => assert!(actions.is_empty()),
+            other => panic!("Expected Row, got {other:?}"),
+        }
     }
 
     #[test]
@@ -7972,6 +8218,33 @@ Note
     }
 
     #[test]
+    fn parse_toolbar_title_and_title_source() {
+        let source = "::toolbar[title=\"Messages\" title-source=thread.display_name]\n- button[label=\"New\" action=compose]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Toolbar { title, title_source, items, .. } => {
+                assert_eq!(title.as_deref(), Some("Messages"));
+                assert_eq!(title_source.as_deref(), Some("thread.display_name"));
+                assert_eq!(items.len(), 1);
+            }
+            other => panic!("Expected Toolbar, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_toolbar_without_title_stays_none() {
+        let source = "::toolbar\n- button[label=\"Run\" action=run]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Toolbar { title, title_source, .. } => {
+                assert_eq!(*title, None);
+                assert_eq!(*title_source, None);
+            }
+            other => panic!("Expected Toolbar, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn parse_drawer_block() {
         let source = "::drawer[name=mako position=right width=320 trigger=icon]\nDrawer content\n::";
         let result = crate::parse(source);
@@ -8176,6 +8449,120 @@ Note
                 assert_eq!(*source, Some("mako.conversation".to_string()));
             }
             other => panic!("Expected ChatThread, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_chat_thread_react_and_doc_open_seams() {
+        let source = "::chat-thread[source=chat.thread on-action=run_action on-react=\"mutate:messages.react:emoji\" on-doc-open=\"open:/docs/{id}\"]\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::ChatThread { source, on_action, on_react, on_doc_open, .. } => {
+                assert_eq!(source.as_deref(), Some("chat.thread"));
+                assert_eq!(on_action.as_deref(), Some("run_action"));
+                assert_eq!(on_react.as_deref(), Some("mutate:messages.react:emoji"));
+                assert_eq!(on_doc_open.as_deref(), Some("open:/docs/{id}"));
+            }
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chat_thread_seams_default_none() {
+        let source = "::chat-thread[source=chat.thread]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::ChatThread { on_react, on_doc_open, .. } => {
+                assert_eq!(*on_react, None);
+                assert_eq!(*on_doc_open, None);
+            }
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_recipient_picker_block() {
+        let source = "::recipient-picker[source=contacts mode=multi on-submit=\"invoke:messages.compose\"]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::RecipientPicker { source, mode, on_submit, .. } => {
+                assert_eq!(source, "contacts");
+                assert_eq!(mode, "multi");
+                assert_eq!(on_submit.as_deref(), Some("invoke:messages.compose"));
+            }
+            other => panic!("Expected RecipientPicker, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_recipient_picker_mode_defaults_single() {
+        let source = "::recipient-picker[source=contacts]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::RecipientPicker { mode, on_submit, .. } => {
+                assert_eq!(mode, "single");
+                assert_eq!(*on_submit, None);
+            }
+            other => panic!("Expected RecipientPicker, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_recipient_picker_invalid_mode_falls_back_single() {
+        let source = "::recipient-picker[source=contacts mode=everything]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::RecipientPicker { mode, .. } => assert_eq!(mode, "single"),
+            other => panic!("Expected RecipientPicker, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_recipient_picker_source_uses_registry_validator() {
+        let source = "::recipient-picker[source=\"https://evil.com/x\"]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::RecipientPicker { source, .. } => {
+                assert!(source.is_empty(), "external URLs must be rejected");
+            }
+            other => panic!("Expected RecipientPicker, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_qr_block_scan_with_resolve() {
+        let source = "::qr[mode=scan on-resolve=\"invoke:contacts.add\"]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Qr { mode, on_resolve, .. } => {
+                assert_eq!(mode, "scan");
+                assert_eq!(on_resolve.as_deref(), Some("invoke:contacts.add"));
+            }
+            other => panic!("Expected Qr, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_qr_mode_defaults_show() {
+        let source = "::qr\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Qr { mode, on_resolve, .. } => {
+                assert_eq!(mode, "show");
+                assert_eq!(*on_resolve, None);
+            }
+            other => panic!("Expected Qr, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_qr_invalid_mode_falls_back_show() {
+        let source = "::qr[mode=teleport]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Qr { mode, .. } => assert_eq!(mode, "show"),
+            other => panic!("Expected Qr, got {other:?}"),
         }
     }
 

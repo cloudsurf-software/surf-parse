@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 107
-registry_updated = "2026-05-27"
+total_blocks = 109
+registry_updated = "2026-07-29"
 
 [blocks.ai-context]
 status = "planned"
@@ -461,7 +461,7 @@ enum_variant = "ProductCard"
 status = "implemented"
 category = "advanced"
 purpose = "Dynamic data list with filtering, sorting, and display modes"
-attributes = ["source", "display", "preload"]
+attributes = ["source", "display", "preload", "stream", "on_select"]
 degradation = "bulleted list"
 enum_variant = "List"
 
@@ -777,7 +777,7 @@ enum_variant = "TabContent"
 status = "implemented"
 category = "advanced"
 purpose = "Horizontal toolbar with buttons, separators, badges, dropdowns, and text items"
-attributes = []
+attributes = ["title", "title_source"]
 degradation = "bulleted action list"
 enum_variant = "Toolbar"
 
@@ -853,11 +853,27 @@ attributes = ["source", "max", "dismissible"]
 degradation = "bulleted suggestion list"
 enum_variant = "SuggestionChips"
 
+[blocks.recipient-picker]
+status = "implemented"
+category = "advanced"
+purpose = "Recipient picker: select one or more entries from a data source and submit the selection (group compose)"
+attributes = ["source", "mode", "on_submit"]
+degradation = "labeled source description"
+enum_variant = "RecipientPicker"
+
+[blocks.qr]
+status = "implemented"
+category = "advanced"
+purpose = "Platform-conditional QR block: show-my-code or scan, with a resolve action fired on a successful scan/exchange"
+attributes = ["mode", "on_resolve"]
+degradation = "italic placeholder text"
+enum_variant = "Qr"
+
 [blocks.chat-thread]
 status = "implemented"
 category = "advanced"
 purpose = "Chat conversation thread display from source with optional action callback"
-attributes = ["source", "on_action"]
+attributes = ["source", "on_action", "on_react", "on_doc_open"]
 degradation = "sequential message list"
 enum_variant = "ChatThread"
 

@@ -34,6 +34,13 @@ Syncing
 Fetching the latest activity
 ::
 
+::row[icon=doc]
+Jordan Lee
+@jordan wants to connect
+action: Accept | invoke:contacts.accept
+action: Deny | mutate:contacts.deny:id
+::
+
 ::infocard[intent=success image="/img/onboard.png"]
 # Acme onboarding
 New customer setup

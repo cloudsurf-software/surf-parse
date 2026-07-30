@@ -36,7 +36,8 @@
     "title": "Getting started",
     "description": "Read the five-minute intro guide",
     "href": "/docs/getting-started",
-    "state": "default"
+    "state": "default",
+    "actions": []
   },
   {
     "type": "row",
@@ -44,7 +45,36 @@
     "title": "Syncing",
     "description": "Fetching the latest activity",
     "href": null,
-    "state": "loading"
+    "state": "loading",
+    "actions": []
+  },
+  {
+    "type": "row",
+    "icon": "doc",
+    "title": "Jordan Lee",
+    "description": "@jordan wants to connect",
+    "href": null,
+    "state": "default",
+    "actions": [
+      {
+        "label": "Accept",
+        "action": {
+          "verb": "invoke",
+          "target": "contacts.accept",
+          "payload": null,
+          "raw": "invoke:contacts.accept"
+        }
+      },
+      {
+        "label": "Deny",
+        "action": {
+          "verb": "mutate",
+          "target": "contacts.deny",
+          "payload": "id",
+          "raw": "mutate:contacts.deny:id"
+        }
+      }
+    ]
   },
   {
     "type": "info_card",

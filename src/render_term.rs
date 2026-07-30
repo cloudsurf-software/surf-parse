@@ -729,6 +729,8 @@ fn render_block(block: &Block) -> String {
         | Block::SuggestionChips { .. }
         | Block::ChatThread { .. }
         | Block::ChatInputSimple { .. }
+        | Block::RecipientPicker { .. }
+        | Block::Qr { .. }
         | Block::Progress { .. }
         | Block::LogStream { .. }
         | Block::ProblemList { .. }

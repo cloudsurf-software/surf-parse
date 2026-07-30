@@ -25,6 +25,8 @@
       },
       {
         "type": "toolbar",
+        "title": "Messages",
+        "title_source": "thread.display_name",
         "items": [
           {
             "kind": "button",
@@ -193,6 +195,18 @@
       "target": "run_action",
       "payload": null,
       "raw": "run_action"
+    },
+    "on_react": {
+      "verb": "mutate",
+      "target": "messages.react",
+      "payload": "emoji",
+      "raw": "mutate:messages.react:emoji"
+    },
+    "on_doc_open": {
+      "verb": "open",
+      "target": "/docs/{id}",
+      "payload": null,
+      "raw": "open:/docs/{id}"
     }
   },
   {

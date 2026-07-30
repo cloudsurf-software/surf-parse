@@ -33,6 +33,8 @@ const ENUM_VARIANTS: &[&str] = &[
     "CodeEditor", "CommandPalette", "Drawer", "LogStream", "Modal",
     "NavTree", "Panel", "ProblemList", "Progress", "Sidebar",
     "SuggestionChips", "TabBar", "TabContent", "Terminal", "Toolbar",
+    // Messages/Contacts vocabulary (0.12)
+    "RecipientPicker", "Qr",
 ];
 
 #[derive(Debug, Deserialize)]
