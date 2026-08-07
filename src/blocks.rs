@@ -4295,6 +4295,7 @@ fn parse_toolbar(content: &str, span: Span) -> Block {
                     icon: attr_string(&attrs, "icon"),
                     style: attr_string(&attrs, "style"),
                     disabled: attr_bool(&attrs, "disabled"),
+                    toggled: attr_bool(&attrs, "toggled"),
                 });
             } else if let Some(inner) = rest.strip_prefix("badge[") {
                 let inner = inner.trim_end_matches(']');
@@ -4327,6 +4328,7 @@ fn parse_toolbar(content: &str, span: Span) -> Block {
                     icon: None,
                     style: None,
                     disabled: false,
+                    toggled: false,
                 });
             }
         }
@@ -8052,6 +8054,20 @@ Note
                 assert!(matches!(&items[1], ToolbarItem::Separator));
                 assert!(matches!(&items[2], ToolbarItem::Spacer));
                 assert!(matches!(&items[3], ToolbarItem::Badge { value, .. } if value == "Live"));
+            }
+            other => panic!("Expected Toolbar, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_toolbar_button_toggled() {
+        let source = "::toolbar\n- button[label=\"Panel\" action=toggle_panel toggled=true]\n- button[label=\"Save\" action=save]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Toolbar { items, .. } => {
+                assert!(matches!(&items[0], ToolbarItem::Button { toggled: true, .. }));
+                // Defaults false when absent.
+                assert!(matches!(&items[1], ToolbarItem::Button { toggled: false, .. }));
             }
             other => panic!("Expected Toolbar, got {:?}", other),
         }

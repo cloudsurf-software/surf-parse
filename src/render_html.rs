@@ -4645,8 +4645,8 @@ pub(crate) fn render_block(block: &Block) -> String {
             let mut html = String::from("<div class=\"surfdoc-toolbar\">");
             for item in items {
                 match item {
-                    crate::types::ToolbarItem::Button { label, action, style, .. } => {
-                        let cls = match style {
+                    crate::types::ToolbarItem::Button { label, action, style, toggled, .. } => {
+                        let mut cls = match style {
                             Some(s) => format!(" surfdoc-toolbar-btn-{}", escape_html(s)),
                             None => String::new(),
                         };
@@ -4654,9 +4654,17 @@ pub(crate) fn render_block(block: &Block) -> String {
                             Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
                             None => String::new(),
                         };
+                        // Accent-ring open state; aria-pressed so it is not
+                        // purely visual. Emitted only when toggled.
+                        let toggled_attr = if *toggled {
+                            cls.push_str(" surfdoc-toolbar-btn--toggled");
+                            " aria-pressed=\"true\""
+                        } else {
+                            ""
+                        };
                         html.push_str(&format!(
-                            "<button class=\"surfdoc-toolbar-btn{}\"{}>{}</button>",
-                            cls, action_attr, escape_html(label.as_deref().unwrap_or("")),
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}>{}</button>",
+                            cls, action_attr, toggled_attr, escape_html(label.as_deref().unwrap_or("")),
                         ));
                     }
                     crate::types::ToolbarItem::Separator => {
@@ -10733,7 +10741,7 @@ About
     fn html_toolbar() {
         let doc = doc_with(vec![Block::Toolbar {
             items: vec![
-                ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false },
+                ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false },
                 ToolbarItem::Separator,
                 ToolbarItem::Spacer,
                 ToolbarItem::Badge { value: "Live".into(), color: Some("green".into()) },
@@ -10747,6 +10755,23 @@ About
         assert!(html.contains("surfdoc-toolbar-spacer"));
         assert!(html.contains("surfdoc-badge-green"));
         assert!(html.contains("Live"));
+    }
+
+    #[test]
+    fn html_toolbar_button_toggled() {
+        let doc = doc_with(vec![Block::Toolbar {
+            items: vec![
+                ToolbarItem::Button { label: Some("Panel".into()), action: Some("toggle_panel".into()), icon: None, style: None, disabled: false, toggled: true },
+                ToolbarItem::Button { label: Some("Save".into()), action: Some("save".into()), icon: None, style: None, disabled: false, toggled: false },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Toggled class and aria-pressed appear exactly once — only on the toggled button.
+        assert_eq!(html.matches("surfdoc-toolbar-btn--toggled").count(), 1);
+        assert_eq!(html.matches("aria-pressed=\"true\"").count(), 1);
+        assert!(html.contains("surfdoc-toolbar-btn--toggled\" data-action=\"toggle_panel\" aria-pressed=\"true\">Panel</button>"));
+        assert!(html.contains("<button class=\"surfdoc-toolbar-btn\" data-action=\"save\">Save</button>"));
     }
 
     #[test]

@@ -776,7 +776,7 @@ enum_variant = "TabContent"
 [blocks.toolbar]
 status = "implemented"
 category = "advanced"
-purpose = "Horizontal toolbar with buttons, separators, badges, dropdowns, and text items"
+purpose = "Horizontal toolbar with buttons (label/action/icon/style/disabled/toggled), separators, badges, dropdowns, and text items"
 attributes = []
 degradation = "bulleted action list"
 enum_variant = "Toolbar"

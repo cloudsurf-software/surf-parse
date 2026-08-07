@@ -2837,6 +2837,8 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-toolbar-btn:hover { background: var(--surface-alt, #1a1a24); color: var(--text, #e6edf3); }
 .surfdoc .surfdoc-toolbar-btn-primary { background: var(--accent, #3b82f6); color: var(--accent-text, #fff); border-color: var(--accent, #3b82f6); font-weight: 600; }
 .surfdoc .surfdoc-toolbar-btn-primary:hover { background: var(--accent-hover, #60a5fa); border-color: var(--accent-hover, #60a5fa); }
+/* Toggled (open) state — accent ring, e.g. a button whose panel is open */
+.surfdoc .surfdoc-toolbar-btn--toggled { color: var(--text, #e6edf3); background: var(--surface-alt, #1a1a24); box-shadow: 0 0 0 1.5px var(--accent, #2e8ad8); }
 .surfdoc .surfdoc-toolbar-separator { width: 1px; height: 20px; background: var(--border, #30363d); margin: 0 4px; }
 .surfdoc .surfdoc-toolbar-spacer { flex: 1; }
 .surfdoc .surfdoc-toolbar-text { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 500; padding: 0 8px; }

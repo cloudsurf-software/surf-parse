@@ -1152,6 +1152,9 @@ pub enum ToolbarItem {
         icon: Option<String>,
         style: Option<String>,
         disabled: bool,
+        /// Accent-ring open/pressed state (e.g. a toolbar button whose
+        /// panel is currently open).
+        toggled: bool,
     },
     Separator,
     Spacer,

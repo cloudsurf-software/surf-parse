@@ -2859,13 +2859,14 @@ fn serialize_block(block: &Block) -> String {
             let mut lines = Vec::new();
             for item in items {
                 match item {
-                    crate::types::ToolbarItem::Button { label, action, icon, style, disabled } => {
+                    crate::types::ToolbarItem::Button { label, action, icon, style, disabled, toggled } => {
                         let mut parts = Vec::new();
                         if let Some(l) = label { parts.push(format!("label=\"{}\"", escape_attr(l))); }
                         if let Some(a) = action { parts.push(format!("action={a}")); }
                         if let Some(i) = icon { parts.push(format!("icon={i}")); }
                         if let Some(s) = style { parts.push(format!("style={s}")); }
                         if *disabled { parts.push("disabled=true".to_string()); }
+                        if *toggled { parts.push("toggled=true".to_string()); }
                         lines.push(format!("- button[{}]", parts.join(" ")));
                     }
                     crate::types::ToolbarItem::Separator => lines.push("- separator".to_string()),
@@ -4082,6 +4083,21 @@ mod tests {
                 assert!(!*dismissible);
             }
             other => panic!("Expected Modal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_toolbar_button_toggled() {
+        let source = "::toolbar\n- button[label=\"Panel\" action=toggle_panel toggled=true]\n- button[label=\"Save\" action=save]\n::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        let reparsed = parse::parse(&out);
+        match &reparsed.doc.blocks[0] {
+            Block::Toolbar { items, .. } => {
+                assert!(matches!(&items[0], crate::types::ToolbarItem::Button { toggled: true, .. }));
+                assert!(matches!(&items[1], crate::types::ToolbarItem::Button { toggled: false, .. }));
+            }
+            other => panic!("Expected Toolbar, got {:?}", other),
         }
     }
 
