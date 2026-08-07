@@ -792,8 +792,8 @@ enum_variant = "Drawer"
 [blocks.modal]
 status = "implemented"
 category = "advanced"
-purpose = "Dialog overlay with name, optional title, and child blocks"
-attributes = ["name", "title"]
+purpose = "Dialog overlay with name, optional title, and child blocks; header always shows the title and a top-right close control"
+attributes = ["name", "title", "width", "placement", "dismissible"]
 degradation = "heading with content"
 enum_variant = "Modal"
 

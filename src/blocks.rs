@@ -4312,10 +4312,19 @@ fn parse_drawer(attrs: &Attrs, content: &str, span: Span) -> Block {
 fn parse_modal(attrs: &Attrs, content: &str, span: Span) -> Block {
     let name = attr_string(attrs, "name").unwrap_or_default();
     let title = attr_string(attrs, "title");
+    let width = attr_u32(attrs, "width");
+    let placement = attr_string(attrs, "placement").unwrap_or_else(|| "centered".to_string());
+    let dismissible = attrs
+        .get("dismissible")
+        .map(|v| matches!(v, AttrValue::Bool(true)))
+        .unwrap_or(true);
     let children = parse_page_children(content);
     Block::Modal {
         name,
         title,
+        width,
+        placement,
+        dismissible,
         children,
         span,
     }
@@ -7993,9 +8002,28 @@ Note
         let result = crate::parse(source);
         let block = &result.doc.blocks[0];
         match block {
-            Block::Modal { name, title, .. } => {
+            Block::Modal { name, title, width, placement, dismissible, .. } => {
                 assert_eq!(name, "deploy");
                 assert_eq!(*title, Some("Deploy App".to_string()));
+                assert_eq!(*width, None);
+                assert_eq!(placement, "centered");
+                assert!(*dismissible);
+            }
+            other => panic!("Expected Modal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_modal_block_attrs() {
+        let source = "::modal[name=confirm title=\"Confirm\" width=480 placement=top dismissible=false]\nBody\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::Modal { name, width, placement, dismissible, .. } => {
+                assert_eq!(name, "confirm");
+                assert_eq!(*width, Some(480));
+                assert_eq!(placement, "top");
+                assert!(!*dismissible);
             }
             other => panic!("Expected Modal, got {:?}", other),
         }

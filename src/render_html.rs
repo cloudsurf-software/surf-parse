@@ -4667,14 +4667,24 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
-        Block::Modal { name, title, children, .. } => {
+        Block::Modal { name, title, width, placement, dismissible, children, .. } => {
+            let style = match width {
+                Some(w) => format!(" style=\"width:{}px\"", w),
+                None => String::new(),
+            };
+            let dismiss_attr = if *dismissible { String::new() } else { " data-dismissible=\"false\"".to_string() };
             let mut html = format!(
-                "<dialog class=\"surfdoc-modal\" data-name=\"{}\">",
-                escape_html(name),
+                "<dialog class=\"surfdoc-modal\" data-name=\"{}\" data-placement=\"{}\"{}{}>",
+                escape_html(name), escape_html(placement), dismiss_attr, style,
             );
-            if let Some(t) = title {
-                html.push_str(&format!("<strong class=\"surfdoc-modal-title\">{}</strong>", escape_html(t)));
-            }
+            // Dismiss canon: the header always carries the title and a
+            // top-right close control, regardless of `dismissible` —
+            // `dismissible` only governs backdrop/escape semantics.
+            let heading = title.as_deref().unwrap_or(name);
+            html.push_str("<header class=\"surfdoc-modal-header\">");
+            html.push_str(&format!("<strong class=\"surfdoc-modal-title\">{}</strong>", escape_html(heading)));
+            html.push_str("<button type=\"button\" class=\"surfdoc-modal-close\" aria-label=\"Close\">&#10005;</button>");
+            html.push_str("</header>");
             for child in children { html.push_str(&render_block(child)); }
             html.push_str("</dialog>");
             html
@@ -10675,13 +10685,42 @@ About
         let doc = doc_with(vec![Block::Modal {
             name: "deploy".into(),
             title: Some("Deploy App".into()),
+            width: None,
+            placement: "centered".into(),
+            dismissible: true,
             children: vec![],
             span: span(),
         }]);
         let html = to_html(&doc);
         assert!(html.contains("surfdoc-modal"));
         assert!(html.contains("data-name=\"deploy\""));
+        assert!(html.contains("data-placement=\"centered\""));
+        assert!(html.contains("<header class=\"surfdoc-modal-header\">"));
         assert!(html.contains("<strong class=\"surfdoc-modal-title\">Deploy App</strong>"));
+        assert!(html.contains("surfdoc-modal-close"));
+        assert!(html.contains("aria-label=\"Close\""));
+        assert!(!html.contains("data-dismissible"));
+    }
+
+    #[test]
+    fn html_modal_non_dismissible_still_has_close() {
+        let doc = doc_with(vec![Block::Modal {
+            name: "confirm".into(),
+            title: None,
+            width: Some(480),
+            placement: "top".into(),
+            dismissible: false,
+            children: vec![],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("data-dismissible=\"false\""));
+        assert!(html.contains("style=\"width:480px\""));
+        assert!(html.contains("data-placement=\"top\""));
+        // Dismiss canon: close control renders even when dismissible=false.
+        assert!(html.contains("surfdoc-modal-close"));
+        // Title falls back to name when absent.
+        assert!(html.contains("<strong class=\"surfdoc-modal-title\">confirm</strong>"));
     }
 
     #[test]

@@ -1018,6 +1018,9 @@ pub enum Block {
     Modal {
         name: String,
         title: Option<String>,
+        width: Option<u32>,
+        placement: String,
+        dismissible: bool,
         children: Vec<Block>,
         span: Span,
     },

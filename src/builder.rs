@@ -2907,9 +2907,12 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Modal { name, title, children, .. } => {
+        Block::Modal { name, title, width, placement, dismissible, children, .. } => {
             let mut attrs_parts = vec![format!("name=\"{}\"", escape_attr(name))];
             if let Some(t) = title { attrs_parts.push(format!("title=\"{}\"", escape_attr(t))); }
+            if let Some(w) = width { attrs_parts.push(format!("width={w}")); }
+            if placement != "centered" { attrs_parts.push(format!("placement={placement}")); }
+            if !dismissible { attrs_parts.push("dismissible=false".to_string()); }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
@@ -4018,6 +4021,24 @@ mod tests {
         match &parsed.doc.blocks[2] {
             Block::Markdown { content, .. } => assert!(content.contains("Some text here.")),
             _ => panic!("Expected Markdown block, got {:?}", parsed.doc.blocks[2]),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_modal_attrs() {
+        let source = "::modal[name=\"confirm\" title=\"Confirm\" width=480 placement=top dismissible=false]\nBody\n::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        let reparsed = parse::parse(&out);
+        match &reparsed.doc.blocks[0] {
+            Block::Modal { name, title, width, placement, dismissible, .. } => {
+                assert_eq!(name, "confirm");
+                assert_eq!(title.as_deref(), Some("Confirm"));
+                assert_eq!(*width, Some(480));
+                assert_eq!(placement, "top");
+                assert!(!*dismissible);
+            }
+            other => panic!("Expected Modal, got {:?}", other),
         }
     }
 
