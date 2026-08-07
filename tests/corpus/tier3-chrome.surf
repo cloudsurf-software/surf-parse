@@ -10,7 +10,7 @@ type: app
 ::
 ::
 
-::toolbar
+::toolbar[title="Messages" title-source=thread.display_name]
 - button[label="Run" action=run icon=play style=primary]
 - separator
 - badge[value="Live" color=green]
@@ -57,7 +57,7 @@ Are you sure you want to ship?
 ::suggestion-chips[source=ai.suggestions max=3 dismissible=true]
 ::
 
-::chat-thread[source=chat.thread on-action=run_action]
+::chat-thread[source=chat.thread on-action=run_action on-react="mutate:messages.react:emoji" on-doc-open="open:/docs/{id}"]
 ::
 
 ::chat-input-simple[placeholder="Ask Mako…" action=send]

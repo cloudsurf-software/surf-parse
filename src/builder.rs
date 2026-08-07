@@ -2023,7 +2023,7 @@ fn serialize_block(block: &Block) -> String {
 
         // ----- App description blocks -----
 
-        Block::List { source, display, item_template, filters, sort, preload, .. } => {
+        Block::List { source, display, item_template, filters, sort, preload, stream, on_select, .. } => {
             let mut attrs_parts = Vec::new();
             attrs_parts.push(format!("source=\"{}\"", escape_attr(source)));
             let display_str = match display {
@@ -2034,6 +2034,12 @@ fn serialize_block(block: &Block) -> String {
             attrs_parts.push(format!("display={display_str}"));
             if *preload {
                 attrs_parts.push("preload".to_string());
+            }
+            if let Some(s) = stream {
+                attrs_parts.push(format!("stream=\"{}\"", escape_attr(s)));
+            }
+            if let Some(a) = on_select {
+                attrs_parts.push(format!("on-select=\"{}\"", escape_attr(a)));
             }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut content_lines = Vec::new();
@@ -2755,7 +2761,7 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, actions, .. } => {
             let mut attrs_parts = vec![format!("icon={icon}")];
             if let Some(h) = href { attrs_parts.push(format!("href=\"{}\"", escape_attr(h))); }
             match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
@@ -2763,7 +2769,15 @@ fn serialize_block(block: &Block) -> String {
             if let Some(l) = trailing_label { attrs_parts.push(format!("trailing-label=\"{}\"", escape_attr(l))); }
             if let Some(a) = trailing_action { attrs_parts.push(format!("trailing-action={a}")); }
             let attrs_str = format!("[{}]", attrs_parts.join(", "));
-            format!("::row{attrs_str}\n{title}\n{description}\n::")
+            let mut content = format!("{title}\n{description}");
+            for a in actions {
+                if a.label == a.action {
+                    content.push_str(&format!("\naction: {}", a.action));
+                } else {
+                    content.push_str(&format!("\naction: {} | {}", a.label, a.action));
+                }
+            }
+            format!("::row{attrs_str}\n{content}\n::")
         }
 
         Block::InfoCard { intent, title, subtitle, summary, image, facts, steps, state, .. } => {
@@ -2859,7 +2873,15 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Toolbar { items, .. } => {
+        Block::Toolbar { title, title_source, items, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(t) = title { attrs_parts.push(format!("title=\"{}\"", escape_attr(t))); }
+            if let Some(s) = title_source { attrs_parts.push(format!("title-source={s}")); }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
             let mut lines = Vec::new();
             for item in items {
                 match item {
@@ -2897,9 +2919,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = lines.join("\n");
             if content.is_empty() {
-                "::toolbar\n::".to_string()
+                format!("::toolbar{attrs_str}\n::")
             } else {
-                format!("::toolbar\n{content}\n::")
+                format!("::toolbar{attrs_str}\n{content}\n::")
             }
         }
 
@@ -3065,10 +3087,12 @@ fn serialize_block(block: &Block) -> String {
             format!("::suggestion-chips{attrs_str}\n::")
         }
 
-        Block::ChatThread { source, on_action, .. } => {
+        Block::ChatThread { source, on_action, on_react, on_doc_open, .. } => {
             let mut attrs_parts = Vec::new();
             if let Some(s) = source { attrs_parts.push(format!("source={s}")); }
             if let Some(a) = on_action { attrs_parts.push(format!("on-action={a}")); }
+            if let Some(a) = on_react { attrs_parts.push(format!("on-react=\"{}\"", escape_attr(a))); }
+            if let Some(a) = on_doc_open { attrs_parts.push(format!("on-doc-open=\"{}\"", escape_attr(a))); }
             let attrs_str = if attrs_parts.is_empty() {
                 String::new()
             } else {
@@ -3129,6 +3153,19 @@ fn serialize_block(block: &Block) -> String {
                 None => String::new(),
             };
             format!("::problem-list{attrs_str}\n::")
+        }
+
+        // ── Messages/Contacts vocabulary (0.12) ───────────────────
+        Block::RecipientPicker { source, mode, on_submit, .. } => {
+            let mut attrs_parts = vec![format!("source=\"{}\"", escape_attr(source)), format!("mode={mode}")];
+            if let Some(a) = on_submit { attrs_parts.push(format!("on-submit=\"{}\"", escape_attr(a))); }
+            format!("::recipient-picker[{}]\n::", attrs_parts.join(" "))
+        }
+
+        Block::Qr { mode, on_resolve, .. } => {
+            let mut attrs_parts = vec![format!("mode={mode}")];
+            if let Some(a) = on_resolve { attrs_parts.push(format!("on-resolve=\"{}\"", escape_attr(a))); }
+            format!("::qr[{}]\n::", attrs_parts.join(" "))
         }
     }
 }

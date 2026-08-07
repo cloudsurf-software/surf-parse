@@ -1060,8 +1060,14 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.join("\n")
         }
 
-        Block::Row { title, description, .. } => {
-            if description.is_empty() { format!("- {title}") } else { format!("- **{title}** — {description}") }
+        Block::Row { title, description, actions, .. } => {
+            let base = if description.is_empty() { format!("- {title}") } else { format!("- **{title}** — {description}") };
+            if actions.is_empty() {
+                base
+            } else {
+                let labels: Vec<&str> = actions.iter().map(|a| a.label.as_str()).collect();
+                format!("{base} [{}]", labels.join(" | "))
+            }
         }
 
         Block::InfoCard { title, subtitle, summary, facts, steps, .. } => {
@@ -1100,13 +1106,17 @@ pub(crate) fn render_block(block: &Block) -> String {
             format!("### {tab}\n\n{}", parts.join("\n\n"))
         }
 
-        Block::Toolbar { items, .. } => {
-            let labels: Vec<String> = items.iter().filter_map(|i| match i {
+        Block::Toolbar { title, items, .. } => {
+            let mut labels: Vec<String> = Vec::new();
+            if let Some(t) = title {
+                labels.push(format!("**{t}**"));
+            }
+            labels.extend(items.iter().filter_map(|i| match i {
                 crate::types::ToolbarItem::Button { label, .. } => Some(format!("- {}", label.as_deref().unwrap_or("Button"))),
                 crate::types::ToolbarItem::Badge { value, .. } => Some(format!("- [{value}]")),
                 crate::types::ToolbarItem::Text { value, .. } => Some(format!("- {value}")),
                 _ => None,
-            }).collect();
+            }));
             labels.join("\n")
         }
 
@@ -1168,6 +1178,15 @@ pub(crate) fn render_block(block: &Block) -> String {
         Block::SuggestionChips { .. } => "*Suggestion chips*".to_string(),
 
         Block::ChatThread { .. } => "*Chat thread*".to_string(),
+
+        Block::RecipientPicker { source, mode, .. } => {
+            let mode_str = if mode == "multi" { "multi-select" } else { "single-select" };
+            format!("**Recipient picker** ({mode_str})\nSource: `{source}`")
+        }
+
+        Block::Qr { mode, .. } => {
+            if mode == "scan" { "*QR scanner*".to_string() } else { "*QR code*".to_string() }
+        }
 
         Block::ChatInputSimple { placeholder, .. } => {
             let ph = placeholder.as_deref().unwrap_or("Message...");

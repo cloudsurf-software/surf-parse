@@ -3540,6 +3540,8 @@ pub(crate) fn render_block(block: &Block) -> String {
             filters,
             sort,
             preload,
+            stream,
+            on_select,
             ..
         } => {
             let display_cls = match display {
@@ -3554,6 +3556,12 @@ pub(crate) fn render_block(block: &Block) -> String {
             );
             if *preload {
                 html.push_str(" data-surf-preload");
+            }
+            if let Some(ev) = stream {
+                html.push_str(&format!(" data-surf-stream=\"{}\"", escape_html(ev)));
+            }
+            if let Some(a) = on_select {
+                html.push_str(&format!(" data-surf-on-select=\"{}\"", escape_html(a)));
             }
             if let Some(s) = sort {
                 html.push_str(&format!(
@@ -4454,7 +4462,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, actions, .. } => {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
@@ -4491,6 +4499,22 @@ pub(crate) fn render_block(block: &Block) -> String {
             } else {
                 String::new()
             };
+            // Per-row actions replace the chevron affordance (0.12).
+            let tail = if actions.is_empty() {
+                format!("<span class=\"surfdoc-row-arrow\">{arrow_svg}</span>")
+            } else {
+                let buttons: String = actions
+                    .iter()
+                    .map(|a| {
+                        format!(
+                            "<button class=\"surfdoc-row-action\" data-action=\"{}\">{}</button>",
+                            escape_html(&a.action),
+                            escape_html(&a.label),
+                        )
+                    })
+                    .collect();
+                format!("<span class=\"surfdoc-row-actions\">{buttons}</span>")
+            };
             format!(
                 "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}>\
                  <span class=\"surfdoc-row-icon\">{icon_svg}</span>\
@@ -4500,7 +4524,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                  </span>\
                  {unread_dot}\
                  {trailing}\
-                 <span class=\"surfdoc-row-arrow\">{arrow_svg}</span>\
+                 {tail}\
                  </{tag}>",
                 title = escape_html(title),
                 desc = escape_html(description),
@@ -4668,8 +4692,18 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
-        Block::Toolbar { items, .. } => {
-            let mut html = String::from("<div class=\"surfdoc-toolbar\">");
+        Block::Toolbar { title, title_source, items, .. } => {
+            let title_source_attr = match title_source {
+                Some(s) => format!(" data-title-source=\"{}\"", escape_html(s)),
+                None => String::new(),
+            };
+            let mut html = format!("<div class=\"surfdoc-toolbar\"{title_source_attr}>");
+            if let Some(t) = title {
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-toolbar-title\">{}</span>",
+                    escape_html(t),
+                ));
+            }
             for item in items {
                 match item {
                     crate::types::ToolbarItem::Button { label, action, style, toggled, .. } => {
@@ -4941,11 +4975,17 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::ChatThread { source, .. } => {
-            let source_attr = match source {
+        Block::ChatThread { source, on_react, on_doc_open, .. } => {
+            let mut source_attr = match source {
                 Some(s) => format!(" data-source=\"{}\"", escape_html(s)),
                 None => String::new(),
             };
+            if let Some(a) = on_react {
+                source_attr.push_str(&format!(" data-on-react=\"{}\"", escape_html(a)));
+            }
+            if let Some(a) = on_doc_open {
+                source_attr.push_str(&format!(" data-on-doc-open=\"{}\"", escape_html(a)));
+            }
             // Static preview: sample 2-message thread so the block is never empty
             format!("<div class=\"surfdoc-chat-thread\"{source_attr}>\
               <div class=\"surfdoc-chat-msg surfdoc-chat-msg-user\">How do I add a new task?</div>\
@@ -5007,6 +5047,42 @@ pub(crate) fn render_block(block: &Block) -> String {
                  </div>\
                  </div>",
                 source_attr,
+            )
+        }
+
+        Block::RecipientPicker { source, mode, on_submit, .. } => {
+            let on_submit_attr = match on_submit {
+                Some(a) => format!(" data-on-submit=\"{}\"", escape_html(a)),
+                None => String::new(),
+            };
+            // Static preview: input + a sample selected chip so the block
+            // is never empty without a live data source.
+            format!(
+                "<div class=\"surfdoc-recipient-picker\" data-surf-source=\"{}\" data-mode=\"{}\"{}>\
+                 <div class=\"surfdoc-recipient-chips\"><span class=\"surfdoc-recipient-chip surfdoc-recipient-chip-sample\">Jordan Lee</span></div>\
+                 <input type=\"text\" placeholder=\"To:\" aria-label=\"To:\" autocomplete=\"off\"/>\
+                 <button class=\"surfdoc-recipient-submit\">Done</button>\
+                 </div>",
+                escape_html(source),
+                escape_html(mode),
+                on_submit_attr,
+            )
+        }
+
+        Block::Qr { mode, on_resolve, .. } => {
+            let on_resolve_attr = match on_resolve {
+                Some(a) => format!(" data-on-resolve=\"{}\"", escape_html(a)),
+                None => String::new(),
+            };
+            let label = if mode == "scan" { "Scan a QR code" } else { "Your QR code" };
+            format!(
+                "<div class=\"surfdoc-qr surfdoc-qr-{mode}\" data-mode=\"{mode}\"{on_resolve_attr}>\
+                 <svg class=\"surfdoc-qr-glyph\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/><path d=\"M14 14h3v3h-3zM21 14v3M14 21h3M21 21h.01\"/></svg>\
+                 <span class=\"surfdoc-qr-label\">{label}</span>\
+                 </div>",
+                mode = escape_html(mode),
+                on_resolve_attr = on_resolve_attr,
+                label = label,
             )
         }
 
@@ -10772,6 +10848,8 @@ About
     #[test]
     fn html_toolbar() {
         let doc = doc_with(vec![Block::Toolbar {
+            title: Some("Messages".into()),
+            title_source: Some("thread.display_name".into()),
             items: vec![
                 ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false },
                 ToolbarItem::Separator,
@@ -10782,6 +10860,8 @@ About
         }]);
         let html = to_html(&doc);
         assert!(html.contains("surfdoc-toolbar"));
+        assert!(html.contains("surfdoc-toolbar-title\">Messages<"));
+        assert!(html.contains("data-title-source=\"thread.display_name\""));
         assert!(html.contains("Deploy"));
         assert!(html.contains("surfdoc-toolbar-separator"));
         assert!(html.contains("surfdoc-toolbar-spacer"));
@@ -10806,6 +10886,8 @@ About
     #[test]
     fn html_toolbar_text_size() {
         let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
             items: vec![
                 ToolbarItem::Text { value: "Surfspace".into(), editable: false, action: None, size: Some(22) },
                 ToolbarItem::Text { value: "plain".into(), editable: false, action: None, size: None },
@@ -10828,6 +10910,7 @@ About
             unread: true,
             trailing_label: Some("Install".into()),
             trailing_action: Some("install_app".into()),
+            actions: vec![],
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -10851,6 +10934,8 @@ About
     #[test]
     fn html_toolbar_button_toggled() {
         let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
             items: vec![
                 ToolbarItem::Button { label: Some("Panel".into()), action: Some("toggle_panel".into()), icon: None, style: None, disabled: false, toggled: true },
                 ToolbarItem::Button { label: Some("Save".into()), action: Some("save".into()), icon: None, style: None, disabled: false, toggled: false },
@@ -10935,6 +11020,7 @@ About
             unread: true,
             trailing_label: None,
             trailing_action: None,
+            actions: vec![],
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -10955,6 +11041,7 @@ About
             unread: false,
             trailing_label: None,
             trailing_action: None,
+            actions: vec![],
             span: span(),
         }]);
         assert!(!to_html(&doc_read).contains("surfdoc-unread-dot"));
@@ -11144,11 +11231,15 @@ About
         let doc = doc_with(vec![Block::ChatThread {
             source: Some("mako.conversation".into()),
             on_action: None,
+            on_react: Some("react".into()),
+            on_doc_open: Some("open:/docs/1".into()),
             span: span(),
         }]);
         let html = to_html(&doc);
         assert!(html.contains("surfdoc-chat-thread"));
         assert!(html.contains("data-source=\"mako.conversation\""));
+        assert!(html.contains("data-on-react=\"react\""));
+        assert!(html.contains("data-on-doc-open=\"open:/docs/1\""));
     }
 
     #[test]

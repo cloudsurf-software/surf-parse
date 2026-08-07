@@ -667,6 +667,13 @@ pub enum Block {
         filters: Vec<ListFilter>,
         sort: Option<SortSpec>,
         preload: bool,
+        /// Stream-seam event name the list live-updates on
+        /// (`stream=conversation_updated`); the `stream=` attribute name
+        /// follows the `::feed` precedent. (0.12)
+        stream: Option<String>,
+        /// Primary row-select action (`on-select=`), the `::nav-tree`
+        /// convention. (0.12)
+        on_select: Option<String>,
         span: Span,
     },
     /// Kanban board with draggable cards.
@@ -940,6 +947,8 @@ pub enum Block {
     /// A compact row component with icon, title, description, and optional link.
     /// Three states: default (content), loading (skeleton), empty (placeholder).
     /// `::row[icon=sparkle, href=/wiki/article, state=loading]`
+    /// Content lines prefixed `action:` declare per-row actions
+    /// (`action: Accept | invoke:contacts.accept`). (0.12)
     Row {
         icon: String,
         title: String,
@@ -952,6 +961,8 @@ pub enum Block {
         /// Right-side trailing action control: display label + action verb.
         trailing_label: Option<String>,
         trailing_action: Option<String>,
+        /// Per-row actions mapping labels to action strings. (0.12)
+        actions: Vec<RowAction>,
         span: Span,
     },
 
@@ -1010,6 +1021,11 @@ pub enum Block {
     },
     /// Horizontal toolbar with buttons, separators, badges, etc.
     Toolbar {
+        /// Static toolbar/screen title (`title=`). (0.12)
+        title: Option<String>,
+        /// Source-bound dynamic title (`title-source=`), a registry name
+        /// carried verbatim (e.g. `thread.display_name`). (0.12)
+        title_source: Option<String>,
         items: Vec<ToolbarItem>,
         span: Span,
     },
@@ -1100,6 +1116,10 @@ pub enum Block {
     ChatThread {
         source: Option<String>,
         on_action: Option<String>,
+        /// Reaction/tapback seam (`on-react=`). (0.12)
+        on_react: Option<String>,
+        /// Doc-chip open seam (`on-doc-open=`). (0.12)
+        on_doc_open: Option<String>,
         span: Span,
     },
     /// Simple chat message input (distinct from app-bound ChatInput).
@@ -1125,6 +1145,31 @@ pub enum Block {
         source: Option<String>,
         span: Span,
     },
+
+    // ----- Messages/Contacts vocabulary (0.12) -----
+
+    /// Recipient picker: choose one or more entries from a data source and
+    /// submit the selection (`::recipient-picker[source=contacts mode=multi
+    /// on-submit=...]`). The group-compose seam `::search` cannot express
+    /// (typeahead-only). (0.12)
+    RecipientPicker {
+        source: String,
+        /// Selection mode: "single" | "multi" (default "single").
+        mode: String,
+        /// Submit action for the completed selection.
+        on_submit: Option<String>,
+        span: Span,
+    },
+    /// Platform-conditional QR block (`::qr[mode=show|scan on-resolve=...]`):
+    /// show-my-code or scan-a-code, with a resolve action fired on a
+    /// successful scan/exchange. (0.12)
+    Qr {
+        /// "show" | "scan" (default "show").
+        mode: String,
+        /// Action fired with the resolved payload.
+        on_resolve: Option<String>,
+        span: Span,
+    },
 }
 
 /// State for Row and InfoCard blocks.
@@ -1134,6 +1179,16 @@ pub enum RowState {
     Default,
     Loading,
     Empty,
+}
+
+/// A labelled action on a `Row` block (`action: Label | action_string`).
+/// (0.12)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RowAction {
+    pub label: String,
+    /// Authored action string in the minimal action grammar
+    /// (`verb:target[:payload]`, bare name = invoke).
+    pub action: String,
 }
 
 /// A tab item within a `TabBar` block.

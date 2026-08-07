@@ -242,6 +242,11 @@ pub enum NativeBlock {
     },
     /// Horizontal toolbar with buttons, separators, badges, dropdowns.
     Toolbar {
+        /// Static toolbar/screen title (0.12).
+        title: Option<String>,
+        /// Source-bound dynamic title — a registry name the client
+        /// resolves at render time (e.g. `thread.display_name`). (0.12)
+        title_source: Option<String>,
         items: Vec<NativeToolbarItem>,
     },
 
@@ -308,6 +313,10 @@ pub enum NativeBlock {
     ChatThread {
         source: Option<String>,
         on_action: Option<NativeAction>,
+        /// Reaction/tapback seam (0.12).
+        on_react: Option<NativeAction>,
+        /// Doc-chip open seam (0.12).
+        on_doc_open: Option<NativeAction>,
     },
     /// Simple chat message input.
     ChatInputSimple {
@@ -342,6 +351,10 @@ pub enum NativeBlock {
         sort_field: Option<String>,
         sort_descending: bool,
         preload: bool,
+        /// Stream-seam event name the list live-updates on (0.12).
+        stream: Option<String>,
+        /// Primary row-select action (0.12).
+        on_select: Option<NativeAction>,
     },
     /// Kanban board with cards grouped into columns (::board).
     Board {
@@ -359,6 +372,24 @@ pub enum NativeBlock {
     Search {
         source: String,
         placeholder: Option<String>,
+    },
+
+    // ── Messages/Contacts vocabulary (0.12) ────────────────────────
+
+    /// Recipient picker (::recipient-picker) — choose one or more entries
+    /// from a data source and submit the selection (group compose).
+    /// `mode` is one of: "single", "multi".
+    RecipientPicker {
+        source: String,
+        mode: String,
+        on_submit: Option<NativeAction>,
+    },
+    /// Platform-conditional QR block (::qr) — show-my-code or scan.
+    /// `mode` is one of: "show", "scan"; `on_resolve` fires with the
+    /// resolved payload after a successful scan/exchange.
+    Qr {
+        mode: String,
+        on_resolve: Option<NativeAction>,
     },
 
     // ── Wavesite site-format variants (7 new) ──────────────────────
@@ -451,12 +482,16 @@ pub enum NativeBlock {
 
     /// Compact navigable list row (::row) — icon + title + description, an
     /// optional link target, and a `state` of "default"/"loading"/"empty".
+    /// `actions` (0.12) carries the per-row labelled action seam
+    /// (contact rows, accept/deny request rows).
     Row {
         icon: String,
         title: String,
         description: String,
         href: Option<String>,
         state: String,
+        /// Labelled per-row actions, typed through the action grammar (0.12).
+        actions: Vec<NativeRowAction>,
     },
 
     /// Rich entity card (::info-card / ::infocard) — an intent badge, title +
@@ -590,6 +625,16 @@ pub struct NativeFaqItem {
 pub struct NativeInfoFact {
     pub label: String,
     pub value: String,
+}
+
+/// A labelled action on a native `Row` (0.12) — the per-row dispatch seam
+/// (accept/deny request rows, contact-row verbs), typed through
+/// [`parse_native_action`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeRowAction {
+    pub label: String,
+    pub action: NativeAction,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1033,7 +1078,20 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// list/board/filterBar/search promoted native, TabBarItem.icon, the seven
 /// former FFI-hole kinds (banner/cite/bibliography/gate/productGrid/postGrid/
 /// slide) structured, and `on*=`/`action=` strings typed as `NativeAction`.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 2;
+///
+/// v3 (0.12) — the Messages/Contacts vocabulary, eight additions:
+/// 1. `List.stream` — stream-seam event name for live list updates.
+/// 2. `List.on_select` — typed primary row-select action.
+/// 3. `ChatThread.on_react` + `ChatThread.on_doc_open` — reaction/tapback
+///    and doc-chip open seams, typed.
+/// 4. `Row.actions` — labelled per-row typed actions (`NativeRowAction`).
+/// 5. `Toolbar.title` + `Toolbar.title_source` — static and source-bound
+///    toolbar titles.
+/// 6. `RecipientPicker` — new kind (source, single/multi mode, on_submit).
+/// 7. `Qr` — new platform-conditional kind (show/scan mode, on_resolve).
+/// 8. Bare registry names accepted in `List`/`Search` `source=` (parse-side;
+///    previously lifted as empty strings).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 3;
 
 /// A parsed document plus its resolved theme — the unit that crosses the
 /// FFI for themed native rendering.
@@ -1412,6 +1470,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             description,
             href,
             state,
+            actions,
             ..
         } => NativeBlock::Row {
             icon: icon.clone(),
@@ -1419,6 +1478,13 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             description: description.clone(),
             href: href.clone(),
             state: row_state_str(state).to_string(),
+            actions: actions
+                .iter()
+                .map(|a| NativeRowAction {
+                    label: a.label.clone(),
+                    action: parse_native_action(&a.action),
+                })
+                .collect(),
         },
 
         Block::InfoCard {
@@ -1757,7 +1823,14 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             children: convert_children(children, depth + 1),
         },
 
-        Block::Toolbar { items, .. } => NativeBlock::Toolbar {
+        Block::Toolbar {
+            title,
+            title_source,
+            items,
+            ..
+        } => NativeBlock::Toolbar {
+            title: title.clone(),
+            title_source: title_source.clone(),
             items: items.iter().map(toolbar_item_to_native).collect(),
         },
 
@@ -1788,7 +1861,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             children: convert_children(children, depth + 1),
         },
 
-        // No dedicated NativeBlock variant (native schema stays v2): a
+        // No dedicated NativeBlock variant (no schema bump needed): a
         // segmented-control maps onto TabBar — same id/label single-select
         // shape — until a native round gives it its own variant.
         Block::SegmentedControl { active, segments, .. } => NativeBlock::TabBar {
@@ -1803,7 +1876,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .collect(),
         },
 
-        // No dedicated NativeBlock variant (native schema stays v2): a
+        // No dedicated NativeBlock variant (no schema bump needed): a
         // dropdown-select degrades to a CommandPalette — same trigger +
         // option-list shape — until a native round gives it its own variant.
         Block::DropdownSelect { label, selected, options, .. } => NativeBlock::CommandPalette {
@@ -1890,10 +1963,16 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         },
 
         Block::ChatThread {
-            source, on_action, ..
+            source,
+            on_action,
+            on_react,
+            on_doc_open,
+            ..
         } => NativeBlock::ChatThread {
             source: source.clone(),
             on_action: on_action.as_deref().map(parse_native_action),
+            on_react: on_react.as_deref().map(parse_native_action),
+            on_doc_open: on_doc_open.as_deref().map(parse_native_action),
         },
 
         Block::ChatInputSimple {
@@ -1936,6 +2015,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             filters,
             sort,
             preload,
+            stream,
+            on_select,
             ..
         } => NativeBlock::List {
             source: source.clone(),
@@ -1945,6 +2026,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             sort_field: sort.as_ref().map(|s| s.field.clone()),
             sort_descending: sort.as_ref().is_some_and(|s| s.descending),
             preload: *preload,
+            stream: stream.clone(),
+            on_select: on_select.as_deref().map(parse_native_action),
         },
 
         Block::Board {
@@ -1983,6 +2066,26 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         } => NativeBlock::Search {
             source: source.clone(),
             placeholder: placeholder.clone(),
+        },
+
+        // ── Messages/Contacts vocabulary (0.12) ─────────────────────
+
+        Block::RecipientPicker {
+            source,
+            mode,
+            on_submit,
+            ..
+        } => NativeBlock::RecipientPicker {
+            source: source.clone(),
+            mode: mode.clone(),
+            on_submit: on_submit.as_deref().map(parse_native_action),
+        },
+
+        Block::Qr {
+            mode, on_resolve, ..
+        } => NativeBlock::Qr {
+            mode: mode.clone(),
+            on_resolve: on_resolve.as_deref().map(parse_native_action),
         },
 
         // ── Wavesite site-format blocks: native conversion ──────────
@@ -2332,7 +2435,7 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             icon,
             style,
             disabled,
-            // No NativeToolbarItem field yet (native schema stays v2);
+            // No NativeToolbarItem field yet (no schema bump needed);
             // the accent-ring open state is web-only until a native round.
             toggled: _,
         } => NativeToolbarItem {
@@ -2554,7 +2657,10 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::List { .. }
         | Block::Board { .. }
         | Block::FilterBar { .. }
-        | Block::Search { .. } => BlockTier::Chrome,
+        | Block::Search { .. }
+        // Messages/Contacts vocabulary (0.12).
+        | Block::RecipientPicker { .. }
+        | Block::Qr { .. } => BlockTier::Chrome,
 
         // ── Tier 4: explicit markdown degradation ────────────────────
         Block::Unknown { .. }
@@ -2638,6 +2744,67 @@ mod tests {
         // Trailing colon with empty rest also degrades whole.
         let a = parse_native_action("open:");
         assert_eq!((a.verb.as_str(), a.target.as_str()), ("invoke", "open:"));
+    }
+
+    /// 0.12: `::list` stream and on-select cross the FFI — the event name
+    /// verbatim, the select action typed through the minimal grammar.
+    #[test]
+    fn list_stream_and_on_select_cross_typed() {
+        let source = "::list[source=conversations display=compact stream=conversation_updated on-select=openThread]\n{= display_name =}\n::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::List { source, stream, on_select, .. } => {
+                assert_eq!(source, "conversations");
+                assert_eq!(stream.as_deref(), Some("conversation_updated"));
+                let sel = on_select.as_ref().expect("on_select");
+                assert_eq!(sel.verb, "invoke");
+                assert_eq!(sel.target, "openThread");
+                assert_eq!(sel.raw, "openThread");
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+    }
+
+    /// 0.12: `::row` action lines cross the FFI as labelled typed actions.
+    #[test]
+    fn row_actions_cross_typed() {
+        let source = "::row[icon=doc]\nJordan Lee\n@jordan\naction: Accept | invoke:contacts.accept\naction: Deny | mutate:contacts.deny:id\n::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::Row { actions, .. } => {
+                assert_eq!(actions.len(), 2);
+                assert_eq!(actions[0].label, "Accept");
+                assert_eq!(actions[0].action.verb, "invoke");
+                assert_eq!(actions[0].action.target, "contacts.accept");
+                assert_eq!(actions[1].action.verb, "mutate");
+                assert_eq!(actions[1].action.payload.as_deref(), Some("id"));
+            }
+            other => panic!("expected Row, got {other:?}"),
+        }
+    }
+
+    /// 0.12: `::chat-thread` reaction and doc-chip seams cross the FFI
+    /// typed through the same minimal action grammar as `on-action`.
+    #[test]
+    fn chat_thread_react_and_doc_open_cross_typed() {
+        let source = "::chat-thread[source=chat.thread on-action=run_action on-react=\"mutate:messages.react:emoji\" on-doc-open=\"open:/docs/123\"]\n::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::ChatThread { on_action, on_react, on_doc_open, .. } => {
+                assert_eq!(on_action.as_ref().expect("on_action").verb, "invoke");
+                let react = on_react.as_ref().expect("on_react");
+                assert_eq!(react.verb, "mutate");
+                assert_eq!(react.target, "messages.react");
+                assert_eq!(react.payload.as_deref(), Some("emoji"));
+                let doc_open = on_doc_open.as_ref().expect("on_doc_open");
+                assert_eq!(doc_open.verb, "open");
+                assert_eq!(doc_open.target, "/docs/123");
+            }
+            other => panic!("expected ChatThread, got {other:?}"),
+        }
     }
 
     /// Actions on parsed blocks cross the FFI typed: registry-bound bare
@@ -4158,9 +4325,10 @@ mod tests {
         assert_eq!(n.doc_page_bg, "var(--surface)");
         assert_eq!(n.drawer_link_size, "0.9375rem");
         assert_eq!(n.drawer_link_weight, "500");
-        // 0.11: the NativeBlock shape changed incompatibly (typed actions,
-        // real chrome nesting) — schema v2.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 2);
+        // 0.12: the NativeBlock shape grew the Messages/Contacts vocabulary
+        // (list stream/on-select, chat-thread seams, row actions, toolbar
+        // titles, recipientPicker + qr kinds) — schema v3.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 3);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

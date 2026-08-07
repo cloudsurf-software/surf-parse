@@ -41,7 +41,9 @@
     ],
     "sort_field": "created_at",
     "sort_descending": true,
-    "preload": true
+    "preload": true,
+    "stream": null,
+    "on_select": null
   },
   {
     "type": "list",
@@ -51,7 +53,57 @@
     "filters": [],
     "sort_field": null,
     "sort_descending": false,
-    "preload": false
+    "preload": false,
+    "stream": null,
+    "on_select": null
+  },
+  {
+    "type": "list",
+    "source": "conversations",
+    "display": "compact",
+    "item_template": "{= display_name =}",
+    "filters": [],
+    "sort_field": null,
+    "sort_descending": false,
+    "preload": false,
+    "stream": "conversation_updated",
+    "on_select": {
+      "verb": "invoke",
+      "target": "openThread",
+      "payload": null,
+      "raw": "openThread"
+    }
+  },
+  {
+    "type": "search",
+    "source": "userSearch",
+    "placeholder": "Search by username"
+  },
+  {
+    "type": "recipient_picker",
+    "source": "contacts",
+    "mode": "multi",
+    "on_submit": {
+      "verb": "invoke",
+      "target": "messages.compose",
+      "payload": null,
+      "raw": "invoke:messages.compose"
+    }
+  },
+  {
+    "type": "qr",
+    "mode": "show",
+    "on_resolve": null
+  },
+  {
+    "type": "qr",
+    "mode": "scan",
+    "on_resolve": {
+      "verb": "invoke",
+      "target": "contacts.add",
+      "payload": null,
+      "raw": "invoke:contacts.add"
+    }
   },
   {
     "type": "board",
