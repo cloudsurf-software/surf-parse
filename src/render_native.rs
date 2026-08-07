@@ -2332,6 +2332,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             icon,
             style,
             disabled,
+            // No NativeToolbarItem field yet (native schema stays v2);
+            // the accent-ring open state is web-only until a native round.
+            toggled: _,
         } => NativeToolbarItem {
             kind: "button".to_string(),
             label: label.clone(),
