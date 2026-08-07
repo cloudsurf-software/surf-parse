@@ -1822,6 +1822,95 @@ pub(crate) fn chart_type_str(t: ChartType) -> &'static str {
     }
 }
 
+/// Which tab-content pane in a chrome container should be visible on
+/// initial static render. Panes are CSS-hidden unless `.active` or
+/// `data-tab="preview"`; the click script only runs on interaction, so
+/// without this the initial paint shows an empty pane. Rule: honor a
+/// sibling tab-bar's `active` id when it names a real pane; otherwise
+/// the first pane. A `preview` pane is already visible via CSS, so no
+/// activation is needed (activating another pane alongside it would
+/// double-show).
+fn initially_active_tab(children: &[Block]) -> Option<&str> {
+    let tabs: Vec<&str> = children
+        .iter()
+        .filter_map(|b| match b {
+            Block::TabContent { tab, .. } => Some(tab.as_str()),
+            _ => None,
+        })
+        .collect();
+    if tabs.is_empty() || tabs.iter().any(|t| *t == "preview") {
+        return None;
+    }
+    let bar_active = children.iter().find_map(|b| match b {
+        Block::TabBar { active, .. } => active.as_deref(),
+        _ => None,
+    });
+    if let Some(a) = bar_active {
+        if tabs.contains(&a) {
+            return Some(a);
+        }
+    }
+    Some(tabs[0])
+}
+
+/// Render the children of a chrome container (app-shell, sidebar,
+/// panel, modal), marking the initially visible tab-content pane.
+fn render_chrome_children(children: &[Block]) -> String {
+    let active_tab = initially_active_tab(children);
+    let mut html = String::new();
+    let mut activated = false;
+    for child in children {
+        match child {
+            Block::TabContent { tab, .. }
+                if !activated && active_tab == Some(tab.as_str()) =>
+            {
+                html.push_str(&render_tab_content(child, true));
+                activated = true;
+            }
+            _ => html.push_str(&render_block(child)),
+        }
+    }
+    html
+}
+
+/// Render a tab-content pane. `active` marks the initially visible pane
+/// (class `active`); width/align emit the ruled centered-column styles.
+fn render_tab_content(block: &Block, active: bool) -> String {
+    let Block::TabContent { tab, width, align, children, .. } = block else {
+        return String::new();
+    };
+    let class = if active {
+        "surfdoc-tab-content active"
+    } else {
+        "surfdoc-tab-content"
+    };
+    let mut styles: Vec<String> = Vec::new();
+    if let Some(w) = width {
+        styles.push(format!("max-width:{w}px"));
+    }
+    if align.as_deref() == Some("center") {
+        styles.push("margin-left:auto".to_string());
+        styles.push("margin-right:auto".to_string());
+        styles.push("width:100%".to_string());
+    }
+    let style_attr = if styles.is_empty() {
+        String::new()
+    } else {
+        format!(" style=\"{}\"", styles.join(";"))
+    };
+    let mut html = format!(
+        "<div class=\"{}\" data-tab=\"{}\" role=\"tabpanel\"{}>",
+        class,
+        escape_html(tab),
+        style_attr,
+    );
+    for child in children {
+        html.push_str(&render_block(child));
+    }
+    html.push_str("</div>");
+    html
+}
+
 pub(crate) fn render_block(block: &Block) -> String {
     match block {
         Block::Markdown { content, .. } => render_markdown(content),
@@ -4612,7 +4701,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}>",
                 escape_html(layout), style,
             );
-            for child in children { html.push_str(&render_block(child)); }
+            html.push_str(&render_chrome_children(children));
             html.push_str("</div>");
             html
         }
@@ -4626,7 +4715,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 "<aside class=\"surfdoc-sidebar surfdoc-sidebar-{}\" data-collapsible=\"{}\"{}>",
                 escape_html(position), collapsible, style,
             );
-            for child in children { html.push_str(&render_block(child)); }
+            html.push_str(&render_chrome_children(children));
             html.push_str("</aside>");
             html
         }
@@ -4640,7 +4729,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 "<div class=\"surfdoc-panel surfdoc-panel-{}\" data-resizable=\"{}\" data-desktop-only=\"{}\"{}>",
                 escape_html(position), resizable, desktop_only, style,
             );
-            for child in children { html.push_str(&render_block(child)); }
+            html.push_str(&render_chrome_children(children));
             html.push_str("</div>");
             html
         }
@@ -4703,16 +4792,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
-        Block::TabContent { tab, children, .. } => {
-            // First tab-content is visible by default, others hidden
-            let mut html = format!(
-                "<div class=\"surfdoc-tab-content\" data-tab=\"{}\" role=\"tabpanel\">",
-                escape_html(tab),
-            );
-            for child in children { html.push_str(&render_block(child)); }
-            html.push_str("</div>");
-            html
-        }
+        Block::TabContent { .. } => render_tab_content(block, false),
 
         Block::Toolbar { title, title_source, items, .. } => {
             let title_source_attr = match title_source {
@@ -4820,7 +4900,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             html.push_str(&format!("<strong class=\"surfdoc-modal-title\">{}</strong>", escape_html(heading)));
             html.push_str("<button type=\"button\" class=\"surfdoc-modal-close\" aria-label=\"Close\">&#10005;</button>");
             html.push_str("</header>");
-            for child in children { html.push_str(&render_block(child)); }
+            html.push_str(&render_chrome_children(children));
             html.push_str("</dialog>");
             html
         }
@@ -10858,6 +10938,8 @@ About
     fn html_tab_content() {
         let doc = doc_with(vec![Block::TabContent {
             tab: "preview".into(),
+            width: None,
+            align: None,
             children: vec![Block::Markdown { content: "Tab body".into(), span: span() }],
             span: span(),
         }]);
@@ -10865,6 +10947,97 @@ About
         assert!(html.contains("surfdoc-tab-content"));
         assert!(html.contains("data-tab=\"preview\""));
         assert!(html.contains("Tab body"));
+    }
+
+    #[test]
+    fn html_lone_tab_content_in_shell_is_initially_active() {
+        // A single pane with no tab-bar must be visible on first paint:
+        // CSS hides panes without `.active`/`data-tab="preview"`, and the
+        // switch script only runs on click.
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![Block::TabContent {
+                tab: "main".into(),
+                width: Some(880),
+                align: Some("center".into()),
+                children: vec![Block::Markdown { content: "List body".into(), span: span() }],
+                span: span(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-tab-content active"));
+        // Ruled centered column: capped width, auto side margins.
+        assert!(html.contains("max-width:880px"));
+        assert!(html.contains("margin-left:auto"));
+        assert!(html.contains("margin-right:auto"));
+    }
+
+    #[test]
+    fn html_tab_bar_active_pane_visible_on_first_paint() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "tabs".into(),
+            height: None,
+            children: vec![
+                Block::TabBar {
+                    active: Some("second".into()),
+                    items: vec![
+                        crate::types::TabBarItem { id: "first".into(), label: "First".into(), icon: None, unread: false },
+                        crate::types::TabBarItem { id: "second".into(), label: "Second".into(), icon: None, unread: false },
+                    ],
+                    span: span(),
+                },
+                Block::TabContent {
+                    tab: "first".into(),
+                    width: None,
+                    align: None,
+                    children: vec![],
+                    span: span(),
+                },
+                Block::TabContent {
+                    tab: "second".into(),
+                    width: None,
+                    align: None,
+                    children: vec![],
+                    span: span(),
+                },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // The bar's active pane is marked, the other stays hidden.
+        assert!(html.contains("<div class=\"surfdoc-tab-content active\" data-tab=\"second\""));
+        assert!(html.contains("<div class=\"surfdoc-tab-content\" data-tab=\"first\""));
+    }
+
+    #[test]
+    fn html_preview_pane_suppresses_extra_activation() {
+        // `data-tab="preview"` is already CSS-visible; activating a sibling
+        // would double-show two panes.
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "tabs".into(),
+            height: None,
+            children: vec![
+                Block::TabContent {
+                    tab: "preview".into(),
+                    width: None,
+                    align: None,
+                    children: vec![],
+                    span: span(),
+                },
+                Block::TabContent {
+                    tab: "other".into(),
+                    width: None,
+                    align: None,
+                    children: vec![],
+                    span: span(),
+                },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(!html.contains("surfdoc-tab-content active"));
     }
 
     #[test]

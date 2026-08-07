@@ -2863,8 +2863,11 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::TabContent { tab, children, .. } => {
-            let attrs_str = format!("[tab=\"{}\"]", escape_attr(tab));
+        Block::TabContent { tab, width, align, children, .. } => {
+            let mut attrs_parts = vec![format!("tab=\"{}\"", escape_attr(tab))];
+            if let Some(w) = width { attrs_parts.push(format!("width={w}")); }
+            if let Some(a) = align { attrs_parts.push(format!("align={a}")); }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
                 format!("::tab-content{attrs_str}\n::")

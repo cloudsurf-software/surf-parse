@@ -1016,6 +1016,13 @@ pub enum Block {
     /// Tab-associated content pane.
     TabContent {
         tab: String,
+        /// Content-column width cap in px (`width=880`) — the ruled
+        /// centered-column idiom for library lists. HTML-only, like
+        /// app-shell `height`. (0.13)
+        width: Option<u32>,
+        /// Horizontal alignment of the capped column (`align=center`).
+        /// HTML-only. (0.13)
+        align: Option<String>,
         children: Vec<Block>,
         span: Span,
     },

@@ -4330,9 +4330,14 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
 
 fn parse_tab_content(attrs: &Attrs, content: &str, span: Span) -> Block {
     let tab = attr_string(attrs, "tab").unwrap_or_default();
+    // 0.13: ruled centered-column idiom (`width=880 align=center`).
+    let width = attr_u32(attrs, "width");
+    let align = attr_string(attrs, "align");
     let children = parse_page_children(content);
     Block::TabContent {
         tab,
+        width,
+        align,
         children,
         span,
     }
@@ -8288,7 +8293,27 @@ Note
         let result = crate::parse(source);
         let block = &result.doc.blocks[0];
         match block {
-            Block::TabContent { tab, .. } => assert_eq!(tab, "preview"),
+            Block::TabContent { tab, width, align, .. } => {
+                assert_eq!(tab, "preview");
+                assert_eq!(*width, None);
+                assert_eq!(*align, None);
+            }
+            other => panic!("Expected TabContent, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_tab_content_width_align() {
+        // 0.13 ruled centered-column idiom for library lists.
+        let source = "::tab-content[tab=main width=880 align=center]\nList body\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::TabContent { tab, width, align, .. } => {
+                assert_eq!(tab, "main");
+                assert_eq!(*width, Some(880));
+                assert_eq!(align.as_deref(), Some("center"));
+            }
             other => panic!("Expected TabContent, got {:?}", other),
         }
     }

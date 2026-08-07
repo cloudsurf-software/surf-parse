@@ -768,8 +768,8 @@ enum_variant = "TabBar"
 [blocks.tab-content]
 status = "implemented"
 category = "advanced"
-purpose = "Tab-associated content pane rendered when its named tab is active"
-attributes = ["tab"]
+purpose = "Tab-associated content pane rendered when its named tab is active; width/align cap and center the content column"
+attributes = ["tab", "width", "align"]
 degradation = "heading with content"
 enum_variant = "TabContent"
 
