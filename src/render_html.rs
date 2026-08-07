@@ -4454,7 +4454,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Row { icon, title, description, href, state, unread, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, .. } => {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
@@ -4473,6 +4473,24 @@ pub(crate) fn render_block(block: &Block) -> String {
             } else {
                 ""
             };
+            // Trailing action: right-side control next to the arrow.
+            let trailing = if trailing_label.is_some() || trailing_action.is_some() {
+                let label = trailing_label
+                    .as_deref()
+                    .or(trailing_action.as_deref())
+                    .unwrap_or_default();
+                let action_attr = match trailing_action {
+                    Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+                    None => String::new(),
+                };
+                format!(
+                    "<button type=\"button\" class=\"surfdoc-row-trailing\"{}>{}</button>",
+                    action_attr,
+                    escape_html(label),
+                )
+            } else {
+                String::new()
+            };
             format!(
                 "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}>\
                  <span class=\"surfdoc-row-icon\">{icon_svg}</span>\
@@ -4481,6 +4499,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                    <span class=\"surfdoc-row-desc\">{desc}</span>\
                  </span>\
                  {unread_dot}\
+                 {trailing}\
                  <span class=\"surfdoc-row-arrow\">{arrow_svg}</span>\
                  </{tag}>",
                 title = escape_html(title),
@@ -4534,10 +4553,18 @@ pub(crate) fn render_block(block: &Block) -> String {
 
         // ── Interactive / application blocks ──────────────────────
 
-        Block::AppShell { layout, children, .. } => {
+        Block::AppShell { layout, height, children, .. } => {
+            // The static-render containment CSS pins `height: auto !important`
+            // with a 460px max-height clamp; an inline `height` alone would
+            // lose to the !important. Inline min-height + max-height carry no
+            // !important opponent, so they pin the shell to the exact height.
+            let style = match height {
+                Some(h) => format!(" style=\"min-height:{h}px;max-height:{h}px\""),
+                None => String::new(),
+            };
             let mut html = format!(
-                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\">",
-                escape_html(layout),
+                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}>",
+                escape_html(layout), style,
             );
             for child in children { html.push_str(&render_block(child)); }
             html.push_str("</div>");
@@ -4689,10 +4716,14 @@ pub(crate) fn render_block(block: &Block) -> String {
                             escape_html(label),
                         ));
                     }
-                    crate::types::ToolbarItem::Text { value, .. } => {
+                    crate::types::ToolbarItem::Text { value, size, .. } => {
+                        let style = match size {
+                            Some(s) => format!(" style=\"font-size:{s}px\""),
+                            None => String::new(),
+                        };
                         html.push_str(&format!(
-                            "<span class=\"surfdoc-toolbar-text\">{}</span>",
-                            escape_html(value),
+                            "<span class=\"surfdoc-toolbar-text\"{}>{}</span>",
+                            style, escape_html(value),
                         ));
                     }
                 }
@@ -10665,6 +10696,7 @@ About
     fn html_app_shell() {
         let doc = doc_with(vec![Block::AppShell {
             layout: "sidebar-main-panel".into(),
+            height: None,
             children: vec![Block::Markdown { content: "Inner".into(), span: span() }],
             span: span(),
         }]);
@@ -10758,6 +10790,65 @@ About
     }
 
     #[test]
+    fn html_app_shell_height_survives_containment_clamp() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main".into(),
+            height: Some(720),
+            children: vec![],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Inline min-height + max-height beat the containment rule's
+        // height:auto!important + max-height:460px clamp.
+        assert!(html.contains("style=\"min-height:720px;max-height:720px\""));
+    }
+
+    #[test]
+    fn html_toolbar_text_size() {
+        let doc = doc_with(vec![Block::Toolbar {
+            items: vec![
+                ToolbarItem::Text { value: "Surfspace".into(), editable: false, action: None, size: Some(22) },
+                ToolbarItem::Text { value: "plain".into(), editable: false, action: None, size: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<span class=\"surfdoc-toolbar-text\" style=\"font-size:22px\">Surfspace</span>"));
+        assert!(html.contains("<span class=\"surfdoc-toolbar-text\">plain</span>"));
+    }
+
+    #[test]
+    fn html_row_trailing_action() {
+        let doc = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "Surf CLI".into(),
+            description: "Command line".into(),
+            href: None,
+            state: RowState::Default,
+            unread: true,
+            trailing_label: Some("Install".into()),
+            trailing_action: Some("install_app".into()),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<button type=\"button\" class=\"surfdoc-row-trailing\" data-action=\"install_app\">Install</button>"));
+        // Coordinated with the unread dot: dot, then trailing, then arrow.
+        let dot_idx = html.find("surfdoc-unread-dot").expect("dot");
+        let trailing_idx = html.find("surfdoc-row-trailing").expect("trailing");
+        let arrow_idx = html.find("surfdoc-row-arrow").expect("arrow");
+        assert!(dot_idx < trailing_idx && trailing_idx < arrow_idx);
+    }
+
+    #[test]
+    fn html_sidebar_nested_divider_renders_hairline() {
+        let source = "::app-shell\n:::sidebar\n::divider\n::\n:::\n::";
+        let result = crate::parse(source);
+        let html = to_html(&result.doc);
+        assert!(html.contains("surfdoc-sidebar"));
+        assert!(html.contains("<hr class=\"surfdoc-divider-plain\" />"));
+    }
+
+    #[test]
     fn html_toolbar_button_toggled() {
         let doc = doc_with(vec![Block::Toolbar {
             items: vec![
@@ -10842,6 +10933,8 @@ About
             href: None,
             state: RowState::Default,
             unread: true,
+            trailing_label: None,
+            trailing_action: None,
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -10860,6 +10953,8 @@ About
             href: None,
             state: RowState::Default,
             unread: false,
+            trailing_label: None,
+            trailing_action: None,
             span: span(),
         }]);
         assert!(!to_html(&doc_read).contains("surfdoc-unread-dot"));

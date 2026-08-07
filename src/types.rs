@@ -949,6 +949,9 @@ pub enum Block {
         /// Right-side blue unread dot. Renderer invariant: the dot is a
         /// right-side element only — accent-left-border is BANNED.
         unread: bool,
+        /// Right-side trailing action control: display label + action verb.
+        trailing_label: Option<String>,
+        trailing_action: Option<String>,
         span: Span,
     },
 
@@ -971,6 +974,8 @@ pub enum Block {
     /// Root app container with layout mode.
     AppShell {
         layout: String,
+        /// Explicit shell height in px; overrides the static-render clamp.
+        height: Option<u32>,
         children: Vec<Block>,
         span: Span,
     },
@@ -1171,6 +1176,8 @@ pub enum ToolbarItem {
         value: String,
         editable: bool,
         action: Option<String>,
+        /// Font size in px (e.g. 22 for a toolbar wordmark).
+        size: Option<u32>,
     },
 }
 

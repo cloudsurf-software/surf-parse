@@ -2755,11 +2755,13 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Row { icon, title, description, href, state, unread, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, .. } => {
             let mut attrs_parts = vec![format!("icon={icon}")];
             if let Some(h) = href { attrs_parts.push(format!("href=\"{}\"", escape_attr(h))); }
             match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
             if *unread { attrs_parts.push("unread=true".to_string()); }
+            if let Some(l) = trailing_label { attrs_parts.push(format!("trailing-label=\"{}\"", escape_attr(l))); }
+            if let Some(a) = trailing_action { attrs_parts.push(format!("trailing-action={a}")); }
             let attrs_str = format!("[{}]", attrs_parts.join(", "));
             format!("::row{attrs_str}\n{title}\n{description}\n::")
         }
@@ -2779,8 +2781,10 @@ fn serialize_block(block: &Block) -> String {
 
         // ── Interactive / application blocks ──────────────────────
 
-        Block::AppShell { layout, children, .. } => {
-            let attrs_str = format!("[layout=\"{}\"]", escape_attr(layout));
+        Block::AppShell { layout, height, children, .. } => {
+            let mut attrs_parts = vec![format!("layout=\"{}\"", escape_attr(layout))];
+            if let Some(h) = height { attrs_parts.push(format!("height={h}")); }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
                 format!("::app-shell{attrs_str}\n::")
@@ -2882,10 +2886,11 @@ fn serialize_block(block: &Block) -> String {
                         if let Some(a) = action { parts.push(format!("action={a}")); }
                         lines.push(format!("- dropdown[{}]", parts.join(" ")));
                     }
-                    crate::types::ToolbarItem::Text { value, editable, action } => {
+                    crate::types::ToolbarItem::Text { value, editable, action, size } => {
                         let mut parts = vec![format!("value=\"{}\"", escape_attr(value))];
                         if *editable { parts.push("editable=true".to_string()); }
                         if let Some(a) = action { parts.push(format!("action={a}")); }
+                        if let Some(s) = size { parts.push(format!("size={s}")); }
                         lines.push(format!("- text[{}]", parts.join(" ")));
                     }
                 }

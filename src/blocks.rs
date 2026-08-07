@@ -3760,6 +3760,8 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         href,
         state,
         unread: attr_bool(attrs, "unread"),
+        trailing_label: attr_string(attrs, "trailing-label"),
+        trailing_action: attr_string(attrs, "trailing-action"),
         span,
     }
 }
@@ -4146,9 +4148,11 @@ fn parse_app_deploy(attrs: &Attrs, content: &str, span: Span) -> Block {
 
 fn parse_app_shell(attrs: &Attrs, content: &str, span: Span) -> Block {
     let layout = attr_string(attrs, "layout").unwrap_or_else(|| "sidebar-main-panel".to_string());
+    let height = attr_u32(attrs, "height");
     let children = parse_page_children(content);
     Block::AppShell {
         layout,
+        height,
         children,
         span,
     }
@@ -4319,6 +4323,7 @@ fn parse_toolbar(content: &str, span: Span) -> Block {
                     value: attr_string(&attrs, "value").unwrap_or_default(),
                     editable: attr_bool(&attrs, "editable"),
                     action: attr_string(&attrs, "action"),
+                    size: attr_u32(&attrs, "size"),
                 });
             } else if !rest.is_empty() {
                 // Plain text item — treat as a button with no action
@@ -8056,6 +8061,50 @@ Note
                 assert!(matches!(&items[3], ToolbarItem::Badge { value, .. } if value == "Live"));
             }
             other => panic!("Expected Toolbar, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_app_shell_height() {
+        let source = "::app-shell[layout=sidebar-main height=720]\nInner\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::AppShell { layout, height, .. } => {
+                assert_eq!(layout, "sidebar-main");
+                assert_eq!(*height, Some(720));
+            }
+            other => panic!("Expected AppShell, got {:?}", other),
+        }
+        let result = crate::parse("::app-shell\nInner\n::");
+        match &result.doc.blocks[0] {
+            Block::AppShell { height, .. } => assert_eq!(*height, None),
+            other => panic!("Expected AppShell, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_toolbar_text_size() {
+        let source = "::toolbar\n- text[value=\"Surfspace\" size=22]\n- text[value=\"plain\"]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Toolbar { items, .. } => {
+                assert!(matches!(&items[0], ToolbarItem::Text { size: Some(22), .. }));
+                assert!(matches!(&items[1], ToolbarItem::Text { size: None, .. }));
+            }
+            other => panic!("Expected Toolbar, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_row_trailing_action() {
+        let source = "::row[icon=doc trailing-label=\"Install\" trailing-action=install_app]\nSurf CLI\nCommand line\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { trailing_label, trailing_action, .. } => {
+                assert_eq!(trailing_label.as_deref(), Some("Install"));
+                assert_eq!(trailing_action.as_deref(), Some("install_app"));
+            }
+            other => panic!("Expected Row, got {:?}", other),
         }
     }
 

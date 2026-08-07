@@ -719,7 +719,7 @@ enum_variant = "AppDeploy"
 status = "implemented"
 category = "utility"
 purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states and a right-side unread dot"
-attributes = ["icon", "href", "state", "unread"]
+attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action"]
 degradation = "single-line description"
 enum_variant = "Row"
 
@@ -736,8 +736,8 @@ enum_variant = "InfoCard"
 [blocks.app-shell]
 status = "implemented"
 category = "advanced"
-purpose = "Root app container with layout mode and child blocks"
-attributes = ["layout"]
+purpose = "Root app container with layout mode, optional explicit height, and child blocks"
+attributes = ["layout", "height"]
 degradation = "sequential child blocks"
 enum_variant = "AppShell"
 

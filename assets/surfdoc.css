@@ -2760,6 +2760,11 @@ ol.surfdoc-steps { padding-left: 1rem; }
    border-left rule keyed off the unread dot, in any theme. */
 .surfdoc .surfdoc-unread-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #2e8ad8); flex-shrink: 0; margin-left: auto; }
 .surfdoc-row .surfdoc-unread-dot { margin-left: 0; }
+/* Trailing action — right-side control next to the arrow */
+.surfdoc .surfdoc-row-trailing { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 4px 10px; flex-shrink: 0; white-space: nowrap; }
+.surfdoc .surfdoc-row-trailing:hover { background: var(--surface-alt, #1a1a24); }
+/* Divider inside a sidebar — tighter spacing than document dividers */
+.surfdoc .surfdoc-sidebar .surfdoc-divider, .surfdoc .surfdoc-sidebar hr { margin: 0.75rem 0; }
 .surfdoc .surfdoc-tab-bar [role="tab"] .surfdoc-unread-dot { margin-left: 6px; vertical-align: middle; }
 @keyframes surfdoc-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.15; } }
 .surfdoc-row--loading { cursor: default; }
