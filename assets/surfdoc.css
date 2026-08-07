@@ -2763,6 +2763,10 @@ ol.surfdoc-steps { padding-left: 1rem; }
 /* Trailing action — right-side control next to the arrow */
 .surfdoc .surfdoc-row-trailing { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 4px 10px; flex-shrink: 0; white-space: nowrap; }
 .surfdoc .surfdoc-row-trailing:hover { background: var(--surface-alt, #1a1a24); }
+/* Per-row actions (0.12) — labelled controls replacing the chevron */
+.surfdoc .surfdoc-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.surfdoc .surfdoc-row-action { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 4px 10px; white-space: nowrap; }
+.surfdoc .surfdoc-row-action:hover { background: var(--surface-alt, #1a1a24); }
 /* Divider inside a sidebar — tighter spacing than document dividers */
 .surfdoc .surfdoc-sidebar .surfdoc-divider, .surfdoc .surfdoc-sidebar hr { margin: 0.75rem 0; }
 .surfdoc .surfdoc-tab-bar [role="tab"] .surfdoc-unread-dot { margin-left: 6px; vertical-align: middle; }
@@ -2998,6 +3002,28 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-dropdown-option.is-selected { background: var(--surface-alt, #1a1a24); }
 .surfdoc .surfdoc-dropdown-option-label { display: block; color: var(--text, #e6edf3); }
 .surfdoc .surfdoc-dropdown-option-desc { display: block; color: var(--text-muted, #8b949e); font-size: 0.75rem; margin-top: 2px; }
+
+/* ============================================================
+   72c. RECIPIENT PICKER (0.12)
+   Static preview: chip strip + To: input + submit.
+   ============================================================ */
+
+.surfdoc .surfdoc-recipient-picker { display: flex; align-items: center; gap: 8px; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); padding: 8px 12px; margin: 0.5rem 0; }
+.surfdoc .surfdoc-recipient-chips { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.surfdoc .surfdoc-recipient-chip { display: inline-block; background: var(--surface-alt, #1a1a24); border: 1px solid var(--border, #30363d); border-radius: 999px; color: var(--text, #e6edf3); font-size: 0.75rem; line-height: 1; padding: 4px 10px; white-space: nowrap; }
+.surfdoc .surfdoc-recipient-picker input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text, #e6edf3); font-size: 0.8125rem; }
+.surfdoc .surfdoc-recipient-picker input::placeholder { color: var(--text-muted, #8b949e); }
+.surfdoc .surfdoc-recipient-submit { appearance: none; background: var(--accent, #2e8ad8); border: none; border-radius: var(--radius-sm); color: var(--accent-text, #fff); cursor: pointer; font-size: 0.75rem; font-weight: var(--font-weight-semibold, 600); line-height: 1; padding: 6px 12px; flex-shrink: 0; }
+.surfdoc .surfdoc-recipient-submit:hover { background: var(--accent-hover, #60a5fa); }
+
+/* ============================================================
+   72d. QR (0.12)
+   Platform-conditional: show-my-code / scan placeholder card.
+   ============================================================ */
+
+.surfdoc .surfdoc-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--surface, #12121a); border: 1px dashed var(--border, #30363d); border-radius: var(--radius-sm); padding: 20px; margin: 0.5rem 0; }
+.surfdoc .surfdoc-qr-glyph { color: var(--text-muted, #8b949e); }
+.surfdoc .surfdoc-qr-label { color: var(--text-muted, #8b949e); font-size: 0.8125rem; }
 
 /* ============================================================
    73. PROGRESS

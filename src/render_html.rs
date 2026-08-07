@@ -4481,6 +4481,12 @@ pub(crate) fn render_block(block: &Block) -> String {
             } else {
                 ""
             };
+            // Interactive content is invalid inside <a> — and a real <button>
+            // in a link row would ALSO navigate on click. Link rows demote
+            // their controls to role="button" spans (same classes and
+            // data-action, so runtime dispatch is unchanged); the runtime
+            // layer stops propagation before the anchor sees the click.
+            let is_link = href.is_some();
             // Trailing action: right-side control next to the arrow.
             let trailing = if trailing_label.is_some() || trailing_action.is_some() {
                 let label = trailing_label
@@ -4491,11 +4497,19 @@ pub(crate) fn render_block(block: &Block) -> String {
                     Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
                     None => String::new(),
                 };
-                format!(
-                    "<button type=\"button\" class=\"surfdoc-row-trailing\"{}>{}</button>",
-                    action_attr,
-                    escape_html(label),
-                )
+                if is_link {
+                    format!(
+                        "<span role=\"button\" class=\"surfdoc-row-trailing\"{}>{}</span>",
+                        action_attr,
+                        escape_html(label),
+                    )
+                } else {
+                    format!(
+                        "<button type=\"button\" class=\"surfdoc-row-trailing\"{}>{}</button>",
+                        action_attr,
+                        escape_html(label),
+                    )
+                }
             } else {
                 String::new()
             };
@@ -4506,11 +4520,19 @@ pub(crate) fn render_block(block: &Block) -> String {
                 let buttons: String = actions
                     .iter()
                     .map(|a| {
-                        format!(
-                            "<button class=\"surfdoc-row-action\" data-action=\"{}\">{}</button>",
-                            escape_html(&a.action),
-                            escape_html(&a.label),
-                        )
+                        if is_link {
+                            format!(
+                                "<span role=\"button\" class=\"surfdoc-row-action\" data-action=\"{}\">{}</span>",
+                                escape_html(&a.action),
+                                escape_html(&a.label),
+                            )
+                        } else {
+                            format!(
+                                "<button class=\"surfdoc-row-action\" data-action=\"{}\">{}</button>",
+                                escape_html(&a.action),
+                                escape_html(&a.label),
+                            )
+                        }
                     })
                     .collect();
                 format!("<span class=\"surfdoc-row-actions\">{buttons}</span>")
@@ -10920,6 +10942,34 @@ About
         let trailing_idx = html.find("surfdoc-row-trailing").expect("trailing");
         let arrow_idx = html.find("surfdoc-row-arrow").expect("arrow");
         assert!(dot_idx < trailing_idx && trailing_idx < arrow_idx);
+    }
+
+    #[test]
+    fn html_link_row_controls_demote_to_role_button_spans() {
+        // Interactive content is invalid inside <a>, and a real <button>
+        // would also trigger the link's navigation on click — link rows
+        // demote trailing/per-row controls to role="button" spans with the
+        // same classes and data-action hooks.
+        let doc = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "Jordan Lee".into(),
+            description: "@jordan".into(),
+            href: Some("/contacts/jordan".into()),
+            state: RowState::Default,
+            unread: false,
+            trailing_label: Some("Install".into()),
+            trailing_action: Some("install_app".into()),
+            actions: vec![crate::types::RowAction {
+                label: "Accept".into(),
+                action: "invoke:contacts.accept".into(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<a class=\"surfdoc-row\""));
+        assert!(!html.contains("<button"), "no <button> may nest inside a link row");
+        assert!(html.contains("<span role=\"button\" class=\"surfdoc-row-trailing\" data-action=\"install_app\">Install</span>"));
+        assert!(html.contains("<span role=\"button\" class=\"surfdoc-row-action\" data-action=\"invoke:contacts.accept\">Accept</span>"));
     }
 
     #[test]
