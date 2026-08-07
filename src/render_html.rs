@@ -4888,8 +4888,12 @@ pub(crate) fn render_block(block: &Block) -> String {
                 None => String::new(),
             };
             let dismiss_attr = if *dismissible { String::new() } else { " data-dismissible=\"false\"".to_string() };
+            // Static render: a <dialog> without `open` paints NOTHING (UA
+            // display:none) and no script calls showModal() — the sheet must
+            // be visible in rendered docs/mockups, so emit it open, in flow,
+            // as a card.
             let mut html = format!(
-                "<dialog class=\"surfdoc-modal\" data-name=\"{}\" data-placement=\"{}\"{}{}>",
+                "<dialog open class=\"surfdoc-modal\" data-name=\"{}\" data-placement=\"{}\"{}{}>",
                 escape_html(name), escape_html(placement), dismiss_attr, style,
             );
             // Dismiss canon: the header always carries the title and a
@@ -11202,6 +11206,9 @@ About
         }]);
         let html = to_html(&doc);
         assert!(html.contains("surfdoc-modal"));
+        // Static render must paint the sheet: a closed <dialog> is
+        // UA-hidden and nothing calls showModal().
+        assert!(html.contains("<dialog open"));
         assert!(html.contains("data-name=\"deploy\""));
         assert!(html.contains("data-placement=\"centered\""));
         assert!(html.contains("<header class=\"surfdoc-modal-header\">"));
