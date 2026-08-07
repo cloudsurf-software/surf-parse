@@ -1121,6 +1121,18 @@ pub(crate) fn render_block(block: &Block) -> String {
             format!("### {heading}\n\n{}", parts.join("\n\n"))
         }
 
+        Block::DropdownSelect { label, selected, options, .. } => {
+            let heading = label.as_deref().or(selected.as_deref()).unwrap_or("Select");
+            let lines: Vec<String> = options.iter().map(|o| {
+                let marker = if selected.as_deref() == Some(o.label.as_str()) { " (selected)" } else { "" };
+                match o.description.as_deref() {
+                    Some(d) => format!("- **{}**{marker} — {d}", o.label),
+                    None => format!("- **{}**{marker}", o.label),
+                }
+            }).collect();
+            format!("{heading}:\n\n{}", lines.join("\n"))
+        }
+
         Block::CommandPalette { items, .. } => {
             let lines: Vec<String> = items.iter().map(|i| {
                 let desc = i.description.as_deref().unwrap_or("");

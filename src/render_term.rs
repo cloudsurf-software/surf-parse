@@ -721,6 +721,7 @@ fn render_block(block: &Block) -> String {
         | Block::Drawer { .. }
         | Block::Modal { .. }
         | Block::CommandPalette { .. }
+        | Block::DropdownSelect { .. }
         | Block::CodeEditor { .. }
         | Block::BlockEditor { .. }
         | Block::Terminal { .. }

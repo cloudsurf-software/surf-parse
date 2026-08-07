@@ -2959,6 +2959,23 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-command-list li:hover { background: var(--surface-alt, #1a1a24); }
 
 /* ============================================================
+   72b. DROPDOWN SELECT
+   Static-rendered inline: trigger row + option list, no overlay.
+   ============================================================ */
+
+.surfdoc .surfdoc-dropdown-select { display: inline-block; min-width: 220px; max-width: 100%; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); margin: 0.5rem 0; vertical-align: top; }
+.surfdoc .surfdoc-dropdown-trigger { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--border, #30363d); color: var(--text, #e6edf3); padding: 8px 12px; font-size: 0.8125rem; cursor: pointer; text-align: left; }
+.surfdoc .surfdoc-dropdown-label { color: var(--text-muted, #8b949e); }
+.surfdoc .surfdoc-dropdown-selected { font-weight: var(--font-weight-semibold, 600); }
+.surfdoc .surfdoc-dropdown-caret { margin-left: auto; color: var(--text-faint, #484f58); }
+.surfdoc .surfdoc-dropdown-options { list-style: none; padding: 4px; margin: 0; }
+.surfdoc .surfdoc-dropdown-option { padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8125rem; }
+.surfdoc .surfdoc-dropdown-option:hover { background: var(--surface-alt, #1a1a24); }
+.surfdoc .surfdoc-dropdown-option.is-selected { background: var(--surface-alt, #1a1a24); }
+.surfdoc .surfdoc-dropdown-option-label { display: block; color: var(--text, #e6edf3); }
+.surfdoc .surfdoc-dropdown-option-desc { display: block; color: var(--text-muted, #8b949e); font-size: 0.75rem; margin-top: 2px; }
+
+/* ============================================================
    73. PROGRESS
    ============================================================ */
 

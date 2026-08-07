@@ -1788,6 +1788,23 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             children: convert_children(children, depth + 1),
         },
 
+        // No dedicated NativeBlock variant (native schema stays v2): a
+        // dropdown-select degrades to a CommandPalette — same trigger +
+        // option-list shape — until a native round gives it its own variant.
+        Block::DropdownSelect { label, selected, options, .. } => NativeBlock::CommandPalette {
+            trigger: label.clone().or_else(|| selected.clone()),
+            items: options
+                .iter()
+                .map(|o| NativeCommandItem {
+                    label: o.label.clone(),
+                    description: o.description.clone(),
+                    action: o.action.as_deref().map(parse_native_action),
+                    icon: o.icon.clone(),
+                    group: None,
+                })
+                .collect(),
+        },
+
         Block::CommandPalette {
             trigger, items, ..
         } => NativeBlock::CommandPalette {
@@ -2502,6 +2519,7 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Drawer { .. }
         | Block::Modal { .. }
         | Block::CommandPalette { .. }
+        | Block::DropdownSelect { .. }
         | Block::CodeEditor { .. }
         | Block::BlockEditor { .. }
         | Block::Terminal { .. }

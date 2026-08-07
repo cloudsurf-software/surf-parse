@@ -7,7 +7,7 @@ use crate::citation::{parse_authors, Reference, RefType};
 use crate::types::{
     AttrValue, Attrs, AuthProvider, BeforeAfterItem, BindingEvent, Block, BookingDay,
     BookingService, CalloutType, ChartData, ChartSeries, ChartType, Format, StoreItem,
-    ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry,
+    ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter,
     ModelField, ModelFieldType, NavGroup, NavItem, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
@@ -128,6 +128,7 @@ pub fn resolve_block(block: Block) -> Block {
         "drawer" => parse_drawer(attrs, content, *span),
         "modal" => parse_modal(attrs, content, *span),
         "command-palette" => parse_command_palette(attrs, content, *span),
+        "dropdown-select" => parse_dropdown_select(attrs, content, *span),
         "code-editor" => parse_code_editor(attrs, content, *span),
         "block-editor" => parse_block_editor(attrs, *span),
         "terminal" => parse_terminal(attrs, *span),
@@ -4361,6 +4362,42 @@ fn parse_command_palette(attrs: &Attrs, content: &str, span: Span) -> Block {
     }
 }
 
+fn parse_dropdown_select(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let label = attr_string(attrs, "label");
+    let icon = attr_string(attrs, "icon");
+    let selected = attr_string(attrs, "selected");
+    let align = attr_string(attrs, "align").unwrap_or_else(|| "left".to_string());
+    let mut options = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            let rest = rest.trim();
+            // Expected: "Label" description="..." action=... icon=...
+            if let Some(label_end) = rest.find('"').and_then(|start| {
+                rest[start + 1..].find('"').map(|end| start + 1 + end)
+            }) {
+                let label = rest[1..label_end].to_string();
+                let remainder = rest[label_end + 1..].trim();
+                let attrs = crate::attrs::parse_attrs(remainder).unwrap_or_default();
+                options.push(DropdownOption {
+                    label,
+                    description: attr_string(&attrs, "description"),
+                    icon: attr_string(&attrs, "icon"),
+                    action: attr_string(&attrs, "action"),
+                });
+            }
+        }
+    }
+    Block::DropdownSelect {
+        label,
+        icon,
+        selected,
+        align,
+        options,
+        span,
+    }
+}
+
 fn parse_code_editor(attrs: &Attrs, content: &str, span: Span) -> Block {
     let lang = attr_string(attrs, "lang");
     let source = attr_string(attrs, "source");
@@ -8026,6 +8063,46 @@ Note
                 assert!(!*dismissible);
             }
             other => panic!("Expected Modal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_dropdown_select_block() {
+        let source = "::dropdown-select[label=\"Sort\" icon=arrow selected=\"Newest\" align=right]\n- \"Newest\" description=\"Most recent first\" action=sort_newest icon=clock\n- \"Oldest\" action=sort_oldest\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::DropdownSelect { label, icon, selected, align, options, .. } => {
+                assert_eq!(*label, Some("Sort".to_string()));
+                assert_eq!(*icon, Some("arrow".to_string()));
+                assert_eq!(*selected, Some("Newest".to_string()));
+                assert_eq!(align, "right");
+                assert_eq!(options.len(), 2);
+                assert_eq!(options[0].label, "Newest");
+                assert_eq!(options[0].description, Some("Most recent first".to_string()));
+                assert_eq!(options[0].action, Some("sort_newest".to_string()));
+                assert_eq!(options[0].icon, Some("clock".to_string()));
+                assert_eq!(options[1].label, "Oldest");
+                assert_eq!(options[1].description, None);
+            }
+            other => panic!("Expected DropdownSelect, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_dropdown_select_defaults() {
+        let source = "::dropdown-select\n- \"One\"\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::DropdownSelect { label, icon, selected, align, options, .. } => {
+                assert_eq!(*label, None);
+                assert_eq!(*icon, None);
+                assert_eq!(*selected, None);
+                assert_eq!(align, "left");
+                assert_eq!(options.len(), 1);
+            }
+            other => panic!("Expected DropdownSelect, got {:?}", other),
         }
     }
 

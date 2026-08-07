@@ -4690,6 +4690,51 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
+        Block::DropdownSelect { label, icon, selected, align, options, .. } => {
+            let icon_attr = match icon {
+                Some(i) => format!(" data-icon=\"{}\"", escape_html(i)),
+                None => String::new(),
+            };
+            let mut html = format!(
+                "<div class=\"surfdoc-dropdown-select\" data-align=\"{}\">",
+                escape_html(align),
+            );
+            html.push_str(&format!("<button type=\"button\" class=\"surfdoc-dropdown-trigger\"{}>", icon_attr));
+            if let Some(l) = label {
+                html.push_str(&format!("<span class=\"surfdoc-dropdown-label\">{}</span>", escape_html(l)));
+            }
+            if let Some(s) = selected {
+                html.push_str(&format!("<span class=\"surfdoc-dropdown-selected\">{}</span>", escape_html(s)));
+            }
+            html.push_str("<span class=\"surfdoc-dropdown-caret\" aria-hidden=\"true\">&#9662;</span></button>");
+            html.push_str("<ul class=\"surfdoc-dropdown-options\">");
+            for opt in options {
+                let sel_class = if selected.as_deref() == Some(opt.label.as_str()) {
+                    " is-selected"
+                } else {
+                    ""
+                };
+                let action_attr = match &opt.action {
+                    Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+                    None => String::new(),
+                };
+                let opt_icon_attr = match &opt.icon {
+                    Some(i) => format!(" data-icon=\"{}\"", escape_html(i)),
+                    None => String::new(),
+                };
+                let desc = match &opt.description {
+                    Some(d) => format!("<span class=\"surfdoc-dropdown-option-desc\">{}</span>", escape_html(d)),
+                    None => String::new(),
+                };
+                html.push_str(&format!(
+                    "<li class=\"surfdoc-dropdown-option{}\"{}{}><span class=\"surfdoc-dropdown-option-label\">{}</span>{}</li>",
+                    sel_class, action_attr, opt_icon_attr, escape_html(&opt.label), desc,
+                ));
+            }
+            html.push_str("</ul></div>");
+            html
+        }
+
         Block::CommandPalette { items, .. } => {
             let mut html = String::from("<div class=\"surfdoc-command-palette\"><input type=\"search\" placeholder=\"Search commands...\" class=\"surfdoc-command-search\">");
             html.push_str("<ul class=\"surfdoc-command-list\">");
@@ -10721,6 +10766,41 @@ About
         assert!(html.contains("surfdoc-modal-close"));
         // Title falls back to name when absent.
         assert!(html.contains("<strong class=\"surfdoc-modal-title\">confirm</strong>"));
+    }
+
+    #[test]
+    fn html_dropdown_select() {
+        let doc = doc_with(vec![Block::DropdownSelect {
+            label: Some("Sort".into()),
+            icon: Some("arrow".into()),
+            selected: Some("Newest".into()),
+            align: "right".into(),
+            options: vec![
+                DropdownOption {
+                    label: "Newest".into(),
+                    description: Some("Most recent first".into()),
+                    icon: Some("clock".into()),
+                    action: Some("sort_newest".into()),
+                },
+                DropdownOption {
+                    label: "Oldest".into(),
+                    description: None,
+                    icon: None,
+                    action: None,
+                },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-dropdown-select"));
+        assert!(html.contains("data-align=\"right\""));
+        assert!(html.contains("surfdoc-dropdown-trigger"));
+        assert!(html.contains("<span class=\"surfdoc-dropdown-label\">Sort</span>"));
+        assert!(html.contains("<span class=\"surfdoc-dropdown-selected\">Newest</span>"));
+        assert!(html.contains("surfdoc-dropdown-option is-selected"));
+        assert!(html.contains("data-action=\"sort_newest\""));
+        assert!(html.contains("<span class=\"surfdoc-dropdown-option-desc\">Most recent first</span>"));
+        assert!(html.contains("<span class=\"surfdoc-dropdown-option-label\">Oldest</span>"));
     }
 
     #[test]

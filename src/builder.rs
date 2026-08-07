@@ -2922,6 +2922,29 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
+        Block::DropdownSelect { label, icon, selected, align, options, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(l) = label { attrs_parts.push(format!("label=\"{}\"", escape_attr(l))); }
+            if let Some(i) = icon { attrs_parts.push(format!("icon={i}")); }
+            if let Some(s) = selected { attrs_parts.push(format!("selected=\"{}\"", escape_attr(s))); }
+            if align != "left" { attrs_parts.push(format!("align={align}")); }
+            let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
+            let mut lines = Vec::new();
+            for opt in options {
+                let mut parts = Vec::new();
+                if let Some(d) = &opt.description { parts.push(format!("description=\"{}\"", escape_attr(d))); }
+                if let Some(a) = &opt.action { parts.push(format!("action={a}")); }
+                if let Some(i) = &opt.icon { parts.push(format!("icon={i}")); }
+                let extra = if parts.is_empty() { String::new() } else { format!(" {}", parts.join(" ")) };
+                lines.push(format!("- \"{}\"{extra}", escape_attr(&opt.label)));
+            }
+            if lines.is_empty() {
+                format!("::dropdown-select{attrs_str}\n::")
+            } else {
+                format!("::dropdown-select{attrs_str}\n{}\n::", lines.join("\n"))
+            }
+        }
+
         Block::CommandPalette { trigger, items, .. } => {
             let attrs_str = match trigger {
                 Some(t) => format!("[trigger=\"{}\"]", escape_attr(t)),

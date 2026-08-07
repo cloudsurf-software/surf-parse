@@ -10,7 +10,7 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 107
+total_blocks = 108
 registry_updated = "2026-05-27"
 
 [blocks.ai-context]
@@ -796,6 +796,14 @@ purpose = "Dialog overlay with name, optional title, and child blocks; header al
 attributes = ["name", "title", "width", "placement", "dismissible"]
 degradation = "heading with content"
 enum_variant = "Modal"
+
+[blocks.dropdown-select]
+status = "implemented"
+category = "advanced"
+purpose = "Anchored dropdown select menu with trigger label/icon/selected and options carrying label, description, icon, action"
+attributes = ["label", "icon", "selected", "align"]
+degradation = "bulleted option list"
+enum_variant = "DropdownSelect"
 
 [blocks.command-palette]
 status = "implemented"

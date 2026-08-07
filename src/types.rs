@@ -1030,6 +1030,15 @@ pub enum Block {
         items: Vec<CommandItem>,
         span: Span,
     },
+    /// Anchored dropdown select menu with a trigger and an option list.
+    DropdownSelect {
+        label: Option<String>,
+        icon: Option<String>,
+        selected: Option<String>,
+        align: String,
+        options: Vec<DropdownOption>,
+        span: Span,
+    },
     /// Syntax-highlighted code editor.
     CodeEditor {
         lang: Option<String>,
@@ -1156,6 +1165,15 @@ pub struct CommandItem {
     pub action: Option<String>,
     pub icon: Option<String>,
     pub group: Option<String>,
+}
+
+/// An option within a `DropdownSelect` block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DropdownOption {
+    pub label: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub action: Option<String>,
 }
 
 /// A step within a `Progress` block.
