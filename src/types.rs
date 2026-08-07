@@ -1030,6 +1030,15 @@ pub enum Block {
         items: Vec<CommandItem>,
         span: Span,
     },
+    /// Compact pill single-select control — a filter idiom, NOT a tab-bar
+    /// style (segments select a filter value; they do not switch panes).
+    SegmentedControl {
+        active: Option<String>,
+        size: String,
+        action: Option<String>,
+        segments: Vec<SegmentItem>,
+        span: Span,
+    },
     /// Anchored dropdown select menu with a trigger and an option list.
     DropdownSelect {
         label: Option<String>,
@@ -1165,6 +1174,13 @@ pub struct CommandItem {
     pub action: Option<String>,
     pub icon: Option<String>,
     pub group: Option<String>,
+}
+
+/// A segment within a `SegmentedControl` block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SegmentItem {
+    pub id: String,
+    pub label: String,
 }
 
 /// An option within a `DropdownSelect` block.

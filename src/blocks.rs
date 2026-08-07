@@ -11,7 +11,7 @@ use crate::types::{
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter,
     ModelField, ModelFieldType, NavGroup, NavItem, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
-    RowState, SchemaField,
+    RowState, SchemaField, SegmentItem,
     SlideLayout, SmokeCheck, SocialLink, SortSpec, Span, StatItem, StepItem,
     StyleProperty, TabBarItem, TabPanel, TaskItem, ToolbarItem, Trend, VolumeEntry,
 };
@@ -123,6 +123,7 @@ pub fn resolve_block(block: Block) -> Block {
         "sidebar" => parse_sidebar(attrs, content, *span),
         "panel" => parse_panel(attrs, content, *span),
         "tab-bar" => parse_tab_bar(attrs, content, *span),
+        "segmented-control" => parse_segmented_control(attrs, content, *span),
         "tab-content" => parse_tab_content(attrs, content, *span),
         "toolbar" => parse_toolbar(content, *span),
         "drawer" => parse_drawer(attrs, content, *span),
@@ -4226,6 +4227,39 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     }
 }
 
+fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let active = attr_string(attrs, "active");
+    let size = attr_string(attrs, "size").unwrap_or_else(|| "compact".to_string());
+    let action = attr_string(attrs, "action");
+    let mut segments = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            // Expected format: id "Label" — flat single-select, no icons.
+            let rest = rest.trim();
+            if let Some((id, label_part)) = rest.split_once(' ') {
+                let label = label_part.trim().trim_matches('"').to_string();
+                segments.push(SegmentItem {
+                    id: id.to_string(),
+                    label,
+                });
+            } else if !rest.is_empty() {
+                segments.push(SegmentItem {
+                    id: rest.to_string(),
+                    label: rest.to_string(),
+                });
+            }
+        }
+    }
+    Block::SegmentedControl {
+        active,
+        size,
+        action,
+        segments,
+        span,
+    }
+}
+
 fn parse_tab_content(attrs: &Attrs, content: &str, span: Span) -> Block {
     let tab = attr_string(attrs, "tab").unwrap_or_default();
     let children = parse_page_children(content);
@@ -8063,6 +8097,44 @@ Note
                 assert!(!*dismissible);
             }
             other => panic!("Expected Modal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_segmented_control_block() {
+        let source = "::segmented-control[active=all size=regular action=filter_posts]\n- all \"All\"\n- posts \"Posts\"\n- docs \"Docs\"\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::SegmentedControl { active, size, action, segments, .. } => {
+                assert_eq!(*active, Some("all".to_string()));
+                assert_eq!(size, "regular");
+                assert_eq!(*action, Some("filter_posts".to_string()));
+                assert_eq!(segments.len(), 3);
+                assert_eq!(segments[0].id, "all");
+                assert_eq!(segments[0].label, "All");
+                assert_eq!(segments[2].id, "docs");
+                assert_eq!(segments[2].label, "Docs");
+            }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_segmented_control_defaults() {
+        let source = "::segmented-control\n- one\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::SegmentedControl { active, size, action, segments, .. } => {
+                assert_eq!(*active, None);
+                assert_eq!(size, "compact");
+                assert_eq!(*action, None);
+                assert_eq!(segments.len(), 1);
+                assert_eq!(segments[0].id, "one");
+                assert_eq!(segments[0].label, "one");
+            }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
         }
     }
 

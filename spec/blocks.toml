@@ -10,7 +10,7 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 108
+total_blocks = 109
 registry_updated = "2026-05-27"
 
 [blocks.ai-context]
@@ -796,6 +796,14 @@ purpose = "Dialog overlay with name, optional title, and child blocks; header al
 attributes = ["name", "title", "width", "placement", "dismissible"]
 degradation = "heading with content"
 enum_variant = "Modal"
+
+[blocks.segmented-control]
+status = "implemented"
+category = "advanced"
+purpose = "Compact pill single-select control for filtering — a filter idiom, not a tab-bar style"
+attributes = ["active", "size", "action"]
+degradation = "inline segment list with active bolded"
+enum_variant = "SegmentedControl"
 
 [blocks.dropdown-select]
 status = "implemented"

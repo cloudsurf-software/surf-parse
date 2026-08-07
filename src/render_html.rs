@@ -4590,6 +4590,32 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
+        Block::SegmentedControl { active, size, action, segments, .. } => {
+            // A filter idiom, not a content-pane switcher: radiogroup role,
+            // no tablist markup and no tab-switching script.
+            let action_attr = match action {
+                Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+                None => String::new(),
+            };
+            let mut html = format!(
+                "<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"{}\"{}>",
+                escape_html(size), action_attr,
+            );
+            for seg in segments {
+                let is_active = active.as_ref().is_some_and(|a| a == &seg.id);
+                let active_cls = if is_active { " is-active" } else { "" };
+                html.push_str(&format!(
+                    "<button type=\"button\" role=\"radio\" class=\"surfdoc-segment{}\" data-id=\"{}\" aria-checked=\"{}\">{}</button>",
+                    active_cls,
+                    escape_html(&seg.id),
+                    is_active,
+                    escape_html(&seg.label),
+                ));
+            }
+            html.push_str("</div>");
+            html
+        }
+
         Block::TabContent { tab, children, .. } => {
             // First tab-content is visible by default, others hidden
             let mut html = format!(
@@ -10766,6 +10792,33 @@ About
         assert!(html.contains("surfdoc-modal-close"));
         // Title falls back to name when absent.
         assert!(html.contains("<strong class=\"surfdoc-modal-title\">confirm</strong>"));
+    }
+
+    #[test]
+    fn html_segmented_control() {
+        let doc = doc_with(vec![Block::SegmentedControl {
+            active: Some("posts".into()),
+            size: "compact".into(),
+            action: Some("filter_posts".into()),
+            segments: vec![
+                SegmentItem { id: "all".into(), label: "All".into() },
+                SegmentItem { id: "posts".into(), label: "Posts".into() },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-segmented-control"));
+        assert!(html.contains("role=\"radiogroup\""));
+        assert!(html.contains("data-size=\"compact\""));
+        assert!(html.contains("data-action=\"filter_posts\""));
+        // Exactly one active pill.
+        assert_eq!(html.matches("is-active").count(), 1);
+        assert!(html.contains("aria-checked=\"true\">Posts</button>"));
+        assert!(html.contains("aria-checked=\"false\">All</button>"));
+        // Not a tab bar: no tablist markup, no tab-switching script.
+        assert!(!html.contains("role=\"tablist\""));
+        assert!(!html.contains("surfdoc-tab-bar"));
+        assert!(!html.contains("<script>"));
     }
 
     #[test]

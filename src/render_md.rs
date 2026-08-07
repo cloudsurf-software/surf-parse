@@ -1121,6 +1121,17 @@ pub(crate) fn render_block(block: &Block) -> String {
             format!("### {heading}\n\n{}", parts.join("\n\n"))
         }
 
+        Block::SegmentedControl { active, segments, .. } => {
+            let parts: Vec<String> = segments.iter().map(|s| {
+                if active.as_ref().is_some_and(|a| a == &s.id) {
+                    format!("**[{}]**", s.label)
+                } else {
+                    s.label.clone()
+                }
+            }).collect();
+            parts.join(" | ")
+        }
+
         Block::DropdownSelect { label, selected, options, .. } => {
             let heading = label.as_deref().or(selected.as_deref()).unwrap_or("Select");
             let lines: Vec<String> = options.iter().map(|o| {

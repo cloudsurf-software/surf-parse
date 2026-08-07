@@ -2922,6 +2922,23 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
+        Block::SegmentedControl { active, size, action, segments, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(a) = active { attrs_parts.push(format!("active={a}")); }
+            if size != "compact" { attrs_parts.push(format!("size={size}")); }
+            if let Some(a) = action { attrs_parts.push(format!("action={a}")); }
+            let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
+            let lines: Vec<String> = segments
+                .iter()
+                .map(|s| format!("- {} \"{}\"", s.id, escape_attr(&s.label)))
+                .collect();
+            if lines.is_empty() {
+                format!("::segmented-control{attrs_str}\n::")
+            } else {
+                format!("::segmented-control{attrs_str}\n{}\n::", lines.join("\n"))
+            }
+        }
+
         Block::DropdownSelect { label, icon, selected, align, options, .. } => {
             let mut attrs_parts = Vec::new();
             if let Some(l) = label { attrs_parts.push(format!("label=\"{}\"", escape_attr(l))); }
@@ -4062,6 +4079,25 @@ mod tests {
                 assert!(!*dismissible);
             }
             other => panic!("Expected Modal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_segmented_control() {
+        let source = "::segmented-control[active=all size=regular action=filter]\n- all \"All\"\n- posts \"Posts\"\n::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        let reparsed = parse::parse(&out);
+        match &reparsed.doc.blocks[0] {
+            Block::SegmentedControl { active, size, action, segments, .. } => {
+                assert_eq!(active.as_deref(), Some("all"));
+                assert_eq!(size, "regular");
+                assert_eq!(action.as_deref(), Some("filter"));
+                assert_eq!(segments.len(), 2);
+                assert_eq!(segments[1].id, "posts");
+                assert_eq!(segments[1].label, "Posts");
+            }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
         }
     }
 

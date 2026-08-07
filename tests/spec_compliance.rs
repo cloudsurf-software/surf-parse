@@ -31,7 +31,7 @@ const ENUM_VARIANTS: &[&str] = &[
     // App shell / interactive
     "AppShell", "BlockEditor", "ChatInputSimple", "ChatThread",
     "CodeEditor", "CommandPalette", "Drawer", "DropdownSelect", "LogStream", "Modal",
-    "NavTree", "Panel", "ProblemList", "Progress", "Sidebar",
+    "NavTree", "Panel", "ProblemList", "Progress", "SegmentedControl", "Sidebar",
     "SuggestionChips", "TabBar", "TabContent", "Terminal", "Toolbar",
 ];
 

@@ -722,6 +722,7 @@ fn render_block(block: &Block) -> String {
         | Block::Modal { .. }
         | Block::CommandPalette { .. }
         | Block::DropdownSelect { .. }
+        | Block::SegmentedControl { .. }
         | Block::CodeEditor { .. }
         | Block::BlockEditor { .. }
         | Block::Terminal { .. }

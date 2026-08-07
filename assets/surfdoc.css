@@ -2959,6 +2959,17 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-command-list li:hover { background: var(--surface-alt, #1a1a24); }
 
 /* ============================================================
+   72a. SEGMENTED CONTROL
+   Compact pill single-select — a filter idiom, not a tab bar.
+   ============================================================ */
+
+.surfdoc .surfdoc-segmented-control { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--surface-alt, #1a1a24); border: 1px solid var(--border, #30363d); border-radius: 999px; margin: 0.5rem 0; }
+.surfdoc .surfdoc-segment { appearance: none; background: transparent; border: none; border-radius: 999px; color: var(--text-muted, #8b949e); font-size: 0.8125rem; line-height: 1; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.surfdoc .surfdoc-segmented-control[data-size="compact"] .surfdoc-segment { font-size: 0.75rem; padding: 4px 10px; }
+.surfdoc .surfdoc-segment:hover { color: var(--text, #e6edf3); }
+.surfdoc .surfdoc-segment.is-active { background: var(--surface, #12121a); color: var(--text, #e6edf3); font-weight: var(--font-weight-semibold, 600); box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+
+/* ============================================================
    72b. DROPDOWN SELECT
    Static-rendered inline: trigger row + option list, no overlay.
    ============================================================ */

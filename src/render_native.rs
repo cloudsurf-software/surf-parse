@@ -1789,6 +1789,21 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         },
 
         // No dedicated NativeBlock variant (native schema stays v2): a
+        // segmented-control maps onto TabBar — same id/label single-select
+        // shape — until a native round gives it its own variant.
+        Block::SegmentedControl { active, segments, .. } => NativeBlock::TabBar {
+            active: active.clone(),
+            items: segments
+                .iter()
+                .map(|s| NativeTabBarItem {
+                    id: s.id.clone(),
+                    label: s.label.clone(),
+                    icon: None,
+                })
+                .collect(),
+        },
+
+        // No dedicated NativeBlock variant (native schema stays v2): a
         // dropdown-select degrades to a CommandPalette — same trigger +
         // option-list shape — until a native round gives it its own variant.
         Block::DropdownSelect { label, selected, options, .. } => NativeBlock::CommandPalette {
@@ -2520,6 +2535,7 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Modal { .. }
         | Block::CommandPalette { .. }
         | Block::DropdownSelect { .. }
+        | Block::SegmentedControl { .. }
         | Block::CodeEditor { .. }
         | Block::BlockEditor { .. }
         | Block::Terminal { .. }
