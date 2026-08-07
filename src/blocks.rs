@@ -3759,6 +3759,7 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         description,
         href,
         state,
+        unread: attr_bool(attrs, "unread"),
         span,
     }
 }
@@ -4189,18 +4190,21 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     for line in content.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("- ") {
-            // Expected format: id "Label" {icon=token}
+            // Expected format: id "Label" {icon=token unread}
             let mut rest = rest.trim();
             let mut icon = None;
+            let mut unread = false;
             if let Some(brace_start) = rest.rfind('{')
                 && let Some(brace) = rest[brace_start + 1..].strip_suffix('}')
             {
                 for tok in brace.split_whitespace() {
                     if let Some(v) = tok.strip_prefix("icon=") {
                         icon = Some(v.trim_matches('"').to_string());
+                    } else if tok == "unread" || tok == "unread=true" {
+                        unread = true;
                     }
                 }
-                if icon.is_some() {
+                if icon.is_some() || unread {
                     rest = rest[..brace_start].trim_end();
                 }
             }
@@ -4210,12 +4214,14 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     id: id.to_string(),
                     label,
                     icon,
+                    unread,
                 });
             } else {
                 items.push(TabBarItem {
                     id: rest.to_string(),
                     label: rest.to_string(),
                     icon,
+                    unread,
                 });
             }
         }
@@ -8097,6 +8103,39 @@ Note
                 assert!(!*dismissible);
             }
             other => panic!("Expected Modal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_tab_bar_item_unread() {
+        let source = "::tab-bar[active=inbox]\n- inbox \"Inbox\" {icon=tray unread}\n- sent \"Sent\"\n::";
+        let result = crate::parse(source);
+        let block = &result.doc.blocks[0];
+        match block {
+            Block::TabBar { items, .. } => {
+                assert_eq!(items.len(), 2);
+                assert!(items[0].unread);
+                assert_eq!(items[0].icon, Some("tray".to_string()));
+                assert_eq!(items[0].label, "Inbox");
+                assert!(!items[1].unread);
+            }
+            other => panic!("Expected TabBar, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_row_unread() {
+        let source = "::row[icon=doc unread=true]\nTitle\nDesc\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { unread, .. } => assert!(*unread),
+            other => panic!("Expected Row, got {:?}", other),
+        }
+        let source_default = "::row[icon=doc]\nTitle\nDesc\n::";
+        let result = crate::parse(source_default);
+        match &result.doc.blocks[0] {
+            Block::Row { unread, .. } => assert!(!*unread),
+            other => panic!("Expected Row, got {:?}", other),
         }
     }
 

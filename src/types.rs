@@ -946,6 +946,9 @@ pub enum Block {
         description: String,
         href: Option<String>,
         state: RowState,
+        /// Right-side blue unread dot. Renderer invariant: the dot is a
+        /// right-side element only — accent-left-border is BANNED.
+        unread: bool,
         span: Span,
     },
 
@@ -1136,6 +1139,8 @@ pub struct TabBarItem {
     /// Optional icon token (SF-symbol-ish, e.g. "doc.text"); native clients
     /// map it to an SFSymbol/Material icon, the web emits it as `data-icon`.
     pub icon: Option<String>,
+    /// Right-side blue unread dot on the tab item.
+    pub unread: bool,
 }
 
 /// An item within a `Toolbar` block.

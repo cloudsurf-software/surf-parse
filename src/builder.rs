@@ -2755,10 +2755,11 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Row { icon, title, description, href, state, .. } => {
+        Block::Row { icon, title, description, href, state, unread, .. } => {
             let mut attrs_parts = vec![format!("icon={icon}")];
             if let Some(h) = href { attrs_parts.push(format!("href=\"{}\"", escape_attr(h))); }
             match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
+            if *unread { attrs_parts.push("unread=true".to_string()); }
             let attrs_str = format!("[{}]", attrs_parts.join(", "));
             format!("::row{attrs_str}\n{title}\n{description}\n::")
         }
@@ -2822,16 +2823,18 @@ fn serialize_block(block: &Block) -> String {
             };
             let mut lines = Vec::new();
             for item in items {
-                match &item.icon {
-                    Some(icon) => lines.push(format!(
-                        "- {} \"{}\" {{icon={}}}",
+                let mut brace_parts = Vec::new();
+                if let Some(icon) = &item.icon { brace_parts.push(format!("icon={icon}")); }
+                if item.unread { brace_parts.push("unread".to_string()); }
+                if brace_parts.is_empty() {
+                    lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)));
+                } else {
+                    lines.push(format!(
+                        "- {} \"{}\" {{{}}}",
                         item.id,
                         escape_attr(&item.label),
-                        icon
-                    )),
-                    None => {
-                        lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)))
-                    }
+                        brace_parts.join(" ")
+                    ));
                 }
             }
             let content = lines.join("\n");

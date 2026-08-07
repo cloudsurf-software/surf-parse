@@ -718,8 +718,8 @@ enum_variant = "AppDeploy"
 [blocks.row]
 status = "implemented"
 category = "utility"
-purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states"
-attributes = ["icon", "href", "state"]
+purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states and a right-side unread dot"
+attributes = ["icon", "href", "state", "unread"]
 degradation = "single-line description"
 enum_variant = "Row"
 
@@ -760,7 +760,7 @@ enum_variant = "Panel"
 [blocks.tab-bar]
 status = "implemented"
 category = "advanced"
-purpose = "Tab strip navigation with labeled tab items and active tab control"
+purpose = "Tab strip navigation with labeled tab items, active tab control, and per-item icon/unread tokens"
 attributes = ["active"]
 degradation = "bulleted tab labels"
 enum_variant = "TabBar"

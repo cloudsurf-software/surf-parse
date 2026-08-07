@@ -4454,7 +4454,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Row { icon, title, description, href, state, .. } => {
+        Block::Row { icon, title, description, href, state, unread, .. } => {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
@@ -4467,6 +4467,12 @@ pub(crate) fn render_block(block: &Block) -> String {
                 Some(h) => format!(" href=\"{}\"", escape_html(h)),
                 None => String::new(),
             };
+            // Unread: right-side dot only — accent-left-border is BANNED.
+            let unread_dot = if *unread {
+                "<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span>"
+            } else {
+                ""
+            };
             format!(
                 "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}>\
                  <span class=\"surfdoc-row-icon\">{icon_svg}</span>\
@@ -4474,6 +4480,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                    <span class=\"surfdoc-row-title\">{title}</span>\
                    <span class=\"surfdoc-row-desc\">{desc}</span>\
                  </span>\
+                 {unread_dot}\
                  <span class=\"surfdoc-row-arrow\">{arrow_svg}</span>\
                  </{tag}>",
                 title = escape_html(title),
@@ -4575,13 +4582,20 @@ pub(crate) fn render_block(block: &Block) -> String {
                     .as_ref()
                     .map(|i| format!(" data-icon=\"{}\"", escape_html(i)))
                     .unwrap_or_default();
+                // Unread: right-side dot only — accent-left-border is BANNED.
+                let unread_dot = if item.unread {
+                    "<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span>"
+                } else {
+                    ""
+                };
                 html.push_str(&format!(
-                    "<button role=\"tab\" data-tab=\"{}\"{}{} aria-selected=\"{}\">{}</button>",
+                    "<button role=\"tab\" data-tab=\"{}\"{}{} aria-selected=\"{}\">{}{}</button>",
                     escape_html(&item.id),
                     icon_attr,
                     active_cls,
                     is_active,
                     escape_html(&item.label),
+                    unread_dot,
                 ));
             }
             html.push_str("</nav>");
@@ -10688,8 +10702,8 @@ About
         let doc = doc_with(vec![Block::TabBar {
             active: Some("preview".into()),
             items: vec![
-                TabBarItem { id: "preview".into(), label: "Preview".into(), icon: None },
-                TabBarItem { id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()) },
+                TabBarItem { id: "preview".into(), label: "Preview".into(), icon: None, unread: false },
+                TabBarItem { id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()), unread: true },
             ],
             span: span(),
         }]);
@@ -10792,6 +10806,54 @@ About
         assert!(html.contains("surfdoc-modal-close"));
         // Title falls back to name when absent.
         assert!(html.contains("<strong class=\"surfdoc-modal-title\">confirm</strong>"));
+    }
+
+    #[test]
+    fn html_row_unread_dot_right_side_no_left_border() {
+        let doc = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "Release notes".into(),
+            description: "1.6.2".into(),
+            href: None,
+            state: RowState::Default,
+            unread: true,
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Dot sits after the body, before the arrow — right side.
+        let dot_idx = html.find("surfdoc-unread-dot").expect("unread dot");
+        let body_idx = html.find("surfdoc-row-body").expect("row body");
+        let arrow_idx = html.find("surfdoc-row-arrow").expect("row arrow");
+        assert!(body_idx < dot_idx && dot_idx < arrow_idx);
+        // Renderer invariant: accent-left-border BANNED — no left border in markup.
+        assert!(!html.contains("border-left"));
+
+        let doc_read = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "Release notes".into(),
+            description: "1.6.2".into(),
+            href: None,
+            state: RowState::Default,
+            unread: false,
+            span: span(),
+        }]);
+        assert!(!to_html(&doc_read).contains("surfdoc-unread-dot"));
+    }
+
+    #[test]
+    fn html_tab_bar_unread_dot() {
+        let doc = doc_with(vec![Block::TabBar {
+            active: Some("inbox".into()),
+            items: vec![
+                TabBarItem { id: "inbox".into(), label: "Inbox".into(), icon: None, unread: true },
+                TabBarItem { id: "sent".into(), label: "Sent".into(), icon: None, unread: false },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("Inbox<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span></button>"));
+        assert_eq!(html.matches("surfdoc-unread-dot").count(), 1);
+        assert!(!html.contains("border-left"));
     }
 
     #[test]
