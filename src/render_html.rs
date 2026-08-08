@@ -11192,6 +11192,60 @@ About
     }
 
     #[test]
+    fn html_link_row_demotion_scoped_to_the_anchor() {
+        // Regression (d07d3e3), multi-block form: demotion applies inside
+        // the link row's <a> only — a sibling non-link row keeps its real
+        // <button>. The single-row test above can assert "no <button>
+        // anywhere"; this one pins the boundary.
+        let doc = doc_with(vec![
+            Block::Row {
+                icon: "person".into(),
+                title: "Jordan Lee".into(),
+                description: "@jordan".into(),
+                href: Some("/contacts/jordan".into()),
+                state: RowState::Default,
+                unread: false,
+                trailing_label: Some("Message".into()),
+                trailing_action: Some("open_thread".into()),
+                actions: vec![crate::types::RowAction {
+                    label: "Accept".into(),
+                    action: "invoke:contacts.accept".into(),
+                }],
+                span: span(),
+            },
+            Block::Row {
+                icon: "app".into(),
+                title: "Surf CLI".into(),
+                description: "Command line".into(),
+                href: None,
+                state: RowState::Default,
+                unread: false,
+                trailing_label: Some("Install".into()),
+                trailing_action: Some("install_app".into()),
+                actions: vec![],
+                span: span(),
+            },
+        ]);
+        let html = to_html(&doc);
+
+        // Slice out the anchor row: from <a ...> to its </a>.
+        let a_start = html.find("<a class=\"surfdoc-row\"").expect("link row anchor");
+        let a_end = html[a_start..].find("</a>").expect("anchor closes") + a_start;
+        let anchor = &html[a_start..a_end];
+
+        // Inside the anchor: role=button spans, never a real button.
+        assert!(!anchor.contains("<button"), "no <button> may nest inside an anchor");
+        assert!(anchor.contains("<span role=\"button\" class=\"surfdoc-row-trailing\" data-action=\"open_thread\">Message</span>"));
+        assert!(anchor.contains("<span role=\"button\" class=\"surfdoc-row-action\" data-action=\"invoke:contacts.accept\">Accept</span>"));
+
+        // The sibling non-link row keeps its real button element.
+        assert!(html.contains("<button type=\"button\" class=\"surfdoc-row-trailing\" data-action=\"install_app\">Install</button>"));
+        // And that button sits outside the anchor slice.
+        let btn_idx = html.find("<button type=\"button\" class=\"surfdoc-row-trailing\"").expect("sibling button");
+        assert!(btn_idx > a_end);
+    }
+
+    #[test]
     fn html_sidebar_nested_divider_renders_hairline() {
         let source = "::app-shell\n:::sidebar\n::divider\n::\n:::\n::";
         let result = crate::parse(source);
