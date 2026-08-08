@@ -2,7 +2,7 @@
 </div><div class="surfdoc-tab-content" data-tab="edit" role="tabpanel"><div class="surfdoc-code-editor" data-lang="surf" data-source="doc" data-line-numbers="true"><pre><code># Editable doc</code></pre></div></div><div class="surfdoc-panel surfdoc-panel-bottom" data-resizable="false" data-desktop-only="true" style="height:160px"><div class="surfdoc-problem-list surfdoc-problem-list-preview" data-source="diagnostics"><div class="surfdoc-problem-empty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No problems detected</div></div></div></div>
 <div class="surfdoc-drawer surfdoc-drawer-right" data-name="filters" style="width:320px"><p>Drawer body content.</p>
 </div>
-<dialog class="surfdoc-modal" data-name="confirm"><strong class="surfdoc-modal-title">Confirm shipment</strong><p>Are you sure you want to ship?</p>
+<dialog open class="surfdoc-modal" data-name="confirm" data-placement="centered"><header class="surfdoc-modal-header"><strong class="surfdoc-modal-title">Confirm shipment</strong><button type="button" class="surfdoc-modal-close" aria-label="Close">&#10005;</button></header><p>Are you sure you want to ship?</p>
 </dialog>
 <div class="surfdoc-command-palette"><input type="search" placeholder="Search commands..." class="surfdoc-command-search"><ul class="surfdoc-command-list"><li class="surfdoc-command-item" data-group="Ops"><span class="surfdoc-command-label">Deploy</span><span class="surfdoc-command-desc">Ship to production</span></li><li class="surfdoc-command-item" data-group="View"><span class="surfdoc-command-label">Toggle theme</span></li></ul></div>
 <span class="surfdoc-badge surfdoc-badge-red">3</span>
