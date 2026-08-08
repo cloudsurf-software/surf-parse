@@ -4777,8 +4777,13 @@ pub(crate) fn render_block(block: &Block) -> String {
                 "<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"{}\"{}>",
                 escape_html(size), action_attr,
             );
-            for seg in segments {
-                let is_active = active.as_ref().is_some_and(|a| a == &seg.id);
+            // Single-select invariant: at most ONE active pill, even when
+            // segment ids are duplicated — first match wins.
+            let active_idx = segments
+                .iter()
+                .position(|seg| active.as_ref().is_some_and(|a| a == &seg.id));
+            for (i, seg) in segments.iter().enumerate() {
+                let is_active = active_idx == Some(i);
                 let active_cls = if is_active { " is-active" } else { "" };
                 html.push_str(&format!(
                     "<button type=\"button\" role=\"radio\" class=\"surfdoc-segment{}\" data-id=\"{}\" aria-checked=\"{}\">{}</button>",
@@ -11387,6 +11392,146 @@ About
         assert!(html.contains("Inbox<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span></button>"));
         assert_eq!(html.matches("surfdoc-unread-dot").count(), 1);
         assert!(!html.contains("border-left"));
+    }
+
+    #[test]
+    fn html_unread_row_invariant_holds_in_every_container_context() {
+        // The unread invariant — right-side dot, NEVER a left border — must
+        // hold wherever a row can nest, not only at top level. (::feed has
+        // no children by type, so it cannot host rows; the containers below
+        // are the full set that can.)
+        let unread_row = || Block::Row {
+            icon: "doc".into(),
+            title: "Release notes".into(),
+            description: "1.6.2".into(),
+            href: None,
+            state: RowState::Default,
+            unread: true,
+            trailing_label: None,
+            trailing_action: None,
+            actions: vec![],
+            span: span(),
+        };
+        let contexts: Vec<(&str, Block)> = vec![
+            ("sidebar", Block::Sidebar {
+                position: "left".into(),
+                collapsible: false,
+                width: None,
+                children: vec![unread_row()],
+                span: span(),
+            }),
+            ("panel", Block::Panel {
+                position: "bottom".into(),
+                resizable: false,
+                height: None,
+                desktop_only: false,
+                children: vec![unread_row()],
+                span: span(),
+            }),
+            ("tab-content", Block::TabContent {
+                tab: "main".into(),
+                width: None,
+                align: None,
+                children: vec![unread_row()],
+                span: span(),
+            }),
+            ("drawer", Block::Drawer {
+                name: "inbox".into(),
+                position: "right".into(),
+                width: None,
+                trigger: None,
+                children: vec![unread_row()],
+                span: span(),
+            }),
+            ("modal", Block::Modal {
+                name: "inbox".into(),
+                title: None,
+                width: None,
+                placement: "centered".into(),
+                dismissible: true,
+                children: vec![unread_row()],
+                span: span(),
+            }),
+            ("app-shell", Block::AppShell {
+                layout: "tabs".into(),
+                height: None,
+                children: vec![Block::TabContent {
+                    tab: "main".into(),
+                    width: None,
+                    align: None,
+                    children: vec![unread_row()],
+                    span: span(),
+                }],
+                span: span(),
+            }),
+        ];
+        for (ctx, block) in contexts {
+            let html = to_html(&doc_with(vec![block]));
+            let dot_idx = html.find("surfdoc-unread-dot")
+                .unwrap_or_else(|| panic!("unread dot must render inside {ctx}"));
+            let body_idx = html.find("surfdoc-row-body")
+                .unwrap_or_else(|| panic!("row body must render inside {ctx}"));
+            assert!(body_idx < dot_idx, "dot must sit right of the body inside {ctx}");
+            assert!(
+                !html.contains("border-left"),
+                "accent-left-border is BANNED — leaked inside {ctx}"
+            );
+        }
+    }
+
+    #[test]
+    fn html_dropdown_option_without_action_emits_no_dispatch_hook() {
+        let doc = doc_with(vec![Block::DropdownSelect {
+            label: Some("Sort".into()),
+            icon: None,
+            selected: None,
+            align: "left".into(),
+            options: vec![
+                DropdownOption {
+                    label: "Newest".into(),
+                    description: None,
+                    icon: None,
+                    action: Some("sort_newest".into()),
+                },
+                DropdownOption {
+                    label: "Oldest".into(),
+                    description: None,
+                    icon: None,
+                    action: None,
+                },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Exactly one dispatch hook: the option that declared an action.
+        assert_eq!(html.matches("data-action").count(), 1);
+        assert!(html.contains("data-action=\"sort_newest\""));
+        // The action-less option renders, hook-free.
+        let oldest = html.find(">Oldest<").expect("Oldest option renders");
+        let option_start = html[..oldest].rfind("surfdoc-dropdown-option").unwrap();
+        assert!(!html[option_start..oldest].contains("data-action"));
+    }
+
+    #[test]
+    fn html_segmented_control_duplicate_active_ids_single_pill() {
+        let doc = doc_with(vec![Block::SegmentedControl {
+            active: Some("posts".into()),
+            size: "regular".into(),
+            action: None,
+            segments: vec![
+                SegmentItem { id: "posts".into(), label: "Posts (first)".into() },
+                SegmentItem { id: "all".into(), label: "All".into() },
+                SegmentItem { id: "posts".into(), label: "Posts (dup)".into() },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Single-select: exactly one active pill even with duplicate ids —
+        // first match wins.
+        assert_eq!(html.matches("is-active").count(), 1);
+        assert_eq!(html.matches("aria-checked=\"true\"").count(), 1);
+        assert!(html.contains("aria-checked=\"true\">Posts (first)</button>"));
+        assert!(html.contains("aria-checked=\"false\">Posts (dup)</button>"));
     }
 
     #[test]
