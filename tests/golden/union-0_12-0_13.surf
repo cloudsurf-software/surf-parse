@@ -1,0 +1,85 @@
+---
+title: "Golden union — every 0.12 + 0.13 kind"
+type: app
+---
+
+# 0.12 + 0.13 union
+
+::app-shell[layout=sidebar-main-panel height=720]
+
+:::sidebar[position=left collapsible=true width=250]
+::nav-tree[source=files on-select=open_file]
+::
+::divider
+::
+:::
+
+::toolbar[title="Messages" title-source=thread.display_name]
+- text[value="Surfspace" size=22]
+- button[label="Panel" action=toggle_panel toggled=true]
+- button[label="Deploy" action=deploy style=primary]
+- separator
+- spacer
+- badge[value="Live" color=green]
+::
+
+::tab-bar[active=inbox]
+- inbox "Inbox" {icon=tray unread=true}
+- sent "Sent"
+::
+
+::tab-content[tab=inbox width=880 align=center]
+
+::segmented-control[active=posts size=compact action=filter_posts]
+- all "All"
+- posts "Posts"
+::
+
+::dropdown-select[label="Sort" icon=arrow selected="Newest" align=right]
+- "Newest" description="Most recent first" icon=clock action=sort_newest
+- "Oldest"
+::
+
+::row[icon=doc unread=true trailing-label="Install" trailing-action=install_app]
+Surf CLI
+Command line for Surfspace
+::
+
+::row[icon=person href="/contacts/jordan"]
+Jordan Lee
+@jordan wants to connect
+action: Accept | invoke:contacts.accept
+action: Deny | mutate:contacts.deny:id
+::
+
+::list[source=conversations display=compact stream=conversation_updated on-select=openThread]
+{= display_name =}
+::
+
+::
+
+::tab-content[tab=sent]
+Sent messages live here.
+::
+
+::panel[position=bottom height=180 desktop-only=true]
+::chat-thread[source=chat.thread on-action=run_action on-react="mutate:messages.react:emoji" on-doc-open="open:/docs/{id}"]
+::
+::chat-input-simple[placeholder="Ask Surfy…" action=send]
+::
+::
+
+::
+
+::modal[name=confirm title="Confirm shipment" width=480 placement=centered dismissible=false]
+Are you sure you want to ship?
+::
+
+::recipient-picker[source=contacts mode=multi on-submit="invoke:messages.compose"]
+::
+
+::qr[mode=show]
+::
+
+::qr[mode=scan on-resolve="invoke:contacts.add"]
+::
