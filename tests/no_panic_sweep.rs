@@ -56,7 +56,6 @@ fn adversarial_sources(name: &str) -> Vec<String> {
 }
 
 /// Render one parsed doc through every format, twice; assert equality.
-/// Returns the concatenated first-pass output (callers may ignore it).
 fn render_all_twice(doc: &surf_parse::SurfDoc, label: &str) {
     let html1 = doc.to_html();
     let html2 = doc.to_html();
