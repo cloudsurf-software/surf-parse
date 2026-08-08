@@ -1,6 +1,6 @@
 [package]
 name = "surf-parse"
-version = "0.13.0"
+version = "0.13.1"
 edition = "2024"
 license = "MIT"
 authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]

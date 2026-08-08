@@ -2824,7 +2824,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-app-shell { display: grid; height: 100vh; width: 100%; overflow: hidden; background: var(--background, #0a0a0f); color: var(--text, #e5e5ef); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; }
 .surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: 250px 1fr; grid-template-rows: 40px 36px 1fr 200px; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-sidebar { grid-column: 1; grid-row: 1 / -1; }
-.surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-toolbar { grid-column: 2; grid-row: 1; }
+.surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-toolbar { grid-column: 2; grid-row: 1; min-width: 0; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-tab-bar { grid-column: 2; grid-row: 2; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-tab-content { grid-column: 2; grid-row: 3; min-width: 0; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-panel { grid-column: 2; grid-row: 4; }
@@ -2841,7 +2841,11 @@ ol.surfdoc-steps { padding-left: 1rem; }
    58. TOOLBAR
    ============================================================ */
 
-.surfdoc .surfdoc-toolbar { display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 40px; background: var(--surface, #12121a); border-bottom: 1px solid var(--border, #30363d); flex-shrink: 0; }
+/* Overflow discipline: the app-shell clips (overflow:hidden) and the grid
+   track can shrink below the toolbar's natural width, so a crowded bar
+   (e.g. a 5-facet filter set at 880px) must scroll horizontally instead
+   of clipping — at every viewport, not only under the 768px media query. */
+.surfdoc .surfdoc-toolbar { display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 40px; background: var(--surface, #12121a); border-bottom: 1px solid var(--border, #30363d); flex-shrink: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; }
 .surfdoc .surfdoc-toolbar-title { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 600; padding: 0 8px; white-space: nowrap; }
 .surfdoc .surfdoc-toolbar-btn { background: transparent; border: 1px solid transparent; color: var(--text-secondary, #8b949e); cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8125rem; display: inline-flex; align-items: center; gap: 4px; transition: background 0.15s, color 0.15s; }
 .surfdoc .surfdoc-toolbar-btn:hover { background: var(--surface-alt, #1a1a24); color: var(--text, #e6edf3); }

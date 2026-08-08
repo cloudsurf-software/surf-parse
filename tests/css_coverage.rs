@@ -248,6 +248,62 @@ fn every_emitted_class_has_a_css_rule() {
     );
 }
 
+/// Toolbar overflow pin (R5): a crowded toolbar must scroll or wrap
+/// instead of clipping — the app-shell sets overflow:hidden and the grid
+/// track can shrink below the bar's natural width. The guard requires the
+/// DESKTOP rule (before the 768px media query) to carry a horizontal
+/// escape valve (overflow-x auto/scroll or flex-wrap wrap) plus a zero
+/// min-width, and the grid placement rule to zero its min-width too —
+/// mobile-only coverage inside the media query does not count.
+#[test]
+fn toolbar_overflow_never_clips_on_desktop() {
+    let css = surf_parse::SURFDOC_CSS;
+
+    // Top-level = braces balance to zero before the selector (a rule
+    // inside @media sits one level deep).
+    let depth_at = |idx: usize| {
+        css[..idx].matches('{').count() as i64 - css[..idx].matches('}').count() as i64
+    };
+
+    // Rule body of the first `.surfdoc .surfdoc-toolbar {` — the desktop
+    // rule; the mobile override lives later, inside a media query.
+    let sel_idx = css
+        .find(".surfdoc .surfdoc-toolbar {")
+        .expect("toolbar rule exists");
+    assert_eq!(
+        depth_at(sel_idx),
+        0,
+        "the first toolbar rule must be top-level (desktop), not media-query-only"
+    );
+    let body_start = css[sel_idx..].find('{').unwrap() + sel_idx + 1;
+    let body_end = css[body_start..].find('}').unwrap() + body_start;
+    let body = &css[body_start..body_end];
+
+    let scrolls = body.contains("overflow-x: auto") || body.contains("overflow-x: scroll");
+    let wraps = body.contains("flex-wrap: wrap");
+    assert!(
+        scrolls || wraps,
+        "desktop toolbar rule must scroll or wrap, not clip: {body}"
+    );
+    assert!(
+        body.contains("min-width: 0"),
+        "desktop toolbar rule needs min-width: 0 so the flex/grid track can shrink: {body}"
+    );
+
+    // Grid placement must also release the track (like tab-content does).
+    let placement_idx = css
+        .find(".surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-toolbar {")
+        .expect("toolbar grid placement rule exists");
+    assert_eq!(depth_at(placement_idx), 0, "grid placement rule must be top-level");
+    let p_start = css[placement_idx..].find('{').unwrap() + placement_idx + 1;
+    let p_end = css[p_start..].find('}').unwrap() + p_start;
+    assert!(
+        css[p_start..p_end].contains("min-width: 0"),
+        "toolbar grid placement needs min-width: 0: {}",
+        &css[p_start..p_end]
+    );
+}
+
 /// The allowlist stays honest: no entry may shadow a class that has since
 /// gained a direct rule.
 #[test]

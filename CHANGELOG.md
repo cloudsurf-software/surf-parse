@@ -3,6 +3,31 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.13.1 — unreleased (test-hardening round + toolbar overflow fix)
+
+### Fixed
+- Toolbar overflow: the desktop `.surfdoc-toolbar` rule now scrolls
+  horizontally (`overflow-x: auto` + `min-width: 0`, and `min-width: 0`
+  on its grid placement) instead of clipping when the bar outgrows its
+  track — e.g. a 5-facet filter set inside an 880px ruled column. The
+  escape valve previously existed only inside the 768px media query.
+- `::segmented-control`: exactly one active pill even when segment ids
+  are duplicated (first match wins); previously every matching segment
+  was marked active.
+
+### Added
+- `.surfdoc-toolbar-title` and `.surfdoc-schema` rules (both classes were
+  emitted with no styling).
+- Test hardening: renderer-fix regressions (tab-content width/align,
+  static modal dialog-open, link-row control demotion boundary), a CSS
+  coverage guard (every emitted `surfdoc-*` class has a rule, a styled
+  sibling, or a justified allowlist entry) with a toolbar-overflow pin,
+  an adversarial no-panic + determinism sweep across all registry kinds
+  and output formats, container-context unread/dropdown/segmented
+  invariants, a committed golden union render pinning the 0.12 + 0.13
+  vocabulary, and a tolerated-unknown hook-attr pin (R3: behavior pinned,
+  grammar debt intentionally not paid).
+
 ## 0.13.0 — unreleased (tag ships this round plus the 0.12 train)
 
 Web chrome round plus the previously untagged 0.12 work, merged.
