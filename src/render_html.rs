@@ -10954,6 +10954,48 @@ About
     }
 
     #[test]
+    fn html_standalone_tab_content_width_align_emitted() {
+        // Regression (da0a6ab): width/align must actually reach the style
+        // attribute even for a tab-content outside any app-shell.
+        let mk = |width: Option<u32>, align: Option<&str>| {
+            let doc = doc_with(vec![Block::TabContent {
+                tab: "main".into(),
+                width,
+                align: align.map(|a| a.to_string()),
+                children: vec![],
+                span: span(),
+            }]);
+            to_html(&doc)
+        };
+
+        // width alone → capped column, no centering margins.
+        let html = mk(Some(640), None);
+        assert!(html.contains("style=\"max-width:640px\""));
+        assert!(!html.contains("margin-left:auto"));
+
+        // width + align=center → ruled centered column.
+        let html = mk(Some(880), Some("center"));
+        assert!(html.contains("max-width:880px"));
+        assert!(html.contains("margin-left:auto"));
+        assert!(html.contains("margin-right:auto"));
+        assert!(html.contains("width:100%"));
+
+        // align=left / align=right are accepted but emit no centering
+        // margins (natural grid placement).
+        for side in ["left", "right"] {
+            let html = mk(Some(720), Some(side));
+            assert!(html.contains("max-width:720px"));
+            assert!(!html.contains("margin-left:auto"), "align={side}");
+            assert!(!html.contains("margin-right:auto"), "align={side}");
+        }
+
+        // align=center alone (no width) still centers.
+        let html = mk(None, Some("center"));
+        assert!(html.contains("style=\"margin-left:auto;margin-right:auto;width:100%\""));
+        assert!(!html.contains("max-width:"));
+    }
+
+    #[test]
     fn html_lone_tab_content_in_shell_is_initially_active() {
         // A single pane with no tab-bar must be visible on first paint:
         // CSS hides panes without `.active`/`data-tab="preview"`, and the
