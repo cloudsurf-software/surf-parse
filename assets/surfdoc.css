@@ -2842,6 +2842,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
    ============================================================ */
 
 .surfdoc .surfdoc-toolbar { display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 40px; background: var(--surface, #12121a); border-bottom: 1px solid var(--border, #30363d); flex-shrink: 0; }
+.surfdoc .surfdoc-toolbar-title { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 600; padding: 0 8px; white-space: nowrap; }
 .surfdoc .surfdoc-toolbar-btn { background: transparent; border: 1px solid transparent; color: var(--text-secondary, #8b949e); cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8125rem; display: inline-flex; align-items: center; gap: 4px; transition: background 0.15s, color 0.15s; }
 .surfdoc .surfdoc-toolbar-btn:hover { background: var(--surface-alt, #1a1a24); color: var(--text, #e6edf3); }
 .surfdoc .surfdoc-toolbar-btn-primary { background: var(--accent, #3b82f6); color: var(--accent-text, #fff); border-color: var(--accent, #3b82f6); font-weight: 600; }
@@ -3238,6 +3239,8 @@ ol.surfdoc-steps { padding-left: 1rem; }
 /* Model table — inherits .surfdoc-data but needs a bit of breathing room */
 .surfdoc-model .surfdoc-model-table { margin-top: 6px; }
 .surfdoc-model-constraints { font-size: var(--font-size-micro); color: var(--text-muted); }
+/* Schema wrapper — spacing only; the inner table inherits .surfdoc-data */
+.surfdoc-schema { margin: 1rem 0; }
 /* Schema name — already has a class so it doesn't enter TOC; style it */
 .surfdoc-schema-name {
     font-family: var(--font-mono);
