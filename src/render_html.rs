@@ -270,6 +270,12 @@ pub struct PageConfig {
     /// Inline the full SurfDoc CSS as a `<style>` block (default `true`). Set
     /// `false` when the consumer links the stylesheet itself (via `stylesheets`).
     pub embed_css: bool,
+    /// Embed the Surf Display brand face as a data-URI `@font-face` plus the
+    /// Inter `@import` (0.13.3, WP-D). Default `false` — static `file://`
+    /// renders opt in; hosted shells that ship their own font files (and
+    /// pages that must stay light) leave it off. Off is byte-identical to
+    /// pre-0.13.3 output.
+    pub embed_fonts: bool,
     /// Arbitrary extra markup injected at the end of `<head>`.
     pub head_extra: Option<String>,
     /// When set, [`to_shell_page`] wraps the page content in a reading-frame
@@ -293,6 +299,7 @@ impl Default for PageConfig {
             theme_init: false,
             theme_key: None,
             embed_css: true,
+            embed_fonts: false,
             head_extra: None,
             reading_frame: None,
         }
@@ -1202,6 +1209,12 @@ pub fn to_html_page(doc: &SurfDoc, config: &PageConfig) -> String {
     )
 }
 
+/// Surf Display (Black, 900) — CloudSurf's own brand display face, vendored
+/// under `assets/fonts/` as both the woff2 binary and this base64 twin for
+/// the `embed_fonts` data-URI (28.5 KB binary / 38 KB base64; see
+/// `docs/embedded-fonts.surf`).
+const SURF_DISPLAY_WOFF2_B64: &str = include_str!("../assets/fonts/SurfDisplay-Black.woff2.b64");
+
 /// Build the `<head>` tail — everything after `<title>…</title>` up to (not
 /// including) `</head>`: meta/OG/Twitter, favicons, stylesheets, FOUC theme
 /// init, scripts, and `head_extra`. Shared by [`to_html_page`] and
@@ -1258,8 +1271,21 @@ fn build_head_tail(title_escaped: &str, description: Option<&str>, config: &Page
         ));
     }
 
-    // CSS: inline the base stylesheet (default) and/or link external sheets.
+    // Fonts (WP-D, opt-in): Surf Display is CloudSurf's own brand face —
+    // static file:// renders can't reach a host-served @font-face, so the
+    // flag embeds the woff2 as a data-URI, plus the Inter import the brand
+    // stack pairs with. Emitted before the stylesheet so faces exist when
+    // the CSS font stacks resolve.
     let mut style_block = String::new();
+    if config.embed_fonts {
+        style_block.push_str(&format!(
+            "\n    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');\
+             @font-face{{font-family:'Surf Display';src:url(data:font/woff2;base64,{}) format('woff2');\
+             font-weight:900;font-style:normal;font-display:swap}}</style>",
+            SURF_DISPLAY_WOFF2_B64.trim(),
+        ));
+    }
+    // CSS: inline the base stylesheet (default) and/or link external sheets.
     if config.embed_css {
         style_block.push_str(&format!("\n    <style>{}</style>", SURFDOC_CSS));
     }
@@ -1853,6 +1879,23 @@ fn initially_active_tab(children: &[Block]) -> Option<&str> {
     Some(tabs[0])
 }
 
+/// Whether a block is (or contains, through the chrome container variants)
+/// a split-pane. Drives the `data-thread="closed"` stamp on the app-shell
+/// root (0.14 messages two-plane round).
+fn contains_split_pane(block: &Block) -> bool {
+    match block {
+        Block::SplitPane { .. } => true,
+        Block::Section { children, .. }
+        | Block::AppShell { children, .. }
+        | Block::Sidebar { children, .. }
+        | Block::Panel { children, .. }
+        | Block::TabContent { children, .. }
+        | Block::Drawer { children, .. }
+        | Block::Modal { children, .. } => children.iter().any(contains_split_pane),
+        _ => false,
+    }
+}
+
 /// Render the children of a chrome container (app-shell, sidebar,
 /// panel, modal), marking the initially visible tab-content pane.
 fn render_chrome_children(children: &[Block]) -> String {
@@ -1870,6 +1913,81 @@ fn render_chrome_children(children: &[Block]) -> String {
             _ => html.push_str(&render_block(child)),
         }
     }
+    html
+}
+
+/// Ruling R-A (0.14): generate the small-screen floating tab-bar from the
+/// shell sidebar's nav rows — every Row child of the FIRST Sidebar up to the
+/// first Divider (the surface rows; hub rows after the divider are
+/// excluded). Distinct class (`surfdoc-app-tabbar`) from the document strip
+/// `surfdoc-tab-bar`, so neither its 38px strip CSS nor its tab-switch
+/// script applies. Active state: parse_row drops `state=active`, so the
+/// item whose title slug matches the shell's initially active tab pane is
+/// marked, else the first item. Empty string when the shell has no sidebar
+/// or the sidebar has no rows.
+fn render_app_tabbar(children: &[Block]) -> String {
+    let side_children = children.iter().find_map(|c| match c {
+        Block::Sidebar { children, .. } => Some(children),
+        _ => None,
+    });
+    let Some(side_children) = side_children else {
+        return String::new();
+    };
+    let mut rows: Vec<(&str, &str, bool, Option<&str>, Option<&str>)> = Vec::new();
+    for child in side_children {
+        match child {
+            Block::Divider { .. } => break,
+            Block::Row { icon, title, unread, href, action, .. } => {
+                rows.push((icon, title, *unread, href.as_deref(), action.as_deref()));
+            }
+            _ => {}
+        }
+    }
+    if rows.is_empty() {
+        return String::new();
+    }
+    let active_tab = initially_active_tab(children);
+    let active_idx = rows
+        .iter()
+        .position(|(_, title, _, _, _)| active_tab == Some(slugify(title).as_str()))
+        .unwrap_or(0);
+    let mut html = String::from("<nav class=\"surfdoc-app-tabbar\" aria-label=\"Primary\">");
+    for (i, (icon, title, unread, href, action)) in rows.iter().enumerate() {
+        let is_active = i == active_idx;
+        let cls = if is_active {
+            "surfdoc-app-tabbar-item is-active"
+        } else {
+            "surfdoc-app-tabbar-item"
+        };
+        let href_attr = match href {
+            Some(h) => format!(" data-href=\"{}\"", escape_html(h)),
+            None => String::new(),
+        };
+        // Forward the source row's verb (0.14): same verbatim data-action
+        // stamp as the row root, so tab-bar taps dispatch identically.
+        let action_attr = match action {
+            Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+            None => String::new(),
+        };
+        // Unread: corner dot on the icon slot (sidebar-rail canon) — the
+        // accent-left-border treatment stays BANNED here too.
+        let dot = if *unread {
+            "<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span>"
+        } else {
+            ""
+        };
+        html.push_str(&format!(
+            "<button type=\"button\" class=\"{cls}\" data-tab=\"{}\"{href_attr}{action_attr} aria-current=\"{}\">\
+             <span class=\"surfdoc-app-tabbar-icon\">{}{dot}</span>\
+             <span class=\"surfdoc-app-tabbar-label\">{}</span>\
+             </button>",
+            slugify(title),
+            if is_active { "page" } else { "false" },
+            row_icon_svg(icon),
+            escape_html(title),
+        ));
+    }
+    html.push_str("</nav>");
     html
 }
 
@@ -1908,6 +2026,316 @@ fn render_tab_content(block: &Block, active: bool) -> String {
         html.push_str(&render_block(child));
     }
     html.push_str("</div>");
+    html
+}
+
+/// Render a dropdown-select's option list (`<ul class="surfdoc-dropdown-
+/// options">`). Factored out (0.14, WP-N0) and shared with the drawer
+/// head tier switcher; the DropdownSelect arm stays byte-identical.
+fn render_dropdown_options(
+    selected: &Option<String>,
+    options: &[crate::types::DropdownOption],
+) -> String {
+    let mut html = String::new();
+    html.push_str("<ul class=\"surfdoc-dropdown-options\">");
+    for opt in options {
+        let sel_class = if selected.as_deref() == Some(opt.label.as_str()) {
+            " is-selected"
+        } else {
+            ""
+        };
+        let action_attr = match &opt.action {
+            Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+            None => String::new(),
+        };
+        let opt_icon_attr = match &opt.icon {
+            Some(i) => format!(" data-icon=\"{}\"", escape_html(i)),
+            None => String::new(),
+        };
+        let desc = match &opt.description {
+            Some(d) => format!("<span class=\"surfdoc-dropdown-option-desc\">{}</span>", escape_html(d)),
+            None => String::new(),
+        };
+        html.push_str(&format!(
+            "<li class=\"surfdoc-dropdown-option{}\"{}{}><span class=\"surfdoc-dropdown-option-label\">{}</span>{}</li>",
+            sel_class, action_attr, opt_icon_attr, escape_html(&opt.label), desc,
+        ));
+    }
+    html.push_str("</ul>");
+    html
+}
+
+/// Render a toolbar's item list (buttons, separators, spacers, badges,
+/// dropdowns, text) without the enclosing `surfdoc-toolbar` wrapper.
+/// Factored out (0.14, WP-N0) so the Surfy drawer head-row composer can
+/// inline a panel toolbar's items directly into the single head row;
+/// the Toolbar arm's output stays byte-identical.
+fn render_toolbar_items(items: &[crate::types::ToolbarItem]) -> String {
+    let mut html = String::new();
+    for item in items {
+        match item {
+            crate::types::ToolbarItem::Button { label, action, icon, style, toggled, avatar, aria_label, .. } => {
+                let mut cls = match style {
+                    Some(s) => format!(" surfdoc-toolbar-btn-{}", escape_html(s)),
+                    None => String::new(),
+                };
+                let action_attr = match action {
+                    Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+                    None => String::new(),
+                };
+                // Accent-ring open state; aria-pressed so it is not
+                // purely visual. Emitted only when toggled.
+                let toggled_attr = if *toggled {
+                    cls.push_str(" surfdoc-toolbar-btn--toggled");
+                    " aria-pressed=\"true\""
+                } else {
+                    ""
+                };
+                // G3 (0.13.3): `icon=` resolves through the registry
+                // and paints before the label; unknown names keep the
+                // circle fallback. A label-less icon button renders
+                // icon-only (square pill) with an aria-label from the
+                // action (falling back to the icon name) so it is
+                // never an unnamed control. No icon → byte-identical
+                // to the pre-0.13.3 output.
+                let glyph = icon
+                    .as_deref()
+                    .map(|i| get_icon(i).unwrap_or(ICON_FALLBACK_CIRCLE));
+                let label_text = label.as_deref().unwrap_or("");
+                // Workspace-chip avatar slot (G6): a circular initial
+                // badge painted before glyph and label.
+                let avatar_html = match avatar {
+                    Some(a) => format!(
+                        "<span class=\"surfdoc-toolbar-avatar\" aria-hidden=\"true\">{}</span>",
+                        escape_html(a),
+                    ),
+                    None => String::new(),
+                };
+                // A label-less avatar chip has no accessible name
+                // either (the initial badge is aria-hidden), so it
+                // gets the same aria-label treatment as icon-only —
+                // explicit aria-label= attr first (0.13.3, G3: the
+                // old visible label carries here), then action, icon
+                // name, then the initial itself. Empty when a label
+                // exists (or on the legacy bare-button case), keeping
+                // those byte-identical.
+                let avatar_aria = if label_text.is_empty() && avatar.is_some() {
+                    let name = aria_label
+                        .as_deref()
+                        .or(action.as_deref())
+                        .or(icon.as_deref())
+                        .or(avatar.as_deref())
+                        .unwrap_or_default();
+                    format!(" aria-label=\"{}\"", escape_html(name))
+                } else {
+                    String::new()
+                };
+                match glyph {
+                    Some(g) if label_text.is_empty() && avatar.is_none() => {
+                        cls.push_str(" surfdoc-toolbar-btn--icon");
+                        let aria = aria_label
+                            .as_deref()
+                            .or(action.as_deref())
+                            .or(icon.as_deref())
+                            .unwrap_or_default();
+                        html.push_str(&format!(
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{} aria-label=\"{}\">{}</button>",
+                            cls, action_attr, toggled_attr, escape_html(aria), g,
+                        ));
+                    }
+                    Some(g) => {
+                        html.push_str(&format!(
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{}>{}{}{}</button>",
+                            cls, action_attr, toggled_attr, avatar_aria, avatar_html, g, escape_html(label_text),
+                        ));
+                    }
+                    None => {
+                        html.push_str(&format!(
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{}>{}{}</button>",
+                            cls, action_attr, toggled_attr, avatar_aria, avatar_html, escape_html(label_text),
+                        ));
+                    }
+                }
+            }
+            crate::types::ToolbarItem::Separator => {
+                html.push_str("<span class=\"surfdoc-toolbar-separator\"></span>");
+            }
+            crate::types::ToolbarItem::Spacer => {
+                html.push_str("<span class=\"surfdoc-toolbar-spacer\"></span>");
+            }
+            crate::types::ToolbarItem::Badge { value, color } => {
+                let cls = match color {
+                    Some(c) => format!(" surfdoc-badge-{}", escape_html(c)),
+                    None => String::new(),
+                };
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-badge{}\">{}</span>",
+                    cls, escape_html(value),
+                ));
+            }
+            crate::types::ToolbarItem::Dropdown { label, options, action } => {
+                // 0.13.3: the dropdown-select markup shape (trigger +
+                // option list), so one dispatcher contract drives both
+                // the block and the toolbar item. The old bare
+                // single-<option> <select> dropped `options` and
+                // `action` entirely — an inert control the shell
+                // runtime could never open or dispatch.
+                html.push_str(
+                    "<div class=\"surfdoc-dropdown-select surfdoc-toolbar-dropdown\" data-align=\"start\">",
+                );
+                html.push_str("<button type=\"button\" class=\"surfdoc-dropdown-trigger\">");
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-dropdown-label\">{}</span>",
+                    escape_html(label),
+                ));
+                html.push_str(
+                    "<span class=\"surfdoc-dropdown-caret\" aria-hidden=\"true\">&#9662;</span></button>",
+                );
+                html.push_str("<ul class=\"surfdoc-dropdown-options\">");
+                let action_attr = match action {
+                    Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+                    None => String::new(),
+                };
+                if let Some(opts) = options {
+                    for opt in opts.split('|').filter(|o| !o.is_empty()) {
+                        html.push_str(&format!(
+                            "<li class=\"surfdoc-dropdown-option\"{}><span class=\"surfdoc-dropdown-option-label\">{}</span></li>",
+                            action_attr,
+                            escape_html(opt),
+                        ));
+                    }
+                }
+                html.push_str("</ul></div>");
+            }
+            crate::types::ToolbarItem::Text { value, size, .. } => {
+                let style = match size {
+                    Some(s) => format!(" style=\"font-size:{s}px\""),
+                    None => String::new(),
+                };
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-toolbar-text\"{}>{}</span>",
+                    style, escape_html(value),
+                ));
+            }
+        }
+    }
+    html
+}
+
+/// Drawer head tier switcher (0.14, WP-N0 B1): the panel-head
+/// dropdown-select renders in toolbar-dropdown clothing (collapsed pill,
+/// popover options under `.is-open`) with ONLY the selected value as its
+/// title — the `label` attr never paints next to `selected`, so "Surfy
+/// Standard" + "Standard" cannot double up. Falls back to the label when
+/// no `selected` is present.
+fn render_panel_tier_dropdown(block: &Block) -> String {
+    let Block::DropdownSelect { label, selected, options, .. } = block else {
+        return String::new();
+    };
+    let title = selected.as_deref().or(label.as_deref()).unwrap_or("");
+    let mut html = String::from(
+        "<div class=\"surfdoc-dropdown-select surfdoc-toolbar-dropdown\" data-align=\"start\">",
+    );
+    html.push_str("<button type=\"button\" class=\"surfdoc-dropdown-trigger\">");
+    html.push_str(&format!(
+        "<span class=\"surfdoc-dropdown-selected\">{}</span>",
+        escape_html(title),
+    ));
+    html.push_str(
+        "<span class=\"surfdoc-dropdown-caret\" aria-hidden=\"true\">&#9662;</span></button>",
+    );
+    html.push_str(&render_dropdown_options(selected, options));
+    html.push_str("</div>");
+    html
+}
+
+/// Surfy drawer anatomy (0.14, WP-N0/WP-N1): compose a right panel's
+/// children into the ruled drawer shape regardless of source block order —
+/// ONE head row (26px accent fin glyph + tier switcher + the first
+/// toolbar's items), the grounding chip (D1, renderer-emitted furniture,
+/// hidden until the shell runtime fills it — no persistence), a body
+/// region that takes all remaining height whatever the child count (B5),
+/// and the composer pinned last with the attach control (D2). Used only by
+/// the `position == "right"` panel arm, so bottom/left panels, standalone
+/// dropdown-selects and the generic chat-input stay byte-identical.
+fn render_surfy_panel_children(children: &[Block]) -> String {
+    let mut head_dropdown: Option<&Block> = None;
+    let mut head_toolbar: Option<&[crate::types::ToolbarItem]> = None;
+    let mut composer: Option<(Option<&str>, Option<&str>)> = None;
+    let mut body: Vec<&Block> = Vec::new();
+    for child in children {
+        match child {
+            Block::DropdownSelect { .. } if head_dropdown.is_none() => {
+                head_dropdown = Some(child);
+            }
+            Block::Toolbar { items, .. } if head_toolbar.is_none() => {
+                head_toolbar = Some(items);
+            }
+            Block::ChatInputSimple { placeholder, action, .. } if composer.is_none() => {
+                composer = Some((placeholder.as_deref(), action.as_deref()));
+            }
+            _ => body.push(child),
+        }
+    }
+
+    // Head row (B2/C1): fin + tier switcher + toolbar items, one flex row.
+    let fin = get_icon("surfy-fin").unwrap_or(ICON_FALLBACK_CIRCLE);
+    let mut html = format!(
+        "<div class=\"surfdoc-panel-head\">\
+         <span class=\"surfdoc-panel-fin\" aria-hidden=\"true\">{fin}</span>",
+    );
+    if let Some(dd) = head_dropdown {
+        html.push_str(&render_panel_tier_dropdown(dd));
+    }
+    if let Some(items) = head_toolbar {
+        html.push_str(&render_toolbar_items(items));
+    }
+    html.push_str("</div>");
+
+    // Grounding chip (D1) — cross-lane contract selectors, hidden when
+    // empty; the shell runtime fills the label and unhides it.
+    html.push_str(
+        "<div class=\"surfdoc-panel-grounding\" hidden>\
+         <span class=\"surfdoc-grounding-label\"></span>\
+         <button type=\"button\" class=\"surfdoc-grounding-clear\" \
+         data-action=\"clearSurfyGrounding\" aria-label=\"Clear grounding\">&#10005;</button>\
+         </div>",
+    );
+
+    // Body region (B5): flex-1 so the thread area grows and the composer
+    // pins to the bottom even with zero body children. Same first-active
+    // tab-content treatment as render_chrome_children.
+    html.push_str("<div class=\"surfdoc-panel-body\">");
+    let active_tab = initially_active_tab(children);
+    let mut activated = false;
+    for child in body {
+        match child {
+            Block::TabContent { tab, .. } if !activated && active_tab == Some(tab.as_str()) => {
+                html.push_str(&render_tab_content(child, true));
+                activated = true;
+            }
+            _ => html.push_str(&render_block(child)),
+        }
+    }
+    html.push_str("</div>");
+
+    // Composer last (B5/D2): attach control BEFORE the input per the
+    // cross-lane contract; Send keeps its own accent styling.
+    if let Some((placeholder, action)) = composer {
+        let ph = placeholder.unwrap_or("");
+        let action_attr = match action {
+            Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
+            None => String::new(),
+        };
+        let plus = get_icon("plus").unwrap_or(ICON_FALLBACK_CIRCLE);
+        html.push_str(&format!(
+            "<div class=\"surfdoc-chat-input\">\
+             <button type=\"button\" class=\"surfdoc-chat-attach\" \
+             data-action=\"attachToSurfy\" aria-label=\"Attach\">{plus}</button>\
+             <input type=\"text\" placeholder=\"{}\"><button{}>Send</button></div>",
+            escape_html(ph), action_attr,
+        ));
+    }
     html
 }
 
@@ -4256,11 +4684,35 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
-        Block::SplitPane { ratio, .. } => {
-            format!(
-                "<div class=\"surfdoc-split-pane\" data-ratio=\"{}\"><div class=\"surfdoc-split-left\"></div><div class=\"surfdoc-split-right\"></div></div>",
+        Block::SplitPane { ratio, back_label, back_action, left, right, .. } => {
+            // Two-plane layout (0.14 messages round): authored pane children
+            // render into the planes via the same chrome-children path as
+            // sidebar/panel bodies. `back-label`/`back-action` emit the
+            // small-screen back control as the first child of the right
+            // plane; it stays hidden outside the ≤767px thread-open state
+            // (Section 74c hooks in assets/surfdoc.css). Empty split-panes
+            // keep the historical two empty divs byte for byte.
+            let mut html = format!(
+                "<div class=\"surfdoc-split-pane\" data-ratio=\"{}\"><div class=\"surfdoc-split-left\">",
                 escape_html(ratio),
-            )
+            );
+            html.push_str(&render_chrome_children(left));
+            html.push_str("</div><div class=\"surfdoc-split-right\">");
+            if back_label.is_some() || back_action.is_some() {
+                let label = back_label.as_deref().unwrap_or("Back");
+                let action = back_action
+                    .as_deref()
+                    .map(|a| format!(" data-action=\"{}\"", escape_html(a)))
+                    .unwrap_or_default();
+                html.push_str(&format!(
+                    "<button type=\"button\" class=\"surfdoc-split-back\"{}>{}</button>",
+                    action,
+                    escape_html(label),
+                ));
+            }
+            html.push_str(&render_chrome_children(right));
+            html.push_str("</div></div>");
+            html
         }
 
         // ----- Infrastructure manifest blocks -----
@@ -4551,7 +5003,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, actions, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, action, actions, .. } => {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
@@ -4562,6 +5014,14 @@ pub(crate) fn render_block(block: &Block) -> String {
             let tag = if href.is_some() { "a" } else { "div" };
             let href_attr = match href {
                 Some(h) => format!(" href=\"{}\"", escape_html(h)),
+                None => String::new(),
+            };
+            // Row-level action (0.14): dispatcher hook stamped verbatim on
+            // the row root — same pattern as the trailing control and
+            // per-row action buttons below (escaped, no verb
+            // interpretation). Works on both the anchor and div roots.
+            let action_attr = match action {
+                Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
                 None => String::new(),
             };
             // Unread: right-side dot only — accent-left-border is BANNED.
@@ -4627,7 +5087,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 format!("<span class=\"surfdoc-row-actions\">{buttons}</span>")
             };
             format!(
-                "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}>\
+                "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}{action_attr}>\
                  <span class=\"surfdoc-row-icon\">{icon_svg}</span>\
                  <span class=\"surfdoc-row-body\">\
                    <span class=\"surfdoc-row-title\">{title}</span>\
@@ -4697,12 +5157,56 @@ pub(crate) fn render_block(block: &Block) -> String {
                 Some(h) => format!(" style=\"min-height:{h}px;max-height:{h}px\""),
                 None => String::new(),
             };
+            // WP-R2 (0.14): a shell with a direct right-panel child carries
+            // the drawer open/closed state on its root (default CLOSED,
+            // ruling R-D: no persistence) and gains a FAB toggle + a
+            // self-contained toggle script. Shells without a right panel
+            // emit none of it.
+            let has_right_panel = children
+                .iter()
+                .any(|c| matches!(c, Block::Panel { position, .. } if position == "right"));
+            let state_attr = if has_right_panel {
+                " data-panel-open=\"false\""
+            } else {
+                ""
+            };
+            // Two-plane state (0.14 messages round): a shell with a
+            // split-pane among its descendants carries data-thread="closed"
+            // on its root so the live layer has an explicit attribute to
+            // flip; the ≤767px CSS swaps planes on data-thread="open"
+            // (assets/surfdoc.css Section 74c). Flipping stays a live-layer
+            // duty. Shells without a split-pane stay unstamped.
+            let thread_attr = if children.iter().any(contains_split_pane) {
+                " data-thread=\"closed\""
+            } else {
+                ""
+            };
             let mut html = format!(
-                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}>",
-                escape_html(layout), style,
+                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}{}{}>",
+                escape_html(layout), state_attr, thread_attr, style,
             );
             html.push_str(&render_chrome_children(children));
+            // Ruling R-A (0.14): ONE responsive shell — the small-screen
+            // tab-bar is generated from the sidebar's nav rows, not
+            // hand-authored. Hidden above 767px by CSS.
+            html.push_str(&render_app_tabbar(children));
+            if has_right_panel {
+                let fin = get_icon("surfy-fin").unwrap_or(ICON_FALLBACK_CIRCLE);
+                html.push_str(&format!(
+                    "<button type=\"button\" class=\"surfdoc-panel-fab\" \
+                     aria-label=\"Toggle Surfy\" aria-expanded=\"false\" \
+                     aria-controls=\"surfdoc-panel-right\">{fin}</button>",
+                ));
+            }
             html.push_str("</div>");
+            if has_right_panel {
+                // Drawer toggle wiring — same self-contained placement idiom
+                // as the tab-bar script below; also honors any
+                // [data-action=toggleSurfy] topbar button. Escape closes and
+                // focus returns to the invoking control. Deliberately avoids
+                // the site-shell toggleDrawer()/closeDrawer() globals.
+                html.push_str(r#"<script>document.querySelectorAll('.surfdoc-app-shell[data-panel-open]').forEach(shell=>{if(shell.__surfyWired)return;shell.__surfyWired=1;const panel=shell.querySelector('.surfdoc-panel-right');if(!panel)return;const btns=Array.from(shell.querySelectorAll('.surfdoc-panel-fab,[data-action="toggleSurfy"]'));let opener=null;const set=open=>{shell.setAttribute('data-panel-open',String(open));panel.setAttribute('aria-hidden',String(!open));btns.forEach(b=>b.setAttribute('aria-expanded',String(open)));if(!open&&opener){opener.focus();opener=null}};btns.forEach(b=>{b.addEventListener('click',()=>{const open=shell.getAttribute('data-panel-open')!=='true';if(open)opener=b;set(open)})});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shell.getAttribute('data-panel-open')==='true')set(false)})})</script>"#);
+            }
             html
         }
 
@@ -4725,6 +5229,23 @@ pub(crate) fn render_block(block: &Block) -> String {
                 Some(h) => format!(" style=\"height:{}px\"", h),
                 None => String::new(),
             };
+            // WP-R2 (0.14): a RIGHT panel is the Surfy drawer — closed by
+            // default (aria-hidden), with a fixed-width inner wrapper so
+            // the content does not squash while the outer width animates
+            // from 0. Guarded on position so bottom/left output stays
+            // byte-identical (golden pin + the 17 chip-only surfaces).
+            if position == "right" {
+                let mut html = format!(
+                    "<div class=\"surfdoc-panel surfdoc-panel-right\" id=\"surfdoc-panel-right\" \
+                     role=\"complementary\" aria-hidden=\"true\" data-resizable=\"{}\" \
+                     data-desktop-only=\"{}\"{}>",
+                    resizable, desktop_only, style,
+                );
+                html.push_str("<div class=\"surfdoc-panel-inner\">");
+                html.push_str(&render_surfy_panel_children(children));
+                html.push_str("</div></div>");
+                return html;
+            }
             let mut html = format!(
                 "<div class=\"surfdoc-panel surfdoc-panel-{}\" data-resizable=\"{}\" data-desktop-only=\"{}\"{}>",
                 escape_html(position), resizable, desktop_only, style,
@@ -4811,64 +5332,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                     escape_html(t),
                 ));
             }
-            for item in items {
-                match item {
-                    crate::types::ToolbarItem::Button { label, action, style, toggled, .. } => {
-                        let mut cls = match style {
-                            Some(s) => format!(" surfdoc-toolbar-btn-{}", escape_html(s)),
-                            None => String::new(),
-                        };
-                        let action_attr = match action {
-                            Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
-                            None => String::new(),
-                        };
-                        // Accent-ring open state; aria-pressed so it is not
-                        // purely visual. Emitted only when toggled.
-                        let toggled_attr = if *toggled {
-                            cls.push_str(" surfdoc-toolbar-btn--toggled");
-                            " aria-pressed=\"true\""
-                        } else {
-                            ""
-                        };
-                        html.push_str(&format!(
-                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}>{}</button>",
-                            cls, action_attr, toggled_attr, escape_html(label.as_deref().unwrap_or("")),
-                        ));
-                    }
-                    crate::types::ToolbarItem::Separator => {
-                        html.push_str("<span class=\"surfdoc-toolbar-separator\"></span>");
-                    }
-                    crate::types::ToolbarItem::Spacer => {
-                        html.push_str("<span class=\"surfdoc-toolbar-spacer\"></span>");
-                    }
-                    crate::types::ToolbarItem::Badge { value, color } => {
-                        let cls = match color {
-                            Some(c) => format!(" surfdoc-badge-{}", escape_html(c)),
-                            None => String::new(),
-                        };
-                        html.push_str(&format!(
-                            "<span class=\"surfdoc-badge{}\">{}</span>",
-                            cls, escape_html(value),
-                        ));
-                    }
-                    crate::types::ToolbarItem::Dropdown { label, .. } => {
-                        html.push_str(&format!(
-                            "<select class=\"surfdoc-toolbar-dropdown\"><option>{}</option></select>",
-                            escape_html(label),
-                        ));
-                    }
-                    crate::types::ToolbarItem::Text { value, size, .. } => {
-                        let style = match size {
-                            Some(s) => format!(" style=\"font-size:{s}px\""),
-                            None => String::new(),
-                        };
-                        html.push_str(&format!(
-                            "<span class=\"surfdoc-toolbar-text\"{}>{}</span>",
-                            style, escape_html(value),
-                        ));
-                    }
-                }
-            }
+            html.push_str(&render_toolbar_items(items));
             html.push_str("</div>");
             html
         }
@@ -4931,31 +5395,8 @@ pub(crate) fn render_block(block: &Block) -> String {
                 html.push_str(&format!("<span class=\"surfdoc-dropdown-selected\">{}</span>", escape_html(s)));
             }
             html.push_str("<span class=\"surfdoc-dropdown-caret\" aria-hidden=\"true\">&#9662;</span></button>");
-            html.push_str("<ul class=\"surfdoc-dropdown-options\">");
-            for opt in options {
-                let sel_class = if selected.as_deref() == Some(opt.label.as_str()) {
-                    " is-selected"
-                } else {
-                    ""
-                };
-                let action_attr = match &opt.action {
-                    Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
-                    None => String::new(),
-                };
-                let opt_icon_attr = match &opt.icon {
-                    Some(i) => format!(" data-icon=\"{}\"", escape_html(i)),
-                    None => String::new(),
-                };
-                let desc = match &opt.description {
-                    Some(d) => format!("<span class=\"surfdoc-dropdown-option-desc\">{}</span>", escape_html(d)),
-                    None => String::new(),
-                };
-                html.push_str(&format!(
-                    "<li class=\"surfdoc-dropdown-option{}\"{}{}><span class=\"surfdoc-dropdown-option-label\">{}</span>{}</li>",
-                    sel_class, action_attr, opt_icon_attr, escape_html(&opt.label), desc,
-                ));
-            }
-            html.push_str("</ul></div>");
+            html.push_str(&render_dropdown_options(selected, options));
+            html.push_str("</div>");
             html
         }
 
@@ -5214,18 +5655,15 @@ pub(crate) fn render_block(block: &Block) -> String {
     }
 }
 
-/// SVG icons for row blocks
+/// Circle fallback for unmapped row/toolbar icon names — the one glyph that
+/// never comes from the registry, so unknown names stay visibly generic.
+const ICON_FALLBACK_CIRCLE: &str = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg>";
+
+/// SVG icons for row blocks — resolved through the shared icon registry
+/// (built-in constants + vendored surf-icons + design-vocabulary aliases,
+/// see `icons.rs`); unmapped names keep the circle fallback.
 fn row_icon_svg(icon: &str) -> &'static str {
-    match icon {
-        "sparkle" | "ai" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z\"/></svg>",
-        "book" | "wiki" | "knowledge" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20\"/><path d=\"M8 7h6\"/><path d=\"M8 11h8\"/></svg>",
-        "folder" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\"/></svg>",
-        "doc" | "file" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z\"/><polyline points=\"14 2 14 8 20 8\"/></svg>",
-        "search" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"/></svg>",
-        "login" | "signin" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"/><polyline points=\"10 17 15 12 10 7\"/><line x1=\"15\" y1=\"12\" x2=\"3\" y2=\"12\"/></svg>",
-        "task" | "check" => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><polyline points=\"9 11 12 14 22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>",
-        _ => "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg>",
-    }
+    get_icon(icon).unwrap_or(ICON_FALLBACK_CIRCLE)
 }
 
 /// Render a comparison cell value: "yes"/"true"/"✓" → green check, "no"/"false"/"✗"/"-" → muted dash, else literal with inline markdown.
@@ -7655,6 +8093,46 @@ mod tests {
         };
         let html = to_html_page(&doc, &config);
         assert!(html.starts_with("<!-- Built with SurfDoc — source: site.surf -->"));
+    }
+
+    #[test]
+    fn html_page_embed_fonts_off_is_byte_identical() {
+        // WP-D contract: the flag defaults off and off means byte-for-byte
+        // the pre-flag output — no font-face, no Inter import.
+        let doc = doc_with(vec![Block::Markdown { content: "# Hi".into(), span: span() }]);
+        let default_html = to_html_page(&doc, &PageConfig::default());
+        let explicit_off = to_html_page(
+            &doc,
+            &PageConfig { embed_fonts: false, ..Default::default() },
+        );
+        assert_eq!(default_html, explicit_off);
+        assert!(!default_html.contains("font/woff2"));
+        assert!(!default_html.contains("family=Inter"));
+    }
+
+    #[test]
+    fn html_page_embed_fonts_emits_one_surf_display_face() {
+        let doc = doc_with(vec![Block::Markdown { content: "# Hi".into(), span: span() }]);
+        let config = PageConfig { embed_fonts: true, ..Default::default() };
+        let html = to_html_page(&doc, &config);
+        // Exactly one Surf Display @font-face, as a woff2 data URI, plus the
+        // Inter import.
+        assert_eq!(html.matches("@font-face{font-family:'Surf Display'").count(), 1);
+        assert_eq!(html.matches("url(data:font/woff2;base64,").count(), 1);
+        assert!(html.contains("font-weight:900"));
+        assert!(html.contains("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700"));
+        // The data URI payload is real base64, not an empty include.
+        let b64_start = html.find("base64,").expect("data uri") + "base64,".len();
+        let b64_end = html[b64_start..].find(')').expect("uri closes") + b64_start;
+        assert!(b64_end - b64_start > 10_000, "embedded woff2 payload looks truncated");
+    }
+
+    #[test]
+    fn shell_page_embed_fonts_emits_face_too() {
+        let shell = doc_with(vec![]);
+        let config = PageConfig { embed_fonts: true, ..Default::default() };
+        let html = to_shell_page(&shell, "<p>Body</p>", &config);
+        assert_eq!(html.matches("@font-face{font-family:'Surf Display'").count(), 1);
     }
 
     #[test]
@@ -10821,12 +11299,13 @@ About
     #[test]
     fn a11y_muted_tokens_are_aa_pinned() {
         // Drift-pins the stylesheet's muted/faint text tokens to AA values
-        // (the 2026-06-11 retune: light muted 4.19→4.77 on --surface-alt,
-        // dark faint 2.82→4.52).
+        // (2026-06-11 retune: light muted 4.19→4.77 on --surface-alt;
+        // 0.13.3 G7 blue-navy dark palette: faint #8496a6 @ 4.97 on the
+        // #1b2734 soft surface — the mockup's #5f7180 failed AA at 3.0).
         assert!(SURFDOC_CSS.contains("--text-muted: #636a7e;"), "light muted retuned");
-        assert!(SURFDOC_CSS.contains("--text-faint: #7f7f7f;"), "dark faint retuned");
+        assert!(SURFDOC_CSS.contains("--text-faint: #8496a6;"), "dark faint retuned (G7)");
         assert!(contrast_ratio("#636a7e", "#eef1f7") >= 4.5);
-        assert!(contrast_ratio("#7f7f7f", "#161616") >= 4.5);
+        assert!(contrast_ratio("#8496a6", "#1b2734") >= 4.5);
         // Accent-as-text reads through the ink (with the plain accent as the
         // doc-page fallback).
         assert!(
@@ -10936,6 +11415,309 @@ About
         assert!(html.contains("data-resizable=\"true\""));
         assert!(html.contains("data-desktop-only=\"true\""));
         assert!(html.contains("style=\"height:200px\""));
+        // Bottom panels never grow drawer chrome (byte-identity guard for
+        // the golden pin and the 17 chip-only surfaces).
+        assert!(!html.contains("surfdoc-panel-inner"));
+        assert!(!html.contains("aria-hidden"));
+        assert!(!html.contains("role=\"complementary\""));
+    }
+
+    // ── 0.14 responsive shell: Surfy drawer + generated tab-bar ────
+
+    fn nav_row(icon: &str, title: &str, unread: bool) -> Block {
+        Block::Row {
+            icon: icon.into(),
+            title: title.into(),
+            description: String::new(),
+            href: Some("#".into()),
+            state: RowState::Default,
+            unread,
+            trailing_label: None,
+            trailing_action: None,
+            action: None,
+            actions: vec![],
+            span: span(),
+        }
+    }
+
+    fn right_panel() -> Block {
+        Block::Panel {
+            position: "right".into(),
+            resizable: false,
+            height: None,
+            desktop_only: false,
+            children: vec![Block::Markdown { content: "Surfy".into(), span: span() }],
+            span: span(),
+        }
+    }
+
+    #[test]
+    fn html_panel_right_renders_drawer_shape() {
+        let doc = doc_with(vec![right_panel()]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-panel surfdoc-panel-right"));
+        assert!(html.contains("id=\"surfdoc-panel-right\""));
+        assert!(html.contains("role=\"complementary\""));
+        assert!(html.contains("aria-hidden=\"true\""));
+        assert!(html.contains("<div class=\"surfdoc-panel-inner\">"));
+        assert!(html.contains("Surfy"));
+    }
+
+    #[test]
+    fn html_app_shell_right_panel_stamps_state_fab_and_script() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![right_panel()],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("data-panel-open=\"false\""));
+        assert!(html.contains("class=\"surfdoc-panel-fab\""));
+        assert!(html.contains("aria-controls=\"surfdoc-panel-right\""));
+        assert!(html.contains("aria-expanded=\"false\""));
+        // Toggle script: state flip + Escape close, honoring topbar
+        // toggleSurfy buttons. No localStorage (ruling R-D: no persistence).
+        assert!(html.contains("__surfyWired"));
+        assert!(html.contains("e.key==='Escape'"));
+        assert!(html.contains("[data-action=\"toggleSurfy\"]"));
+        assert!(!html.contains("localStorage"));
+        // No collision with the site-shell drawer helpers.
+        assert!(!html.contains("toggleDrawer()"));
+        assert!(!html.contains("closeDrawer()"));
+    }
+
+    // ── 0.14 messages two-plane: split-pane children + back control ────
+
+    #[test]
+    fn html_split_pane_children_fill_planes() {
+        let src = "::split-pane[ratio=\"40:60\"]\n:::pane[side=left]\n::::toolbar\n- text[value=\"Chats\"]\n::::\n::::row[icon=knowledge href=#]\nSam Rose\n::::\n:::\n:::pane[side=right]\nThread body\n:::\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        let left_start = html.find("surfdoc-split-left").expect("left plane");
+        let right_start = html.find("surfdoc-split-right").expect("right plane");
+        let left_html = &html[left_start..right_start];
+        let right_html = &html[right_start..];
+        assert!(left_html.contains("surfdoc-toolbar"), "rail toolbar lands left");
+        assert!(left_html.contains("surfdoc-row"), "rail rows land left");
+        assert!(left_html.contains("Sam Rose"));
+        assert!(right_html.contains("Thread body"), "thread blocks land right");
+        assert!(!left_html.contains("Thread body"));
+        assert!(html.contains("data-ratio=\"40:60\""));
+    }
+
+    #[test]
+    fn html_split_pane_empty_keeps_two_empty_planes() {
+        // Byte-identity with the pre-0.14 leaf output.
+        let doc = doc_with(vec![Block::SplitPane {
+            ratio: "50:50".into(),
+            back_label: None,
+            back_action: None,
+            left: vec![],
+            right: vec![],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains(
+            "<div class=\"surfdoc-split-pane\" data-ratio=\"50:50\">\
+             <div class=\"surfdoc-split-left\"></div>\
+             <div class=\"surfdoc-split-right\"></div></div>"
+        ));
+        assert!(!html.contains("surfdoc-split-back"));
+    }
+
+    #[test]
+    fn html_split_pane_back_attrs_emit_back_button_in_right_plane() {
+        let src = "::split-pane[back-label=\"Chats\" back-action=closeConversation]\n:::pane[side=right]\nThread\n:::\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        let right_start = html.find("surfdoc-split-right").expect("right plane");
+        let right_html = &html[right_start..];
+        assert!(right_html.contains(
+            "<button type=\"button\" class=\"surfdoc-split-back\" \
+             data-action=\"closeConversation\">Chats</button>"
+        ));
+        // Back control precedes the thread content.
+        assert!(
+            right_html.find("surfdoc-split-back").unwrap()
+                < right_html.find("Thread").unwrap()
+        );
+        // Without the attrs, nothing is emitted (empty-plane test above).
+    }
+
+    #[test]
+    fn html_app_shell_with_split_pane_stamps_data_thread_closed() {
+        let src = "::app-shell[layout=sidebar-main]\n:::tab-content[tab=main]\n::::split-pane\n::::\n:::\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        assert!(html.contains("data-thread=\"closed\""), "shell root carries thread state");
+    }
+
+    #[test]
+    fn html_app_shell_without_split_pane_has_no_data_thread() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![right_panel()],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(!html.contains("data-thread"));
+    }
+
+    // ── 0.14 row-level action passthrough ────
+
+    #[test]
+    fn html_row_action_stamps_data_action_on_div_root() {
+        let src = "::row[icon=knowledge action=openConversation]\nSam Rose\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        assert!(html.contains("<div class=\"surfdoc-row\" data-action=\"openConversation\">"));
+    }
+
+    #[test]
+    fn html_row_action_stamps_data_action_on_anchor_root() {
+        let src = "::row[icon=doc href=/messages/sam action=openConversation]\nSam Rose\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        assert!(html.contains(
+            "<a class=\"surfdoc-row\" href=\"/messages/sam\" data-action=\"openConversation\">"
+        ));
+    }
+
+    #[test]
+    fn html_row_without_action_emits_no_root_data_action() {
+        let src = "::row[icon=doc]\nPlain row\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        assert!(!html.contains("data-action"));
+    }
+
+    #[test]
+    fn html_app_tabbar_forwards_row_action() {
+        let src = "::app-shell[layout=sidebar-main]\n:::sidebar[position=left]\n::::row[icon=knowledge href=# action=openMessages]\nMessages\n::::\n:::\n::";
+        let doc = crate::parse(src).doc;
+        let html = doc.to_html();
+        let tabbar_start = html.find("surfdoc-app-tabbar").expect("generated tab bar");
+        assert!(
+            html[tabbar_start..].contains("data-action=\"openMessages\""),
+            "tab-bar item forwards the row verb"
+        );
+    }
+
+    #[test]
+    fn html_app_shell_without_right_panel_has_no_drawer_chrome() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![Block::Panel {
+                position: "bottom".into(),
+                resizable: false,
+                height: Some(160),
+                desktop_only: false,
+                children: vec![],
+                span: span(),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(!html.contains("data-panel-open"));
+        assert!(!html.contains("surfdoc-panel-fab"));
+        assert!(!html.contains("__surfyWired"));
+    }
+
+    #[test]
+    fn html_app_tabbar_generated_from_sidebar_rows() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![
+                Block::Sidebar {
+                    position: "left".into(),
+                    collapsible: false,
+                    width: Some(240),
+                    children: vec![
+                        nav_row("doc", "Docs", false),
+                        nav_row("task", "Tasks", false),
+                        nav_row("apps", "Apps", false),
+                        nav_row("knowledge", "Messages", true),
+                        Block::Divider { label: None, span: span() },
+                        nav_row("posts", "Posts", false),
+                    ],
+                    span: span(),
+                },
+                Block::TabContent {
+                    tab: "main".into(),
+                    width: None,
+                    align: None,
+                    children: vec![],
+                    span: span(),
+                },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<nav class=\"surfdoc-app-tabbar\" aria-label=\"Primary\">"));
+        // One button per surface row, ids slugged from titles.
+        for tab in ["docs", "tasks", "apps", "messages"] {
+            assert!(html.contains(&format!("data-tab=\"{tab}\"")), "missing tab {tab}");
+        }
+        // Hub rows after the divider are excluded.
+        assert!(!html.contains("data-tab=\"posts\""));
+        // Icons render through the registry inside the icon slot.
+        assert!(html.contains("surfdoc-app-tabbar-icon"));
+        assert!(html.contains("surfdoc-app-tabbar-label"));
+        // Unread dot rides the Messages item.
+        let messages = html.split("data-tab=\"messages\"").nth(1).unwrap();
+        let button_end = messages.find("</button>").unwrap();
+        assert!(messages[..button_end].contains("surfdoc-unread-dot"));
+        // No active pane matches a row slug → first item is active.
+        assert!(html.contains("surfdoc-app-tabbar-item is-active\" data-tab=\"docs\""));
+        // Distinct from the document tab strip.
+        assert!(!html.contains("surfdoc-app-tabbar\" role=\"tablist\""));
+    }
+
+    #[test]
+    fn html_app_tabbar_active_follows_active_pane() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![
+                Block::Sidebar {
+                    position: "left".into(),
+                    collapsible: false,
+                    width: None,
+                    children: vec![
+                        nav_row("doc", "Docs", false),
+                        nav_row("knowledge", "Messages", false),
+                    ],
+                    span: span(),
+                },
+                Block::TabContent {
+                    tab: "messages".into(),
+                    width: None,
+                    align: None,
+                    children: vec![],
+                    span: span(),
+                },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-app-tabbar-item is-active\" data-tab=\"messages\""));
+        assert!(!html.contains("surfdoc-app-tabbar-item is-active\" data-tab=\"docs\""));
+    }
+
+    #[test]
+    fn html_app_shell_without_sidebar_has_no_tabbar() {
+        let doc = doc_with(vec![Block::AppShell {
+            layout: "sidebar-main-panel".into(),
+            height: None,
+            children: vec![Block::Markdown { content: "Inner".into(), span: span() }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(!html.contains("surfdoc-app-tabbar"));
     }
 
     #[test]
@@ -11111,7 +11893,7 @@ About
             title: Some("Messages".into()),
             title_source: Some("thread.display_name".into()),
             items: vec![
-                ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false },
+                ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false, avatar: None, aria_label: None },
                 ToolbarItem::Separator,
                 ToolbarItem::Spacer,
                 ToolbarItem::Badge { value: "Live".into(), color: Some("green".into()) },
@@ -11127,6 +11909,161 @@ About
         assert!(html.contains("surfdoc-toolbar-spacer"));
         assert!(html.contains("surfdoc-badge-green"));
         assert!(html.contains("Live"));
+    }
+
+    #[test]
+    fn html_toolbar_icon_only_explicit_aria_label_wins() {
+        // G3 + consolidation round: sources carry the old visible label as
+        // an explicit `aria-label=` attr; it must beat the action-derived
+        // fallback (raw verb names like "openCreateApp" are not accessible
+        // names). Full path: source text -> parse -> render.
+        let src = "::toolbar\n- button[icon=plus action=openCreateApp aria-label=\"New App\"]\n::";
+        let doc = crate::parse(src).doc;
+        let html = to_html(&doc);
+        assert!(html.contains("aria-label=\"New App\""), "explicit aria-label must win: {html}");
+        assert!(!html.contains("aria-label=\"openCreateApp\""));
+    }
+
+    #[test]
+    fn html_toolbar_dropdown_emits_dispatchable_dropdown_select_markup() {
+        // 0.13.3: toolbar dropdowns render in the dropdown-select shape —
+        // trigger + full option list with the item's data-action stamped on
+        // every option — so the shell dispatcher can open and drive them.
+        // The pre-0.13.3 bare single-<option> <select> dropped options and
+        // action (inert by construction).
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![ToolbarItem::Dropdown {
+                label: "Sort: Newest first".into(),
+                options: Some("newest-first|oldest-first|name-az".into()),
+                action: Some("applySort".into()),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-dropdown-select surfdoc-toolbar-dropdown"));
+        assert!(html.contains("<span class=\"surfdoc-dropdown-label\">Sort: Newest first</span>"));
+        assert_eq!(html.matches("surfdoc-dropdown-option\"").count(), 3);
+        assert_eq!(html.matches("data-action=\"applySort\"").count(), 3);
+        assert!(html.contains("<span class=\"surfdoc-dropdown-option-label\">oldest-first</span>"));
+        assert!(!html.contains("<select"), "no inert bare select");
+    }
+
+    #[test]
+    fn html_toolbar_dropdown_without_options_or_action() {
+        // Option-less dropdown (e.g. an assignee scope fed at runtime):
+        // trigger renders, list is empty, and no dispatch hook is faked.
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![ToolbarItem::Dropdown {
+                label: "All assignees".into(),
+                options: None,
+                action: Some("scopeAssignee".into()),
+            }],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<span class=\"surfdoc-dropdown-label\">All assignees</span>"));
+        assert!(html.contains("<ul class=\"surfdoc-dropdown-options\"></ul>"));
+        assert!(!html.contains("data-action=\"scopeAssignee\""), "no option, no hook");
+    }
+
+    #[test]
+    fn html_toolbar_button_icon_before_label() {
+        // G3: `icon=` paints a registry glyph before the label text.
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![
+                ToolbarItem::Button { label: Some("New Doc".into()), action: Some("create_doc".into()), icon: Some("plus".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        // Glyph then label, inside one button; label text survives.
+        let btn_start = html.find("<button class=\"surfdoc-toolbar-btn\"").expect("button");
+        let btn_end = html[btn_start..].find("</button>").expect("button closes") + btn_start;
+        let btn = &html[btn_start..btn_end];
+        assert!(btn.contains("<svg"), "labelled icon button must carry a glyph");
+        assert!(btn.ends_with("New Doc"), "label must follow the glyph: {btn}");
+        assert!(!btn.contains("aria-label"), "labelled button needs no aria-label");
+    }
+
+    #[test]
+    fn html_toolbar_button_icon_only_gets_aria_label() {
+        // G3: label-less icon button renders icon-only with an aria-label
+        // from the action and the square-pill modifier class.
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![
+                ToolbarItem::Button { label: None, action: Some("open_filter".into()), icon: Some("filter".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: None, action: None, icon: Some("notifications".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert_eq!(html.matches("surfdoc-toolbar-btn--icon").count(), 2);
+        assert!(html.contains("aria-label=\"open_filter\""));
+        // No action either: aria-label falls back to the icon name.
+        assert!(html.contains("aria-label=\"notifications\""));
+        // Icon-only: the glyph is the entire content — no empty text node.
+        assert!(html.contains("</svg></button>"));
+    }
+
+    #[test]
+    fn html_toolbar_button_avatar_span() {
+        // G6: avatar initial renders as a circular badge span before the
+        // label; decorative (aria-hidden) since the label names the chip.
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![
+                ToolbarItem::Button { label: Some("cloudsurf".into()), action: Some("switch_workspace".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false, avatar: Some("C".into()), aria_label: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<span class=\"surfdoc-toolbar-avatar\" aria-hidden=\"true\">C</span>"));
+        let av_idx = html.find("surfdoc-toolbar-avatar").expect("avatar span");
+        let label_idx = html.find("cloudsurf").expect("label");
+        assert!(av_idx < label_idx, "avatar paints before the label");
+        // An avatar chip is never icon-only, even without a label.
+        assert!(!html.contains("surfdoc-toolbar-btn--icon"));
+    }
+
+    #[test]
+    fn html_toolbar_button_avatar_without_label_gets_aria_label() {
+        // The initial badge is aria-hidden, so a label-less avatar chip must
+        // carry an aria-label (from the action) — never an unnamed control.
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![
+                ToolbarItem::Button { label: None, action: Some("switch_workspace".into()), icon: None, style: None, disabled: false, toggled: false, avatar: Some("C".into()), aria_label: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("aria-label=\"switch_workspace\""));
+        assert!(html.contains("<span class=\"surfdoc-toolbar-avatar\" aria-hidden=\"true\">C</span>"));
+        assert!(!html.contains("surfdoc-toolbar-btn--icon"));
+    }
+
+    #[test]
+    fn html_toolbar_button_unknown_icon_falls_back_to_circle() {
+        let doc = doc_with(vec![Block::Toolbar {
+            title: None,
+            title_source: None,
+            items: vec![
+                ToolbarItem::Button { label: None, action: Some("mystery".into()), icon: Some("no-such-glyph".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+            ],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("<circle cx=\"12\" cy=\"12\" r=\"10\"/>"), "unknown icon keeps the circle fallback");
     }
 
     #[test]
@@ -11170,6 +12107,7 @@ About
             unread: true,
             trailing_label: Some("Install".into()),
             trailing_action: Some("install_app".into()),
+            action: None,
             actions: vec![],
             span: span(),
         }]);
@@ -11197,6 +12135,7 @@ About
             unread: false,
             trailing_label: Some("Install".into()),
             trailing_action: Some("install_app".into()),
+            action: None,
             actions: vec![crate::types::RowAction {
                 label: "Accept".into(),
                 action: "invoke:contacts.accept".into(),
@@ -11226,6 +12165,7 @@ About
                 unread: false,
                 trailing_label: Some("Message".into()),
                 trailing_action: Some("open_thread".into()),
+                action: None,
                 actions: vec![crate::types::RowAction {
                     label: "Accept".into(),
                     action: "invoke:contacts.accept".into(),
@@ -11241,6 +12181,7 @@ About
                 unread: false,
                 trailing_label: Some("Install".into()),
                 trailing_action: Some("install_app".into()),
+                action: None,
                 actions: vec![],
                 span: span(),
             },
@@ -11279,8 +12220,8 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: Some("Panel".into()), action: Some("toggle_panel".into()), icon: None, style: None, disabled: false, toggled: true },
-                ToolbarItem::Button { label: Some("Save".into()), action: Some("save".into()), icon: None, style: None, disabled: false, toggled: false },
+                ToolbarItem::Button { label: Some("Panel".into()), action: Some("toggle_panel".into()), icon: None, style: None, disabled: false, toggled: true, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: Some("Save".into()), action: Some("save".into()), icon: None, style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
             ],
             span: span(),
         }]);
@@ -11365,6 +12306,7 @@ About
             unread: true,
             trailing_label: None,
             trailing_action: None,
+            action: None,
             actions: vec![],
             span: span(),
         }]);
@@ -11386,6 +12328,7 @@ About
             unread: false,
             trailing_label: None,
             trailing_action: None,
+            action: None,
             actions: vec![],
             span: span(),
         }]);
@@ -11423,6 +12366,7 @@ About
             unread: true,
             trailing_label: None,
             trailing_action: None,
+            action: None,
             actions: vec![],
             span: span(),
         };

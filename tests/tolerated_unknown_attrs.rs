@@ -12,6 +12,16 @@
 //! This suite pins TODAY'S behavior only (ruling R3: no first-class hook
 //! attrs, no grammar debt paid here). If the grammar later adopts these
 //! attrs, these tests should fail and be rewritten deliberately.
+//!
+//! DELIBERATE NARROWING (0.14 messages round, G3): row-level `action`
+//! became a first-class attribute — rows stamp it verbatim as a
+//! `data-action` dispatcher hook on the row root, so conversation and
+//! Surfy verbs (openConversation, askSurfyDoc, …) are reachable from
+//! authored markup. The `action` hook marker therefore moved off `::row`
+//! and onto `::callout` (which still declares only type/title), and the
+//! adoption itself is pinned positively in
+//! `adopted_row_action_reaches_html_as_data_action` below. The row keeps
+//! carrying the remaining name/placement/anchor hooks.
 
 use surf_parse::FixSafety;
 
@@ -26,11 +36,16 @@ const HOOK_MARKERS: &[&str] = &[
 
 fn hook_doc_source() -> &'static str {
     // Block-level hooks ride on blocks that do NOT declare them:
-    // ::row declares none of name/placement/anchor; ::segmented-control
-    // declares action (given a hook value on ::row instead).
-    "::row[icon=doc name=hook-name-x placement=hook-placement-x anchor=hook-anchor-x action=hook-action-x]\n\
+    // ::row declares none of name/placement/anchor (its `action` became
+    // first-class in 0.14, so the action hook moved off it);
+    // ::callout declares only type/title, so it carries the action hook.
+    "::row[icon=doc name=hook-name-x placement=hook-placement-x anchor=hook-anchor-x]\n\
      Title\n\
      Description\n\
+     ::\n\
+     \n\
+     ::callout[type=info title=\"Note\" action=hook-action-x]\n\
+     Callout body\n\
      ::\n\
      \n\
      ::dropdown-select[label=\"Sort\"]\n\
@@ -103,5 +118,20 @@ fn hook_attr_drop_is_deterministic() {
     assert_eq!(
         serde_json::to_string(&a).unwrap(),
         serde_json::to_string(&b).unwrap(),
+    );
+}
+
+/// Adoption pin (0.14, G3): row `action` is no longer a tolerated-unknown
+/// attr — it is first-class and reaches HTML as a `data-action` hook on
+/// the row root. Pinned positively so the narrowing above reads as
+/// deliberate adoption, not marker erosion.
+#[test]
+fn adopted_row_action_reaches_html_as_data_action() {
+    let doc =
+        surf_parse::parse("::row[icon=doc action=openConversation]\nSam Rose\n::").doc;
+    let html = doc.to_html();
+    assert!(
+        html.contains("data-action=\"openConversation\""),
+        "authored row action must reach HTML as a data-action hook"
     );
 }

@@ -56,8 +56,8 @@ const ALLOWLIST: &[&str] = &[
 ];
 
 /// One minimal source document per implemented registry kind
-/// (spec/blocks.toml, status = "implemented"; registry currently has 98
-/// implemented of 111 total). When a kind is added to the registry, the
+/// (spec/blocks.toml, status = "implemented"; registry currently has 99
+/// implemented of 112 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 const SNIPPETS: &[(&str, &str)] = &[
     ("callout", "::callout[type=warning title=\"Heads up\"]\nBody\n::"),
@@ -112,6 +112,7 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("feed", "::feed[source=\"/api/feed\" stream=feed_updated]\n::"),
     ("editor", "::editor[source=doc lang=surf preview=true]\n::"),
     ("split-pane", "::split-pane[ratio=50]\n::"),
+    ("pane", "::split-pane[ratio=50 back-label=\"Chats\" back-action=closeConversation]\n:::pane[side=left]\n::::row[icon=knowledge href=#]\nSam Rose\n::::\n:::\n:::pane[side=right]\nThread\n:::\n::"),
     ("app", "::app[name=demo]\n::"),
     ("build", "::build[base=debian runtime=rust edition=2024]\n::"),
     ("database", "::database[name=main shared-auth=true volume-gb=1]\n::"),
@@ -135,12 +136,15 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("app-deploy", "::app-deploy[region=sjc scale=1]\n::"),
     ("row", "::row[icon=doc href=\"/docs\" unread=true trailing-label=\"Open\" trailing-action=open]\nTitle\nDescription\naction: Accept | invoke:contacts.accept\n::"),
     ("infocard", "::infocard[intent=success image=\"/img/a.png\"]\n# Card\nSubtitle\n\nSummary text.\n\n1. Step one\n\nVersion: 1.0\n::"),
-    ("app-shell", "::app-shell[layout=sidebar-main-panel height=600]\n::"),
+    // Full shell shape (0.14): sidebar rows + divider + hub row (drives the
+    // generated tab-bar), topbar, tab-content, and a RIGHT panel (drives
+    // the drawer + FAB), so every responsive-chrome class is covered.
+    ("app-shell", "::app-shell[layout=sidebar-main-panel height=600]\n:::sidebar[position=left width=240]\n::::toolbar\n- text[value=\"Surfspace\" size=22]\n::::\n::::row[icon=doc href=#]\nDocs\n::::\n::::row[icon=knowledge href=# unread=true]\nMessages\n::::\n::::divider\n::::\n::::row[icon=settings href=#]\nSettings\n::::\n:::\n:::toolbar\n- button[label=\"Search\" icon=search action=openSearch]\n- separator\n- button[label=\"Surfy\" icon=surfy-fin action=toggleSurfy]\n:::\n:::tab-content[tab=main]\nPane\n:::\n:::panel[position=right]\nSurfy body\n::::chat-input-simple[placeholder=\"Ask\" action=send]\n::::\n:::\n::"),
     ("sidebar", "::sidebar[position=left collapsible=true width=240]\n::"),
     ("panel", "::panel[position=bottom resizable=true height=160 desktop-only=true]\n::"),
     ("tab-bar", "::tab-bar[active=preview]\n- preview \"Preview\" {icon=eye unread=true}\n- edit \"Edit\"\n::"),
     ("tab-content", "::tab-content[tab=preview width=880 align=center]\nPane\n::"),
-    ("toolbar", "::toolbar[title=\"Messages\" title-source=thread.display_name]\n- button[label=\"Run\" action=run style=primary toggled=true]\n- text[value=\"Surfspace\" size=22]\n- separator\n- spacer\n- badge[value=\"Live\" color=green]\n- dropdown[options=\"A|B\"]\n::"),
+    ("toolbar", "::toolbar[title=\"Messages\" title-source=thread.display_name]\n- button[label=\"Run\" action=run style=primary toggled=true]\n- button[icon=filter action=open_filter]\n- button[label=\"cloudsurf\" avatar=\"C\" action=switch_workspace]\n- text[value=\"Surfspace\" size=22]\n- separator\n- spacer\n- badge[value=\"Live\" color=green]\n- dropdown[options=\"A|B\"]\n::"),
     ("drawer", "::drawer[name=filters position=right width=320 trigger=\"Filters\"]\nBody\n::"),
     ("modal", "::modal[name=confirm title=\"Confirm\" width=480 placement=centered dismissible=false]\nSure?\n::"),
     ("segmented-control", "::segmented-control[active=all size=compact action=filter]\n- all \"All\"\n- done \"Done\"\n::"),
@@ -301,6 +305,283 @@ fn toolbar_overflow_never_clips_on_desktop() {
         css[p_start..p_end].contains("min-width: 0"),
         "toolbar grid placement needs min-width: 0: {}",
         &css[p_start..p_end]
+    );
+}
+
+/// Extract the body of the first media query whose prelude contains
+/// `needle` — brace-balanced, so nested rules stay inside.
+fn media_block(css: &str, needle: &str) -> String {
+    let mut from = 0;
+    while let Some(pos) = css[from..].find("@media") {
+        let abs = from + pos;
+        let brace = css[abs..].find('{').expect("media block opens") + abs;
+        if css[abs..brace].contains(needle) {
+            let mut depth = 0i64;
+            for (i, c) in css[brace..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return css[brace + 1..brace + i].to_string();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        from = brace;
+    }
+    panic!("no media query with prelude containing {needle:?}");
+}
+
+/// WP-R1 (0.14): the medium icon-rail block exists and every selector in
+/// it that touches shell chrome is scoped under the app shell.
+#[test]
+fn medium_icon_rail_block_is_shell_scoped() {
+    let body = media_block(surf_parse::SURFDOC_CSS, "max-width: 1023px");
+    assert!(
+        body.contains(".surfdoc .surfdoc-app-shell .surfdoc-sidebar"),
+        "1023px block must scope the icon rail under .surfdoc-app-shell"
+    );
+    assert!(
+        body.contains("min-width: 68px") && body.contains("max-width: 68px"),
+        "icon rail needs min/max-width clamps — a bare `width` loses to the \
+         renderer's inline style=\"width:NNNpx\" when the sidebar has a width= attr"
+    );
+    assert!(
+        body.contains(".surfdoc-panel-right"),
+        "1023px block must switch the right drawer to overlay mode"
+    );
+    assert!(
+        !body.contains("position: fixed"),
+        "medium overlay must be absolute, not fixed — Section 76 containment"
+    );
+}
+
+/// WP-R1 (0.14): the small block hides the sidebar and shows the
+/// generated floating tab-bar.
+#[test]
+fn small_block_swaps_sidebar_for_generated_tabbar() {
+    let css = surf_parse::SURFDOC_CSS;
+    // Two ≤767px blocks exist (legacy Section 74 + Section 74c); the
+    // tab-bar lives in the one that mentions it.
+    let mut found = false;
+    let mut from = 0;
+    while let Some(pos) = css[from..].find("max-width: 767px") {
+        let abs = from + pos;
+        let brace = css[abs..].find('{').unwrap() + abs;
+        let mut depth = 0i64;
+        let mut end = css.len();
+        for (i, c) in css[brace..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = brace + i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let body = &css[brace + 1..end];
+        if body.contains(".surfdoc .surfdoc-app-tabbar") {
+            assert!(
+                body.contains(".surfdoc .surfdoc-app-shell .surfdoc-sidebar { display: none; }"),
+                "767px tab-bar block must hide the shell sidebar"
+            );
+            assert!(body.contains("display: flex"), "tab-bar must be shown as flex");
+            found = true;
+        }
+        from = end;
+    }
+    assert!(found, "no 767px block styles .surfdoc-app-tabbar");
+    // The shell grid must NOT collapse to a single-column template on small
+    // screens: children are pinned to grid-column 2 (Section 56), so a `1fr`
+    // override would strand them in an implicit auto column beside an empty
+    // 1fr track. Column 1 auto-collapses when the sidebar hides instead.
+    assert!(
+        !css.contains(".surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: 1fr; }"),
+        "small-screen single-column template override must stay removed"
+    );
+    // Outside the media queries the generated tab-bar and FAB stay hidden.
+    assert!(css.contains(".surfdoc .surfdoc-app-tabbar { display: none;"));
+    assert!(css.contains(".surfdoc .surfdoc-panel-fab {\n    display: none;"));
+}
+
+/// WP-R5 (0.14): the native topbar treatments are pinned to the DIRECT
+/// app-shell toolbar child and carry no !important (the live layer must
+/// be able to shrink them without a specificity war).
+#[test]
+fn native_topbar_treatments_are_scoped_without_important() {
+    let css = surf_parse::SURFDOC_CSS;
+    for action in ["openSearch", "toggleSurfy"] {
+        let sel = format!(
+            ".surfdoc .surfdoc-app-shell > .surfdoc-toolbar [data-action=\"{action}\"] {{"
+        );
+        let idx = css.find(&sel).unwrap_or_else(|| panic!("missing topbar rule for {action}"));
+        let body_start = idx + sel.len();
+        let body_end = css[body_start..].find('}').unwrap() + body_start;
+        assert!(
+            !css[body_start..body_end].contains("!important"),
+            "{action} topbar rule must not use !important"
+        );
+    }
+}
+
+/// F1 (0.14 drawer polish): the tier dropdown inside the drawer head must
+/// not inherit the content dropdown's 220px min-width — at 1280 the open
+/// drawer's head row (fin + tier + spacer + Chats + ✕) otherwise overflows
+/// the 360px inner width and pushes the close ✕ off-viewport (DOM probe:
+/// ✕ right edge 1313 > 1280, head scrollWidth 392 > 360). The fix is a
+/// panel-head-scoped release, NOT a change to the base rule: toolbar and
+/// in-content dropdown-select sites keep their 220px geometry.
+#[test]
+fn panel_head_dropdown_releases_the_base_min_width() {
+    let css = surf_parse::SURFDOC_CSS;
+
+    // Base rule keeps its geometry (byte-identical renders elsewhere).
+    let base_sel = ".surfdoc .surfdoc-dropdown-select {";
+    let base_idx = css.find(base_sel).expect("base dropdown-select rule exists");
+    let base_start = base_idx + base_sel.len();
+    let base_end = css[base_start..].find('}').unwrap() + base_start;
+    assert!(
+        css[base_start..base_end].contains("min-width: 220px"),
+        "base dropdown-select must keep min-width: 220px — the fix is scoped, \
+         not global: {}",
+        &css[base_start..base_end]
+    );
+
+    // Panel-head scope releases it so the head row fits in 360px. The
+    // selector carries 3 classes, so it beats the base rule regardless of
+    // source order.
+    let head_sel = ".surfdoc .surfdoc-panel-head .surfdoc-dropdown-select {";
+    let head_idx = css
+        .find(head_sel)
+        .expect("panel-head dropdown-select override rule exists");
+    let head_start = head_idx + head_sel.len();
+    let head_end = css[head_start..].find('}').unwrap() + head_start;
+    assert!(
+        css[head_start..head_end].contains("min-width: 0"),
+        "panel-head dropdown-select must release the 220px min-width \
+         (min-width: 0) so the drawer head row fits its 360px track: {}",
+        &css[head_start..head_end]
+    );
+}
+
+/// F2 (0.14 drawer polish): split-pane children are flex:1 — with the
+/// default min-width:auto their min-content size (long thread lines, the
+/// composer input+Send) forces the pane past its track, clipping the
+/// roster chevrons at 390 and the thread text + Send at 900 (DOM probe:
+/// right pane right edge 1001 > 900, left pane 418 > 390). The classic
+/// fix: min-width: 0 on the panes so they shrink to their track and inner
+/// content wraps/ellipsizes.
+#[test]
+fn split_pane_children_shrink_to_their_track() {
+    let css = surf_parse::SURFDOC_CSS;
+    let sel = ".surfdoc-split-left, .surfdoc-split-right {";
+    let idx = css.find(sel).expect("split-pane children rule exists");
+    let start = idx + sel.len();
+    let end = css[start..].find('}').unwrap() + start;
+    let body = &css[start..end];
+    assert!(body.contains("flex: 1"), "split children stay flex: 1: {body}");
+    assert!(
+        body.contains("min-width: 0"),
+        "split children need min-width: 0 — flex min-width:auto lets content \
+         force the pane past its track and clip at 390/900: {body}"
+    );
+}
+
+/// F3 (0.14 drawer polish): the tier dropdown OPTIONS popup at panel-head
+/// placement needs its own explicit width — the F1 head-scoped min-width
+/// release shrank the closed trigger AND left the absolutely-positioned
+/// popup to shrink-to-fit its ~91px containing block (the collapsed
+/// trigger wrapper), wrapping option descriptions to 11 lines (DOM probe:
+/// popup w 91.1, options w 79.1). A min-width floor is NOT enough: the
+/// live layer's `.surfdoc.surfdoc-live .surfdoc-dropdown-select.is-open
+/// .surfdoc-dropdown-options` rule wins min-width at 5-class specificity
+/// (its 100% resolves against the same tiny wrapper), so the crate pins
+/// `width` — a property the live layer does not touch. 220px matches the
+/// base content dropdown floor, and the popup is positioned, so it cannot
+/// inflate the head row (F1 stays intact). Scoped under the panel head:
+/// toolbar and in-content options popups stay byte-identical.
+#[test]
+fn panel_head_dropdown_options_popup_keeps_a_readable_width() {
+    let css = surf_parse::SURFDOC_CSS;
+
+    // Head-scoped popup rule pins an explicit width.
+    let sel = ".surfdoc .surfdoc-panel-head .surfdoc-dropdown-options {";
+    let idx = css.find(sel).expect("panel-head dropdown-options rule exists");
+    let start = idx + sel.len();
+    let end = css[start..].find('}').unwrap() + start;
+    let body = &css[start..end];
+    assert!(
+        body.contains("width: 220px"),
+        "panel-head options popup needs an explicit 220px width — min-width \
+         alone loses to the live layer's 5-class min-width:100% and the \
+         popup collapses to its ~91px containing block: {body}"
+    );
+    assert!(
+        !body.contains("!important"),
+        "panel-head options rule must stay !important-free: {body}"
+    );
+
+    // The shared toolbar-dropdown popup rule keeps its geometry (other
+    // dropdown sites byte-identical).
+    let base_sel = ".surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-options {";
+    let base_idx = css.find(base_sel).expect("toolbar-dropdown options rule exists");
+    let base_start = base_idx + base_sel.len();
+    let base_end = css[base_start..].find('}').unwrap() + base_start;
+    assert!(
+        css[base_start..base_end].contains("min-width: max(100%, 180px)"),
+        "shared toolbar-dropdown options floor must stay untouched — the \
+         F3 fix is head-scoped: {}",
+        &css[base_start..base_end]
+    );
+}
+
+/// F4 (0.14 drawer polish): the split right-pane header title (messages
+/// thread: "Danny Pappageorge — … · cloudsurf workspace") hard-cuts at
+/// 390 full-plane — the toolbar-text span keeps min-width:auto, so it
+/// refuses to shrink past its nowrap min-content and overflows the bar
+/// (DOM probe: title w 364.8 > bar w 328, text-overflow clip). The fix
+/// is the classic ellipsis chain ON THE TITLE element: min-width: 0 so
+/// the flex item shrinks to its track, overflow hidden + text-overflow
+/// ellipsis + nowrap. Scoped to the split right pane: every other
+/// toolbar title keeps its current geometry.
+#[test]
+fn split_right_toolbar_title_ellipsizes_instead_of_hard_cutting() {
+    let css = surf_parse::SURFDOC_CSS;
+    let sel = ".surfdoc .surfdoc-split-right .surfdoc-toolbar .surfdoc-toolbar-text {";
+    let idx = css.find(sel).expect("split-right toolbar-text rule exists");
+    let start = idx + sel.len();
+    let end = css[start..].find('}').unwrap() + start;
+    let body = &css[start..end];
+    for decl in [
+        "min-width: 0",
+        "overflow: hidden",
+        "text-overflow: ellipsis",
+        "white-space: nowrap",
+    ] {
+        assert!(
+            body.contains(decl),
+            "split-right toolbar title needs `{decl}` in its ellipsis chain: {body}"
+        );
+    }
+
+    // The base toolbar-text rule stays untouched — other toolbar titles
+    // keep their geometry.
+    let base_sel = ".surfdoc .surfdoc-toolbar-text {";
+    let base_idx = css.find(base_sel).expect("base toolbar-text rule exists");
+    let base_start = base_idx + base_sel.len();
+    let base_end = css[base_start..].find('}').unwrap() + base_start;
+    let base_body = &css[base_start..base_end];
+    assert!(
+        !base_body.contains("text-overflow") && !base_body.contains("overflow: hidden"),
+        "base toolbar-text must NOT gain the ellipsis chain — the F4 fix \
+         is split-right-scoped: {base_body}"
     );
 }
 

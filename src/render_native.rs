@@ -2438,6 +2438,12 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             // No NativeToolbarItem field yet (no schema bump needed);
             // the accent-ring open state is web-only until a native round.
             toggled: _,
+            // Same precedent (0.13.3): the workspace-chip avatar initial is
+            // web-only render styling — no native schema field.
+            avatar: _,
+            // Same precedent (0.13.3): the explicit accessible name is
+            // web-only render styling — no native schema field.
+            aria_label: _,
         } => NativeToolbarItem {
             kind: "button".to_string(),
             label: label.clone(),

@@ -2310,8 +2310,27 @@ fn serialize_block(block: &Block) -> String {
             format!("::chart[{}]\n::", attrs_parts.join(" "))
         }
 
-        Block::SplitPane { ratio, .. } => {
-            format!("::split-pane[ratio=\"{ratio}\"]\n::")
+        Block::SplitPane { ratio, back_label, back_action, left, right, .. } => {
+            let mut attrs_parts = vec![format!("ratio=\"{ratio}\"")];
+            if let Some(l) = back_label {
+                attrs_parts.push(format!("back-label=\"{}\"", escape_attr(l)));
+            }
+            if let Some(a) = back_action {
+                attrs_parts.push(format!("back-action=\"{}\"", escape_attr(a)));
+            }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let mut panes: Vec<String> = Vec::new();
+            for (side, blocks) in [("left", left), ("right", right)] {
+                if !blocks.is_empty() {
+                    let inner = serialize_children(blocks);
+                    panes.push(format!("::pane[side={side}]\n{inner}\n::"));
+                }
+            }
+            if panes.is_empty() {
+                format!("::split-pane{attrs_str}\n::")
+            } else {
+                format!("::split-pane{attrs_str}\n{}\n::", panes.join("\n\n"))
+            }
         }
 
         // ----- Infrastructure manifest blocks -----
@@ -2761,14 +2780,18 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, actions, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, action, actions, .. } => {
             let mut attrs_parts = vec![format!("icon={icon}")];
             if let Some(h) = href { attrs_parts.push(format!("href=\"{}\"", escape_attr(h))); }
             match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
             if *unread { attrs_parts.push("unread=true".to_string()); }
             if let Some(l) = trailing_label { attrs_parts.push(format!("trailing-label=\"{}\"", escape_attr(l))); }
             if let Some(a) = trailing_action { attrs_parts.push(format!("trailing-action={a}")); }
-            let attrs_str = format!("[{}]", attrs_parts.join(", "));
+            if let Some(a) = action { attrs_parts.push(format!("action={a}")); }
+            // Space-separated: the attr grammar (attrs.rs) rejects commas
+            // between pairs, so a comma join serialized rows whose attrs
+            // (icon/href/action) silently vanished on re-parse.
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut content = format!("{title}\n{description}");
             for a in actions {
                 if a.label == a.action {
@@ -2784,7 +2807,8 @@ fn serialize_block(block: &Block) -> String {
             let mut attrs_parts = vec![format!("intent={intent}")];
             if let Some(img) = image { attrs_parts.push(format!("image=\"{}\"", escape_attr(img))); }
             match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
-            let attrs_str = format!("[{}]", attrs_parts.join(", "));
+            // Space-separated for the same comma-rejection reason as ::row.
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut lines = vec![format!("# {title}")];
             if !subtitle.is_empty() { lines.push(subtitle.clone()); }
             if !summary.is_empty() { lines.push(String::new()); lines.push(summary.clone()); }
@@ -2888,7 +2912,7 @@ fn serialize_block(block: &Block) -> String {
             let mut lines = Vec::new();
             for item in items {
                 match item {
-                    crate::types::ToolbarItem::Button { label, action, icon, style, disabled, toggled } => {
+                    crate::types::ToolbarItem::Button { label, action, icon, style, disabled, toggled, avatar, aria_label } => {
                         let mut parts = Vec::new();
                         if let Some(l) = label { parts.push(format!("label=\"{}\"", escape_attr(l))); }
                         if let Some(a) = action { parts.push(format!("action={a}")); }
@@ -2896,6 +2920,8 @@ fn serialize_block(block: &Block) -> String {
                         if let Some(s) = style { parts.push(format!("style={s}")); }
                         if *disabled { parts.push("disabled=true".to_string()); }
                         if *toggled { parts.push("toggled=true".to_string()); }
+                        if let Some(av) = avatar { parts.push(format!("avatar=\"{}\"", escape_attr(av))); }
+                        if let Some(al) = aria_label { parts.push(format!("aria-label=\"{}\"", escape_attr(al))); }
                         lines.push(format!("- button[{}]", parts.join(" ")));
                     }
                     crate::types::ToolbarItem::Separator => lines.push("- separator".to_string()),
@@ -4143,6 +4169,40 @@ mod tests {
                 assert!(matches!(&items[1], crate::types::ToolbarItem::Button { toggled: false, .. }));
             }
             other => panic!("Expected Toolbar, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_row_attrs_and_split_pane_children() {
+        // Regression (0.14 messages round 2): the row/infocard serializers
+        // joined attrs with ", " but the attr grammar rejects commas, so
+        // every serialized row silently lost icon/href/action on re-parse
+        // (the block fell back to defaults). Also pins the new split-pane
+        // pane-children serialization shape end to end.
+        let source = "::split-pane[ratio=\"40:60\" back-label=\"Chats\" back-action=closeConversation]\n:::pane[side=left]\n::::row[icon=knowledge href=\"/messages/sam\" action=openConversation]\nSam Rose\n::::\n:::\n:::pane[side=right]\nThread body\n:::\n::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        let reparsed = parse::parse(&out);
+        assert_eq!(
+            parsed.doc.to_html(),
+            reparsed.doc.to_html(),
+            "split-pane + row attrs must survive a builder round-trip"
+        );
+        match &reparsed.doc.blocks[0] {
+            Block::SplitPane { back_label, back_action, left, right, .. } => {
+                assert_eq!(back_label.as_deref(), Some("Chats"));
+                assert_eq!(back_action.as_deref(), Some("closeConversation"));
+                assert_eq!(right.len(), 1);
+                match &left[0] {
+                    Block::Row { icon, href, action, .. } => {
+                        assert_eq!(icon, "knowledge");
+                        assert_eq!(href.as_deref(), Some("/messages/sam"));
+                        assert_eq!(action.as_deref(), Some("openConversation"));
+                    }
+                    other => panic!("Expected Row in left pane, got {other:?}"),
+                }
+            }
+            other => panic!("Expected SplitPane, got {other:?}"),
         }
     }
 

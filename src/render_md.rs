@@ -836,8 +836,20 @@ pub(crate) fn render_block(block: &Block) -> String {
             format!("{heading}{period_str}\nSource: `{source}`")
         }
 
-        Block::SplitPane { ratio, .. } => {
-            format!("**Split Pane** ({ratio})")
+        Block::SplitPane { ratio, left, right, .. } => {
+            if left.is_empty() && right.is_empty() {
+                format!("**Split Pane** ({ratio})")
+            } else {
+                // Container idiom (degradation "sequential sections"): panes
+                // flatten in order, left then right.
+                let parts: Vec<String> = left
+                    .iter()
+                    .chain(right.iter())
+                    .map(render_block)
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                parts.join("\n\n")
+            }
         }
 
         // ----- Infrastructure manifest blocks -----

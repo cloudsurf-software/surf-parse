@@ -300,33 +300,36 @@
     --shadow: none;
 }
 
-/* Explicit dark mode toggle — Surf shell PURE-BLACK dark palette (aligned to the
-   Reference's `.sd-*` mocks, which resolve through the surf-shell tokens:
-   page #000, sheet #0a0a0a, soft #161616, line #262626, text #fafafa, muted
-   #a3a3a3). Part C alignment: the render was previously on the tokens.css
-   blue-cast neutrals (#111118/#1e1e2a/#e5e5ef), one step lighter and bluer than
-   the reference — this retunes the render dark palette to match the reference
-   pixel-for-token. Light mode is untouched. */
+/* Explicit dark mode toggle — Surfspace BLUE-NAVY dark palette (G7 ruling,
+   2026-08-10: dark neutrals shift from the pure-black family to the
+   web-surfspace mockup's blue-navy family). Values measured from
+   preview/mockup.html: bg #0b1117 (the ruling's "#0d1420 family" —
+   reconciled to the measured mockup value, which is design ground truth),
+   sheet #151e28, text #e8eef4, muted #93a4b3, hairline white@9%, accent
+   #2E8AD8. Mockup faint #5f7180 fails AA (3.0 on the soft surface), so
+   --text-faint lifts to #8496a6 (4.97 on --surface-alt). Light mode is
+   untouched (0.13.2). Keep this block and the auto-detect twin below
+   IDENTICAL. */
 [data-theme="dark"] {
-    --accent: #2563eb;               /* brand accent (stays blue) */
-    --accent-hover: #2563eb;
-    --accent-light: #60a5fa;
-    --accent-soft: rgba(37, 99, 235, 0.18);
+    --accent: #2e8ad8;               /* brand accent (mockup Surf blue) */
+    --accent-hover: #2578bd;
+    --accent-light: #6ab0e8;
+    --accent-soft: rgba(46, 138, 216, 0.18);
     --accent-text: #ffffff;
-    --background: #000000;           /* reference body: pure black */
-    --surface: #0d0d0d;              /* neutral, lifted off black */
-    --surface-alt: #161616;          /* reference cards: neutral gray */
-    --surface-hover: #161616;        /* neutral */
-    --surface-code: #0d0d0d;         /* neutral */
-    --border: #262626;               /* neutral line */
-    --border-light: #2a2a2a;         /* neutral line (light) */
-    --text: #e5e5e5;                 /* neutral text */
-    --text-muted: #8b8b8b;           /* neutral muted */
-    --text-faint: #7f7f7f;           /* fainter, but AA: ≥4.5 on --surface-alt (#161616), was #5a5a5a @ 2.82 */
-    --text-secondary: #cbcbcb;       /* neutral secondary */
-    --bg: #000000;                   /* alias → pure black body */
+    --background: #0b1117;           /* mockup body: blue-navy */
+    --surface: #151e28;              /* mockup sheet (surface-solid) */
+    --surface-alt: #1b2734;          /* soft card, one step off the sheet */
+    --surface-hover: #1b2734;
+    --surface-code: #10161e;
+    --border: rgba(255, 255, 255, 0.09);   /* mockup hairline */
+    --border-light: rgba(255, 255, 255, 0.12);
+    --text: #e8eef4;                 /* mockup text */
+    --text-muted: #93a4b3;           /* mockup muted */
+    --text-faint: #8496a6;           /* AA: ≥4.5 on --surface-alt (#1b2734) — mockup #5f7180 @ 3.0 */
+    --text-secondary: #c6d2dc;
+    --bg: #0b1117;                   /* alias → blue-navy body */
     --green: #22c55e;                /* alias → success (explicit in dark) */
-    --code-bg: #0d0d0d;              /* neutral */
+    --code-bg: #10161e;
     --danger-light: rgba(239, 68, 68, 0.1);
     --success-light: rgba(34, 197, 94, 0.1);
     --warning-light: rgba(245, 158, 11, 0.1);
@@ -336,32 +339,33 @@
     --sd-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
     --sd-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.45);
     --ws-feature-card-bg: var(--surface-alt); /* dark: the light-mode surface/surface-alt color-mix reads
-        too close to pure-black --background; pin back to --surface-alt so tier/stat/product cards keep
+        too close to the --background navy; pin back to --surface-alt so tier/stat/product cards keep
         the same visible fill as untouched siblings (testimonial/metric/logo/booking/store). */
 }
 
-/* Auto-detect: dark mode only when the OS asks and no explicit theme set. */
+/* Auto-detect: dark mode only when the OS asks and no explicit theme set.
+   Keep IDENTICAL to the [data-theme="dark"] block above. */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme]) {
-        --accent: #2563eb;               /* brand accent (stays blue) */
-        --accent-hover: #2563eb;
-        --accent-light: #60a5fa;
-        --accent-soft: rgba(37, 99, 235, 0.18);
+        --accent: #2e8ad8;               /* brand accent (mockup Surf blue) */
+        --accent-hover: #2578bd;
+        --accent-light: #6ab0e8;
+        --accent-soft: rgba(46, 138, 216, 0.18);
         --accent-text: #ffffff;
-        --background: #000000;           /* reference body: pure black */
-        --surface: #0d0d0d;              /* neutral, lifted off black */
-        --surface-alt: #161616;          /* reference cards: neutral gray */
-        --surface-hover: #161616;        /* neutral */
-        --surface-code: #0d0d0d;         /* neutral */
-        --border: #262626;               /* neutral line */
-        --border-light: #2a2a2a;         /* neutral line (light) */
-        --text: #e5e5e5;                 /* neutral text */
-        --text-muted: #8b8b8b;           /* neutral muted */
-        --text-faint: #7f7f7f;           /* fainter, but AA on --surface-alt (see [data-theme="dark"]) */
-        --text-secondary: #cbcbcb;       /* neutral secondary */
-        --bg: #000000;                   /* alias → pure black body */
+        --background: #0b1117;           /* mockup body: blue-navy */
+        --surface: #151e28;              /* mockup sheet (surface-solid) */
+        --surface-alt: #1b2734;          /* soft card, one step off the sheet */
+        --surface-hover: #1b2734;
+        --surface-code: #10161e;
+        --border: rgba(255, 255, 255, 0.09);   /* mockup hairline */
+        --border-light: rgba(255, 255, 255, 0.12);
+        --text: #e8eef4;                 /* mockup text */
+        --text-muted: #93a4b3;           /* mockup muted */
+        --text-faint: #8496a6;           /* AA on --surface-alt (see [data-theme="dark"]) */
+        --text-secondary: #c6d2dc;
+        --bg: #0b1117;                   /* alias → blue-navy body */
         --green: #22c55e;                /* alias → success (explicit in dark) */
-        --code-bg: #0d0d0d;              /* neutral */
+        --code-bg: #10161e;
         --danger-light: rgba(239, 68, 68, 0.1);
         --success-light: rgba(34, 197, 94, 0.1);
         --warning-light: rgba(245, 158, 11, 0.1);
@@ -2789,27 +2793,60 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-editor, .surfdoc-chart { margin: 1rem 0; min-height: 200px; }
 .surfdoc-editor-preview { padding: 1.25rem 1.5rem; border: var(--ws-border-w) var(--ws-border-style) var(--border, #333); border-radius: var(--ws-radius-card); background: var(--surface, #fff); }
 .surfdoc-split-pane { display: flex; gap: 4px; margin: 1rem 0; min-height: 200px; }
-.surfdoc-split-left, .surfdoc-split-right { flex: 1; border: var(--ws-border-w) var(--ws-border-style) var(--border, #333); border-radius: var(--ws-radius-card); padding: 1rem; }
+/* min-width: 0 — flex min-width:auto would let min-content (long thread
+   lines, the composer input+Send) force a pane past its track and clip
+   at narrow viewports; released, panes shrink to the track and inner
+   content wraps/ellipsizes. */
+.surfdoc-split-left, .surfdoc-split-right { flex: 1; min-width: 0; border: var(--ws-border-w) var(--ws-border-style) var(--border, #333); border-radius: var(--ws-radius-card); padding: 1rem; }
+/* Two-plane back control (0.14, ruling R-C): emitted by the live layer for
+   the small-screen messages swap; hidden everywhere except the ≤767px
+   thread-open state (Section 74c). */
+.surfdoc .surfdoc-split-back { display: none; }
+/* F4: the thread-header title in the split RIGHT pane ellipsizes instead
+   of hard-cutting — as a nowrap flex item its min-width:auto refuses to
+   shrink past min-content and it overflows the bar at 390 full-plane.
+   The classic chain on the title element itself completes the pane's
+   min-width: 0 chain; scoped here so every other toolbar title keeps its
+   current geometry. */
+.surfdoc .surfdoc-split-right .surfdoc-toolbar .surfdoc-toolbar-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ============================================================
    53. ROW BLOCK
    ============================================================ */
-/* Base row = a quiet sheet card (document-embedded lists). Hierarchy comes
-   from the surface fill + type ramp, not from a heavy outline; hover shifts
-   the fill, never the border color. In-shell contexts override this into a
-   ruled list (main pane) or a pill nav row (sidebar) — see Section 57a. */
+/* Base row = tinted elevated card (G2 ruling, 2026-08-10: card rows
+   EVERYWHERE, light AND dark). Mockup treatment: surface fill + hairline,
+   hover lifts with a soft shadow and an accent-tinted border; the icon sits
+   in a 34px rounded accent-soft badge. The sidebar overrides this into a
+   pill nav row — see Section 57a. */
 .surfdoc-row {
-    display: flex; align-items: center; gap: 0.75rem;
-    padding: 0.7rem 1rem; border-radius: var(--ws-control-radius, 10px);
+    display: flex; align-items: center; gap: 13px;
+    padding: 11px 14px; border-radius: 14px;
     border: var(--ws-border-w) var(--ws-border-style) var(--border, #334155); background: var(--surface, #fff);
     box-shadow: var(--ws-shadow);
     text-decoration: none; color: var(--text, #e5e5ef);
     cursor: pointer; box-sizing: border-box;
-    transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out);
+    transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out), box-shadow var(--sd-ease, 120ms ease-out);
 }
-.surfdoc-row:hover { background: var(--surface-hover, #eef1f7); }
+.surfdoc-row:hover {
+    box-shadow: 0 4px 18px rgba(16, 32, 48, 0.08);
+    border-color: color-mix(in srgb, var(--accent, #2e8ad8) 50%, transparent);
+}
 .surfdoc-row:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
-.surfdoc-row-icon { flex-shrink: 0; color: var(--text-muted, #64748b); width: 18px; height: 18px; display: flex; align-items: center; }
+/* Link rows are <a> inside .surfdoc, so the prose `.surfdoc a:hover`
+   underline (0,1,1 + :hover) outranks the base row rule above and
+   underlines the title/meta on hover (G10). Suppress it at (0,2,0)+ for
+   every state — same precedent as the hero/event-card anchors. */
+.surfdoc a.surfdoc-row, .surfdoc a.surfdoc-row:hover,
+.surfdoc a.surfdoc-row:focus, .surfdoc a.surfdoc-row:active,
+.surfdoc a.surfdoc-row:visited,
+.surfdoc a.surfdoc-row .surfdoc-row-title, .surfdoc a.surfdoc-row .surfdoc-row-desc,
+.surfdoc a.surfdoc-row .surfdoc-row-trailing, .surfdoc a.surfdoc-row .surfdoc-row-action { text-decoration: none; }
+/* Icon badge (G2): 34px rounded accent-soft tile. The sidebar resets this
+   back to a bare 18px glyph slot (Section 57a). */
+.surfdoc-row-icon { flex-shrink: 0; color: var(--accent, #2e8ad8); background: var(--accent-soft, #e3ebff); width: 34px; height: 34px; border-radius: var(--ws-control-radius, 10px); display: flex; align-items: center; justify-content: center; }
+/* Registry glyphs carry an intrinsic 16px; the badge glyph paints at 18px,
+   normalized for every glyph — vendored or built-in. */
+.surfdoc-row-icon svg { width: 18px; height: 18px; }
 .surfdoc-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 .surfdoc-row-title { font-size: 0.875rem; font-weight: 600; color: var(--text, #e5e5ef); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
 .surfdoc-row-desc { font-size: 0.75rem; color: var(--text-muted, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; margin-top: 0.125rem; }
@@ -2828,12 +2865,13 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .surfdoc .surfdoc-row-action { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 6px); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; font-weight: 500; line-height: 1; padding: 5px 10px; white-space: nowrap; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
 .surfdoc .surfdoc-row-action:hover { background: var(--accent-soft, #e3ebff); border-color: var(--accent, #2563eb); }
-/* Divider inside a sidebar — tighter spacing than document dividers */
-.surfdoc .surfdoc-sidebar .surfdoc-divider, .surfdoc .surfdoc-sidebar hr { margin: 0.75rem 0; }
+/* Divider inside a sidebar — subtle inset section rule (G5, mockup
+   .nav-sep: hairline with side gutters, tighter than document dividers) */
+.surfdoc .surfdoc-sidebar .surfdoc-divider, .surfdoc .surfdoc-sidebar hr { margin: 8px 12px; border-color: var(--border, #30363d); }
 .surfdoc .surfdoc-tab-bar [role="tab"] .surfdoc-unread-dot { margin-left: 6px; vertical-align: middle; }
 @keyframes surfdoc-pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.3; } }
 .surfdoc-row--loading { cursor: default; }
-.surfdoc-row--loading:hover { background: var(--surface, #fff); }
+.surfdoc-row--loading:hover { background: var(--surface, #fff); box-shadow: var(--ws-shadow); border-color: var(--border, #dde2ec); }
 .surfdoc-row--loading .surfdoc-row-title {
     color: transparent; background: var(--border, #dde2ec); border-radius: var(--radius-sm);
     animation: surfdoc-pulse 1.5s ease-in-out infinite;
@@ -2847,7 +2885,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-row--loading .surfdoc-row-icon svg, .surfdoc-row--loading .surfdoc-row-arrow svg { opacity: 0; }
 .surfdoc-row--loading .surfdoc-row-icon, .surfdoc-row--loading .surfdoc-row-arrow { background: var(--border, #dde2ec); border-radius: var(--radius-sm); animation: surfdoc-pulse 1.5s ease-in-out infinite; }
 .surfdoc-row--empty { cursor: default; opacity: 0.4; }
-.surfdoc-row--empty:hover { background: var(--surface, #fff); }
+.surfdoc-row--empty:hover { background: var(--surface, #fff); box-shadow: var(--ws-shadow); border-color: var(--border, #dde2ec); }
 
 /* ============================================================
    54. INFOCARD BLOCK
@@ -2882,16 +2920,22 @@ ol.surfdoc-steps { padding-left: 1rem; }
    56. APP SHELL — VS Code-style layout
    ============================================================ */
 
-.surfdoc .surfdoc-app-shell { display: grid; height: 100vh; width: 100%; overflow: hidden; background: var(--background, #0a0a0f); color: var(--text, #e5e5ef); font-family: var(--ws-font-body); font-size: 13px; -webkit-font-smoothing: antialiased; }
+/* position:relative (0.14): the generated tab-bar, FAB, and medium-screen
+   drawer overlay anchor to the shell box, not the viewport — static-render
+   containment (Section 76) stays intact. */
+.surfdoc .surfdoc-app-shell { position: relative; display: grid; height: 100vh; width: 100%; overflow: hidden; background: var(--background, #0a0a0f); color: var(--text, #e5e5ef); font-family: var(--ws-font-body); font-size: 13px; -webkit-font-smoothing: antialiased; }
 /* Tracks are auto-sized (children carry their own heights/widths) so a shell
    without a tab-bar or bottom panel collapses those tracks instead of
-   rendering dead strips. */
-.surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: auto 1fr; grid-template-rows: auto auto 1fr auto; }
+   rendering dead strips. Column 3 (0.14) is the Surfy right drawer: auto
+   collapses to 0 when absent or closed, and the main pane reflows as the
+   drawer's width animates. */
+.surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: auto 1fr auto; grid-template-rows: auto auto 1fr auto; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-sidebar { grid-column: 1; grid-row: 1 / -1; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-toolbar { grid-column: 2; grid-row: 1; min-width: 0; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-tab-bar { grid-column: 2; grid-row: 2; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-tab-content { grid-column: 2; grid-row: 3; min-width: 0; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-panel { grid-column: 2; grid-row: 4; }
+.surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-panel-right { grid-column: 3; grid-row: 1 / -1; }
 
 /* ============================================================
    57. SIDEBAR
@@ -2909,24 +2953,38 @@ ol.surfdoc-steps { padding-left: 1rem; }
 
 .surfdoc .surfdoc-sidebar .surfdoc-row {
     border: none; background: transparent; box-shadow: none;
-    margin: 1px 10px; padding: 0 10px; min-height: 38px;
+    margin: 1px 10px; padding: 0 10px; min-height: 36px;
     gap: 11px; border-radius: var(--ws-control-radius, 8px);
+    position: relative; /* anchors the unread dot on the icon corner (G5) */
     transition: background var(--sd-ease, 120ms ease-out), color var(--sd-ease, 120ms ease-out);
 }
-.surfdoc .surfdoc-sidebar .surfdoc-row:hover { background: var(--surface-alt, #eef1f7); }
+.surfdoc .surfdoc-sidebar .surfdoc-row:hover { background: var(--surface-alt, #eef1f7); box-shadow: none; border-color: transparent; }
+.surfdoc .surfdoc-sidebar .surfdoc-row:hover .surfdoc-row-icon { color: var(--text, #0f1422); }
+/* Unread dot rides the icon's top-right corner (G5, mockup .nav-item .dot):
+   7px accent dot with a 2px surface ring, absolutely positioned over the
+   icon slot — markup order stays as emitted. Right-side-dot canon holds for
+   rows outside the rail. */
+.surfdoc .surfdoc-sidebar .surfdoc-row .surfdoc-unread-dot {
+    position: absolute; left: 21px; top: 7px; margin: 0;
+    width: 7px; height: 7px; box-sizing: content-box;
+    border: 2px solid var(--surface, #fff);
+}
 .surfdoc .surfdoc-sidebar .surfdoc-row:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; }
 .surfdoc .surfdoc-sidebar .surfdoc-row-title { font-size: 0.8125rem; font-weight: 500; color: var(--text, #0f1422); }
 .surfdoc .surfdoc-sidebar .surfdoc-row-desc { font-size: 0.6875rem; }
-.surfdoc .surfdoc-sidebar .surfdoc-row-icon { color: var(--text-muted, #64748b); transition: color var(--sd-ease, 120ms ease-out); }
+/* Nav rows keep a bare glyph slot — the 34px card badge (Section 53) is a
+   main-pane treatment, not a rail one. */
+.surfdoc .surfdoc-sidebar .surfdoc-row-icon { color: var(--text-muted, #64748b); background: transparent; width: 18px; height: 18px; border-radius: 0; justify-content: flex-start; transition: color var(--sd-ease, 120ms ease-out); }
 /* Nav rows don't advertise chevrons — the rail is a destination list, not a
    drill-down. (Hub/detail rows outside the sidebar keep theirs.) */
 .surfdoc .surfdoc-sidebar .surfdoc-row-arrow { display: none; }
-/* Active route — neutral chip + accent icon/label (production drawer-row
-   canon). The renderer emits no active class yet; the runtime layer stamps
-   `.is-active` / aria-current, and these rules are ready for it. */
+/* Active route — filled accent-soft tint block + accent icon/label (G5,
+   mockup .nav-item.active). The renderer emits no active class yet; the
+   runtime layer stamps `.is-active` / aria-current, and these rules are
+   ready for it. */
 .surfdoc .surfdoc-sidebar .surfdoc-row.is-active,
 .surfdoc .surfdoc-sidebar .surfdoc-row[aria-current="page"] {
-    background: var(--surface-alt, #eef1f7);
+    background: var(--accent-soft, #e3ebff);
 }
 .surfdoc .surfdoc-sidebar .surfdoc-row.is-active .surfdoc-row-title,
 .surfdoc .surfdoc-sidebar .surfdoc-row[aria-current="page"] .surfdoc-row-title {
@@ -2958,6 +3016,17 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-toolbar-btn { background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); color: var(--text, #0f1422); cursor: pointer; height: 30px; padding: 0 13px; border-radius: var(--ws-control-radius, 999px); font-size: 0.8125rem; font-weight: 500; font-family: inherit; line-height: 1; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out), color var(--sd-ease, 120ms ease-out); }
 .surfdoc .surfdoc-toolbar-btn:hover { background: var(--surface-alt, #eef1f7); border-color: var(--text-muted, #6b7388); }
 .surfdoc .surfdoc-toolbar-btn:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 1px; }
+/* Registry glyphs inside toolbar buttons (G3): 16px, never squeezed. */
+.surfdoc .surfdoc-toolbar-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+/* Workspace-chip avatar slot (G6, mockup .chip .avatar): circular initial
+   badge before the label; on a primary (accent) chip it goes translucent
+   white. Negative inset mimics the chip's tighter left padding. */
+.surfdoc .surfdoc-toolbar-avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft, #e3ebff); color: var(--accent, #2563eb); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-left: -7px; }
+.surfdoc .surfdoc-toolbar-btn-primary .surfdoc-toolbar-avatar { background: rgba(255, 255, 255, 0.25); color: #fff; }
+/* Icon-only buttons (G3): a label-less `icon=` button renders as a square
+   glyph pill; the aria-label carries its name. Toggled keeps the accent
+   ring below — currentColor tints the glyph. */
+.surfdoc .surfdoc-toolbar-btn--icon { width: 30px; padding: 0; justify-content: center; }
 .surfdoc .surfdoc-toolbar-btn-primary { background: var(--accent, #3b82f6); color: var(--accent-text, #fff); border-color: var(--accent, #3b82f6); font-weight: 600; }
 .surfdoc .surfdoc-toolbar-btn-primary:hover { background: var(--accent-hover, #1d4ed8); border-color: var(--accent-hover, #1d4ed8); }
 /* Toggled (open) state — accent ring: soft accent fill + accent border,
@@ -2966,9 +3035,38 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-toolbar-separator { width: 1px; height: 18px; background: var(--border, #30363d); margin: 0 4px; flex-shrink: 0; }
 .surfdoc .surfdoc-toolbar-spacer { flex: 1; }
 .surfdoc .surfdoc-toolbar-text { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 500; padding: 0 6px; white-space: nowrap; }
-.surfdoc .surfdoc-toolbar-dropdown { appearance: none; -webkit-appearance: none; background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); color: var(--text, #0f1422); border-radius: var(--ws-control-radius, 999px); height: 30px; padding: 0 13px; font-size: 0.8125rem; font-weight: 500; font-family: inherit; cursor: pointer; flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
+/* Toolbar dropdown (0.13.3): dropdown-select markup in toolbar clothing — a
+   compact collapsed pill (the old <select> silhouette), option list hidden
+   until `.is-open` and floated as a popover so the bar never reflows. */
+.surfdoc .surfdoc-toolbar-dropdown { position: relative; display: inline-block; min-width: 0; margin: 0; background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); border-radius: var(--ws-control-radius, 999px); flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
 .surfdoc .surfdoc-toolbar-dropdown:hover { background: var(--surface-alt, #eef1f7); border-color: var(--text-muted, #6b7388); }
-.surfdoc .surfdoc-toolbar-dropdown:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 1px; }
+.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger { width: auto; height: 28px; padding: 0 13px; color: var(--text, #0f1422); font-weight: 500; }
+.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger:hover { background: transparent; }
+.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 1px; }
+.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-label { color: var(--text, #0f1422); }
+.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-options { display: none; position: absolute; top: calc(100% + 4px); left: 0; margin: 0; min-width: max(100%, 180px); z-index: 40; }
+.surfdoc .surfdoc-toolbar-dropdown.is-open .surfdoc-dropdown-options { display: block; }
+
+/* ── Native topbar treatments (WP-R5, 0.14 — from preview/mockup.html) ──
+   The TOPBAR is the only toolbar that is a direct app-shell child, so the
+   `>` scope leaves surface title-row buttons untouched. Search renders
+   icon-only (the a11y label stays in the markup; font-size:0 hides it,
+   the SVG keeps its attribute size); Surfy renders as the branded
+   accent-tinted pill. No !important — the live layer can still shrink
+   these without a specificity war. */
+.surfdoc .surfdoc-app-shell > .surfdoc-toolbar [data-action="openSearch"] {
+    font-size: 0;
+    gap: 0;
+    background: transparent;
+    border-color: transparent;
+    padding: 0 8px;
+}
+.surfdoc .surfdoc-app-shell > .surfdoc-toolbar [data-action="toggleSurfy"] {
+    color: var(--accent, #2563eb);
+    background: var(--accent-soft, #e3ebff);
+    border-color: transparent;
+    font-weight: 600;
+}
 
 /* ── Toolbars inside the main pane (tab-content) ─────────────────────────
    These are content rows, not chrome bars: transparent, no hairline, and a
@@ -2994,20 +3092,27 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-tab-bar button.active, .surfdoc .surfdoc-tab-bar button[aria-selected="true"] { color: var(--text, #e6edf3); font-weight: 600; border-bottom-color: var(--accent, #3b82f6); }
 
 /* ============================================================
+   59a. GENERATED APP TAB-BAR (ruling R-A, 0.14)
+   Renderer-generated from the sidebar's nav rows; a floating pill on
+   small screens ONLY (Section 74c). Distinct from the 38px document
+   strip above — neither its CSS nor its switch script applies.
+   ============================================================ */
+
+.surfdoc .surfdoc-app-tabbar { display: none; }
+
+/* ============================================================
    60. TAB CONTENT
    ============================================================ */
 
 .surfdoc .surfdoc-tab-content { overflow-y: auto; overflow-x: hidden; padding: 18px 24px 56px; background: var(--background, #0a0a0f); display: none; min-width: 0; }
 
-/* ── Main-pane row lists: the ruled column ───────────────────────────────
-   Rows in the content pane drop the card box and read as a ruled list —
-   hairline separators, quiet rounded hover fill, denser padding. (The
-   surface docs pin this: "ruled 880px centered column".) */
-.surfdoc .surfdoc-tab-content .surfdoc-row { border: none; background: transparent; box-shadow: none; border-radius: var(--ws-control-radius, 8px); padding: 0.7rem 0.75rem; }
-.surfdoc .surfdoc-tab-content .surfdoc-row + .surfdoc-row { border-top: 1px solid var(--border, #dde2ec); border-top-left-radius: 0; border-top-right-radius: 0; }
-.surfdoc .surfdoc-tab-content .surfdoc-row:hover { background: var(--surface-alt, #eef1f7); }
+/* ── Main-pane row lists (G2 ruling, 2026-08-10) ─────────────────────────
+   The 0.13.2 ruled-column override is REPLACED: in-shell rows keep the
+   tinted elevated card treatment from Section 53 (both themes) and stack
+   with the mockup's 6px list rhythm. */
+.surfdoc .surfdoc-tab-content .surfdoc-row + .surfdoc-row { margin-top: 6px; }
 .surfdoc .surfdoc-tab-content .surfdoc-row--loading:hover,
-.surfdoc .surfdoc-tab-content .surfdoc-row--empty:hover { background: transparent; }
+.surfdoc .surfdoc-tab-content .surfdoc-row--empty:hover { background: var(--surface, #fff); box-shadow: var(--ws-shadow); border-color: var(--border, #dde2ec); }
 .surfdoc .surfdoc-tab-content[data-tab="preview"] { display: block; }
 .surfdoc .surfdoc-tab-content.active { display: block; }
 
@@ -3020,6 +3125,78 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-panel .surfdoc-tab-bar { height: 32px; background: var(--surface, #12121a); border-bottom: 1px solid var(--border-light, #21262d); }
 .surfdoc .surfdoc-panel .surfdoc-tab-bar button { font-size: 0.75rem; padding: 0 12px; }
 .surfdoc .surfdoc-panel .surfdoc-tab-content { padding: 8px 12px; font-family: var(--font-mono, monospace); font-size: 0.75rem; background: var(--surface, #12121a); }
+
+/* ── RIGHT DRAWER — Surfy panel (WP-R2, 0.14; mockup .surfy-panel) ──────
+   Closed by default: width 0 + overflow hidden; the fixed-width inner
+   wrapper keeps content from squashing while the outer width animates.
+   Open state rides the shell root — [data-panel-open="true"] from the
+   renderer's toggle script, or .is-panel-open stamped by a dispatcher. */
+.surfdoc .surfdoc-panel-right {
+    width: 0; overflow: hidden;
+    border-top: none; border-left: 1px solid var(--border, #30363d);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    transition: width .2s ease;
+}
+.surfdoc .surfdoc-panel-inner { width: 360px; display: flex; flex-direction: column; height: 100%; }
+.surfdoc [data-panel-open="true"] .surfdoc-panel-right,
+.surfdoc .is-panel-open .surfdoc-panel-right { width: 360px; }
+/* ── Drawer anatomy (0.14, WP-N0/WP-N1) ─────────────────────────────────
+   ONE head row (fin + tier switcher + toolbar items), grounding chip,
+   flex-1 body, composer pinned last. The old blanket gray on every drawer
+   chat button is gone: only the attach control is the gray circle — Send
+   keeps the accent styling (D2). */
+.surfdoc .surfdoc-panel-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light, #21262d); flex-shrink: 0; }
+/* Fin-head (C1): the bare 26px accent fin — no chip, no circle. Native
+   here so the frontend mask stopgap (next-shell.css) can be deleted. */
+.surfdoc .surfdoc-panel-fin { display: inline-flex; align-items: center; justify-content: center; color: var(--accent, #2e8ad8); flex-shrink: 0; }
+.surfdoc .surfdoc-panel-fin svg { width: 26px; height: 26px; }
+/* Tier switcher in the head: quiet pill, chevron flips while open (B1).
+   min-width: 0 releases the content dropdown's 220px floor (Section 72b)
+   — the 3-class selector outranks it whatever the source order — so the
+   head row (fin + tier + spacer + Chats + ✕) fits the 360px inner width
+   instead of pushing the close ✕ past the viewport edge. */
+.surfdoc .surfdoc-panel-head .surfdoc-dropdown-select { min-width: 0; }
+.surfdoc .surfdoc-panel-head .surfdoc-toolbar-dropdown { background: transparent; border-color: transparent; }
+.surfdoc .surfdoc-panel-head .surfdoc-dropdown-trigger { padding: 0 4px; font-weight: 600; }
+.surfdoc .surfdoc-panel-head .surfdoc-dropdown-caret { transition: transform var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-panel-head .surfdoc-dropdown-select.is-open .surfdoc-dropdown-caret { transform: rotate(180deg); }
+/* F3: the OPTIONS popup gets its own explicit width — the min-width: 0
+   release above shrinks the closed trigger, but the absolutely-positioned
+   popup then shrink-to-fits the collapsed ~91px trigger wrapper and wraps
+   option descriptions unreadably. `width` (not a min-width floor) on
+   purpose: the live layer's is-open options rule pins min-width at
+   5-class specificity, but never touches width. 220px = the base content
+   dropdown floor; the popup is positioned, so it cannot inflate the head
+   row. */
+.surfdoc .surfdoc-panel-head .surfdoc-dropdown-options { width: 220px; }
+/* Grounding chip (D1): hairline pill under the head row; the explicit
+   [hidden] rule must exist — the flex display would defeat the UA's
+   hidden-attribute display:none otherwise. */
+.surfdoc .surfdoc-panel-grounding { display: flex; align-items: center; gap: 6px; margin: 8px 12px 0; padding: 3px 6px 3px 10px; border: 1px solid var(--border, #dde2ec); border-radius: var(--ws-radius-chip, 999px); background: var(--surface-alt, #eef1f7); font-size: 0.75rem; color: var(--text-muted, #6b7388); flex-shrink: 0; min-width: 0; }
+.surfdoc .surfdoc-panel-grounding[hidden] { display: none; }
+.surfdoc .surfdoc-grounding-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc .surfdoc-grounding-clear { border: none; background: transparent; color: var(--text-muted, #6b7388); cursor: pointer; padding: 0 4px; font-size: 0.6875rem; line-height: 1; flex-shrink: 0; }
+.surfdoc .surfdoc-grounding-clear:hover { color: var(--text, #0f1422); }
+/* Body region (B5): takes all remaining height whatever the child count,
+   so the composer lands at the drawer bottom, not under the prose. */
+.surfdoc .surfdoc-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.surfdoc .surfdoc-panel-right .surfdoc-chat-input { margin-top: auto; }
+/* Attach control (D2): 32px gray circle on surface-alt — deliberately not
+   accent, so Send stays the only accent control in the composer. */
+.surfdoc .surfdoc-chat-attach { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border, #dde2ec); background: var(--surface-alt, #eef1f7); color: var(--text, #0f1422); display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-chat-attach:hover { background: var(--border-light, #dde2ec); }
+/* FAB (WP-R2): hidden except on small screens (≤767px block, Section 74c),
+   where it is the 52px accent circle that toggles the drawer. */
+.surfdoc .surfdoc-panel-fab {
+    display: none; position: absolute; right: 14px; bottom: 14px; z-index: 30;
+    width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--accent, #2e8ad8); color: #fff;
+    place-items: center;
+    box-shadow: 0 8px 24px rgba(46, 138, 216, 0.45);
+}
+.surfdoc .surfdoc-panel-fab svg { width: 24px; height: 24px; }
+.surfdoc .surfdoc-panel-fab:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
 
 /* ============================================================
    62. TERMINAL
@@ -3192,16 +3369,141 @@ ol.surfdoc-steps { padding-left: 1rem; }
 
 /* ============================================================
    74. MOBILE RESPONSIVE — interactive blocks
+   (768px → 767px in 0.14 so the medium icon-rail range, 768–1023px,
+   is not clipped by the legacy sidebar-hiding rule at exactly 768px.)
    ============================================================ */
 
-@media (max-width: 768px) {
-    .surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: 1fr; }
+@media (max-width: 767px) {
+    /* No grid-template-columns override here: shell children are pinned to
+       grid-column 2 (Section 56), so forcing a single `1fr` template would
+       push them into an implicit auto column beside an empty 1fr track.
+       With the base `auto 1fr auto` template, column 1 auto-collapses when
+       the sidebar hides and column 3 empties when the right drawer goes
+       absolute (74b) — the main pane keeps the full width by itself. */
     .surfdoc .surfdoc-sidebar { display: none; }
     .surfdoc .surfdoc-panel[data-desktop-only="true"] { display: none; }
     .surfdoc .surfdoc-drawer { width: 100% !important; height: 70vh; top: auto; bottom: 0; border-left: none; border-top: 1px solid var(--border, #30363d); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
     .surfdoc .surfdoc-toolbar { padding: 0 8px; overflow-x: auto; }
     .surfdoc .surfdoc-toolbar-btn { padding: 0 10px; height: 28px; font-size: 0.75rem; }
     .surfdoc .surfdoc-tab-content { padding: 14px 14px 40px; }
+}
+
+/* ============================================================
+   74b. MEDIUM — 68px ICON RAIL (WP-R1, 0.14; ≤1023px, app-shell scoped)
+   Mockup ground truth: sidebar collapses to an icon rail — wordmark,
+   labels, and the hub group (divider + rows after it) hide; the four
+   surface rows render icon-only, centered. The Surfy drawer becomes an
+   absolute overlay (NOT fixed — Section 76 static containment holds)
+   and the main pane no longer reflows.
+   ============================================================ */
+
+@media (max-width: 1023px) {
+    /* min/max clamps beat the renderer's inline style="width:NNNpx" (emitted
+       whenever the sidebar carries a width= attr) — a bare `width` here would
+       lose to the inline declaration and the rail would never narrow. */
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar { width: 68px; min-width: 68px; max-width: 68px; padding: 14px 8px; }
+    /* Wordmark strip hides */
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-toolbar { display: none; }
+    /* Icon-only rows: the body span (title + desc) hides entirely — its
+       flex:1 would otherwise drag the icon off-center. */
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-row-body,
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-row-title,
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-row-desc,
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-row-arrow { display: none; }
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-row { justify-content: center; padding: 10px 0; }
+    /* Unread dot re-anchors to the centered icon's corner */
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-row .surfdoc-unread-dot { left: calc(50% + 4px); top: 6px; }
+    /* Hub group hides: the divider and every row after it (rows are
+       direct <aside> siblings; the sidebar divider is the plain <hr>
+       form when unlabeled). */
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-divider,
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-divider-plain,
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-divider ~ .surfdoc-row,
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar .surfdoc-divider-plain ~ .surfdoc-row { display: none; }
+    /* Surfy drawer becomes an overlay: absolute (containment-safe), no
+       grid reflow, min(400px, 100vw) when open. */
+    .surfdoc .surfdoc-app-shell > .surfdoc-panel-right { position: absolute; right: 0; top: 0; bottom: 0; z-index: 35; box-shadow: var(--sd-shadow-overlay, -4px 0 24px rgba(0, 0, 0, 0.3)); }
+    .surfdoc .surfdoc-app-shell .surfdoc-panel-inner { width: min(400px, 100vw); }
+    .surfdoc [data-panel-open="true"] .surfdoc-panel-right,
+    .surfdoc .is-panel-open .surfdoc-panel-right { width: min(400px, 100vw); }
+}
+
+/* ============================================================
+   74c. SMALL — GENERATED TAB-BAR + FAB + SMALL FURNITURE
+   (WP-R1/WP-R2 + ruling R-C, 0.14; ≤767px)
+   Shell chrome rules are app-shell scoped; the furniture rules (kanban
+   stacking, two-plane split, sheet geometry) apply to both static
+   renders and the live shell.
+   ============================================================ */
+
+@media (max-width: 767px) {
+    .surfdoc .surfdoc-app-shell .surfdoc-sidebar { display: none; }
+
+    /* Floating pill tab-bar (mockup .tabbar): absolute to the shell,
+       inset 76px on the right to clear the FAB. */
+    .surfdoc .surfdoc-app-tabbar {
+        display: flex; position: absolute; left: 12px; right: 76px; bottom: 12px; z-index: 30;
+        background: var(--surface, #12121a);
+        backdrop-filter: blur(24px) saturate(1.6);
+        -webkit-backdrop-filter: blur(24px) saturate(1.6);
+        border: 1px solid var(--border, #30363d); border-radius: 999px;
+        box-shadow: var(--sd-shadow-pop, 0 8px 24px rgba(15, 23, 42, 0.18));
+        padding: 6px; gap: 2px; justify-content: space-around; align-items: center;
+    }
+    .surfdoc .surfdoc-app-tabbar-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px; border-radius: 999px; background: transparent; border: none; cursor: pointer; color: var(--text-muted, #8b949e); font-family: inherit; }
+    .surfdoc .surfdoc-app-tabbar-item.is-active { color: var(--accent, #2e8ad8); background: var(--accent-soft, #e3ebff); }
+    .surfdoc .surfdoc-app-tabbar-icon { position: relative; display: flex; width: 18px; height: 18px; }
+    .surfdoc .surfdoc-app-tabbar-icon svg { width: 18px; height: 18px; }
+    /* 7px corner unread dot from the row's unread attr */
+    .surfdoc .surfdoc-app-tabbar-icon .surfdoc-unread-dot { position: absolute; right: -4px; top: -2px; margin: 0; width: 7px; height: 7px; }
+    .surfdoc .surfdoc-app-tabbar-label { font-family: var(--ws-font-display); font-weight: 900; font-size: 10px; letter-spacing: 0.03em; }
+
+    /* FAB shows (base rule + geometry in Section 61) */
+    .surfdoc .surfdoc-app-shell .surfdoc-panel-fab { display: grid; }
+
+    /* Topbar keeps only the workspace chip and Search: the Surfy pill and
+       the separator before it hide. */
+    .surfdoc .surfdoc-app-shell > .surfdoc-toolbar [data-action="toggleSurfy"],
+    .surfdoc .surfdoc-app-shell > .surfdoc-toolbar .surfdoc-toolbar-separator:has(+ [data-action="toggleSurfy"]) { display: none; }
+
+    /* Content clears the floating tab-bar */
+    .surfdoc .surfdoc-app-shell .surfdoc-tab-content { padding-bottom: 110px; }
+
+    /* Surfy drawer goes full-screen while open; tab-bar + FAB hide. */
+    .surfdoc .surfdoc-app-shell > .surfdoc-panel-right { z-index: 40; }
+    .surfdoc [data-panel-open="true"] .surfdoc-panel-right,
+    .surfdoc .is-panel-open .surfdoc-panel-right { width: 100vw; max-width: 100%; }
+    .surfdoc [data-panel-open="true"] .surfdoc-panel-inner,
+    .surfdoc .is-panel-open .surfdoc-panel-inner { width: 100%; }
+    .surfdoc [data-panel-open="true"] .surfdoc-app-tabbar,
+    .surfdoc [data-panel-open="true"] .surfdoc-panel-fab,
+    .surfdoc .is-panel-open .surfdoc-app-tabbar,
+    .surfdoc .is-panel-open .surfdoc-panel-fab { display: none; }
+
+    /* ── Small furniture (ruling R-C) — static AND live contexts ── */
+
+    /* Kanban stacks vertical */
+    .surfdoc .surfdoc-board-columns { flex-direction: column; min-width: 0; }
+    .surfdoc .surfdoc-board-column { min-width: 0; max-width: none; }
+
+    /* Messages two-plane: one plane at a time, swapped by
+       data-thread="open" on the shell root (or body); back button shows
+       in the thread plane. */
+    .surfdoc .surfdoc-split-pane .surfdoc-split-right { display: none; }
+    [data-thread="open"] .surfdoc-split-pane .surfdoc-split-left { display: none; }
+    [data-thread="open"] .surfdoc-split-pane .surfdoc-split-right { display: block; }
+    [data-thread="open"] .surfdoc-split-back { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* Detail bars wrap; the title span takes the full width. */
+    .surfdoc .surfdoc-tab-content .surfdoc-toolbar { flex-wrap: wrap; row-gap: 8px; height: auto; }
+    .surfdoc .surfdoc-tab-content .surfdoc-toolbar .surfdoc-toolbar-title,
+    .surfdoc .surfdoc-tab-content > .surfdoc-toolbar:first-child .surfdoc-toolbar-text { width: 100%; flex-basis: 100%; }
+
+    /* Sheets go edge-to-edge in the live shell. Static renders are
+       untouched: containment (Section 76) pins position:static, where
+       left/right/transform do not apply. */
+    .surfdoc.surfdoc-live .surfdoc-modal,
+    .surfdoc.surfdoc-live .surfdoc-drawer { left: 10px !important; right: 10px !important; width: auto !important; max-width: none !important; transform: none !important; }
 }
 
 /* ============================================================

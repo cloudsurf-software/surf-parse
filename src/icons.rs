@@ -4,7 +4,58 @@
 //! Each icon is a minimal inline SVG (24x24 viewbox, stroke-based, currentColor).
 
 /// Look up a built-in icon by name. Returns an inline SVG string or `None`.
+///
+/// Resolution order (0.13.3):
+/// 1. the curated built-in constants below (stable — existing renders keep
+///    their exact glyphs);
+/// 2. the vendored surf-icons set (`icons_vendored.rs`, 127 glyphs from
+///    CloudSurf's own MIT icon library);
+/// 3. the design-vocabulary alias table (`doc` → `docs`, `knowledge` →
+///    `messages`, …), resolved back through 1 then 2.
+///
+/// Unknown names return `None`; row/toolbar renderers keep their circle
+/// fallback. Icons are a render concern only — no block schema involvement.
 pub fn get_icon(name: &str) -> Option<&'static str> {
+    if let Some(svg) = builtin_icon(name) {
+        return Some(svg);
+    }
+    if let Some(svg) = crate::icons_vendored::vendored_icon(name) {
+        return Some(svg);
+    }
+    let alias = design_alias(name)?;
+    builtin_icon(alias).or_else(|| crate::icons_vendored::vendored_icon(alias))
+}
+
+/// Design-vocabulary aliases — names the Surfspace shell docs use that map
+/// onto a differently-named glyph. Kept as data so the vocabulary is
+/// auditable in one place.
+fn design_alias(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "doc" => "docs",
+        "task" => "tasks",
+        // Every authored `icon=knowledge` site is messages-semantic (nav rows,
+        // roster rows, tab bar) — the alias exists solely to glyph the
+        // messages nav row, so it resolves to the filled messages trace.
+        // `book-open` stays reachable under its own name.
+        "knowledge" => "messages",
+        "posts" => "newspaper",
+        "device" => "devices",
+        "sort" => "list",
+        "move" => "arrow-right",
+        "feature" => "star",
+        "double-check" => "check-circle",
+        "people" | "members" => "users",
+        "import" => "upload",
+        "wiki" => "book",
+        "signin" => "login",
+        "ai" => "sparkle",
+        _ => return None,
+    })
+}
+
+/// The curated built-in constants (pre-0.13.3 set plus the sparkle/login
+/// glyphs folded in from the private row-icon table).
+fn builtin_icon(name: &str) -> Option<&'static str> {
     match name {
         "download" => Some(ICON_DOWNLOAD),
         "github" => Some(ICON_GITHUB),
@@ -50,20 +101,36 @@ pub fn get_icon(name: &str) -> Option<&'static str> {
         "target" => Some(ICON_TARGET),
         "flask" | "beaker" => Some(ICON_FLASK),
         "newspaper" | "news" => Some(ICON_NEWSPAPER),
+        "sparkle" => Some(ICON_SPARKLE),
+        "login" => Some(ICON_LOGIN),
+        "bug" => Some(ICON_BUG),
         _ => None,
     }
 }
 
-/// Return the list of all available icon names.
+/// Return the list of all available icon names: built-in constants,
+/// design-vocabulary aliases, and the vendored surf-icons set, deduped.
 pub fn available_icons() -> &'static [&'static str] {
     &[
-        "download", "github", "external-link", "arrow-right", "chevron-right",
-        "mail", "star", "heart", "play", "book", "code", "globe", "check",
-        "info", "menu", "search", "settings", "user", "home", "file",
-        "file-text", "clock", "edit", "pencil", "shield", "zap", "lock", "phone",
-        "map-pin", "calendar", "users", "truck", "message-circle", "image",
-        "briefcase", "award", "layers", "package", "trending-up", "coffee",
-        "scissors", "wrench", "target", "flask", "beaker", "newspaper", "news",
+        "activity", "ai", "alert-circle", "apps", "archive", "arrow-down", "arrow-left",
+        "arrow-right", "arrow-up", "award", "bar-chart", "beaker", "book", "book-open",
+        "bookmark", "box", "briefcase", "bug", "calendar", "camera", "check", "check-circle",
+        "chevron-down", "chevron-left", "chevron-right", "chevron-up", "circle", "clipboard",
+        "clock", "cloud", "code", "code-repos", "coffee", "compass", "copy", "create",
+        "credit-card", "database", "deploy", "device", "devices", "doc", "docs", "dollar-sign",
+        "domains", "double-check", "download", "edit", "external-link", "feature", "file",
+        "file-text", "files", "filter", "flag", "flask", "folder", "gift", "github", "globe",
+        "heart", "home", "image", "images", "import", "inbox", "info", "knowledge", "layers",
+        "layout", "link", "list", "lock", "login", "mail", "map", "map-pin", "members", "menu",
+        "message-circle", "message-square", "messages", "mic", "minus", "monitor", "moon",
+        "more", "move", "music", "new-chat", "news", "newspaper", "notebook", "notifications",
+        "package", "pencil", "people", "phone", "pie-chart", "play", "plus", "plus-circle",
+        "posts", "refresh-cw", "ruler", "scissors", "search", "send", "settings", "share",
+        "shield", "shopping-bag", "shopping-cart", "signin", "smartphone", "sort", "sparkle",
+        "star", "sun", "surf-emblem", "surfy", "surfy-fin", "tag", "target", "task", "tasks",
+        "thumbs-down", "thumbs-up", "tier-free", "tier-premium", "tier-pro", "tier-ultra",
+        "trash", "trending-up", "trophy", "truck", "upload", "user", "users", "video",
+        "wallet", "waves", "wavesite", "wiki", "wind", "workspace", "wrench", "x", "zap",
     ]
 }
 
@@ -158,6 +225,17 @@ const ICON_WRENCH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" 
 
 const ICON_TARGET: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>"#;
 
+// Folded in from the private row-icon table (0.13.3): sparkle (Surfy/AI) and
+// login have no surf-icons counterpart, so they stay curated constants.
+
+const ICON_SPARKLE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>"#;
+
+const ICON_LOGIN: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>"#;
+
+// Bug-type task rows — glyph traced from preview/mockup.html (design ground
+// truth, 2026-08-10 ruling): rounded-body beetle with antennae + legs.
+const ICON_BUG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="6" width="8" height="14" rx="4"/><path d="M9 6a3 3 0 0 1 6 0"/><path d="M12 11v9"/><path d="M8 12H5M8 17H5M16 12h3M16 17h3"/></svg>"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,6 +250,76 @@ mod tests {
     #[test]
     fn unknown_icon_returns_none() {
         assert!(get_icon("nonexistent").is_none());
+        // bug resolves as of the consolidation round: preview/mockup.html
+        // (design ground truth) draws a real beetle glyph on bug-type task
+        // rows, so the earlier "circle fallback by design" call was wrong
+        // against the mockup.
+        assert!(get_icon("bug").is_some());
+    }
+
+    #[test]
+    fn design_vocabulary_names_resolve() {
+        // Every icon name the Surfspace shell strategy docs use must resolve
+        // through the registry (measured vocabulary, 2026-08-10 round).
+        for name in [
+            "doc", "task", "apps", "knowledge", "posts", "folder", "device",
+            "settings", "notifications", "search", "surfy-fin", "login",
+            "file", "sparkle", "chevron-left", "plus", "share", "filter",
+            "edit", "download", "copy", "upload", "trash", "sort", "people",
+            "package", "move", "members", "lock", "import", "feature",
+            "double-check", "clock", "archive", "bug",
+        ] {
+            assert!(get_icon(name).is_some(), "design name '{}' must resolve", name);
+        }
+        // knowledge is a messages-semantic alias (every authored site is a
+        // messages nav/roster row): it must resolve to the same glyph as
+        // `messages`, while `book-open` keeps its own distinct stroke.
+        assert_eq!(
+            get_icon("knowledge"),
+            get_icon("messages"),
+            "knowledge must alias the messages trace"
+        );
+        let book_open = get_icon("book-open").expect("book-open must still resolve");
+        assert_ne!(
+            Some(book_open),
+            get_icon("messages"),
+            "book-open must keep its own distinct stroke"
+        );
+    }
+
+    #[test]
+    fn vendored_icons_all_resolve_and_are_valid() {
+        for (name, svg) in crate::icons_vendored::VENDORED_ICONS {
+            // Builtin constants shadow same-named vendored glyphs by design
+            // (stability), so assert resolution, not identity.
+            assert!(get_icon(name).is_some(), "vendored '{}' must resolve", name);
+            assert!(svg.starts_with("<svg"), "vendored '{}' must start with <svg", name);
+            assert!(svg.ends_with("</svg>"), "vendored '{}' must end with </svg>", name);
+            assert!(svg.contains("currentColor"), "vendored '{}' must use currentColor", name);
+            assert!(
+                svg.contains("width=\"16\" height=\"16\""),
+                "vendored '{}' must carry the intrinsic 16px size",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn vendored_table_is_sorted_for_binary_search() {
+        let names: Vec<&str> = crate::icons_vendored::VENDORED_ICONS.iter().map(|(n, _)| *n).collect();
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        assert_eq!(names, sorted, "VENDORED_ICONS must stay sorted by name");
+    }
+
+    #[test]
+    fn builtin_names_keep_their_curated_glyphs() {
+        // Resolution order pins stability: names that predate the vendored
+        // set keep their exact constants, so existing renders do not drift.
+        assert_eq!(get_icon("download"), Some(ICON_DOWNLOAD));
+        assert_eq!(get_icon("search"), Some(ICON_SEARCH));
+        assert_eq!(get_icon("settings"), Some(ICON_SETTINGS));
+        assert_eq!(get_icon("newspaper"), Some(ICON_NEWSPAPER));
     }
 
     #[test]

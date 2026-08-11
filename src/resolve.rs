@@ -63,6 +63,8 @@ pub(crate) fn resolve_font_preset(name: &str) -> Option<FontPreset> {
         // are self-hosted by consumers (@font-face in the host page/app
         // bundle), so the preset only supplies the stack — with a graceful
         // system-sans fallback for surfaces that don't ship the files.
+        // Static renders can opt into a data-URI @font-face instead via
+        // `PageConfig::embed_fonts` (0.13.3, docs/embedded-fonts.surf).
         "surf-display" => Some(FontPreset {
             stack: "'Surf Display', -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
             import: None,

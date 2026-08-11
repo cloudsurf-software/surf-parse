@@ -1,0 +1,62 @@
+---
+title: "Embedded fonts for static renders"
+type: doc
+status: active
+scope: public
+created: 2026-08-10
+version: 1
+tags: [surf-parse, fonts, rendering, html]
+description: "Why Surf Display never painted in static file:// renders, and the opt-in PageConfig::embed_fonts flag that fixes it."
+---
+
+# Embedded fonts for static renders
+
+::summary
+Static `file://` renders never painted Surf Display: `surfdoc.css` ships no
+`@font-face` for it, and the `surf-display` font preset intentionally only
+supplies a family stack (consumers self-host the files). 0.13.3 adds an
+opt-in page option — `PageConfig::embed_fonts` — that embeds the face as a
+data-URI `@font-face` plus the Inter `@import`. Default is **off** to
+protect page weight; off is byte-identical to pre-0.13.3 output.
+::
+
+## The problem
+
+The `surf-display` entry in the font preset table (`src/resolve.rs`) sets
+only the family stack — `'Surf Display', -apple-system, …` — with no import
+URL, because hosted surfaces (surf.space, the web shell) declare the
+`@font-face` themselves in the host page. That is correct for hosted pages
+and wrong for static output: an HTML file opened from disk has no host to
+serve the woff2, so the stack silently falls back to system sans and the
+brand display face never appears.
+
+## The decision
+
+- **Mechanism**: a boolean `embed_fonts` on `PageConfig`, honored by both
+  `to_html_page` and `to_shell_page` (it lives in the shared head builder).
+  When set, the head gains one `<style>` block containing the Inter
+  Google-Fonts `@import` and a single `@font-face` for Surf Display
+  (weight 900, `font-display: swap`) whose `src` is a base64 woff2 data
+  URI. It is emitted *before* the inlined SurfDoc stylesheet so the face
+  exists by the time the CSS font stacks resolve.
+- **Default off**: the woff2 is 28.5 KB (38 KB as base64) added to every
+  page. Documents that are served rather than opened from disk should keep
+  using the host-declared face. Off emits nothing — existing pages are
+  byte-for-byte unchanged, pinned by test.
+- **Asset**: Surf Display Black is CloudSurf's own brand asset. It is
+  vendored under `assets/fonts/` twice: `SurfDisplay-Black.woff2` (the
+  binary, provenance copy) and `SurfDisplay-Black.woff2.b64` (its base64
+  twin, consumed at compile time via `include_str!` so the crate needs no
+  base64 dependency or build script). If the face is ever re-exported,
+  regenerate both files together.
+- **CLI surface**: the strategy/preview trees render through the `surf` CLI
+  (`SURF_BIN`), so a user-facing `--embed-fonts` flag belongs to the `surf`
+  repo, which forwards to this page option. `surf-lint` has no render
+  command and is unaffected.
+
+## Contract (pinned by tests)
+
+- `embed_fonts: false` (the default) leaves the head byte-identical to
+  0.13.2 output — no `@font-face`, no Inter import.
+- `embed_fonts: true` emits exactly one Surf Display `@font-face` with a
+  non-truncated woff2 data URI, on both the page and shell-page paths.

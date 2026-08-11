@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 111
-registry_updated = "2026-08-06"
+total_blocks = 112
+registry_updated = "2026-08-11"
 
 [blocks.ai-context]
 status = "planned"
@@ -534,8 +534,16 @@ enum_variant = "Editor"
 [blocks.split-pane]
 status = "implemented"
 category = "container"
-purpose = "Resizable side-by-side layout mount point with configurable ratio"
-attributes = ["ratio"]
+purpose = "Resizable side-by-side layout mount point with configurable ratio; back-label/back-action emit the small-screen back control in the right plane"
+attributes = ["ratio", "back-label", "back-action"]
+degradation = "sequential sections"
+enum_variant = "SplitPane"
+
+[blocks.pane]
+status = "implemented"
+category = "container"
+purpose = "Child plane of a split-pane; side=left|right selects the plane (order is the fallback: first pane left, second right)"
+attributes = ["side"]
 degradation = "sequential sections"
 enum_variant = "SplitPane"
 
@@ -719,7 +727,7 @@ enum_variant = "AppDeploy"
 status = "implemented"
 category = "utility"
 purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states and a right-side unread dot"
-attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action"]
+attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action", "action"]
 degradation = "single-line description"
 enum_variant = "Row"
 

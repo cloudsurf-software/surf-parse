@@ -773,9 +773,21 @@ pub enum Block {
         data: Option<ChartData>,
         span: Span,
     },
-    /// Resizable side-by-side layout mount point.
+    /// Resizable side-by-side layout mount point. Authored `::pane[side=left]`
+    /// / `::pane[side=right]` children fill the two planes (order is the
+    /// fallback when `side` is omitted: first pane left, second right; stray
+    /// non-pane children fall to the left pane). `back-label` / `back-action`
+    /// emit the small-screen back control in the right plane.
     SplitPane {
         ratio: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        back_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        back_action: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        left: Vec<Block>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        right: Vec<Block>,
         span: Span,
     },
 
@@ -961,6 +973,11 @@ pub enum Block {
         /// Right-side trailing action control: display label + action verb.
         trailing_label: Option<String>,
         trailing_action: Option<String>,
+        /// Row-level action verb (0.14): stamped verbatim as `data-action`
+        /// on the row root so dispatcher verbs (openConversation,
+        /// askSurfyDoc, …) are reachable from authored rows.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        action: Option<String>,
         /// Per-row actions mapping labels to action strings. (0.12)
         actions: Vec<RowAction>,
         span: Span,
@@ -1222,6 +1239,15 @@ pub enum ToolbarItem {
         /// Accent-ring open/pressed state (e.g. a toolbar button whose
         /// panel is currently open).
         toggled: bool,
+        /// Workspace-chip avatar slot (0.13.3): a short initial (e.g. "C")
+        /// rendered as a circular badge before the label. Render concern
+        /// only — same precedent as `icon` (no native schema field).
+        avatar: Option<String>,
+        /// Explicit accessible name (0.13.3, `aria-label=` attr): the G3
+        /// icon-only buttons carry their old visible label here. Takes
+        /// priority over the action/icon-derived fallback. Render concern
+        /// only — same precedent as `avatar` (no native schema field).
+        aria_label: Option<String>,
     },
     Separator,
     Spacer,

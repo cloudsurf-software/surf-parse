@@ -1508,6 +1508,26 @@ fn style_refresh_cover_hero_contract_intact() {
 }
 
 #[test]
+fn style_row_anchor_underline_suppressed() {
+    // G10: link rows are anchors; the prose `.surfdoc a:hover` underline must
+    // never leak onto the row title/meta. The suppression rule covers the
+    // anchor and its descendant spans for all states including hover.
+    let css = surf_parse::SURFDOC_CSS;
+    assert!(
+        css.contains(".surfdoc a.surfdoc-row, .surfdoc a.surfdoc-row:hover"),
+        "row anchor-decoration suppression selector missing from SURFDOC_CSS"
+    );
+    assert!(
+        css.contains(".surfdoc a.surfdoc-row .surfdoc-row-title"),
+        "row title must be covered by the anchor-decoration suppression rule"
+    );
+    assert!(
+        css.contains(".surfdoc a.surfdoc-row .surfdoc-row-trailing"),
+        "row trailing control must be covered by the anchor-decoration suppression rule"
+    );
+}
+
+#[test]
 fn style_refresh_img_slot_rule_present() {
     assert!(
         surf_parse::SURFDOC_CSS.contains(".surfdoc-img-slot"),
@@ -1695,3 +1715,159 @@ fn copy_sweep_warnings_never_in_html() {
     assert!(html.contains("Quick turnaround"), "content still renders: {html}");
 }
 
+
+/// 0.14 responsive shell (WP-R1/WP-R2, rulings R-A/R-D): a shell.surf-shaped
+/// document — sidebar rows + divider + hub rows + topbar + tab-content +
+/// right panel — renders the whole responsive kit together: the Surfy
+/// drawer, the generated tab-bar (surface rows only), the FAB, and the
+/// closed-by-default state attributes.
+#[test]
+fn responsive_shell_renders_drawer_tabbar_fab_and_state() {
+    let source = "\
+::app-shell[layout=sidebar-main-panel height=720]\n\
+:::sidebar[position=left width=240]\n\
+::::toolbar\n- text[value=\"Surfspace\" size=22]\n::::\n\
+::::row[icon=doc href=#]\nDocs\n::::\n\
+::::row[icon=task href=#]\nTasks\n::::\n\
+::::row[icon=apps href=#]\nApps\n::::\n\
+::::row[icon=knowledge href=# unread=true]\nMessages\n::::\n\
+::::divider\n::::\n\
+::::row[icon=posts href=#]\nPosts\n::::\n\
+::::row[icon=settings href=#]\nSettings\n::::\n\
+:::\n\
+:::toolbar\n\
+- button[label=\"Search\" icon=search action=openSearch]\n\
+- separator\n\
+- button[label=\"Surfy\" icon=surfy-fin action=toggleSurfy]\n\
+:::\n\
+:::tab-content[tab=main]\nBody\n:::\n\
+:::panel[position=right]\nSurfy thread\n:::\n\
+::\n";
+    let result = surf_parse::parse(source);
+    let html = result.doc.to_html();
+
+    // Shell root: closed drawer state stamped (default CLOSED, ruling R-D).
+    assert!(html.contains("data-panel-open=\"false\""), "{html}");
+
+    // Drawer: right panel in drawer shape with fixed-width inner wrapper.
+    assert!(html.contains("surfdoc-panel surfdoc-panel-right"));
+    assert!(html.contains("aria-hidden=\"true\""));
+    assert!(html.contains("<div class=\"surfdoc-panel-inner\">"));
+    assert!(html.contains("Surfy thread"));
+
+    // Drawer anatomy (0.14 WP-N0): ONE head row (fin glyph), the grounding
+    // chip directly below it, then the flex-1 body region carrying the
+    // panel's source children — in that order, even for a panel with no
+    // dropdown/toolbar/composer children.
+    assert_eq!(html.matches("surfdoc-panel-head").count(), 1, "one head row");
+    let head = html.find("surfdoc-panel-head").unwrap();
+    let ground = html.find("surfdoc-panel-grounding").expect("grounding chip");
+    let body_region = html.find("surfdoc-panel-body").expect("body region");
+    let thread = html.find("Surfy thread").unwrap();
+    assert!(head < ground && ground < body_region && body_region < thread);
+    assert!(html.contains("<span class=\"surfdoc-panel-fin\" aria-hidden=\"true\">"));
+
+    // Generated tab-bar: the four surface rows, hub rows excluded.
+    assert!(html.contains("<nav class=\"surfdoc-app-tabbar\""));
+    for tab in ["docs", "tasks", "apps", "messages"] {
+        assert!(html.contains(&format!("data-tab=\"{tab}\"")), "missing {tab}");
+    }
+    assert!(!html.contains("data-tab=\"posts\""));
+    assert!(!html.contains("data-tab=\"settings\""));
+
+    // FAB + toggle script, wired to the topbar Surfy button too.
+    assert!(html.contains("surfdoc-panel-fab"));
+    assert!(html.contains("aria-controls=\"surfdoc-panel-right\""));
+    assert!(html.contains("__surfyWired"));
+    assert!(html.contains("[data-action=\"toggleSurfy\"]"));
+    assert!(!html.contains("localStorage"));
+}
+
+/// 0.14 drawer polish (WP-N0/WP-N1, cross-lane contract): a shell.surf-shaped
+/// right panel — tier dropdown-select + toolbar + prose + chat-input-simple —
+/// composes to the ruled drawer anatomy regardless of source block order:
+/// one head row (fin + selected-value-only tier switcher + toolbar items),
+/// the grounding chip with the pinned selectors, body, and the composer
+/// LAST with the attach control before the input. Bottom panels keep the
+/// generic chat-input markup byte-identical.
+#[test]
+fn surfy_drawer_head_grounding_and_composer_contract() {
+    let source = "\
+::panel[position=right width=360]\n\
+:::dropdown-select[name=surfy-tier icon=surfy-fin label=\"Surfy Standard\" selected=\"Standard\" action=switchTier]\n\
+- \"Standard\" value=standard action=switchTierStandard\n\
+- \"Max\" value=max action=switchTierMax\n\
+:::\n\
+:::toolbar\n\
+- spacer\n\
+- button[label=\"Chats\" action=openSurfyChats]\n\
+- button[label=\"\u{2715}\" action=dismissSurfy]\n\
+:::\n\
+Context inherits here.\n\
+:::chat-input-simple[placeholder=\"Message Surfy...\" action=sendToSurfy]\n\
+:::\n\
+::\n";
+    let result = surf_parse::parse(source);
+    let html = result.doc.to_html();
+
+    // B2: ONE head row — the toolbar's items are inlined into it, so no
+    // nested `surfdoc-toolbar` wrapper renders inside the drawer.
+    assert_eq!(html.matches("surfdoc-panel-head").count(), 1, "{html}");
+    assert!(!html.contains("<div class=\"surfdoc-toolbar\""), "{html}");
+    let head = html.find("<div class=\"surfdoc-panel-head\">").unwrap();
+    let fin = html.find("surfdoc-panel-fin").unwrap();
+    let dropdown = html.find("surfdoc-dropdown-select").unwrap();
+    let spacer = html.find("surfdoc-toolbar-spacer").unwrap();
+    let chats = html.find(">Chats</button>").unwrap();
+    let close = html.find("data-action=\"dismissSurfy\"").unwrap();
+    assert!(head < fin && fin < dropdown && dropdown < spacer && spacer < chats && chats < close);
+
+    // B1: the tier switcher title is ONLY the selected value — no label
+    // duplication — and the caret span is present for the is-open flip.
+    assert!(html.contains("<span class=\"surfdoc-dropdown-selected\">Standard</span>"), "{html}");
+    assert!(!html.contains("surfdoc-dropdown-label"), "{html}");
+    assert!(!html.contains(">Surfy Standard<"), "{html}");
+    assert!(html.contains("surfdoc-dropdown-caret"));
+    assert!(surf_parse::SURFDOC_CSS
+        .contains(".surfdoc-panel-head .surfdoc-dropdown-select.is-open .surfdoc-dropdown-caret"));
+
+    // D1: grounding chip — exact cross-lane contract markup, hidden, in the
+    // panel head area directly below the head row.
+    let chip = "<div class=\"surfdoc-panel-grounding\" hidden>\
+                <span class=\"surfdoc-grounding-label\"></span>\
+                <button type=\"button\" class=\"surfdoc-grounding-clear\" \
+                data-action=\"clearSurfyGrounding\" aria-label=\"Clear grounding\">"
+        .replace("                ", "");
+    assert!(html.contains(&chip), "{html}");
+
+    // B5: body takes the remaining space; the composer renders LAST, after
+    // the body region, whatever the source order.
+    let body_region = html.find("<div class=\"surfdoc-panel-body\">").unwrap();
+    let prose = html.find("Context inherits here.").unwrap();
+    let composer = html.find("<div class=\"surfdoc-chat-input\">").unwrap();
+    assert!(body_region < prose && prose < composer, "{html}");
+
+    // D2: attach control before the input, contract selectors; Send keeps
+    // its own button (no gray blanket class).
+    let attach = html
+        .find("<button type=\"button\" class=\"surfdoc-chat-attach\" data-action=\"attachToSurfy\" aria-label=\"Attach\">")
+        .expect("attach control");
+    let input = html.find("<input type=\"text\" placeholder=\"Message Surfy...\">").unwrap();
+    let send = html.find("<button data-action=\"sendToSurfy\">Send</button>").unwrap();
+    assert!(attach < input && input < send, "{html}");
+
+    // Bottom panels: generic chat-input markup stays byte-identical — no
+    // attach control, no drawer anatomy.
+    let bottom = surf_parse::parse(
+        "::panel[position=bottom height=200]\n\
+         :::chat-input-simple[placeholder=\"Ask\" action=send]\n\
+         :::\n\
+         ::\n",
+    )
+    .doc
+    .to_html();
+    assert!(bottom.contains("<div class=\"surfdoc-chat-input\"><input type=\"text\" placeholder=\"Ask\"><button data-action=\"send\">Send</button></div>"), "{bottom}");
+    assert!(!bottom.contains("surfdoc-chat-attach"));
+    assert!(!bottom.contains("surfdoc-panel-head"));
+    assert!(!bottom.contains("surfdoc-panel-grounding"));
+}

@@ -91,7 +91,7 @@ pub fn resolve_block(block: Block) -> Block {
         // Compound widget mount points
         "editor" => parse_editor(attrs, *span),
         "chart" => parse_chart(attrs, content, *span),
-        "split-pane" => parse_split_pane(attrs, *span),
+        "split-pane" => parse_split_pane(attrs, content, *span),
         // Infrastructure manifest blocks
         "app" => parse_app(attrs, content, *span),
         "build" => parse_build(attrs, content, *span),
@@ -3134,10 +3134,40 @@ fn parse_chart_number(cell: &str) -> f64 {
     cleaned.parse::<f64>().unwrap_or(0.0)
 }
 
-fn parse_split_pane(attrs: &Attrs, span: Span) -> Block {
+fn parse_split_pane(attrs: &Attrs, content: &str, span: Span) -> Block {
     let ratio = attr_string(attrs, "ratio").unwrap_or_else(|| "50:50".to_string());
+    let back_label = attr_string(attrs, "back-label");
+    let back_action = attr_string(attrs, "back-action");
 
-    Block::SplitPane { ratio, span }
+    // Authored `::pane[side=left|right]` children fill the two planes.
+    // Order is the fallback when `side` is omitted (first pane left, second
+    // right); stray non-pane children fall to the left pane. An empty body
+    // keeps the two empty planes.
+    let mut left: Vec<Block> = Vec::new();
+    let mut right: Vec<Block> = Vec::new();
+    if !content.trim().is_empty() {
+        let mut pane_index = 0usize;
+        for child in parse_page_children(content) {
+            match child {
+                Block::Unknown { ref name, ref attrs, content: ref body, .. }
+                    if name == "pane" =>
+                {
+                    let side = attr_string(attrs, "side");
+                    let target = match side.as_deref() {
+                        Some("right") => &mut right,
+                        Some("left") => &mut left,
+                        _ if pane_index == 0 => &mut left,
+                        _ => &mut right,
+                    };
+                    target.extend(parse_page_children(body));
+                    pane_index += 1;
+                }
+                other => left.push(other),
+            }
+        }
+    }
+
+    Block::SplitPane { ratio, back_label, back_action, left, right, span }
 }
 
 // ------------------------------------------------------------------
@@ -3819,6 +3849,7 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         unread: attr_bool(attrs, "unread"),
         trailing_label: attr_string(attrs, "trailing-label"),
         trailing_action: attr_string(attrs, "trailing-action"),
+        action: attr_string(attrs, "action"),
         actions,
         span,
     }
@@ -4369,6 +4400,8 @@ fn parse_toolbar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     style: attr_string(&attrs, "style"),
                     disabled: attr_bool(&attrs, "disabled"),
                     toggled: attr_bool(&attrs, "toggled"),
+                    avatar: attr_string(&attrs, "avatar"),
+                    aria_label: attr_string(&attrs, "aria-label"),
                 });
             } else if let Some(inner) = rest.strip_prefix("badge[") {
                 let inner = inner.trim_end_matches(']');
@@ -4403,6 +4436,8 @@ fn parse_toolbar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     style: None,
                     disabled: false,
                     toggled: false,
+                    avatar: None,
+                    aria_label: None,
                 });
             }
         }
@@ -7443,8 +7478,57 @@ Saturday 7am-4pm, Sunday 8am-2pm.
         ]);
         let block = unknown("split-pane", a, "");
         match resolve_block(block) {
-            Block::SplitPane { ratio, .. } => {
+            Block::SplitPane { ratio, back_label, back_action, left, right, .. } => {
                 assert_eq!(ratio, "60:40");
+                assert!(back_label.is_none());
+                assert!(back_action.is_none());
+                assert!(left.is_empty(), "empty body must keep empty planes");
+                assert!(right.is_empty(), "empty body must keep empty planes");
+            }
+            other => panic!("Expected SplitPane, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_split_pane_panes_partition_by_side() {
+        let content = "::pane[side=right]\nThread body\n::\n\n::pane[side=left]\n::row[icon=knowledge href=#]\nSam Rose\n::\n::";
+        let block = unknown("split-pane", Attrs::default(), content);
+        match resolve_block(block) {
+            Block::SplitPane { left, right, .. } => {
+                assert_eq!(left.len(), 1, "left pane gets the side=left body");
+                assert!(matches!(left[0], Block::Row { .. }));
+                assert_eq!(right.len(), 1, "right pane gets the side=right body");
+                assert!(matches!(right[0], Block::Markdown { .. }));
+            }
+            other => panic!("Expected SplitPane, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_split_pane_side_defaults_by_order_and_strays_fall_left() {
+        // No side attrs: first pane is left, second is right. A stray
+        // non-pane child falls to the left pane.
+        let content = "Stray intro\n\n::pane\nRail\n::\n\n::pane\nThread\n::";
+        let block = unknown("split-pane", Attrs::default(), content);
+        match resolve_block(block) {
+            Block::SplitPane { left, right, .. } => {
+                assert_eq!(left.len(), 2, "stray child + first pane body go left");
+                assert_eq!(right.len(), 1, "second pane body goes right");
+            }
+            other => panic!("Expected SplitPane, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_split_pane_back_attrs() {
+        let a = attrs(&[
+            ("back-label", AttrValue::String("Chats".into())),
+            ("back-action", AttrValue::String("closeConversation".into())),
+        ]);
+        match resolve_block(unknown("split-pane", a, "")) {
+            Block::SplitPane { back_label, back_action, .. } => {
+                assert_eq!(back_label.as_deref(), Some("Chats"));
+                assert_eq!(back_action.as_deref(), Some("closeConversation"));
             }
             other => panic!("Expected SplitPane, got {other:?}"),
         }
@@ -8402,6 +8486,21 @@ Note
                 assert!(matches!(&items[0], ToolbarItem::Button { toggled: true, .. }));
                 // Defaults false when absent.
                 assert!(matches!(&items[1], ToolbarItem::Button { toggled: false, .. }));
+            }
+            other => panic!("Expected Toolbar, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_toolbar_button_avatar() {
+        // G6 (0.13.3): workspace-chip initial, e.g. `avatar="C"`.
+        let source = "::toolbar\n- button[label=\"cloudsurf\" action=switch_workspace avatar=\"C\"]\n- button[label=\"Save\" action=save]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Toolbar { items, .. } => {
+                assert!(matches!(&items[0], ToolbarItem::Button { avatar: Some(a), .. } if a == "C"));
+                // Defaults None when absent.
+                assert!(matches!(&items[1], ToolbarItem::Button { avatar: None, .. }));
             }
             other => panic!("Expected Toolbar, got {:?}", other),
         }

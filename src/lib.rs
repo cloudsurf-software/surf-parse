@@ -22,6 +22,7 @@ pub(crate) mod diagram;
 pub mod diagram_scene;
 pub mod error;
 pub mod icons;
+mod icons_vendored;
 pub mod inline;
 pub mod lint;
 pub(crate) mod mermaid_compat;
