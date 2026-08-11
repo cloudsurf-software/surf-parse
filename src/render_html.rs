@@ -9557,10 +9557,24 @@ mod tests {
         // swap the display/body face while Surf stays byte-identical.
         assert!(SURFDOC_CSS.contains("font-family: var(--ws-font-body)"));
         assert!(SURFDOC_CSS.contains("font-family: var(--ws-font-display)"));
-        assert!(SURFDOC_CSS.contains("--ws-font-body: var(--font-body)"));
-        assert!(SURFDOC_CSS.contains("--ws-font-display: var(--font-heading)"));
-        // h5/h6 micro-eyebrows stay on the UI heading font.
-        assert!(SURFDOC_CSS.contains("font-family: var(--font-heading)"));
+        // 0.13.2: --font-heading/--font-body are `initial` (guaranteed-invalid)
+        // by default so a doc-scoped `::style` override is DETECTABLE; the
+        // --ws-* slots carry the default stack as a var() fallback, and the
+        // indirection is re-declared on `.surfdoc` so an injected
+        // `.surfdoc { --font-heading: … }` block actually reaches the
+        // var(--ws-font-*) consumers (a :root-only indirection resolves at
+        // :root and freezes before the doc override exists).
+        assert!(SURFDOC_CSS.contains("--font-heading: initial"));
+        assert!(SURFDOC_CSS.contains("--font-body: initial"));
+        assert!(SURFDOC_CSS.contains("--ws-font-body: var(--font-body, var(--font-sans))"));
+        assert!(SURFDOC_CSS.contains("--ws-font-display: var(--font-heading, var(--font-sans))"));
+        assert!(SURFDOC_CSS
+            .contains("--ws-font-display: var(--font-heading, var(--sd-font-display-above, var(--font-sans)))"));
+        assert!(SURFDOC_CSS
+            .contains("--ws-font-body: var(--font-body, var(--sd-font-body-above, var(--font-sans)))"));
+        // h5/h6 micro-eyebrows stay on the UI heading font (explicit fallback
+        // now that --font-heading is unset-by-default).
+        assert!(SURFDOC_CSS.contains("font-family: var(--font-heading, var(--font-sans))"));
     }
 
     #[test]

@@ -3,6 +3,42 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.13.2 — chrome visual design pass
+
+CSS-only product styling for the app-shell chrome families, harmonized with
+the production Surf shell (tokens.css / surf-shell.css): app-shell/sidebar/
+rows/toolbar/controls product styling; doc-scoped font overrides now paint
+(`--ws-*` font indirection moved onto `.surfdoc`).
+
+### Changed
+- Sidebar: quiet rail — sheet surface + hairline, nav rows as inset pill
+  rows (hover fill, `.is-active`/`aria-current` accent state, hidden
+  chevrons, brand strip without bar chrome).
+- Main-pane `.surfdoc-row` lists: ruled-column treatment (hairline
+  separators, rounded hover fill, title/meta type ramp); standalone rows
+  become quiet sheet cards (fill + hairline, no border-color hover).
+- `:::toolbar`: 48px header bar on the page surface; buttons/dropdowns as
+  bordered pills (30px, production hover/active recipe); toggled state =
+  accent-soft fill + accent ring; in-pane toolbars turn transparent with a
+  type ramp (display-face title row, uppercase section headers, muted meta).
+- `::tab-bar`, `::segmented-control`, `::dropdown-select`, `::modal`,
+  command palette, chips, recipient picker: finished control styling —
+  radius scale, focus-visible rings, floating-layer shadows
+  (`--sd-shadow-*`), 120ms ease-out transitions, accent-soft selected
+  states; modal body gets a proper inner gutter.
+- App-shell grid tracks auto-size (no dead strips when a shell has no
+  tab-bar/panel); chrome typography routes through `--ws-font-body`.
+- Dark theme: all of the above holds; dark elevation recipes added.
+
+### Fixed
+- Doc-scoped font overrides never painted: `--ws-font-display/--ws-font-body`
+  were declared only on `:root`, so the indirection resolved before a
+  `.surfdoc { --font-heading: … }` override existed. `--font-heading/--font-body`
+  are now unset-by-default (`initial`) with the default stack as var()
+  fallback, and the indirection is re-declared on `.surfdoc` with an
+  ancestor-captured fallback so style packs / host overrides keep winning
+  when the doc itself sets nothing.
+
 ## 0.13.1 — unreleased (test-hardening round + toolbar overflow fix)
 
 ### Fixed

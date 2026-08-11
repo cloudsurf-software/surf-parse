@@ -96,8 +96,17 @@
        declared here — those consumers carry a per-element fallback
        (`var(--ws-…, <today's value>)`) so the identity look is exact, and a
        pack sets the token once to shift them all. */
-    --ws-font-display: var(--font-heading);   /* hero headline, section + card titles, h1–h3 */
-    --ws-font-body: var(--font-body);          /* prose / body copy */
+    /* Font routing (0.13.2). --font-heading/--font-body are UNSET by default
+       (see the typography block below) so "did the doc set a font?" is
+       detectable; the concrete default stack lives in the var() fallback.
+       Precedence, most specific wins:
+         1. doc `::style` fonts — injected as `.surfdoc { --font-heading: … }`
+         2. style pack / host page --ws-font-display/--ws-font-body (any scope:
+            `:root` blocks, container inline styles)
+         3. the default system stack
+       The `.surfdoc`-scoped re-resolution lives right after this :root block. */
+    --ws-font-display: var(--font-heading, var(--font-sans));   /* hero headline, section + card titles, h1–h3 */
+    --ws-font-body: var(--font-body, var(--font-sans));          /* prose / body copy */
     --ws-heading-transform: none;              /* uppercase eyebrows/labels in editorial packs */
     --ws-heading-style: normal;                /* italic display in some packs */
     --ws-btn-bg: var(--accent);                /* marketing CTA fill — a pack can make it outline/ghost */
@@ -177,10 +186,29 @@
     --shadow-sm: none;
     --shadow: none;
 
+    /* ── App-shell chrome recipe (0.13.2 visual pass) ─────────────
+       Private --sd-* tokens for the interactive chrome families (app-shell,
+       sidebar, toolbar, rows, controls, floating layers). Aligned with the
+       production Surf shell (tokens.css / surf-shell.css): 120ms ease-out
+       state transitions, slate-tinted elevation in light, deeper black in
+       dark. NOT part of the --ws-* style-pack contract. */
+    --sd-ease: 120ms ease-out;
+    --sd-shadow-raise: 0 1px 2px rgba(15, 23, 42, 0.05);
+    --sd-shadow-pop: 0 12px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
+    --sd-shadow-overlay: 0 24px 64px rgba(15, 23, 42, 0.22), 0 4px 12px rgba(15, 23, 42, 0.10);
+
     /* ── Typography: font stacks ── */
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-heading: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* --font-heading / --font-body are declared `initial` (guaranteed-invalid)
+       on purpose: a doc `::style` override or host page SETS them; every
+       consumer carries a var() fallback. Giving them a concrete :root value
+       here would make "unset" indistinguishable from "set", which is what
+       froze doc-scoped font overrides before 0.13.2 (custom properties
+       substitute their var()s at computed-value time on the element they're
+       declared on, so a :root-resolved indirection never re-reads a
+       .surfdoc-scoped override). */
+    --font-heading: initial;
+    --font-body: initial;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
 
@@ -220,6 +248,24 @@
     --shell-drawer-link-hover-bg: var(--surface-hover);
     --shell-control-border: var(--border);
     --shell-nav-h: 56px;
+}
+
+/* ── Doc-scoped font re-resolution (0.13.2) ──────────────────────
+   Ancestor capture: every element that is not itself a doc root records the
+   font stacks resolved so far (pack `:root` blocks, container inline tokens,
+   host overrides — whatever won the cascade above the doc). `.surfdoc` then
+   re-derives the --ws-* slots on the doc root itself, so an injected
+   `.surfdoc { --font-heading: …; --font-body: … }` override (the `::style`
+   emission) finally reaches every var(--ws-font-*) consumer — while a doc
+   with no `::style` fonts falls back to the captured pack/host value.
+   :where() keeps specificity at zero. */
+:where(:not(.surfdoc)) {
+    --sd-font-display-above: var(--ws-font-display);
+    --sd-font-body-above: var(--ws-font-body);
+}
+.surfdoc {
+    --ws-font-display: var(--font-heading, var(--sd-font-display-above, var(--font-sans)));
+    --ws-font-body: var(--font-body, var(--sd-font-body-above, var(--font-sans)));
 }
 
 /* ============================================================
@@ -286,6 +332,9 @@
     --warning-light: rgba(245, 158, 11, 0.1);
     --shadow-sm: none;
     --shadow: none;
+    --sd-shadow-raise: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --sd-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --sd-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.45);
     --ws-feature-card-bg: var(--surface-alt); /* dark: the light-mode surface/surface-alt color-mix reads
         too close to pure-black --background; pin back to --surface-alt so tier/stat/product cards keep
         the same visible fill as untouched siblings (testimonial/metric/logo/booking/store). */
@@ -318,6 +367,9 @@
         --warning-light: rgba(245, 158, 11, 0.1);
         --shadow-sm: none;
         --shadow: none;
+        --sd-shadow-raise: 0 1px 2px rgba(0, 0, 0, 0.5);
+        --sd-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+        --sd-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.45);
         --ws-feature-card-bg: var(--surface-alt); /* see [data-theme="dark"] override above */
     }
 }
@@ -1482,7 +1534,7 @@ dialog.modal h2 {
    tracking, transform, style — each defaulting to today's value so Surf is
    unchanged); the h5/h6 micro-eyebrows stay on the UI font. */
 .surfdoc h1, .surfdoc h2, .surfdoc h3, .surfdoc h4 { font-family: var(--ws-font-display); font-style: var(--ws-heading-style); text-transform: var(--ws-heading-transform); }
-.surfdoc h5, .surfdoc h6 { font-family: var(--font-heading); }
+.surfdoc h5, .surfdoc h6 { font-family: var(--font-heading, var(--font-sans)); }
 /* h1–h3 default to the black display weight (style-v2 spec: titles own the
    heaviest face); packs still override via --ws-heading-weight. */
 .surfdoc h1 { font-size: var(--font-size-h1); font-weight: var(--ws-heading-weight, var(--font-weight-black)); margin: 2.5rem 0 1rem; letter-spacing: var(--ws-heading-tracking, var(--tracking-tight)); }
@@ -2742,51 +2794,60 @@ ol.surfdoc-steps { padding-left: 1rem; }
 /* ============================================================
    53. ROW BLOCK
    ============================================================ */
+/* Base row = a quiet sheet card (document-embedded lists). Hierarchy comes
+   from the surface fill + type ramp, not from a heavy outline; hover shifts
+   the fill, never the border color. In-shell contexts override this into a
+   ruled list (main pane) or a pill nav row (sidebar) — see Section 57a. */
 .surfdoc-row {
     display: flex; align-items: center; gap: 0.75rem;
-    padding: 0.75rem 1rem; border-radius: var(--ws-radius-card);
-    border: var(--ws-border-w) var(--ws-border-style) var(--border, #334155); background: transparent;
+    padding: 0.7rem 1rem; border-radius: var(--ws-control-radius, 10px);
+    border: var(--ws-border-w) var(--ws-border-style) var(--border, #334155); background: var(--surface, #fff);
+    box-shadow: var(--ws-shadow);
     text-decoration: none; color: var(--text, #e5e5ef);
     cursor: pointer; box-sizing: border-box;
+    transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out);
 }
-.surfdoc-row:hover { border-color: var(--accent, #3b82f6); }
-.surfdoc-row-icon { flex-shrink: 0; color: var(--text-secondary, #64748b); width: 18px; height: 18px; display: flex; align-items: center; }
+.surfdoc-row:hover { background: var(--surface-hover, #eef1f7); }
+.surfdoc-row:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
+.surfdoc-row-icon { flex-shrink: 0; color: var(--text-muted, #64748b); width: 18px; height: 18px; display: flex; align-items: center; }
 .surfdoc-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-.surfdoc-row-title { font-size: 0.8125rem; font-weight: 600; color: var(--text, #e5e5ef); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
-.surfdoc-row-desc { font-size: 0.6875rem; color: var(--text-secondary, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; margin-top: 0.25rem; }
-.surfdoc-row-arrow { margin-left: auto; color: var(--text-secondary, #64748b); flex-shrink: 0; display: flex; align-items: center; }
+.surfdoc-row-title { font-size: 0.875rem; font-weight: 600; color: var(--text, #e5e5ef); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
+.surfdoc-row-desc { font-size: 0.75rem; color: var(--text-muted, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; margin-top: 0.125rem; }
+.surfdoc-row-desc:empty { display: none; }
+.surfdoc-row-arrow { margin-left: auto; color: var(--text-muted, #64748b); opacity: 0.6; flex-shrink: 0; display: flex; align-items: center; transition: opacity var(--sd-ease, 120ms ease-out); }
+.surfdoc-row:hover .surfdoc-row-arrow { opacity: 1; }
 /* Unread indicator — right-side blue dot ONLY. Renderer invariant:
    accent-left-border is BANNED for unread states; never add a
    border-left rule keyed off the unread dot, in any theme. */
 .surfdoc .surfdoc-unread-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #2e8ad8); flex-shrink: 0; margin-left: auto; }
 .surfdoc-row .surfdoc-unread-dot { margin-left: 0; }
 /* Trailing action — right-side control next to the arrow */
-.surfdoc .surfdoc-row-trailing { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 4px 10px; flex-shrink: 0; white-space: nowrap; }
-.surfdoc .surfdoc-row-trailing:hover { background: var(--surface-alt, #1a1a24); }
+.surfdoc .surfdoc-row-trailing { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 6px); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; font-weight: 500; line-height: 1; padding: 5px 10px; flex-shrink: 0; white-space: nowrap; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-row-trailing:hover { background: var(--accent-soft, #e3ebff); border-color: var(--accent, #2563eb); }
 /* Per-row actions (0.12) — labelled controls replacing the chevron */
 .surfdoc .surfdoc-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.surfdoc .surfdoc-row-action { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 4px 10px; white-space: nowrap; }
-.surfdoc .surfdoc-row-action:hover { background: var(--surface-alt, #1a1a24); }
+.surfdoc .surfdoc-row-action { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 6px); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; font-weight: 500; line-height: 1; padding: 5px 10px; white-space: nowrap; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-row-action:hover { background: var(--accent-soft, #e3ebff); border-color: var(--accent, #2563eb); }
 /* Divider inside a sidebar — tighter spacing than document dividers */
 .surfdoc .surfdoc-sidebar .surfdoc-divider, .surfdoc .surfdoc-sidebar hr { margin: 0.75rem 0; }
 .surfdoc .surfdoc-tab-bar [role="tab"] .surfdoc-unread-dot { margin-left: 6px; vertical-align: middle; }
-@keyframes surfdoc-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.15; } }
+@keyframes surfdoc-pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.3; } }
 .surfdoc-row--loading { cursor: default; }
-.surfdoc-row--loading:hover { border-color: var(--border, #334155); background: transparent; }
+.surfdoc-row--loading:hover { background: var(--surface, #fff); }
 .surfdoc-row--loading .surfdoc-row-title {
-    color: transparent; background: var(--text-secondary, #64748b); border-radius: var(--radius-sm);
+    color: transparent; background: var(--border, #dde2ec); border-radius: var(--radius-sm);
     animation: surfdoc-pulse 1.5s ease-in-out infinite;
     font-size: 0; line-height: 0; height: 0.8125rem; width: 55%; display: block;
 }
 .surfdoc-row--loading .surfdoc-row-desc {
-    color: transparent; background: var(--text-secondary, #64748b); border-radius: var(--radius-sm);
+    color: transparent; background: var(--border, #dde2ec); border-radius: var(--radius-sm);
     animation: surfdoc-pulse 1.5s ease-in-out infinite;
     font-size: 0; line-height: 0; height: 0.6875rem; width: 80%; display: block; margin-top: 0.25rem;
 }
 .surfdoc-row--loading .surfdoc-row-icon svg, .surfdoc-row--loading .surfdoc-row-arrow svg { opacity: 0; }
-.surfdoc-row--loading .surfdoc-row-icon, .surfdoc-row--loading .surfdoc-row-arrow { background: var(--text-secondary, #64748b); border-radius: var(--radius-sm); animation: surfdoc-pulse 1.5s ease-in-out infinite; }
+.surfdoc-row--loading .surfdoc-row-icon, .surfdoc-row--loading .surfdoc-row-arrow { background: var(--border, #dde2ec); border-radius: var(--radius-sm); animation: surfdoc-pulse 1.5s ease-in-out infinite; }
 .surfdoc-row--empty { cursor: default; opacity: 0.4; }
-.surfdoc-row--empty:hover { border-color: var(--border, #334155); background: transparent; }
+.surfdoc-row--empty:hover { background: var(--surface, #fff); }
 
 /* ============================================================
    54. INFOCARD BLOCK
@@ -2821,8 +2882,11 @@ ol.surfdoc-steps { padding-left: 1rem; }
    56. APP SHELL — VS Code-style layout
    ============================================================ */
 
-.surfdoc .surfdoc-app-shell { display: grid; height: 100vh; width: 100%; overflow: hidden; background: var(--background, #0a0a0f); color: var(--text, #e5e5ef); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; }
-.surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: 250px 1fr; grid-template-rows: 40px 36px 1fr 200px; }
+.surfdoc .surfdoc-app-shell { display: grid; height: 100vh; width: 100%; overflow: hidden; background: var(--background, #0a0a0f); color: var(--text, #e5e5ef); font-family: var(--ws-font-body); font-size: 13px; -webkit-font-smoothing: antialiased; }
+/* Tracks are auto-sized (children carry their own heights/widths) so a shell
+   without a tab-bar or bottom panel collapses those tracks instead of
+   rendering dead strips. */
+.surfdoc .surfdoc-layout-sidebar-main-panel { grid-template-columns: auto 1fr; grid-template-rows: auto auto 1fr auto; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-sidebar { grid-column: 1; grid-row: 1 / -1; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-toolbar { grid-column: 2; grid-row: 1; min-width: 0; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-tab-bar { grid-column: 2; grid-row: 2; }
@@ -2833,9 +2897,48 @@ ol.surfdoc-steps { padding-left: 1rem; }
    57. SIDEBAR
    ============================================================ */
 
-.surfdoc .surfdoc-sidebar { background: var(--surface, #12121a); border-right: 1px solid var(--border, #30363d); overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+/* The sidebar is a quiet rail: sheet surface + one hairline, rows float as
+   inset pills (Section 57a) — no boxed cards, no per-row borders. */
+.surfdoc .surfdoc-sidebar { width: 250px; background: var(--surface, #12121a); border-right: 1px solid var(--border, #30363d); overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; padding-bottom: 10px; }
 .surfdoc .surfdoc-sidebar-left { grid-column: 1; grid-row: 1 / -1; }
 .surfdoc .surfdoc-nav-tree { padding: 8px 0; font-size: 0.8125rem; flex: 1; }
+
+/* ============================================================
+   57a. SIDEBAR NAV ROWS — inset pill rows (Finder/iOS source list)
+   ============================================================ */
+
+.surfdoc .surfdoc-sidebar .surfdoc-row {
+    border: none; background: transparent; box-shadow: none;
+    margin: 1px 10px; padding: 0 10px; min-height: 38px;
+    gap: 11px; border-radius: var(--ws-control-radius, 8px);
+    transition: background var(--sd-ease, 120ms ease-out), color var(--sd-ease, 120ms ease-out);
+}
+.surfdoc .surfdoc-sidebar .surfdoc-row:hover { background: var(--surface-alt, #eef1f7); }
+.surfdoc .surfdoc-sidebar .surfdoc-row:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; }
+.surfdoc .surfdoc-sidebar .surfdoc-row-title { font-size: 0.8125rem; font-weight: 500; color: var(--text, #0f1422); }
+.surfdoc .surfdoc-sidebar .surfdoc-row-desc { font-size: 0.6875rem; }
+.surfdoc .surfdoc-sidebar .surfdoc-row-icon { color: var(--text-muted, #64748b); transition: color var(--sd-ease, 120ms ease-out); }
+/* Nav rows don't advertise chevrons — the rail is a destination list, not a
+   drill-down. (Hub/detail rows outside the sidebar keep theirs.) */
+.surfdoc .surfdoc-sidebar .surfdoc-row-arrow { display: none; }
+/* Active route — neutral chip + accent icon/label (production drawer-row
+   canon). The renderer emits no active class yet; the runtime layer stamps
+   `.is-active` / aria-current, and these rules are ready for it. */
+.surfdoc .surfdoc-sidebar .surfdoc-row.is-active,
+.surfdoc .surfdoc-sidebar .surfdoc-row[aria-current="page"] {
+    background: var(--surface-alt, #eef1f7);
+}
+.surfdoc .surfdoc-sidebar .surfdoc-row.is-active .surfdoc-row-title,
+.surfdoc .surfdoc-sidebar .surfdoc-row[aria-current="page"] .surfdoc-row-title {
+    color: var(--accent, #2563eb); font-weight: 600;
+}
+.surfdoc .surfdoc-sidebar .surfdoc-row.is-active .surfdoc-row-icon,
+.surfdoc .surfdoc-sidebar .surfdoc-row[aria-current="page"] .surfdoc-row-icon {
+    color: var(--accent, #2563eb);
+}
+/* Brand/header strip at the top of the rail — no bar chrome, just type. */
+.surfdoc .surfdoc-sidebar .surfdoc-toolbar { background: transparent; border-bottom: none; height: 54px; padding: 0 20px; overflow: visible; flex-shrink: 0; }
+.surfdoc .surfdoc-sidebar .surfdoc-toolbar-text { font-family: var(--ws-font-display); font-weight: 700; letter-spacing: var(--tracking-tight); color: var(--text, #0f1422); padding: 0; }
 
 /* ============================================================
    58. TOOLBAR
@@ -2844,34 +2947,67 @@ ol.surfdoc-steps { padding-left: 1rem; }
 /* Overflow discipline: the app-shell clips (overflow:hidden) and the grid
    track can shrink below the toolbar's natural width, so a crowded bar
    (e.g. a 5-facet filter set at 880px) must scroll horizontally instead
-   of clipping — at every viewport, not only under the 768px media query. */
-.surfdoc .surfdoc-toolbar { display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 40px; background: var(--surface, #12121a); border-bottom: 1px solid var(--border, #30363d); flex-shrink: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+   of clipping — at every viewport, not only under the 768px media query.
+
+   Look: the shell header bar sits on the page surface (production topbar
+   blends into the body); its controls are bordered pills on the sheet
+   surface (production .surf-toolbar-btn), so the bar itself needs no boxy
+   fill to read as chrome. */
+.surfdoc .surfdoc-toolbar { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 48px; background: var(--background, #0a0a0f); border-bottom: 1px solid var(--border, #30363d); flex-shrink: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; }
 .surfdoc .surfdoc-toolbar-title { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 600; padding: 0 8px; white-space: nowrap; }
-.surfdoc .surfdoc-toolbar-btn { background: transparent; border: 1px solid transparent; color: var(--text-secondary, #8b949e); cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.8125rem; display: inline-flex; align-items: center; gap: 4px; transition: background 0.15s, color 0.15s; }
-.surfdoc .surfdoc-toolbar-btn:hover { background: var(--surface-alt, #1a1a24); color: var(--text, #e6edf3); }
+.surfdoc .surfdoc-toolbar-btn { background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); color: var(--text, #0f1422); cursor: pointer; height: 30px; padding: 0 13px; border-radius: var(--ws-control-radius, 999px); font-size: 0.8125rem; font-weight: 500; font-family: inherit; line-height: 1; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out), color var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-toolbar-btn:hover { background: var(--surface-alt, #eef1f7); border-color: var(--text-muted, #6b7388); }
+.surfdoc .surfdoc-toolbar-btn:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 1px; }
 .surfdoc .surfdoc-toolbar-btn-primary { background: var(--accent, #3b82f6); color: var(--accent-text, #fff); border-color: var(--accent, #3b82f6); font-weight: 600; }
-.surfdoc .surfdoc-toolbar-btn-primary:hover { background: var(--accent-hover, #60a5fa); border-color: var(--accent-hover, #60a5fa); }
-/* Toggled (open) state — accent ring, e.g. a button whose panel is open */
-.surfdoc .surfdoc-toolbar-btn--toggled { color: var(--text, #e6edf3); background: var(--surface-alt, #1a1a24); box-shadow: 0 0 0 1.5px var(--accent, #2e8ad8); }
-.surfdoc .surfdoc-toolbar-separator { width: 1px; height: 20px; background: var(--border, #30363d); margin: 0 4px; }
+.surfdoc .surfdoc-toolbar-btn-primary:hover { background: var(--accent-hover, #1d4ed8); border-color: var(--accent-hover, #1d4ed8); }
+/* Toggled (open) state — accent ring: soft accent fill + accent border,
+   e.g. a filter button whose row is open */
+.surfdoc .surfdoc-toolbar-btn--toggled { color: var(--accent, #2563eb); background: var(--accent-soft, #e3ebff); border-color: var(--accent, #2563eb); font-weight: 600; }
+.surfdoc .surfdoc-toolbar-separator { width: 1px; height: 18px; background: var(--border, #30363d); margin: 0 4px; flex-shrink: 0; }
 .surfdoc .surfdoc-toolbar-spacer { flex: 1; }
-.surfdoc .surfdoc-toolbar-text { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 500; padding: 0 8px; }
-.surfdoc .surfdoc-toolbar-dropdown { background: var(--surface-alt, #1a1a24); border: 1px solid var(--border, #30363d); color: var(--text-secondary, #8b949e); border-radius: var(--radius-sm); padding: 3px 8px; font-size: 0.75rem; cursor: pointer; }
+.surfdoc .surfdoc-toolbar-text { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 500; padding: 0 6px; white-space: nowrap; }
+.surfdoc .surfdoc-toolbar-dropdown { appearance: none; -webkit-appearance: none; background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); color: var(--text, #0f1422); border-radius: var(--ws-control-radius, 999px); height: 30px; padding: 0 13px; font-size: 0.8125rem; font-weight: 500; font-family: inherit; cursor: pointer; flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-toolbar-dropdown:hover { background: var(--surface-alt, #eef1f7); border-color: var(--text-muted, #6b7388); }
+.surfdoc .surfdoc-toolbar-dropdown:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 1px; }
+
+/* ── Toolbars inside the main pane (tab-content) ─────────────────────────
+   These are content rows, not chrome bars: transparent, no hairline, and a
+   type ramp — the FIRST toolbar is the pane's title row (display face), a
+   text-only toolbar deeper in the list is a section header, and remaining
+   toolbar text (counts, status) reads as meta. */
+.surfdoc .surfdoc-tab-content .surfdoc-toolbar { background: transparent; border-bottom: none; height: auto; min-height: 42px; padding: 2px 0; }
+.surfdoc .surfdoc-tab-content > .surfdoc-toolbar:first-child { min-height: 52px; margin-bottom: 2px; }
+.surfdoc .surfdoc-tab-content > .surfdoc-toolbar:first-child .surfdoc-toolbar-text { font-family: var(--ws-font-display); font-size: 21px; font-weight: 700; letter-spacing: var(--tracking-tight); color: var(--text, #0f1422); padding: 0; }
+/* Section headers — a toolbar whose only item is a text label ("To Do (4)") */
+.surfdoc .surfdoc-tab-content .surfdoc-toolbar .surfdoc-toolbar-text:only-child { font-size: 0.8125rem; font-weight: 600; color: var(--text-muted, #6b7388); text-transform: uppercase; letter-spacing: var(--tracking-wide); padding: 0; margin-top: 14px; }
+/* Meta text in secondary rows (result counts, statuses) */
+.surfdoc .surfdoc-tab-content .surfdoc-toolbar:not(:first-child) .surfdoc-toolbar-text:not(:only-child) { color: var(--text-muted, #6b7388); font-weight: 400; font-size: 0.75rem; }
 
 /* ============================================================
    59. TAB BAR
    ============================================================ */
 
-.surfdoc .surfdoc-tab-bar { display: flex; align-items: stretch; background: var(--surface, #12121a); border-bottom: 1px solid var(--border, #30363d); height: 36px; flex-shrink: 0; padding: 0 8px; gap: 0; }
-.surfdoc .surfdoc-tab-bar button { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary, #8b949e); cursor: pointer; padding: 0 14px; font-size: 0.8125rem; transition: color 0.15s, border-color 0.15s; white-space: nowrap; }
+.surfdoc .surfdoc-tab-bar { display: flex; align-items: stretch; background: var(--background, #f7f8fc); border-bottom: 1px solid var(--border, #30363d); height: 38px; flex-shrink: 0; padding: 0 10px; gap: 2px; }
+.surfdoc .surfdoc-tab-bar button { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted, #8b949e); font-weight: 500; font-family: inherit; cursor: pointer; padding: 0 14px; font-size: 0.8125rem; transition: color var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); white-space: nowrap; }
 .surfdoc .surfdoc-tab-bar button:hover { color: var(--text, #e6edf3); }
-.surfdoc .surfdoc-tab-bar button.active, .surfdoc .surfdoc-tab-bar button[aria-selected="true"] { color: var(--text, #e6edf3); border-bottom-color: var(--accent, #3b82f6); }
+.surfdoc .surfdoc-tab-bar button:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; border-radius: var(--ws-control-radius, 6px); }
+.surfdoc .surfdoc-tab-bar button.active, .surfdoc .surfdoc-tab-bar button[aria-selected="true"] { color: var(--text, #e6edf3); font-weight: 600; border-bottom-color: var(--accent, #3b82f6); }
 
 /* ============================================================
    60. TAB CONTENT
    ============================================================ */
 
-.surfdoc .surfdoc-tab-content { overflow-y: auto; overflow-x: hidden; padding: 16px; background: var(--background, #0a0a0f); display: none; min-width: 0; }
+.surfdoc .surfdoc-tab-content { overflow-y: auto; overflow-x: hidden; padding: 18px 24px 56px; background: var(--background, #0a0a0f); display: none; min-width: 0; }
+
+/* ── Main-pane row lists: the ruled column ───────────────────────────────
+   Rows in the content pane drop the card box and read as a ruled list —
+   hairline separators, quiet rounded hover fill, denser padding. (The
+   surface docs pin this: "ruled 880px centered column".) */
+.surfdoc .surfdoc-tab-content .surfdoc-row { border: none; background: transparent; box-shadow: none; border-radius: var(--ws-control-radius, 8px); padding: 0.7rem 0.75rem; }
+.surfdoc .surfdoc-tab-content .surfdoc-row + .surfdoc-row { border-top: 1px solid var(--border, #dde2ec); border-top-left-radius: 0; border-top-right-radius: 0; }
+.surfdoc .surfdoc-tab-content .surfdoc-row:hover { background: var(--surface-alt, #eef1f7); }
+.surfdoc .surfdoc-tab-content .surfdoc-row--loading:hover,
+.surfdoc .surfdoc-tab-content .surfdoc-row--empty:hover { background: transparent; }
 .surfdoc .surfdoc-tab-content[data-tab="preview"] { display: block; }
 .surfdoc .surfdoc-tab-content.active { display: block; }
 
@@ -2881,7 +3017,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
 
 .surfdoc .surfdoc-panel { border-top: 1px solid var(--border, #30363d); background: var(--surface, #12121a); display: flex; flex-direction: column; flex-shrink: 0; }
 .surfdoc .surfdoc-panel-bottom { height: 200px; }
-.surfdoc .surfdoc-panel .surfdoc-tab-bar { height: 32px; border-bottom: 1px solid var(--border-light, #21262d); }
+.surfdoc .surfdoc-panel .surfdoc-tab-bar { height: 32px; background: var(--surface, #12121a); border-bottom: 1px solid var(--border-light, #21262d); }
 .surfdoc .surfdoc-panel .surfdoc-tab-bar button { font-size: 0.75rem; padding: 0 12px; }
 .surfdoc .surfdoc-panel .surfdoc-tab-content { padding: 8px 12px; font-family: var(--font-mono, monospace); font-size: 0.75rem; background: var(--surface, #12121a); }
 
@@ -2910,9 +3046,9 @@ ol.surfdoc-steps { padding-left: 1rem; }
    65. DRAWER (Mako)
    ============================================================ */
 
-.surfdoc .surfdoc-drawer { position: fixed; top: 0; right: 0; height: 100vh; background: var(--surface, #12121a); border-left: 1px solid var(--border, #30363d); display: flex; flex-direction: column; z-index: 200; box-shadow: -4px 0 24px rgba(0,0,0,0.3); }
+.surfdoc .surfdoc-drawer { position: fixed; top: 0; right: 0; height: 100vh; background: var(--surface, #12121a); border-left: 1px solid var(--border, #30363d); display: flex; flex-direction: column; z-index: 200; box-shadow: var(--sd-shadow-overlay, -4px 0 24px rgba(0,0,0,0.3)); }
 .surfdoc .surfdoc-drawer-right { width: 320px; }
-.surfdoc .surfdoc-drawer h1 { font-size: 1rem; font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--border, #30363d); margin: 0; flex-shrink: 0; }
+.surfdoc .surfdoc-drawer h1 { font-size: 0.9375rem; font-weight: 600; letter-spacing: var(--tracking-tight); padding: 14px 16px; border-bottom: 1px solid var(--border, #30363d); margin: 0; flex-shrink: 0; }
 
 /* ============================================================
    66. SUGGESTION CHIPS
@@ -2921,8 +3057,9 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border-light, #21262d); flex-shrink: 0; }
 /* Standalone suggestion-chips (outside app-shell) */
 .surfdoc-suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 1rem 0; padding: 0.75rem 0; }
-.surfdoc-chip { background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); border-radius: var(--radius-sm); color: var(--text, #0f1422); cursor: pointer; font-size: 0.8125rem; padding: 0.35rem 0.85rem; }
-.surfdoc-chip:hover { background: var(--surface-alt, #eef1f7); border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
+.surfdoc-chip { background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); border-radius: var(--ws-radius-chip, 999px); color: var(--text, #0f1422); cursor: pointer; font-size: 0.8125rem; font-weight: 500; font-family: inherit; padding: 0.35rem 0.85rem; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out), color var(--sd-ease, 120ms ease-out); }
+.surfdoc-chip:hover { background: var(--accent-soft, #e3ebff); border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
+.surfdoc-chip:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 1px; }
 
 /* ============================================================
    67. CHAT THREAD + INPUT
@@ -2937,24 +3074,30 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-chat-msg-assistant { align-self: flex-start; background: var(--surface-alt, #eef1f7); color: var(--text, #0f1422); }
 .surfdoc .surfdoc-chat-input { border-top: 1px solid var(--border, #30363d); padding: 12px; flex-shrink: 0; }
 .surfdoc .surfdoc-chat-form { display: flex; gap: 8px; }
-.surfdoc .surfdoc-chat-form input { flex: 1; background: var(--bg, #0a0a0f); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); color: var(--text, #e6edf3); padding: 8px 12px; font-size: 0.8125rem; outline: none; }
-.surfdoc .surfdoc-chat-form input:focus { border-color: var(--accent, #3b82f6); }
-.surfdoc .surfdoc-chat-form button { background: var(--accent, #3b82f6); color: var(--accent-text, #fff); border: none; border-radius: var(--radius-sm); padding: 8px 16px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
-.surfdoc .surfdoc-chat-form button:hover { background: var(--accent-hover, #60a5fa); }
+.surfdoc .surfdoc-chat-form input { flex: 1; background: var(--bg, #0a0a0f); border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 8px); color: var(--text, #e6edf3); padding: 8px 12px; font-size: 0.8125rem; font-family: inherit; outline: none; transition: border-color var(--sd-ease, 120ms ease-out), box-shadow var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-chat-form input:focus { border-color: var(--accent, #3b82f6); box-shadow: 0 0 0 3px var(--accent-soft, rgba(37,99,235,0.18)); }
+.surfdoc .surfdoc-chat-form button { background: var(--accent, #3b82f6); color: var(--accent-text, #fff); border: none; border-radius: var(--ws-control-radius, 8px); padding: 8px 16px; font-size: 0.8125rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: background var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-chat-form button:hover { background: var(--accent-hover, #1d4ed8); }
+.surfdoc .surfdoc-chat-form button:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
 
 /* ============================================================
    68. MODAL
    ============================================================ */
 
-.surfdoc .surfdoc-modal { background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); padding: 0; color: var(--text, #e6edf3); max-width: 480px; width: 90%; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
+.surfdoc .surfdoc-modal { background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: 12px; padding: 0; color: var(--text, #e6edf3); max-width: 480px; width: 90%; box-shadow: var(--sd-shadow-overlay, 0 16px 48px rgba(0,0,0,0.4)); }
 .surfdoc .surfdoc-modal::backdrop { background: rgba(0,0,0,0.5); }
-.surfdoc .surfdoc-modal h2 { font-size: 1rem; font-weight: 600; padding: 16px 20px; border-bottom: 1px solid var(--border, #30363d); margin: 0; }
+.surfdoc .surfdoc-modal h2 { font-size: 0.9375rem; font-weight: 600; letter-spacing: var(--tracking-tight); padding: 16px 20px 12px; border-bottom: 1px solid var(--border, #30363d); margin: 0; }
+/* Modal body: the header runs full-bleed (hairline spans the sheet), body
+   blocks get the sheet's inner gutter. */
+.surfdoc .surfdoc-modal > :not(.surfdoc-modal-header) { margin-left: 20px; margin-right: 20px; }
+.surfdoc .surfdoc-modal > .surfdoc-modal-header + * { margin-top: 14px; }
+.surfdoc .surfdoc-modal > :last-child:not(.surfdoc-modal-header) { margin-bottom: 18px; }
 
 /* ============================================================
    69. BADGE
    ============================================================ */
 
-.surfdoc .surfdoc-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-wide); background: rgba(63,185,80,0.15); color: var(--green, #3fb950); }
+.surfdoc .surfdoc-badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: var(--ws-radius-chip, 999px); font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-wide); background: rgba(63,185,80,0.15); color: var(--green, #3fb950); }
 
 /* ============================================================
    70. CODE EDITOR
@@ -2974,10 +3117,11 @@ ol.surfdoc-steps { padding-left: 1rem; }
    72. COMMAND PALETTE
    ============================================================ */
 
-.surfdoc .surfdoc-command-palette { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); width: 500px; max-width: 90vw; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); box-shadow: 0 16px 48px rgba(0,0,0,0.5); z-index: 300; }
-.surfdoc .surfdoc-command-search { width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--border, #30363d); color: var(--text, #e6edf3); padding: 12px 16px; font-size: 0.875rem; outline: none; }
-.surfdoc .surfdoc-command-list { list-style: none; padding: 4px; max-height: 300px; overflow-y: auto; }
-.surfdoc .surfdoc-command-list li { padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8125rem; }
+.surfdoc .surfdoc-command-palette { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); width: 500px; max-width: 90vw; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: 12px; overflow: hidden; box-shadow: var(--sd-shadow-overlay, 0 16px 48px rgba(0,0,0,0.5)); z-index: 300; }
+.surfdoc .surfdoc-command-search { width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--border, #30363d); color: var(--text, #e6edf3); padding: 13px 16px; font-size: 0.875rem; font-family: inherit; outline: none; }
+.surfdoc .surfdoc-command-search::placeholder { color: var(--text-muted, #8b949e); }
+.surfdoc .surfdoc-command-list { list-style: none; padding: 6px; max-height: 300px; overflow-y: auto; }
+.surfdoc .surfdoc-command-list li { padding: 8px 12px; border-radius: var(--ws-control-radius, 6px); cursor: pointer; font-size: 0.8125rem; transition: background var(--sd-ease, 120ms ease-out); }
 .surfdoc .surfdoc-command-list li:hover { background: var(--surface-alt, #1a1a24); }
 
 /* ============================================================
@@ -2985,26 +3129,34 @@ ol.surfdoc-steps { padding-left: 1rem; }
    Compact pill single-select — a filter idiom, not a tab bar.
    ============================================================ */
 
-.surfdoc .surfdoc-segmented-control { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--surface-alt, #1a1a24); border: 1px solid var(--border, #30363d); border-radius: 999px; margin: 0.5rem 0; }
-.surfdoc .surfdoc-segment { appearance: none; background: transparent; border: none; border-radius: 999px; color: var(--text-muted, #8b949e); font-size: 0.8125rem; line-height: 1; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
-.surfdoc .surfdoc-segmented-control[data-size="compact"] .surfdoc-segment { font-size: 0.75rem; padding: 4px 10px; }
-.surfdoc .surfdoc-segment:hover { color: var(--text, #e6edf3); }
-.surfdoc .surfdoc-segment.is-active { background: var(--surface, #12121a); color: var(--text, #e6edf3); font-weight: var(--font-weight-semibold, 600); box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.surfdoc .surfdoc-segmented-control { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--surface, #fff); border: 1px solid var(--border, #30363d); border-radius: 999px; margin: 0.5rem 0; }
+.surfdoc .surfdoc-segment { appearance: none; background: transparent; border: none; border-radius: 999px; color: var(--text-muted, #8b949e); font-size: 0.8125rem; font-weight: 500; font-family: inherit; line-height: 1; padding: 6px 13px; cursor: pointer; white-space: nowrap; transition: background var(--sd-ease, 120ms ease-out), color var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-segmented-control[data-size="compact"] .surfdoc-segment { font-size: 0.75rem; padding: 5px 11px; }
+.surfdoc .surfdoc-segment:hover { color: var(--text, #e6edf3); background: var(--surface-alt, #eef1f7); }
+.surfdoc .surfdoc-segment:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; }
+.surfdoc .surfdoc-segment.is-active { background: var(--accent-soft, #e3ebff); color: var(--accent, #2563eb); font-weight: var(--font-weight-semibold, 600); }
 
 /* ============================================================
    72b. DROPDOWN SELECT
    Static-rendered inline: trigger row + option list, no overlay.
    ============================================================ */
 
-.surfdoc .surfdoc-dropdown-select { display: inline-block; min-width: 220px; max-width: 100%; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); margin: 0.5rem 0; vertical-align: top; }
-.surfdoc .surfdoc-dropdown-trigger { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--border, #30363d); color: var(--text, #e6edf3); padding: 8px 12px; font-size: 0.8125rem; cursor: pointer; text-align: left; }
+.surfdoc .surfdoc-dropdown-select { display: inline-block; min-width: 220px; max-width: 100%; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 10px); margin: 0.5rem 0; vertical-align: top; }
+.surfdoc .surfdoc-dropdown-trigger { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: none; border-radius: inherit; color: var(--text, #e6edf3); padding: 8px 12px; font-size: 0.8125rem; font-family: inherit; cursor: pointer; text-align: left; transition: background var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-dropdown-trigger:hover { background: var(--surface-alt, #eef1f7); }
+.surfdoc .surfdoc-dropdown-trigger:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; }
 .surfdoc .surfdoc-dropdown-label { color: var(--text-muted, #8b949e); }
 .surfdoc .surfdoc-dropdown-selected { font-weight: var(--font-weight-semibold, 600); }
-.surfdoc .surfdoc-dropdown-caret { margin-left: auto; color: var(--text-faint, #484f58); }
-.surfdoc .surfdoc-dropdown-options { list-style: none; padding: 4px; margin: 0; }
-.surfdoc .surfdoc-dropdown-option { padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8125rem; }
+.surfdoc .surfdoc-dropdown-caret { margin-left: auto; color: var(--text-muted, #8b949e); }
+/* Option list = a real popover surface: sheet fill, hairline, floating-layer
+   shadow. In the static render it sits inside the control as a labeled-look
+   preview; in the live shell next-shell.js positions it absolutely and the
+   same treatment reads as the open menu. */
+.surfdoc .surfdoc-dropdown-options { list-style: none; padding: 5px; margin: 6px; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 10px); box-shadow: var(--sd-shadow-pop); }
+.surfdoc .surfdoc-dropdown-option { padding: 8px 11px; border-radius: var(--ws-control-radius, 6px); cursor: pointer; font-size: 0.8125rem; transition: background var(--sd-ease, 120ms ease-out); }
 .surfdoc .surfdoc-dropdown-option:hover { background: var(--surface-alt, #1a1a24); }
-.surfdoc .surfdoc-dropdown-option.is-selected { background: var(--surface-alt, #1a1a24); }
+.surfdoc .surfdoc-dropdown-option.is-selected { background: var(--accent-soft, #e3ebff); }
+.surfdoc .surfdoc-dropdown-option.is-selected .surfdoc-dropdown-option-label { color: var(--accent, #2563eb); font-weight: 600; }
 .surfdoc .surfdoc-dropdown-option-label { display: block; color: var(--text, #e6edf3); }
 .surfdoc .surfdoc-dropdown-option-desc { display: block; color: var(--text-muted, #8b949e); font-size: 0.75rem; margin-top: 2px; }
 
@@ -3013,13 +3165,14 @@ ol.surfdoc-steps { padding-left: 1rem; }
    Static preview: chip strip + To: input + submit.
    ============================================================ */
 
-.surfdoc .surfdoc-recipient-picker { display: flex; align-items: center; gap: 8px; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--radius-sm); padding: 8px 12px; margin: 0.5rem 0; }
+.surfdoc .surfdoc-recipient-picker { display: flex; align-items: center; gap: 8px; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 10px); padding: 8px 12px; margin: 0.5rem 0; transition: border-color var(--sd-ease, 120ms ease-out), box-shadow var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-recipient-picker:focus-within { border-color: var(--accent, #3b82f6); box-shadow: 0 0 0 3px var(--accent-soft, rgba(37,99,235,0.18)); }
 .surfdoc .surfdoc-recipient-chips { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .surfdoc .surfdoc-recipient-chip { display: inline-block; background: var(--surface-alt, #1a1a24); border: 1px solid var(--border, #30363d); border-radius: 999px; color: var(--text, #e6edf3); font-size: 0.75rem; line-height: 1; padding: 4px 10px; white-space: nowrap; }
 .surfdoc .surfdoc-recipient-picker input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text, #e6edf3); font-size: 0.8125rem; }
 .surfdoc .surfdoc-recipient-picker input::placeholder { color: var(--text-muted, #8b949e); }
-.surfdoc .surfdoc-recipient-submit { appearance: none; background: var(--accent, #2e8ad8); border: none; border-radius: var(--radius-sm); color: var(--accent-text, #fff); cursor: pointer; font-size: 0.75rem; font-weight: var(--font-weight-semibold, 600); line-height: 1; padding: 6px 12px; flex-shrink: 0; }
-.surfdoc .surfdoc-recipient-submit:hover { background: var(--accent-hover, #60a5fa); }
+.surfdoc .surfdoc-recipient-submit { appearance: none; background: var(--accent, #2e8ad8); border: none; border-radius: var(--ws-control-radius, 8px); color: var(--accent-text, #fff); cursor: pointer; font-size: 0.75rem; font-weight: var(--font-weight-semibold, 600); font-family: inherit; line-height: 1; padding: 7px 12px; flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-recipient-submit:hover { background: var(--accent-hover, #1d4ed8); }
 
 /* ============================================================
    72d. QR (0.12)
@@ -3047,7 +3200,8 @@ ol.surfdoc-steps { padding-left: 1rem; }
     .surfdoc .surfdoc-panel[data-desktop-only="true"] { display: none; }
     .surfdoc .surfdoc-drawer { width: 100% !important; height: 70vh; top: auto; bottom: 0; border-left: none; border-top: 1px solid var(--border, #30363d); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
     .surfdoc .surfdoc-toolbar { padding: 0 8px; overflow-x: auto; }
-    .surfdoc .surfdoc-toolbar-btn { padding: 4px 8px; font-size: 0.75rem; }
+    .surfdoc .surfdoc-toolbar-btn { padding: 0 10px; height: 28px; font-size: 0.75rem; }
+    .surfdoc .surfdoc-tab-content { padding: 14px 14px 40px; }
 }
 
 /* ============================================================
@@ -3097,7 +3251,8 @@ ol.surfdoc-steps { padding-left: 1rem; }
     box-shadow: none !important;
     z-index: auto !important;
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--ws-control-radius, 10px);
+    overflow: hidden;
 }
 /* Overlay preview labels — show block type in top-left corner of each contained overlay */
 .surfdoc .surfdoc-command-palette::before { content: "Command Palette"; }
@@ -3120,9 +3275,10 @@ ol.surfdoc-steps { padding-left: 1rem; }
 /* Modal title — <strong class="surfdoc-modal-title"> replaces bare <h2> so it stays out of TOC */
 .surfdoc .surfdoc-modal .surfdoc-modal-title {
     display: block;
-    font-size: var(--font-size-h3);
+    font-size: 1.0625rem;
     font-weight: var(--font-weight-semibold);
-    padding: 12px 20px 8px;
+    letter-spacing: var(--tracking-tight);
+    padding: 14px 20px 10px;
     color: var(--text);
 }
 /* Modal header — dismiss canon: title left, close control top-right.
@@ -3157,7 +3313,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
     max-height: 460px;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--ws-control-radius, 10px);
     margin: 1.5rem 0;
 }
 
@@ -3965,7 +4121,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-pg2-inner { max-width: min(var(--ws-band-inner), 100%); margin: 0 auto; padding: 0 var(--ws-space-md); }
 .surfdoc-post-grid-head { max-width: 720px; margin: 0 0 36px; }
 .surfdoc-post-grid-title {
-    font-family: var(--font-heading);
+    font-family: var(--ws-font-display);
     font-size: var(--font-size-display);
     font-weight: var(--font-weight-extrabold);
     letter-spacing: var(--tracking-tight);
@@ -4028,7 +4184,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
     color: var(--text-muted);
 }
 .surfdoc-post-card-title {
-    font-family: var(--font-heading);
+    font-family: var(--ws-font-display);
     font-size: var(--font-size-h3);
     font-weight: var(--font-weight-bold);
     line-height: 1.3;
@@ -4074,7 +4230,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
     box-shadow: var(--ws-shadow-hover);
 }
 .surfdoc-gate-title {
-    font-family: var(--font-heading);
+    font-family: var(--ws-font-display);
     font-size: var(--font-size-h1);
     font-weight: var(--font-weight-bold);
     letter-spacing: var(--tracking-tight);
