@@ -2851,6 +2851,12 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-row-title { font-size: 0.875rem; font-weight: 600; color: var(--text, #e5e5ef); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
 .surfdoc-row-desc { font-size: 0.75rem; color: var(--text-muted, #94a3b8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; margin-top: 0.125rem; }
 .surfdoc-row-desc:empty { display: none; }
+/* D4 (0.14.1): optional usage bar under the description (`::row[progress=]`,
+   modal plan rows: "Ultra — 8.4M of 20M used this cycle"). Thin rounded
+   track + accent fill; the renderer stamps the width inline from the
+   clamped fraction, so the fill can never paint outside the track. */
+.surfdoc-row-progress { display: block; width: 100%; height: 4px; margin-top: 7px; border-radius: 999px; background: var(--surface-alt, #eef1f7); overflow: hidden; }
+.surfdoc-row-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent, #2563eb); }
 .surfdoc-row-arrow { margin-left: auto; color: var(--text-muted, #64748b); opacity: 0.6; flex-shrink: 0; display: flex; align-items: center; transition: opacity var(--sd-ease, 120ms ease-out); }
 .surfdoc-row:hover .surfdoc-row-arrow { opacity: 1; }
 /* Unread indicator — right-side blue dot ONLY. Renderer invariant:
@@ -3037,10 +3043,16 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-toolbar-text { color: var(--text, #e6edf3); font-size: 0.8125rem; font-weight: 500; padding: 0 6px; white-space: nowrap; }
 /* Toolbar dropdown (0.13.3): dropdown-select markup in toolbar clothing — a
    compact collapsed pill (the old <select> silhouette), option list hidden
-   until `.is-open` and floated as a popover so the bar never reflows. */
-.surfdoc .surfdoc-toolbar-dropdown { position: relative; display: inline-block; min-width: 0; margin: 0; background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); border-radius: var(--ws-control-radius, 999px); flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
-.surfdoc .surfdoc-toolbar-dropdown:hover { background: var(--surface-alt, #eef1f7); border-color: var(--text-muted, #6b7388); }
-.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger { width: auto; height: 28px; padding: 0 13px; color: var(--text, #0f1422); font-weight: 500; }
+   until `.is-open` and floated as a popover so the bar never reflows.
+   D9 (0.14.1): the pill rule carries .surfdoc-dropdown-select specificity —
+   as a 2-class rule it LOST every conflicting declaration (min-width,
+   margin, background, radius) to the later Section 72b base rule, which
+   re-imposed a 220px pill around a label-width trigger; and the trigger
+   fills its pill (width: 100%, not auto) so clicks right of the text land
+   on the button, not the inert wrapper. */
+.surfdoc .surfdoc-dropdown-select.surfdoc-toolbar-dropdown { position: relative; display: inline-block; min-width: 0; margin: 0; background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); border-radius: var(--ws-control-radius, 999px); flex-shrink: 0; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
+.surfdoc .surfdoc-dropdown-select.surfdoc-toolbar-dropdown:hover { background: var(--surface-alt, #eef1f7); border-color: var(--text-muted, #6b7388); }
+.surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger { width: 100%; height: 28px; padding: 0 13px; color: var(--text, #0f1422); font-weight: 500; }
 .surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger:hover { background: transparent; }
 .surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 1px; }
 .surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-label { color: var(--text, #0f1422); }
@@ -3073,7 +3085,15 @@ ol.surfdoc-steps { padding-left: 1rem; }
    type ramp — the FIRST toolbar is the pane's title row (display face), a
    text-only toolbar deeper in the list is a section header, and remaining
    toolbar text (counts, status) reads as meta. */
-.surfdoc .surfdoc-tab-content .surfdoc-toolbar { background: transparent; border-bottom: none; height: auto; min-height: 42px; padding: 2px 0; }
+/* D3 (0.14.1): these bars must never scroll — the 880px detail column's
+   breadcrumb bar grew a horizontal scroller from the chrome-bar escape
+   valve above (overflow-x: auto is inherited from the base rule and was
+   never reset here). Content rows wrap instead; the chrome-bar invariant
+   from b1e5723 (scroll-not-clip on the DESKTOP chrome bar) is untouched. */
+.surfdoc .surfdoc-tab-content .surfdoc-toolbar { background: transparent; border-bottom: none; height: auto; min-height: 42px; padding: 2px 0; flex-wrap: wrap; row-gap: 8px; overflow-x: visible; overflow-y: visible; }
+/* Long breadcrumb/meta text in detail bars shrinks and ellipsizes instead
+   of forcing the bar wide (mirrors the split-right title fix, F4). */
+.surfdoc .surfdoc-tab-content .surfdoc-toolbar .surfdoc-toolbar-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .surfdoc .surfdoc-tab-content > .surfdoc-toolbar:first-child { min-height: 52px; margin-bottom: 2px; }
 .surfdoc .surfdoc-tab-content > .surfdoc-toolbar:first-child .surfdoc-toolbar-text { font-family: var(--ws-font-display); font-size: 21px; font-weight: 700; letter-spacing: var(--tracking-tight); color: var(--text, #0f1422); padding: 0; }
 /* Section headers — a toolbar whose only item is a text label ("To Do (4)") */
@@ -3261,7 +3281,7 @@ ol.surfdoc-steps { padding-left: 1rem; }
    68. MODAL
    ============================================================ */
 
-.surfdoc .surfdoc-modal { background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: 12px; padding: 0; color: var(--text, #e6edf3); max-width: 480px; width: 90%; box-shadow: var(--sd-shadow-overlay, 0 16px 48px rgba(0,0,0,0.4)); }
+.surfdoc .surfdoc-modal { background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: 16px; padding: 0; color: var(--text, #e6edf3); max-width: 480px; width: 90%; box-shadow: var(--sd-shadow-overlay, 0 16px 48px rgba(0,0,0,0.4)); }
 .surfdoc .surfdoc-modal::backdrop { background: rgba(0,0,0,0.5); }
 .surfdoc .surfdoc-modal h2 { font-size: 0.9375rem; font-weight: 600; letter-spacing: var(--tracking-tight); padding: 16px 20px 12px; border-bottom: 1px solid var(--border, #30363d); margin: 0; }
 /* Modal body: the header runs full-bleed (hairline spans the sheet), body
@@ -3269,6 +3289,12 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-modal > :not(.surfdoc-modal-header) { margin-left: 20px; margin-right: 20px; }
 .surfdoc .surfdoc-modal > .surfdoc-modal-header + * { margin-top: 14px; }
 .surfdoc .surfdoc-modal > :last-child:not(.surfdoc-modal-header) { margin-bottom: 18px; }
+/* D5 + D8 (0.14.1): a toolbar INSIDE a modal is a button/content row, not a
+   chrome bar — without this reset it keeps the Section 58 bar treatment
+   (full-width --background fill + hairline + fixed 48px), painting the dark
+   band Brady saw behind "Create a blank doc instead" and the filter
+   dropdowns. Also D4: real vertical padding so modal button rows breathe. */
+.surfdoc .surfdoc-modal .surfdoc-toolbar { background: transparent; border-bottom: none; height: auto; min-height: 0; padding: 10px 0; flex-wrap: wrap; row-gap: 8px; overflow-x: visible; overflow-y: visible; }
 
 /* ============================================================
    69. BADGE
@@ -3556,6 +3582,13 @@ ol.surfdoc-steps { padding-left: 1rem; }
     border-radius: var(--ws-control-radius, 10px);
     overflow: hidden;
 }
+/* D5 (0.14.1): modal keeps a sheet-scale corner — the grouped containment
+   rule above re-imposed var(--ws-control-radius, 10px), and the live layer
+   (next-shell.css) overrides overflow but declares no radius, so a squared
+   --ws-control-radius squared the sheet. Scoped to the modal only: drawer
+   and command-palette keep their containment geometry. The overflow clip
+   stays so children cannot square the corners in the static render. */
+.surfdoc .surfdoc-modal { border-radius: 16px; overflow: hidden; }
 /* Overlay preview labels — show block type in top-left corner of each contained overlay */
 .surfdoc .surfdoc-command-palette::before { content: "Command Palette"; }
 .surfdoc .surfdoc-drawer::before { content: "Drawer"; }

@@ -726,8 +726,8 @@ enum_variant = "AppDeploy"
 [blocks.row]
 status = "implemented"
 category = "utility"
-purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states and a right-side unread dot"
-attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action", "action"]
+purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states, a right-side unread dot, and an optional usage/progress fraction bar"
+attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action", "action", "progress"]
 degradation = "single-line description"
 enum_variant = "Row"
 

@@ -978,6 +978,12 @@ pub enum Block {
         /// askSurfyDoc, …) are reachable from authored rows.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         action: Option<String>,
+        /// Optional usage/progress fraction (0.14.1, D4): `progress=0.42`
+        /// renders a thin fill bar under the description (modal plan rows:
+        /// "Ultra — 8.4M of 20M used this cycle"). Clamped to 0..=1 at
+        /// parse; absent = no bar, output byte-identical to 0.14.0.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        progress: Option<f32>,
         /// Per-row actions mapping labels to action strings. (0.12)
         actions: Vec<RowAction>,
         span: Span,

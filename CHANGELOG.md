@@ -3,6 +3,40 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.14.1 — unreleased (R-lane UI fix round: D3/D4/D5+D8/D9)
+
+HTML/CSS render surface only; registry/native schema untouched apart from
+one additive, optional `::row` attribute.
+
+### Fixed
+- D3 — doc-detail toolbar in the 880px web detail column: tab-content
+  toolbars now wrap (`flex-wrap: wrap`, `overflow-x: visible`, row-gap)
+  instead of growing a horizontal scroller under the bar; long breadcrumb
+  text ellipsizes. The desktop chrome-bar scroll escape valve from 0.13.1
+  (`b1e5723`) is untouched — the change is scoped to
+  `.surfdoc-tab-content` toolbars, which are content rows, not chrome.
+- D5 + D8 — modal chrome: toolbars inside a modal no longer paint the
+  chrome-bar treatment (dark full-width band + hairline behind secondary
+  buttons); a modal-scoped reset makes them transparent, borderless,
+  wrapping, with real vertical padding (also D4's roomier modal button
+  rows). Modal corner radius raised to a sheet-scale 16px in both the
+  base rule and a post-containment override, keeping the overflow clip so
+  children cannot square the corners.
+- D9 — filter-dropdown dead zone: the toolbar-dropdown pill release
+  (`min-width: 0`, `margin: 0`) now carries `.surfdoc-dropdown-select`
+  specificity so the later base rule can no longer re-impose its 220px
+  min-width on the pill, and the trigger fills its pill (`width: 100%`)
+  instead of sizing to its label — clicks right of the text land on the
+  button, not an inert wrapper. Diagnosed as crate-side CSS geometry; no
+  surf dispatcher change needed.
+
+### Added
+- D4 — `::row[progress=0.42]`: optional token-usage fraction (0..=1) on
+  row blocks, rendered as a `surfdoc-row-progress` /
+  `surfdoc-row-progress-fill` bar under the row description with
+  `role="progressbar"` and percentage aria values. Absent attribute =
+  byte-identical output.
+
 ## 0.14.0 — responsive app-shell chrome + Surfy right drawer (R-series rulings)
 
 One responsive shell (ruling R-A): the renderer itself now emits the

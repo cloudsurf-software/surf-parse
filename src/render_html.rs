@@ -5003,7 +5003,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, action, actions, .. } => {
+        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, action, progress, actions, .. } => {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
@@ -5062,6 +5062,24 @@ pub(crate) fn render_block(block: &Block) -> String {
             } else {
                 String::new()
             };
+            // D4 (0.14.1): optional usage bar under the description —
+            // track + fill spans inside the row body. The fraction is
+            // clamped at parse; percent renders with at most one decimal
+            // (42 not 42.0) so output stays deterministic.
+            let progress_bar = match progress {
+                Some(p) => {
+                    let pct = ((p * 1000.0).round() / 10.0).clamp(0.0, 100.0);
+                    let pct = format!("{pct:.1}");
+                    let pct = pct.strip_suffix(".0").unwrap_or(&pct);
+                    format!(
+                        "<span class=\"surfdoc-row-progress\" role=\"progressbar\" \
+                         aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"{pct}\">\
+                         <span class=\"surfdoc-row-progress-fill\" style=\"width:{pct}%\"></span>\
+                         </span>"
+                    )
+                }
+                None => String::new(),
+            };
             // Per-row actions replace the chevron affordance (0.12).
             let tail = if actions.is_empty() {
                 format!("<span class=\"surfdoc-row-arrow\">{arrow_svg}</span>")
@@ -5092,6 +5110,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                  <span class=\"surfdoc-row-body\">\
                    <span class=\"surfdoc-row-title\">{title}</span>\
                    <span class=\"surfdoc-row-desc\">{desc}</span>\
+                   {progress_bar}\
                  </span>\
                  {unread_dot}\
                  {trailing}\
@@ -11435,6 +11454,7 @@ About
             trailing_label: None,
             trailing_action: None,
             action: None,
+            progress: None,
             actions: vec![],
             span: span(),
         }
@@ -12108,6 +12128,7 @@ About
             trailing_label: Some("Install".into()),
             trailing_action: Some("install_app".into()),
             action: None,
+            progress: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12118,6 +12139,74 @@ About
         let trailing_idx = html.find("surfdoc-row-trailing").expect("trailing");
         let arrow_idx = html.find("surfdoc-row-arrow").expect("arrow");
         assert!(dot_idx < trailing_idx && trailing_idx < arrow_idx);
+    }
+
+    #[test]
+    fn html_row_progress_bar_markup_and_percentage() {
+        // D4 (0.14.1): the bar renders inside the row body — track span
+        // with progressbar semantics, fill span with an inline width from
+        // the clamped fraction; 0.42 → "42" (no trailing .0).
+        let doc = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "Ultra".into(),
+            description: "8.4M of 20M used this cycle".into(),
+            href: None,
+            state: RowState::Default,
+            unread: false,
+            trailing_label: None,
+            trailing_action: None,
+            action: None,
+            progress: Some(0.42),
+            actions: vec![],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains(
+            "<span class=\"surfdoc-row-progress\" role=\"progressbar\" \
+             aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"42\">\
+             <span class=\"surfdoc-row-progress-fill\" style=\"width:42%\"></span></span>"
+        ), "bar markup drifted: {html}");
+        // The bar sits inside the row body, after the description.
+        let body_idx = html.find("surfdoc-row-body").expect("row body");
+        let desc_idx = html.find("surfdoc-row-desc").expect("row desc");
+        let bar_idx = html.find("surfdoc-row-progress").expect("bar");
+        assert!(body_idx < desc_idx && desc_idx < bar_idx);
+
+        // One decimal survives when the fraction needs it: 0.425 → 42.5%.
+        let doc = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "T".into(),
+            description: String::new(),
+            href: None,
+            state: RowState::Default,
+            unread: false,
+            trailing_label: None,
+            trailing_action: None,
+            action: None,
+            progress: Some(0.425),
+            actions: vec![],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("aria-valuenow=\"42.5\""), "{html}");
+        assert!(html.contains("style=\"width:42.5%\""), "{html}");
+
+        // No progress attribute → byte-identical row: no bar markup at all.
+        let doc = doc_with(vec![Block::Row {
+            icon: "doc".into(),
+            title: "T".into(),
+            description: String::new(),
+            href: None,
+            state: RowState::Default,
+            unread: false,
+            trailing_label: None,
+            trailing_action: None,
+            action: None,
+            progress: None,
+            actions: vec![],
+            span: span(),
+        }]);
+        assert!(!to_html(&doc).contains("surfdoc-row-progress"));
     }
 
     #[test]
@@ -12136,6 +12225,7 @@ About
             trailing_label: Some("Install".into()),
             trailing_action: Some("install_app".into()),
             action: None,
+            progress: None,
             actions: vec![crate::types::RowAction {
                 label: "Accept".into(),
                 action: "invoke:contacts.accept".into(),
@@ -12166,6 +12256,7 @@ About
                 trailing_label: Some("Message".into()),
                 trailing_action: Some("open_thread".into()),
                 action: None,
+                progress: None,
                 actions: vec![crate::types::RowAction {
                     label: "Accept".into(),
                     action: "invoke:contacts.accept".into(),
@@ -12182,6 +12273,7 @@ About
                 trailing_label: Some("Install".into()),
                 trailing_action: Some("install_app".into()),
                 action: None,
+                progress: None,
                 actions: vec![],
                 span: span(),
             },
@@ -12307,6 +12399,7 @@ About
             trailing_label: None,
             trailing_action: None,
             action: None,
+            progress: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12329,6 +12422,7 @@ About
             trailing_label: None,
             trailing_action: None,
             action: None,
+            progress: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12367,6 +12461,7 @@ About
             trailing_label: None,
             trailing_action: None,
             action: None,
+            progress: None,
             actions: vec![],
             span: span(),
         };

@@ -3850,6 +3850,12 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         trailing_label: attr_string(attrs, "trailing-label"),
         trailing_action: attr_string(attrs, "trailing-action"),
         action: attr_string(attrs, "action"),
+        // D4 (0.14.1): usage fraction — finite parses only, clamped to
+        // 0..=1 so a hostile value can never paint outside the track.
+        progress: attr_string(attrs, "progress")
+            .and_then(|s| s.parse::<f32>().ok())
+            .filter(|f| f.is_finite())
+            .map(|f| f.clamp(0.0, 1.0)),
         actions,
         span,
     }
@@ -7800,6 +7806,41 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(actions[0].label, "remove");
                 assert_eq!(actions[0].action, "remove");
             }
+            other => panic!("Expected Row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_row_progress_fraction_clamped() {
+        // D4 (0.14.1): valid fraction parses through.
+        let result = crate::parse("::row[icon=doc progress=0.42]\nUltra\n8.4M of 20M used this cycle\n::");
+        match &result.doc.blocks[0] {
+            Block::Row { progress, .. } => assert_eq!(*progress, Some(0.42)),
+            other => panic!("Expected Row, got {other:?}"),
+        }
+        // Out-of-range clamps into 0..=1.
+        let result = crate::parse("::row[icon=doc progress=3.5]\nT\n::");
+        match &result.doc.blocks[0] {
+            Block::Row { progress, .. } => assert_eq!(*progress, Some(1.0)),
+            other => panic!("Expected Row, got {other:?}"),
+        }
+        let result = crate::parse("::row[icon=doc progress=-1]\nT\n::");
+        match &result.doc.blocks[0] {
+            Block::Row { progress, .. } => assert_eq!(*progress, Some(0.0)),
+            other => panic!("Expected Row, got {other:?}"),
+        }
+        // Garbage and non-finite values drop to None (no bar, no panic).
+        for bad in ["progress=lots", "progress=NaN", "progress=inf"] {
+            let result = crate::parse(&format!("::row[icon=doc {bad}]\nT\n::"));
+            match &result.doc.blocks[0] {
+                Block::Row { progress, .. } => assert_eq!(*progress, None, "{bad}"),
+                other => panic!("Expected Row, got {other:?}"),
+            }
+        }
+        // Absent attribute stays None.
+        let result = crate::parse("::row[icon=doc]\nT\n::");
+        match &result.doc.blocks[0] {
+            Block::Row { progress, .. } => assert_eq!(*progress, None),
             other => panic!("Expected Row, got {other:?}"),
         }
     }

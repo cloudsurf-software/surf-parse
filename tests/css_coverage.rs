@@ -134,7 +134,7 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("use", "::use\n- serde\n::"),
     ("app-env", "::app-env\nKEY: value\n::"),
     ("app-deploy", "::app-deploy[region=sjc scale=1]\n::"),
-    ("row", "::row[icon=doc href=\"/docs\" unread=true trailing-label=\"Open\" trailing-action=open]\nTitle\nDescription\naction: Accept | invoke:contacts.accept\n::"),
+    ("row", "::row[icon=doc href=\"/docs\" unread=true trailing-label=\"Open\" trailing-action=open progress=0.42]\nTitle\nDescription\naction: Accept | invoke:contacts.accept\n::"),
     ("infocard", "::infocard[intent=success image=\"/img/a.png\"]\n# Card\nSubtitle\n\nSummary text.\n\n1. Step one\n\nVersion: 1.0\n::"),
     // Full shell shape (0.14): sidebar rows + divider + hub row (drives the
     // generated tab-bar), topbar, tab-content, and a RIGHT panel (drives
@@ -305,6 +305,155 @@ fn toolbar_overflow_never_clips_on_desktop() {
         css[p_start..p_end].contains("min-width: 0"),
         "toolbar grid placement needs min-width: 0: {}",
         &css[p_start..p_end]
+    );
+}
+
+/// D3 (0.14.1): toolbars inside tab-content are content rows, not chrome
+/// bars — the 880px detail column's breadcrumb bar must WRAP, never grow
+/// a horizontal scroller (Brady's doc-detail screenshot: the crumb pushed
+/// share/up off-track behind a scrollbar). The desktop chrome-bar rule
+/// keeps its b1e5723 scroll escape valve (pinned above); this pin covers
+/// the tab-content-scoped override: top-level (not media-query-only),
+/// wraps, and resets the inherited overflow-x back to visible.
+#[test]
+fn tab_content_toolbar_wraps_instead_of_scrolling() {
+    let css = surf_parse::SURFDOC_CSS;
+    let depth_at = |idx: usize| {
+        css[..idx].matches('{').count() as i64 - css[..idx].matches('}').count() as i64
+    };
+    let sel = ".surfdoc .surfdoc-tab-content .surfdoc-toolbar {";
+    let idx = css.find(sel).expect("tab-content toolbar rule exists");
+    assert_eq!(depth_at(idx), 0, "the first tab-content toolbar rule must be top-level");
+    let start = idx + sel.len();
+    let end = css[start..].find('}').unwrap() + start;
+    let body = &css[start..end];
+    assert!(
+        body.contains("flex-wrap: wrap"),
+        "tab-content toolbars must wrap, not scroll: {body}"
+    );
+    assert!(
+        body.contains("overflow-x: visible"),
+        "tab-content toolbars must reset the chrome bar's overflow-x: auto: {body}"
+    );
+    assert!(
+        !body.contains("overflow-x: auto") && !body.contains("overflow-x: scroll"),
+        "no horizontal scroller in the detail column: {body}"
+    );
+    // Long breadcrumb text shrinks and ellipsizes instead of forcing the
+    // bar wide (mirrors the split-right F4 chain).
+    let text_sel = ".surfdoc .surfdoc-tab-content .surfdoc-toolbar .surfdoc-toolbar-text {";
+    let tidx = css.find(text_sel).expect("tab-content toolbar-text rule exists");
+    let tstart = tidx + text_sel.len();
+    let tend = css[tstart..].find('}').unwrap() + tstart;
+    let tbody = &css[tstart..tend];
+    assert!(
+        tbody.contains("min-width: 0") && tbody.contains("text-overflow: ellipsis"),
+        "crumb text must shrink + ellipsize: {tbody}"
+    );
+}
+
+/// D5 + D8 (0.14.1): a toolbar inside a modal is a button/content row —
+/// the modal-scoped reset must strip the chrome-bar treatment (the dark
+/// full-width band + hairline behind "Create a blank doc instead" and the
+/// filter dropdowns) and give the row real vertical padding (D4).
+#[test]
+fn modal_toolbar_is_content_not_chrome() {
+    let css = surf_parse::SURFDOC_CSS;
+    let sel = ".surfdoc .surfdoc-modal .surfdoc-toolbar {";
+    let idx = css.find(sel).expect("modal-scoped toolbar rule exists");
+    let start = idx + sel.len();
+    let end = css[start..].find('}').unwrap() + start;
+    let body = &css[start..end];
+    assert!(body.contains("background: transparent"), "no chrome fill in a modal: {body}");
+    assert!(body.contains("border-bottom: none"), "no chrome hairline in a modal: {body}");
+    assert!(body.contains("height: auto"), "no fixed 48px bar height in a modal: {body}");
+    assert!(body.contains("padding: 10px 0"), "modal button rows need vertical room (D4): {body}");
+    assert!(body.contains("flex-wrap: wrap"), "modal toolbars wrap, never scroll: {body}");
+}
+
+/// D5 (0.14.1): the modal keeps a sheet-scale corner in BOTH declarations —
+/// the base rule (Section 68) and the post-containment override (the
+/// Section 76 grouped rule re-imposes var(--ws-control-radius, 10px), and
+/// the live layer declares no radius at all) — with the overflow clip so
+/// children cannot square the corners.
+#[test]
+fn modal_corner_radius_is_sheet_scale_in_both_declarations() {
+    let css = surf_parse::SURFDOC_CSS;
+    let sel = ".surfdoc .surfdoc-modal {";
+    let mut bodies = Vec::new();
+    let mut from = 0;
+    while let Some(pos) = css[from..].find(sel) {
+        let start = from + pos + sel.len();
+        let end = css[start..].find('}').unwrap() + start;
+        bodies.push(&css[start..end]);
+        from = end;
+    }
+    let radiused: Vec<&&str> = bodies
+        .iter()
+        .filter(|b| b.contains("border-radius: 16px"))
+        .collect();
+    assert!(
+        radiused.len() >= 2,
+        "both modal radius declarations (base + post-containment override) \
+         must carry the 16px sheet corner; found {} of {} rule bodies: {:?}",
+        radiused.len(),
+        bodies.len(),
+        bodies
+    );
+    // The override (the last modal rule) also keeps the clip.
+    let last = bodies.last().expect("at least one modal rule");
+    assert!(
+        last.contains("border-radius: 16px") && last.contains("overflow: hidden"),
+        "the final modal rule must pin radius + clip so the containment \
+         rule cannot square the sheet: {last}"
+    );
+}
+
+/// D9 (0.14.1): the toolbar-dropdown pill release must carry
+/// .surfdoc-dropdown-select specificity — as a plain 2-class rule it lost
+/// min-width/margin to the later Section 72b base rule, which re-imposed a
+/// 220px pill around a label-width trigger (clicks right of the text hit
+/// the inert wrapper). And the trigger fills its pill (width: 100%), the
+/// same shape as the panel-head release pinned above.
+#[test]
+fn toolbar_dropdown_trigger_fills_its_pill() {
+    let css = surf_parse::SURFDOC_CSS;
+
+    // Base rule keeps its geometry (in-content dropdowns byte-identical).
+    let base_sel = ".surfdoc .surfdoc-dropdown-select {";
+    let base_idx = css.find(base_sel).expect("base dropdown-select rule exists");
+    let base_start = base_idx + base_sel.len();
+    let base_end = css[base_start..].find('}').unwrap() + base_start;
+    assert!(
+        css[base_start..base_end].contains("min-width: 220px"),
+        "base dropdown-select keeps min-width: 220px — the D9 fix is scoped: {}",
+        &css[base_start..base_end]
+    );
+
+    // Pill rule carries 3-class specificity so the base rule can never
+    // re-impose its min-width/margin regardless of source order.
+    let pill_sel = ".surfdoc .surfdoc-dropdown-select.surfdoc-toolbar-dropdown {";
+    let pill_idx = css.find(pill_sel).expect("specificity-hardened toolbar pill rule exists");
+    let pill_start = pill_idx + pill_sel.len();
+    let pill_end = css[pill_start..].find('}').unwrap() + pill_start;
+    let pill = &css[pill_start..pill_end];
+    assert!(pill.contains("min-width: 0"), "toolbar pill releases the 220px floor: {pill}");
+    assert!(pill.contains("margin: 0"), "toolbar pill drops the content-flow margin: {pill}");
+
+    // Trigger fills the pill — a width:auto button sizes to its label and
+    // leaves a dead zone right of the text.
+    let trig_sel = ".surfdoc .surfdoc-toolbar-dropdown .surfdoc-dropdown-trigger {";
+    let trig_idx = css.find(trig_sel).expect("toolbar dropdown trigger rule exists");
+    let trig_start = trig_idx + trig_sel.len();
+    let trig_end = css[trig_start..].find('}').unwrap() + trig_start;
+    let trig = &css[trig_start..trig_end];
+    assert!(
+        trig.contains("width: 100%"),
+        "trigger must fill its pill so the whole control is clickable: {trig}"
+    );
+    assert!(
+        !trig.contains("width: auto"),
+        "width: auto re-opens the D9 dead zone: {trig}"
     );
 }
 
