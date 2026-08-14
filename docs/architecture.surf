@@ -247,6 +247,12 @@ pub fn render_site_page(
 All styles are scoped under `.surfdoc` — never pollutes the host page. CSS variables (`--surfdoc-accent`, `--surfdoc-font`) enable theming without overriding global styles. Font presets (system, serif, mono, inter, jetbrains-mono) auto-inject Google Fonts `@import` rules.
 ::
 
+### DOM Renderer (`render_dom`, feature `dom`)
+
+A fifth backend (2026-08): constructive DOM emission for the browser — `createElement` / `textContent` / allowlisted `setAttribute` only, via a `DomSink` abstraction (native arena sink for byte-identity tests; wasm32/web-sys sink for the live runtime). It walks the same block tree as `render_html` and must serialize byte-identical to it (hostile corpus included, never-weaken). Unimplemented or TT-incompatible block kinds get a typed decline and fall back to full navigation. This backend is the navigation mechanism for the zero-sink web runtime — no HTML string is ever inserted into a live document.
+
+Normative details, the constructive-navigation contract, and the security profile (Trusted Types with no policy, CSP, SRI, attestation, parse bounds): **`spec/web-runtime-v1.surf`**.
+
 ### Degradation Renderers
 
 ::details[title="Markdown Renderer (758 lines)"]

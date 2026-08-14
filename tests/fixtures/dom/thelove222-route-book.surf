@@ -1,0 +1,92 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/book" title="BOOK"]
+
+::hero[align=center transparent]
+# Booking Is a Conversation
+
+No set days, no rigid slots — Sam and her sister share one studio chair, so every booking starts as a request. Send yours below and you'll get a text back to confirm the details, human to human.
+::
+
+::features[cols=3]
+### 1. Send the request
+
+Tell us your idea, placement, size, and the days that work for you. Reference photos and Instagram links welcome — the more detail, the faster the yes.
+
+### 2. Get instant answers
+
+The studio assistant replies right away with pricing, aftercare, and availability info. Anything custom pings Sam directly on her phone — a real person confirms every booking before it's real.
+
+### 3. Deposit & lock it in
+
+Once you settle the details over text, you get a Square deposit link — pay it from your phone and your session lands on the shared studio-chair calendar, locked in.
+::
+
+::section
+## Studio chair availability — one chair, two artists
+
+Sam and Rae trade time on the same chair, so the calendar below shows when the chair itself is open — not fixed appointment slots. Picking a window here just attaches a time preference to your request (this is a demo — nothing is reserved until a human texts you to confirm).
+::
+
+::booking[title="Studio chair availability — one chair, two artists" service-label="Choose a service"]
+service: Consultation | 30 min | Free
+service: Flash / Small Tattoo | 2 hr | $250
+service: Half-Day Session | 4 hr | $500
+service: Full-Day Session | 8 hr | $950
+day: 2026-08-12 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-08-13 | 12:00 PM, 2:00 PM
+day: 2026-08-14 | full
+day: 2026-08-15 | 11:00 AM, 2:00 PM, 4:00 PM
+day: 2026-08-18 | 11:00 AM, 1:00 PM
+day: 2026-08-19 | 12:00 PM, 3:00 PM
+day: 2026-08-21 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-08-22 | full
+day: 2026-08-25 | 11:00 AM, 2:00 PM
+day: 2026-08-26 | 12:00 PM, 2:00 PM, 4:00 PM
+day: 2026-08-28 | 11:00 AM, 1:00 PM
+day: 2026-08-29 | 11:00 AM, 3:00 PM
+day: 2026-09-01 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-09-02 | 12:00 PM, 2:00 PM
+day: 2026-09-04 | 11:00 AM, 2:00 PM, 4:00 PM
+day: 2026-09-05 | full
+day: 2026-09-08 | 11:00 AM, 1:00 PM
+day: 2026-09-09 | 12:00 PM, 3:00 PM
+day: 2026-09-11 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-09-12 | 11:00 AM, 2:00 PM
+::
+
+::section
+## Send your booking request
+
+The whole booking happens on the site — request, confirmation, then your Square deposit once a time is set. Coming from Instagram? DMs land in the same queue, or just fill this out and you'll hear back by text.
+::
+
+::form[submit="Send booking request"]
+- Name (text) *
+- Phone or Instagram (text) *
+- Email (email)
+- Artist (select: Sam Rose | Rae — her sister | Either) *
+- Service (select: Consultation | Flash / Small Tattoo | Half-Day Session | Full-Day Session | Custom project) *
+- Placement (text)
+- Size (select: Small | Medium | Large | Full piece)
+- Tattoo idea + reference links (textarea) *
+- Preferred days & times (textarea) *
+::
+
+::callout[type=tip title="How support works: AI answers, human confirmation"]
+The live site pairs an AI studio assistant with real-person escalation: routine questions — pricing, aftercare, healing, which days the chair is free — get an instant answer any hour, while anything custom (your design, a cover-up, a budget question) goes straight to Sam's phone. No matter what the assistant says, a human confirms every appointment before it's on the books. The assistant isn't wired up in this demo — for now, text 702-370-1380 or DM [@love222tattoo](https://instagram.com/love222tattoo).
+::
+
+::callout[type=note title="Demo — no payment taken online"]
+Payments are disabled in this preview. On the live site, deposits run through Square the moment your time is confirmed — nothing is charged before that. Questions? Text 702-370-1380 or email [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com).
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

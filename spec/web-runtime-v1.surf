@@ -1,0 +1,101 @@
+---
+title: "SurfDoc Web Runtime Spec v1 — DOM Rendering, Constructive Navigation, Security"
+type: doc
+version: 1
+created: "2026-08-13"
+status: active
+tags: [surfdoc, spec, dom, wasm, spa, security, trusted-types, csp]
+---
+
+# SurfDoc Web Runtime Spec v1
+
+::summary
+Normative specification for how SurfDoc reaches a browser: the two-form rendering law (full-document SSR via `render_html`; constructive DOM via `render_dom`), the constructive-navigation runtime that gives published sites and apps SPA feel without an HTML-string code path, and the security profile (Trusted Types with no policy, CSP, SRI, attestation, parse bounds). Derived from the zero-sink architecture (rev 2, ruled 2026-08-13) and the P0 pilot site, which is live in production. Each section carries a status: **LAW** (normative, never-weaken), **SHIPPED** (implemented, pilot or release), **TRAIN-BOUND** (implemented, rides the next surf-parse tag), or **PLANNED** (P3/P4 of the zero-sink plan).
+::
+
+Companion docs: `spec/app-spec-v1.surf` (app manifest surface), `docs/architecture.surf` (crate architecture).
+
+## 1. Rendering model — two forms only [LAW]
+
+HTML exists in exactly one form: **full-document SSR** emitted by `render_html`. DOM updates exist in exactly one form: **constructive emission** by `render_dom` (`createElement` / `textContent` / allowlisted `setAttribute`). There is **no code path that inserts an HTML string into a live document** — no `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, or `DOMParser` over dynamic content, anywhere in shipped client code.
+
+Consequences:
+
+- The browser's HTML parser executes **only** on full-document navigations.
+- `require-trusted-types-for 'script'` is served with **no policy defined** — every injection sink throws at the platform level. The absence of a policy is the proof the architecture held; adding a policy anywhere is a spec violation, not a workaround.
+- Enforced two ways, both never-weaken: (a) the TT header with no policy; (b) a CI sink lint over the shell, wasm glue, and codegen output.
+
+## 2. `render_dom` backend [SHIPPED — pilot census; PLANNED — full 71-kind coverage at P3]
+
+- Lives **inside surf-parse** behind the `dom` feature (never a JS fork). One parser, one typed block tree, per-platform backends; no block rendering outside the crate.
+- `DomSink` abstraction: a native arena sink (byte-exact serializer, used by the identity corpus) and a wasm32/web-sys sink. Both walk the same block tree as `render_html`.
+- **Byte-identity corpus** [LAW]: `render_dom` output serialized must byte-match `render_html` across the snapshot corpus **plus the hostile corpus** (quote-breaks, `javascript:`/`data:` URLs, closing-rawtext payloads, half-open containers). Never-weaken.
+- **Parser-stable emission** [LAW]: emitted HTML must parse to the DOM it names. The pilot proved bytes-identical output can still produce divergent DOMs (block-in-`<p>` hoisting); phrasing-only bodies keep the historical `<p>`, block-bearing bodies get a `<div>` the parser nests literally. Pinned by never-weaken parser-stability tests in both backends.
+- **Partial-coverage law** [LAW]: a route/doc containing any unimplemented block kind gets a **typed decline** (`Unimplemented(kind)`) and falls back to full navigation. Coverage rolls out block-by-block behind the MPA floor — never big-bang.
+- **TT-constructibility in the coverage model** [LAW]: the constructive path may only use constructs buildable under Trusted Types. Event-handler attributes (`onerror=`, …) are TrustedScript sinks — `render_html`'s image fallback moved to `data-img-fallback` + a delegated listener [TRAIN-BOUND]. Script-emitting blocks (store, booking, gallery-lightbox) are **constructively unimplemented** — creating `<script>` text is itself a TrustedScript sink; their behavior moves to the versioned runtime at P3/P4. `coverage_check` must decline TT-incompatible constructs so coverage-green can never panic live.
+
+## 3. Constructive navigation (the SPA mechanism) [SHIPPED — pilot; PLANNED — generalized runtime at P4]
+
+The web app tier is **not** a fragment-swap SPA. Navigation is: wasm ready → `coverage_check(source, route)` → dry-run render → `pushState` + constructive mount swap. One shell (`surfdoc-shell.js`, pilot: `surfdoc-shell.pilot.js`) dispatches via closures over elements — no global-id lookups (DOM-clobbering discipline).
+
+- **MPA floor** [LAW]: every pane state has a real URL that fully SSRs. Wasm absent/failed/blocked, fetch timeout, coverage decline, or attest mismatch → full navigation with a named `console.warn`. Breakage means MPA, never a dead click. JS-off works.
+- **Source contract** (ruled 2026-08-13): navigation payload is **raw SurfDoc source, whole-site** (one sibling source fetch serves every route — pilot: 12,402 B vs 277–291 KB SSR per page); the **render is route-scoped** in the glue. Source responses are `text/plain`-class, never renderable as HTML; no content negotiation, no `Vary`.
+- **Attestation** [LAW]: on takeover and spot-check, hash the live mount subtree and compare against the canonical serialization; mismatch → degrade to full navigation (self-healing against extension mutation, SSR drift, renderer bugs). Attestation exists because byte-identity structurally cannot catch parser-hoisting divergence.
+- **State discipline**: constructive nav must reproduce navigation side-effects the MPA gets free — close the nav drawer (checkbox-hack `checked` write), move `active` + `aria-current="page"` to the landing route's link, restore scroll/focus, tear down listeners. All writes TT-clean.
+- **Glue exports** (pilot contract): `coverage_check(source, route) -> bool`, `render(source, route, mount_id)` (dry-run-before-clear), `attest_hash(mount_id)`, `has_route`.
+
+## 4. Security considerations [LAW unless marked]
+
+### 4.1 CSP profile (the canonical SurfDoc-serving profile)
+
+Verified live on the pilot host:
+
+```
+require-trusted-types-for 'script';
+script-src 'self' 'wasm-unsafe-eval' 'sha256-<per-page inline hashes>';
+object-src 'none'; base-uri 'none'
+```
+
+- **No TT policy is ever defined.** Sinks throw platform-wide.
+- `'wasm-unsafe-eval'` is required for `WebAssembly.instantiate` — the standard wasm carve-out. It does not permit JS `eval`; SRI-pinned assets + TT still hold.
+- Inline scripts the SSR page legitimately carries (theme resolver, `ld+json`) are hash-pinned per page rather than pure `'self'` — documented deviation.
+- Shell + wasm glue ship with **SRI hashes recomputed from served bytes** and are version-locked to the surf-parse tag [PLANNED at P4; pilot pins SRI in serving code + drift tests].
+- `frame-ancestors` set per product need. Static-host publishes get the same profile via real headers where the host allows; the `<meta>` fallback cannot carry `frame-ancestors` or report-uri — document per host.
+
+### 4.2 Origin isolation
+
+Published sites (`*.doc.surf`) are origin-isolated from authenticated Surfspace surfaces: distinct registrable domain, no cookies. Verified for the pilot; re-verify before each new publish surface [LAW].
+
+### 4.3 Input hostility
+
+- The hostile corpus is part of the identity corpus and never-weaken: quote-breaking text, `javascript:`/`data:` URLs in link fields, closing-rawtext payloads (`</textarea>`, `</style>`), half-open containers, max-depth nesting.
+- URL-typed fields are scheme-allowlisted at the encoder layer. Field **security typing** in `spec/blocks.toml` (`text`, `url`, `enum`, `style-token`, `int-bounded`) with fully generated encoders is the cross-platform policy [PLANNED — P3]; the encoder layer is where divergence is a vulnerability.
+
+### 4.4 Client DoS bounds [PLANNED — P3]
+
+Max nesting depth, max block count, max source size — enforced identically at publish (server-side reject, not sanitize) and at parse (client fuel limits).
+
+### 4.5 Incremental rendering (streaming) [PLANNED — P5]
+
+Blocks materialize to DOM only at committed grammar boundaries; half-open containers render as inert placeholders and can never capture subsequent content (the v0.10 `::figure` lesson, made law). Gate: patched tree ≡ full reparse of accumulated source, never-weaken. This class is the mXSS-analog for incremental rendering.
+
+### 4.6 Size budget
+
+Wasm bundle = parser + dom backend only (no pdf/native/uniffi). Working target ≤ 1.5 MB gz; **CI gate pinned at 1.2 MB gz** (ruled 2026-08-13; first build measured 964,370 B gz with pilot census coverage).
+
+## 5. Status ledger (2026-08-13)
+
+| Piece | Status |
+|-------|--------|
+| Zero-sink law + TT-no-policy + CSP profile | LIVE on the pilot host (full TT) |
+| `render_dom` pilot census (site/page/hero/section/figure/callout/features/form/banner/store/infocard/gallery/booking + md subset) | SHIPPED |
+| Byte-identity + hostile + parser-stability corpus | SHIPPED, never-weaken |
+| Constructive nav shell (pilot) + attestation + nav-chrome sync | LIVE |
+| `onerror` → `data-img-fallback`, widget JS sink-free, parser-stable emission in `render_html` | TRAIN-BOUND (next surf-parse tag) |
+| blocks.toml security typing, generated encoders, parse bounds, full 71-kind coverage | PLANNED — P3 |
+| Versioned `surfdoc-shell.js` runtime + source endpoints + capability manifests | PLANNED — P4 |
+| Streaming commit points + patched-tree ≡ reparse | PLANNED — P5 |
+
+::callout[type=warning title="Never-weaken list"]
+The TT-no-policy header, the CI sink lint, the byte-identity corpus (hostile fixtures included), the parser-stability pins, the MPA floor, and the wasm size gate are never-weaken. Weakening any of them to ship a feature is a spec violation; the feature waits.
+::

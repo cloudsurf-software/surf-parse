@@ -1,0 +1,14 @@
+::page[route="/" title="Half open"]
+
+::section
+## Section never closed
+
+Text inside the unterminated section.
+
+::figure[src="/a.png" alt="figure inside half-open section"]
+
+::banner
+# Banner inside
+
+::callout[type=warning title="Callout never closed"]
+Warning body with **bold** and [link](/x)

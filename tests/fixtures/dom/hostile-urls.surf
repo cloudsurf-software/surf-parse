@@ -1,0 +1,26 @@
+::page[route="/" title="URL hostile"]
+
+[js link](javascript:alert(1)) and [data link](data:text/html,%3Cscript%3Ex%3C/script%3E) and [vbs](vbscript:msgbox) stay defused.
+
+![img with js src](javascript:evil()) and ![img with data src](data:image/svg+xml,%3Csvg%20onload=alert(1)%3E)
+
+[mixed case](JaVaScRiPt:alert(2)) and [scheme with space](java script:x) and [ok](https://example.com/a?b=1&c='q')
+
+::figure[src="javascript:alert('figure')" alt="js figure"]
+
+::figure[src="data:text/html,payload" alt="data figure"]
+
+::gallery
+![](javascript:alert('gallery'))
+![ok](https://example.com/a b.jpg)
+::
+
+::hero[align=center transparent image="javascript:alert('hero')" image-alt="js hero"]
+# Hero with hostile image
+
+[Button](javascript:alert('btn')){primary}
+::
+
+::hero[layout=cover align=center image="/bg')};</style><script>x()</script>'s \"quote\".jpg" image-alt="cover hostile"]
+# Cover hero with hostile background URL
+::

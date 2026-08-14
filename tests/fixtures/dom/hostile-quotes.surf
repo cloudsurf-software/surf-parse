@@ -1,0 +1,28 @@
+::site[domain="evil.example"]
+name: "Quoted" & <Angled> Site's
+::
+
+::page[route="/" title="Quote "breaker" page"]
+
+::hero[align=center transparent]
+# Head with "quotes" & <angles> and 'apostrophes'
+
+Sub with "quotes" onmouseover="alert(1)" and </div> breakage
+::
+
+::callout[type=note title=""><script>alert(1)</script>"]
+Body with "quotes" & <b>tags</b> and 'apostrophes' plus [a link]("></a><script>x</script>)
+::
+
+::figure[src="/img/a".png" onload="x()" alt=""><img src=x onerror=alert(1)>"]
+
+::infocard[title="T"quote" intent="who"sub"]
+- **step "one"** with <angles>
+- step 'two' & more
+::
+
+::section
+## "Sectioned" & <headline>
+
+Paragraph with attribute-breaking "quote payloads" and trailing backslash \
+::

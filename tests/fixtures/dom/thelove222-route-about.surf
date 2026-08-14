@@ -1,0 +1,23 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/about" title="ABOUT"]
+
+::hero[align=center transparent]
+# ABOUT ME
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/2025-01-15_02-32-51_1736937186.png" alt="Sam Rose — photo by @taylorjean.photos"]
+
+IM A LAS VEGAS BORN & RAISED ARTIST.
+
+ART HAS BEEN MY PASSION EVER SINCE I WAS LITTLE. I DABBLE IN PAINTING, PHOTOGRAPHY, TUFTING, AND DRAWING. I GRADUATED WITH A BACHELORS OF FINE ART DEGREE AT UNLV
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

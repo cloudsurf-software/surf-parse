@@ -1,0 +1,18 @@
+::page[route="/" title="Rawtext escapes"]
+
+::form[submit="</textarea><script>alert(1)</script>"]
+- Name (text, "</textarea><script>x</script>") *
+- Message (textarea, "closing </textarea> payload")
+- Style (select: </style> | </script> | "quoted")
+::
+
+::store[title="</style><script>store</script>" currency="$"]
+category: </script>
+item: Item </script> one | 10 | Blurb with </textarea> and "quotes" | </style>
+item: Amp & item | 12.50 | Newline\tand tab
+::
+
+::booking[title="Book </script> now" service-label="Pick </style>"]
+service: Cut </script> | 30 min | $10
+day: 2026-08-12 | 11:00 AM, </script>
+::

@@ -3,7 +3,46 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
-## 0.14.1 — unreleased (R-lane UI fix round: D3/D4/D5+D8/D9)
+## 0.15.0 — 2026-08-13 (zero-sink train: `dom` backend + TT-clean SSR)
+
+The zero-sink pilot train. Adds the constructive DOM render backend and
+removes every Trusted-Types-incompatible construct from the HTML render
+surface. Spec: `spec/web-runtime-v1.surf`.
+
+### Added
+- `render_dom` backend behind the new `dom` feature (off by default; never
+  in server/native builds): `DomSink` abstraction with a native arena sink
+  (byte-exact serializer, drives the identity corpus) and a wasm32/web-sys
+  sink. Covers the pilot block census byte-identical to `render_html`;
+  everything else gets a typed `Unimplemented(kind)` decline.
+  `coverage_check` dry-runs the native sink and also declines
+  TT-inconstructible output (script-emitting blocks: store, booking,
+  gallery-lightbox — `<script>` text is itself a TrustedScript sink).
+- Cross-backend byte-identity corpus (`tests/render_dom_identity.rs` +
+  `tests/fixtures/dom/`), hostile fixtures included — never-weaken.
+- Web runtime spec `spec/web-runtime-v1.surf` (DOM rendering law,
+  constructive navigation contract, security profile) + architecture-doc
+  DOM Renderer section.
+
+### Changed (HTML render surface — TT-clean SSR)
+- Image fallbacks: every inline `onerror` handler (a TrustedScript sink)
+  replaced with `data-img-fallback` attributes (`hide` / `broken` / `logo`
+  + `data-img-fallback-text`); the serving shell's single delegated
+  capture-phase error listener performs the swap. Sites: figure, gallery,
+  hero (both layouts), `::hero-image`, nav-shell logo, product-grid
+  emblems (tile + row).
+- Store/booking widget JS rewritten sink-free: `replaceChildren` /
+  `createElement` / `textContent` only (7 former `innerHTML` sites) — the
+  widgets now run under `require-trusted-types-for 'script'` with no
+  policy defined.
+- Parser-stable emission for block-bearing bodies (feature bodies et al.):
+  phrasing-only bodies keep the historical `<p>` byte-for-byte;
+  block-bearing bodies emit a `<div>` the HTML parser nests literally
+  (fixes parser-hoisting divergence — bytes identical, DOMs different —
+  which byte-identity tests structurally cannot catch). Pinned by
+  never-weaken parser-stability tests in both backends.
+
+## 0.14.1 — 2026-08-12 (R-lane UI fix round: D3/D4/D5+D8/D9)
 
 HTML/CSS render surface only; registry/native schema untouched apart from
 one additive, optional `::row` attribute.

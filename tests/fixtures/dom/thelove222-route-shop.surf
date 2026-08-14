@@ -1,0 +1,41 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/shop" title="SHOP"]
+
+::hero[align=center transparent]
+# Shop
+
+Original art by Sam Rose — paintings, prints, tufted pieces, and photography, made in Las Vegas between tattoo sessions.
+::
+
+::store[title="Sam Rose Art — originals & prints" currency="$"]
+category: Original Paintings
+item: Desert Bloom | 650 | Acrylic on canvas, 24x36in — cactus flowers at golden hour | One of a kind
+item: 2:22 | 480 | Mixed media on wood panel, 18x24in — the numbers that started it all
+item: Neon Bones | 720 | Acrylic + ink on canvas, 30x40in — Vegas glow over black work linework
+category: Prints
+item: Desert Bloom — Print | 35 | Archival giclee print, 11x14in, signed
+item: Flash Sheet No. 7 — Print | 28 | Classic flash designs, 8x10in on heavyweight matte
+item: Neon Bones — Print | 40 | Archival giclee print, 12x16in, signed & numbered | Bestseller
+category: Tufted Pieces
+item: Heart Eyes Rug | 260 | Hand-tufted wall rug, 20x20in, soft acrylic yarn
+item: 2:22 Clock Rug | 320 | Hand-tufted, 24in round — it is always 2:22 somewhere | New
+category: Photography
+item: Vegas After Rain | 90 | Fine-art photo print, 16x20in, limited run of 25
+item: Studio Mornings | 75 | Behind-the-scenes film series, 11x14in print
+item: Mojave Light | 120 | Framed 16x20in desert landscape, ready to hang
+::
+
+::callout[type=note title="Demo checkout — no real payments"]
+The cart and checkout here are a demo — no card is charged and no order ships from this preview. The live shop will check out through Square. Want to buy a piece today? DM [@love222tattoo](https://instagram.com/love222tattoo) and we'll set it up directly.
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

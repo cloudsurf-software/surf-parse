@@ -1,0 +1,84 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/" title="HOME"]
+
+::hero[layout=stacked align=center transparent image="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_2888%202_1736935488.jpg" image-alt="LOVE 2:22 Tattoo"]
+# LOVE 222 Tattoo
+
+WHATS BETTER THERAPY THAN A TATTOO?
+
+[Book Now](/book){primary}
+::
+
+::section
+## Our Services
+
+### tattoo styles
+
+- BLACK WORK
+- BLACK & GREY
+- REALISM
+- GEOMETRIC
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_2917%202_1736935531.jpg" alt="Tattoo work by Sam Rose"]
+
+::banner
+# LOVE 2:22 TATTOO
+::
+
+::section
+## making art since 2:22
+
+Learn more about my journey as an artist in and outside tattooing
+
+[Learn More](/about)
+::
+
+::section
+## Shop original art
+
+Paintings, prints, tufted pieces, and photography — straight from my studio to your walls.
+
+[Shop the collection](/shop)
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/2025-01-15_02-29-29_1736936979.png" alt="Portrait of Sam Rose — photo by @taylorjean.photos"]
+
+::banner
+# Follow
+
+[See full feed](https://instagram.com/love222tattoo){primary external}
+::
+
+::features[cols=3]
+### Location
+
+- ROSE & RAE TATTOO
+- 5770 S DURANGO DRIVE
+- STE.110
+- LAS VEGAS,NV 89113
+- UNITED STATES
+
+### my Hours
+
+- BY APPOINTMENT ONLY PLEASE
+- EMAIL ME : SAM@ROSEANDRAETATTOO
+- TEXT ME: 702-370-1380
+
+### Follow
+
+- Instagram : [@love222tattoo](https://instagram.com/love222tattoo)
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/Love-3_1736907268.png" alt="LOVE 2:22 logo" width="180"]
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

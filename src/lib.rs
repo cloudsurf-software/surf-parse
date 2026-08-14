@@ -49,6 +49,8 @@ pub mod ffi;
 uniffi::setup_scaffolding!();
 #[cfg(feature = "wasm")]
 pub mod wasm;
+#[cfg(feature = "dom")]
+pub mod render_dom;
 pub mod template;
 pub mod types;
 pub mod validate;

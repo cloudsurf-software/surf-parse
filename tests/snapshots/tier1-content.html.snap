@@ -14,7 +14,7 @@
 <article class="surfdoc-decision surfdoc-decision-accepted" role="note" aria-label="Decision: accepted"><div class="surfdoc-decision-header"><span class="surfdoc-decision-status surfdoc-decision-status--accepted">Accepted</span><span class="surfdoc-decision-date">2026-06-11</span></div><div class="surfdoc-decision-body"><p>The FFI moves upstream.</p>
 </div></article>
 <div class="surfdoc-metric-row"><div class="surfdoc-metric" role="group" aria-label="Tests: 694 tests, trending up"><div class="surfdoc-metric-value">694 <span class="surfdoc-metric-unit">tests</span></div><div class="surfdoc-metric-label">Tests<span class="surfdoc-trend surfdoc-trend--up">▲</span></div></div></div>
-<figure class="surfdoc-figure"><div class="surfdoc-figure-img"><img src="/assets/wave.png" alt="A wave" onerror="this.style.display='none';this.onerror=null" /></div><figcaption class="surfdoc-figure-cap">The wave</figcaption></figure>
+<figure class="surfdoc-figure"><div class="surfdoc-figure-img"><img src="/assets/wave.png" alt="A wave" data-img-fallback="hide" /></div><figcaption class="surfdoc-figure-cap">The wave</figcaption></figure>
 <blockquote>
 <p>All that is gold does not glitter.</p>
 </blockquote>

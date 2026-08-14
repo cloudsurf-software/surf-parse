@@ -1,0 +1,30 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/gallery" title="PORTFOLIO"]
+
+::hero[align=center transparent]
+# Portfolio
+::
+
+::gallery
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/6E198348-9E3D-4F62-8BF6-4F1051892BF1_1737060749.JPG)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_2942_1737060757.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/448C8020-8950-4267-98F7-1BDF4682CA71_1737060749.JPG)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_8278E023CBEA-1_1737061492.jpeg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_AD2C656D5DB6-1_1737061541.jpeg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/9ACA6C31-848E-4C7E-81EC-C6A9752D0088_1737958221.JPG)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/F33FCE03-5B91-4820-AA72-EA9659685EC6_1737958249.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_1146%202_1737958324.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_1149_1737959108.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_1150_1737959338.jpg)
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

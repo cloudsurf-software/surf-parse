@@ -1,0 +1,52 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/admin" title="ADMIN"]
+
+::hero[align=center transparent]
+# Artist Admin
+
+One login for the studio — Sam and Rae each sign in with their own Google account to run the chair, the requests, and the deposits.
+::
+
+::form[submit="Sign in with Google"]
+- Email (email) *
+- Password (password) *
+::
+
+::callout[type=note title="Demo — login not wired up"]
+On the live site this is one-tap Google sign-in, no separate password to manage. The dashboard below is what each artist sees after signing in.
+::
+
+::section
+## The shared studio dashboard
+::
+
+::features[cols=3]
+### Shared chair calendar
+
+Both artists' personal Google Calendars sync in and overlay onto the one chair. If either calendar is busy, that window shows as taken — for both of them.
+
+### No double-booking
+
+Confirming a request checks both Google Calendars first — one conflict and it will not confirm. A clean confirm writes the session to both calendars and blocks the chair.
+
+### Requests & deposits
+
+Booking requests from the site and Instagram DMs land in one inbox. Confirm a time and the client gets a Square deposit link by text — paid means locked.
+::
+
+::infocard[title="How conflict-checking works"]
+- **Connect once** — Sam and Rae each link their own Google Calendar the first time they sign in.
+- **One chair, one truth** — the public chair calendar is a live overlay of both artists' busy times.
+- **Confirm safely** — a request can only be confirmed into a window that is clear on both calendars; confirming writes the event to both and sends the Square deposit link.
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

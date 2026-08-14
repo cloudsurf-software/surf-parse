@@ -161,7 +161,7 @@ fn render_inline_markdown(content: &str) -> String {
 /// leaves them as literal text instead of parsing emphasis/code/link/
 /// strikethrough syntax across the marker boundary. See
 /// [`render_inline_markdown`] for why this matters.
-fn escape_markdown_in_slot_markers(s: &str) -> String {
+pub(crate) fn escape_markdown_in_slot_markers(s: &str) -> String {
     if !s.contains('\u{ab}') {
         return s.to_string();
     }
@@ -193,7 +193,7 @@ fn escape_markdown_in_slot_markers(s: &str) -> String {
 /// of a task list checkbox row). pulldown-cmark always wraps a single
 /// paragraph of input in `<p>...</p>\n`; this strips that wrapper when
 /// present and returns the inner phrasing content untouched otherwise.
-fn render_inline_markdown_phrasing(content: &str) -> String {
+pub(crate) fn render_inline_markdown_phrasing(content: &str) -> String {
     let html = render_inline_markdown(content);
     let trimmed = html.trim_end_matches('\n');
     if let Some(inner) = trimmed.strip_prefix("<p>").and_then(|s| s.strip_suffix("</p>")) {
@@ -202,6 +202,30 @@ fn render_inline_markdown_phrasing(content: &str) -> String {
         }
     }
     html
+}
+
+/// Render body/subtitle markdown into a parser-stable wrapper element.
+///
+/// Phrasing-only content keeps the historical `<p>` wrapper. Content that
+/// renders to block-level markup (a list, heading, blockquote, or multiple
+/// paragraphs) is wrapped in a `<div>` instead: the HTML parser auto-closes
+/// an open `<p>` at the first block-level start tag and hoists the block out
+/// as a sibling, so `<p><ul>…</ul></p>` bytes re-parse to a DIFFERENT tree
+/// than the literal one `render_dom` builds — serialized bytes can be
+/// identical while the parsed DOM diverges (only attestation catches it).
+/// A `<div>` wrapper parses literally, so SSR bytes and the constructive
+/// DOM stay shape-identical. Mirrored by `build_wrapped_phrasing_or_blocks`
+/// in `render_dom.rs` — change both together.
+pub(crate) fn render_wrapped_phrasing_or_blocks(class: Option<&str>, content: &str) -> String {
+    let class_attr = class.map(|c| format!(" class=\"{c}\"")).unwrap_or_default();
+    let html = render_inline_markdown(content);
+    let trimmed = html.trim_end_matches('\n');
+    if let Some(inner) = trimmed.strip_prefix("<p>").and_then(|s| s.strip_suffix("</p>")) {
+        if !inner.contains("<p>") {
+            return format!("<p{class_attr}>{inner}</p>");
+        }
+    }
+    format!("<div{class_attr}>{html}</div>")
 }
 
 /// A `<link rel="icon">` / apple-touch-icon entry for the page head.
@@ -459,7 +483,7 @@ fn render_nav_shell_html(items: &[crate::types::NavItem], effective_logo: Option
             || logo_text.starts_with("data:");
         if is_image {
             html.push_str(&format!(
-                "<a class=\"surfdoc-nav-logo\" href=\"/\"><img src=\"{}\" alt=\"Logo\" class=\"surfdoc-nav-logo-img\" onerror=\"this.style.display='none';this.parentElement.insertAdjacentText('afterbegin','Surf');this.onerror=null\"></a>",
+                "<a class=\"surfdoc-nav-logo\" href=\"/\"><img src=\"{}\" alt=\"Logo\" class=\"surfdoc-nav-logo-img\" data-img-fallback=\"logo\" data-img-fallback-text=\"Surf\"></a>",
                 escape_html(logo_text),
             ));
         } else {
@@ -760,7 +784,7 @@ fn render_minimal_nav_html(logo: Option<&str>, brand: Option<&str>, brand_reg: b
 
 /// Convert heading text to a URL anchor slug: lowercase, runs of non-alphanumeric
 /// characters collapsed to a single `-`, no leading/trailing `-`.
-fn slugify(text: &str) -> String {
+pub(crate) fn slugify(text: &str) -> String {
     let mut slug = String::new();
     for c in text.chars() {
         if c.is_ascii_alphanumeric() {
@@ -795,7 +819,7 @@ fn strip_tags(html: &str) -> String {
 /// `Our Menu {#our-menu}` → `("Our Menu", "our-menu")`. Slug charset is
 /// `[A-Za-z0-9_-]+`; anything else (prose braces, template syntax) is left
 /// untouched. Returns `None` when no valid trailing anchor exists.
-fn split_explicit_anchor(inner: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_explicit_anchor(inner: &str) -> Option<(&str, &str)> {
     let trimmed = inner.trim_end();
     if !trimmed.ends_with('}') {
         return None;
@@ -1690,6 +1714,80 @@ fn sanitize_css_value(s: &str) -> String {
     stripped
 }
 
+/// Static `::store` layout scaffold (filters/grid/cart).
+pub(crate) const STORE_LAYOUT_HTML: &str =
+    "<div class=\"surfdoc-store-layout\">\
+                   <div class=\"surfdoc-store-main\">\
+                     <div class=\"surfdoc-store-filters\" data-st-filters></div>\
+                     <div class=\"surfdoc-store-grid\" data-st-grid></div>\
+                   </div>\
+                   <aside class=\"surfdoc-store-cart\" data-st-cart aria-label=\"Cart\">\
+                     <div class=\"surfdoc-store-cart-head\">Your cart</div>\
+                     <div class=\"surfdoc-store-cart-items\" data-st-items aria-live=\"polite\"></div>\
+                     <div class=\"surfdoc-store-cart-foot\">\
+                       <div class=\"surfdoc-store-total\">Total <span data-st-total></span></div>\
+                       <button type=\"button\" class=\"surfdoc-store-checkout-btn\" data-st-checkout disabled>Checkout</button>\
+                     </div>\
+                   </aside>\
+                 </div>";
+
+/// Static `::store` checkout form + confirmation region.
+pub(crate) const STORE_FORM_HTML: &str =
+    "<form class=\"surfdoc-store-form\" data-st-form hidden>\
+                   <div class=\"surfdoc-store-form-title\">Checkout</div>\
+                   <label class=\"surfdoc-store-field\">Name<input type=\"text\" name=\"name\" autocomplete=\"name\" required></label>\
+                   <label class=\"surfdoc-store-field\">Email<input type=\"email\" name=\"email\" autocomplete=\"email\" required></label>\
+                   <label class=\"surfdoc-store-field\">Shipping address<input type=\"text\" name=\"address\" autocomplete=\"street-address\" required></label>\
+                   <button type=\"submit\" class=\"surfdoc-store-place-btn\">Place order</button>\
+                 </form>\
+                 <div class=\"surfdoc-store-confirm\" data-st-confirm hidden aria-live=\"polite\"></div>";
+
+/// Static `::booking` calendar + slots scaffold.
+pub(crate) const BOOKING_CAL_HTML: &str =
+    "<div class=\"surfdoc-booking-col surfdoc-booking-cal\">\
+                   <div class=\"surfdoc-booking-cal-head\">\
+                     <button type=\"button\" class=\"surfdoc-booking-nav\" data-bk-prev aria-label=\"Previous month\">&lsaquo;</button>\
+                     <span class=\"surfdoc-booking-month\" data-bk-month aria-live=\"polite\"></span>\
+                     <button type=\"button\" class=\"surfdoc-booking-nav\" data-bk-next aria-label=\"Next month\">&rsaquo;</button>\
+                   </div>\
+                   <div class=\"surfdoc-booking-weekdays\"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>\
+                   <div class=\"surfdoc-booking-days\" data-bk-days></div>\
+                 </div>\
+                 <div class=\"surfdoc-booking-col surfdoc-booking-slots\" data-bk-slots>\
+                   <p class=\"surfdoc-booking-hint\">Select an available date to see open times.</p>\
+                 </div>";
+
+/// Static `::booking` confirmation form + confirm region.
+pub(crate) const BOOKING_FORM_HTML: &str =
+    "<form class=\"surfdoc-booking-form\" data-bk-form hidden>\
+                   <div class=\"surfdoc-booking-summary\" data-bk-summary></div>\
+                   <label class=\"surfdoc-booking-field\">Name<input type=\"text\" name=\"name\" autocomplete=\"name\" required></label>\
+                   <label class=\"surfdoc-booking-field\">Email<input type=\"email\" name=\"email\" autocomplete=\"email\" required></label>\
+                   <button type=\"submit\" class=\"surfdoc-booking-confirm-btn\">Confirm booking</button>\
+                 </form>\
+                 <div class=\"surfdoc-booking-confirm\" data-bk-confirm hidden aria-live=\"polite\"></div>";
+
+/// Static lightbox overlay markup shared by `::gallery` (HTML + DOM renderers).
+pub(crate) const GALLERY_LIGHTBOX_HTML: &str = concat!(
+    "<div class=\"surfdoc-lightbox\" hidden>",
+    "<button class=\"sl-close\" aria-label=\"Close\">&times;</button>",
+    "<button class=\"sl-prev\" aria-label=\"Previous\">&#8249;</button>",
+    "<button class=\"sl-next\" aria-label=\"Next\">&#8250;</button>",
+    "<div class=\"sl-img-wrap\"><img class=\"sl-img\" src=\"\" alt=\"\" /></div>",
+    "<div class=\"sl-caption\"></div>",
+    "<div class=\"sl-counter\"></div>",
+    "</div>",
+);
+
+/// `::gallery` category-filter client script (emitted only with categories).
+pub(crate) const GALLERY_FILTER_JS: &str = r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(g=>{g.querySelectorAll('.filter-btn').forEach(b=>{b.onclick=()=>{g.querySelectorAll('.filter-btn').forEach(e=>e.classList.remove('active'));b.classList.add('active');var f=b.dataset.filter;g.querySelectorAll('.surfdoc-gallery-item').forEach(i=>{i.style.display=f==='all'||i.dataset.category===f?'':'none'})}})})</script>"#;
+
+/// `::gallery` lightbox client script.
+pub(crate) const GALLERY_LIGHTBOX_JS: &str = r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(function(g){var lb=g.querySelector('.surfdoc-lightbox');if(!lb)return;var si=lb.querySelector('.sl-img'),sc=lb.querySelector('.sl-caption'),sn=lb.querySelector('.sl-counter'),items,idx;function vis(){return Array.prototype.filter.call(g.querySelectorAll('.surfdoc-gallery-item'),function(i){return i.style.display!=='none'})}function show(i){items=vis();idx=i;var f=items[idx],im=f.querySelector('img'),fc=f.querySelector('figcaption');si.src=im.src;si.alt=im.alt||'';sc.textContent=fc?fc.textContent:'';sn.textContent=(idx+1)+' / '+items.length;lb.hidden=false;document.body.style.overflow='hidden'}function hide(){lb.hidden=true;document.body.style.overflow=''}function nav(d){show((idx+d+items.length)%items.length)}g.querySelectorAll('.surfdoc-gallery-item').forEach(function(f){f.onclick=function(){var v=vis();show(v.indexOf(f))};f.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();f.onclick()}}});lb.querySelector('.sl-close').onclick=hide;lb.querySelector('.sl-prev').onclick=function(){nav(-1)};lb.querySelector('.sl-next').onclick=function(){nav(1)};lb.onclick=function(e){if(e.target===lb)hide()};document.addEventListener('keydown',function(e){if(lb.hidden)return;if(e.key==='Escape')hide();if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1)});var tx;lb.addEventListener('touchstart',function(e){tx=e.touches[0].clientX});lb.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)nav(dx>0?-1:1)})})</script>"#;
+
+/// `::form` honeypot input.
+pub(crate) const FORM_HONEYPOT_HTML: &str = "<input type=\"text\" name=\"_honey\" class=\"surfdoc-form-honey\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\">";
+
 /// Self-contained client script for every `::booking` widget on a page.
 ///
 /// Guarded by a window flag so it initialises all `[data-booking]` widgets
@@ -1697,7 +1795,11 @@ fn sanitize_css_value(s: &str) -> String {
 /// widget's inlined JSON, builds the month calendar with the browser `Date`
 /// API, and drives service → date → slot → confirmation entirely client-side
 /// (static data-bound; no network). Hidden SPA sections still init fine.
-const BOOKING_WIDGET_JS: &str = r#"<script>(function(){
+///
+/// Sink-free (zero-sink law): all DOM writes go through `replaceChildren` /
+/// `createElement` / `textContent` — no `innerHTML`, so the widget runs
+/// under `require-trusted-types-for 'script'` (pilot CSP).
+pub(crate) const BOOKING_WIDGET_JS: &str = r#"<script>(function(){
 if(window.__surfBookingInit)return;window.__surfBookingInit=1;
 var MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function fmt(iso){var p=iso.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});}
@@ -1727,7 +1829,7 @@ function init(root){
   var m=months[mi],y=+m.slice(0,4),mo=+m.slice(5,7)-1;
   monthEl.textContent=MON[mo]+' '+y;
   var first=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate();
-  daysEl.innerHTML='';
+  daysEl.replaceChildren();
   for(var i=0;i<first;i++){var pad=document.createElement('span');pad.className='surfdoc-booking-day is-pad';daysEl.appendChild(pad);}
   for(var d=1;d<=dim;d++){
    var iso=m+'-'+(d<10?'0'+d:d),slots=byDate[iso],cell;
@@ -1739,14 +1841,14 @@ function init(root){
  }
  function selectDate(iso){selDate=iso;selSlot=null;renderMonth();renderSlots();if(form)form.hidden=true;if(confirmEl)confirmEl.hidden=true;}
  function renderSlots(){
-  slotsEl.innerHTML='';var slots=byDate[selDate]||[];
+  slotsEl.replaceChildren();var slots=byDate[selDate]||[];
   var h=document.createElement('div');h.className='surfdoc-booking-slots-head';h.textContent=fmt(selDate);slotsEl.appendChild(h);
   var grid=document.createElement('div');grid.className='surfdoc-booking-slot-grid';
   slots.forEach(function(t){var b=document.createElement('button');b.type='button';b.className='surfdoc-booking-slot';b.textContent=t;b.addEventListener('click',function(){selSlot=t;grid.querySelectorAll('.surfdoc-booking-slot').forEach(function(x){x.classList.remove('is-sel');});b.classList.add('is-sel');showForm();});grid.appendChild(b);});
   slotsEl.appendChild(grid);
  }
  function showForm(){if(!form)return;form.hidden=false;var bits=[];if(selService)bits.push(selService);bits.push(fmt(selDate));if(selSlot)bits.push(selSlot);if(summaryEl)summaryEl.textContent=bits.join(' · ');}
- if(form){form.addEventListener('submit',function(e){e.preventDefault();if(!selDate||!selSlot)return;var nf=form.querySelector('[name=name]');var name=nf?nf.value:'';var ref='BK-'+selDate.replace(/-/g,'')+'-'+(selSlot.replace(/[^0-9]/g,'').slice(0,4)||'0000');confirmEl.innerHTML='';var card=document.createElement('div');card.className='surfdoc-booking-confirm-card';var t=document.createElement('div');t.className='surfdoc-booking-confirm-title';t.textContent='Booking confirmed';var p=document.createElement('p');p.className='surfdoc-booking-confirm-detail';p.textContent=(name?name+', your ':'Your ')+(selService?selService+' ':'')+'is booked for '+fmt(selDate)+' at '+selSlot+'.';var r=document.createElement('p');r.className='surfdoc-booking-confirm-ref';r.textContent='Confirmation '+ref;card.appendChild(t);card.appendChild(p);card.appendChild(r);confirmEl.appendChild(card);confirmEl.hidden=false;form.hidden=true;});}
+ if(form){form.addEventListener('submit',function(e){e.preventDefault();if(!selDate||!selSlot)return;var nf=form.querySelector('[name=name]');var name=nf?nf.value:'';var ref='BK-'+selDate.replace(/-/g,'')+'-'+(selSlot.replace(/[^0-9]/g,'').slice(0,4)||'0000');confirmEl.replaceChildren();var card=document.createElement('div');card.className='surfdoc-booking-confirm-card';var t=document.createElement('div');t.className='surfdoc-booking-confirm-title';t.textContent='Booking confirmed';var p=document.createElement('p');p.className='surfdoc-booking-confirm-detail';p.textContent=(name?name+', your ':'Your ')+(selService?selService+' ':'')+'is booked for '+fmt(selDate)+' at '+selSlot+'.';var r=document.createElement('p');r.className='surfdoc-booking-confirm-ref';r.textContent='Confirmation '+ref;card.appendChild(t);card.appendChild(p);card.appendChild(r);confirmEl.appendChild(card);confirmEl.hidden=false;form.hidden=true;});}
  if(prev)prev.addEventListener('click',function(){if(mi>0){mi--;renderMonth();}});
  if(next)next.addEventListener('click',function(){if(mi<months.length-1){mi++;renderMonth();}});
  renderMonth();
@@ -1761,7 +1863,10 @@ if(document.readyState!=='loading')boot();else document.addEventListener('DOMCon
 /// widget's inlined JSON and drives category filter → add-to-cart → qty/line
 /// totals → checkout → order confirmation entirely client-side. Static
 /// data-bound; payment is out of scope (links out).
-const STORE_WIDGET_JS: &str = r#"<script>(function(){
+///
+/// Sink-free (zero-sink law): `replaceChildren` / `createElement` /
+/// `textContent` only — no `innerHTML` (pilot TT CSP).
+pub(crate) const STORE_WIDGET_JS: &str = r#"<script>(function(){
 if(window.__surfStoreInit)return;window.__surfStoreInit=1;
 function init(root){
  var dataEl=root.querySelector('[data-st-data]');if(!dataEl)return;
@@ -1778,11 +1883,11 @@ function init(root){
  function renderFilters(){
   if(!filtEl||!hasCats)return;
   var all=['All'].concat(cats.filter(function(c){return c!=='All';}));
-  filtEl.innerHTML='';
+  filtEl.replaceChildren();
   all.forEach(function(c){var b=document.createElement('button');b.type='button';b.className='surfdoc-store-chip'+(c===filter?' is-sel':'');b.textContent=c;b.addEventListener('click',function(){filter=c;renderFilters();renderGrid();});filtEl.appendChild(b);});
  }
  function renderGrid(){
-  gridEl.innerHTML='';
+  gridEl.replaceChildren();
   items.filter(function(it){return filter==='All'||(it.category||'All')===filter;}).forEach(function(it){
    var card=document.createElement('div');card.className='surfdoc-store-card';
    if(it.badge){var bd=document.createElement('span');bd.className='surfdoc-store-badge';bd.textContent=it.badge;card.appendChild(bd);}
@@ -1796,7 +1901,7 @@ function init(root){
  }
  function addToCart(it){var k=it.name;if(!cart[k])cart[k]={item:it,qty:0};cart[k].qty++;renderCart();}
  function renderCart(){
-  var keys=Object.keys(cart);itemsEl.innerHTML='';var total=0;
+  var keys=Object.keys(cart);itemsEl.replaceChildren();var total=0;
   if(!keys.length){var e=document.createElement('p');e.className='surfdoc-store-empty';e.textContent='Your cart is empty.';itemsEl.appendChild(e);}
   keys.forEach(function(k){var c=cart[k];total+=price(c.item)*c.qty;
    var row=document.createElement('div');row.className='surfdoc-store-line';
@@ -1819,7 +1924,7 @@ function init(root){
   var count=0,total=0;keys.forEach(function(k){count+=cart[k].qty;total+=price(cart[k].item)*cart[k].qty;});
   var nf=form.querySelector('[name=name]');var name=nf?nf.value:'';
   var ref='ORD-'+(String(Math.round(total))+'').slice(0,4)+'-'+count;
-  confirmEl.innerHTML='';
+  confirmEl.replaceChildren();
   var card=document.createElement('div');card.className='surfdoc-store-confirm-card';
   var t=document.createElement('div');t.className='surfdoc-store-confirm-title';t.textContent='Order placed';
   var p=document.createElement('p');p.className='surfdoc-store-confirm-detail';p.textContent=(name?name+', your':'Your')+' order of '+count+' item'+(count===1?'':'s')+' ('+money(total)+') is confirmed.';
@@ -2553,10 +2658,15 @@ pub(crate) fn render_block(block: &Block) -> String {
                 Some(c) => format!("<figcaption class=\"surfdoc-figure-cap\">{}</figcaption>", escape_html(c)),
                 None => String::new(),
             };
-            // Wrap the image in a div so that onerror can hide the <img> and
-            // the placeholder div still fills the aspect-ratio box cleanly.
+            // Wrap the image in a div so that the broken-image fallback can
+            // hide the <img> and the placeholder div still fills the
+            // aspect-ratio box cleanly. `data-img-fallback` replaces the
+            // former inline `onerror` handler (a Trusted Types script sink —
+            // setAttribute('onerror') throws under
+            // `require-trusted-types-for 'script'`); the pilot shell's ONE
+            // delegated capture-phase error listener performs the swap.
             format!(
-                "<figure class=\"surfdoc-figure\"><div class=\"surfdoc-figure-img\"><img src=\"{}\" alt=\"{}\" onerror=\"this.style.display='none';this.onerror=null\" /></div>{caption_html}</figure>",
+                "<figure class=\"surfdoc-figure\"><div class=\"surfdoc-figure-img\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"hide\" /></div>{caption_html}</figure>",
                 escape_html(src),
                 escape_html(alt_attr),
             )
@@ -2723,7 +2833,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 String::new()
             };
             format!(
-                "<div class=\"surfdoc-hero-image\"{}><img src=\"{}\" alt=\"{}\" onerror=\"this.classList.add('broken');this.onerror=null\" /></div>",
+                "<div class=\"surfdoc-hero-image\"{}><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\" /></div>",
                 role_attr,
                 escape_html(src),
                 escape_html(alt_attr),
@@ -3041,7 +3151,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             };
             let mut html = format!("<form class=\"surfdoc-form\"{target_attrs}>");
             if *honeypot {
-                html.push_str("<input type=\"text\" name=\"_honey\" class=\"surfdoc-form-honey\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\">");
+                html.push_str(FORM_HONEYPOT_HTML);
             }
             for field in fields {
                 let req = if field.required { " required" } else { "" };
@@ -3291,7 +3401,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                             }
                         } else {
                             parts.push(format!(
-                                "<img src=\"{}\" alt=\"\" width=\"48\" height=\"48\" class=\"surfdoc-pg-tile-emblem\" loading=\"lazy\" onerror=\"this.classList.add('broken');this.onerror=null\">",
+                                "<img src=\"{}\" alt=\"\" width=\"48\" height=\"48\" class=\"surfdoc-pg-tile-emblem\" loading=\"lazy\" data-img-fallback=\"broken\">",
                                 escape_html(emblem)
                             ));
                         }
@@ -3402,7 +3512,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                             }
                         } else {
                             parts.push(format!(
-                                "<img src=\"{}\" alt=\"\" width=\"40\" height=\"40\" class=\"surfdoc-pg-emblem\" loading=\"lazy\" onerror=\"this.classList.add('broken');this.onerror=null\">",
+                                "<img src=\"{}\" alt=\"\" width=\"40\" height=\"40\" class=\"surfdoc-pg-emblem\" loading=\"lazy\" data-img-fallback=\"broken\">",
                                 escape_html(emblem)
                             ));
                         }
@@ -3572,7 +3682,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                     i
                 ));
                 html.push_str(&format!(
-                    "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" onerror=\"this.style.display='none';this.onerror=null\" />",
+                    "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" data-img-fallback=\"hide\" />",
                     escape_html(&item.src),
                     escape_html(alt),
                 ));
@@ -3583,22 +3693,13 @@ pub(crate) fn render_block(block: &Block) -> String {
             }
             html.push_str("</div>");
             // Lightbox overlay
-            html.push_str(concat!(
-                "<div class=\"surfdoc-lightbox\" hidden>",
-                "<button class=\"sl-close\" aria-label=\"Close\">&times;</button>",
-                "<button class=\"sl-prev\" aria-label=\"Previous\">&#8249;</button>",
-                "<button class=\"sl-next\" aria-label=\"Next\">&#8250;</button>",
-                "<div class=\"sl-img-wrap\"><img class=\"sl-img\" src=\"\" alt=\"\" /></div>",
-                "<div class=\"sl-caption\"></div>",
-                "<div class=\"sl-counter\"></div>",
-                "</div>",
-            ));
+            html.push_str(GALLERY_LIGHTBOX_HTML);
             // Gallery filter JS
             if !categories.is_empty() {
-                html.push_str(r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(g=>{g.querySelectorAll('.filter-btn').forEach(b=>{b.onclick=()=>{g.querySelectorAll('.filter-btn').forEach(e=>e.classList.remove('active'));b.classList.add('active');var f=b.dataset.filter;g.querySelectorAll('.surfdoc-gallery-item').forEach(i=>{i.style.display=f==='all'||i.dataset.category===f?'':'none'})}})})</script>"#);
+                html.push_str(GALLERY_FILTER_JS);
             }
             // Lightbox JS
-            html.push_str(r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(function(g){var lb=g.querySelector('.surfdoc-lightbox');if(!lb)return;var si=lb.querySelector('.sl-img'),sc=lb.querySelector('.sl-caption'),sn=lb.querySelector('.sl-counter'),items,idx;function vis(){return Array.prototype.filter.call(g.querySelectorAll('.surfdoc-gallery-item'),function(i){return i.style.display!=='none'})}function show(i){items=vis();idx=i;var f=items[idx],im=f.querySelector('img'),fc=f.querySelector('figcaption');si.src=im.src;si.alt=im.alt||'';sc.textContent=fc?fc.textContent:'';sn.textContent=(idx+1)+' / '+items.length;lb.hidden=false;document.body.style.overflow='hidden'}function hide(){lb.hidden=true;document.body.style.overflow=''}function nav(d){show((idx+d+items.length)%items.length)}g.querySelectorAll('.surfdoc-gallery-item').forEach(function(f){f.onclick=function(){var v=vis();show(v.indexOf(f))};f.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();f.onclick()}}});lb.querySelector('.sl-close').onclick=hide;lb.querySelector('.sl-prev').onclick=function(){nav(-1)};lb.querySelector('.sl-next').onclick=function(){nav(1)};lb.onclick=function(e){if(e.target===lb)hide()};document.addEventListener('keydown',function(e){if(lb.hidden)return;if(e.key==='Escape')hide();if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1)});var tx;lb.addEventListener('touchstart',function(e){tx=e.touches[0].clientX});lb.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)nav(dx>0?-1:1)})})</script>"#);
+            html.push_str(GALLERY_LIGHTBOX_JS);
             html.push_str("</div>");
             html
         }
@@ -3771,7 +3872,9 @@ pub(crate) fn render_block(block: &Block) -> String {
             // Centered/stacked layout: image above text (logo/product image)
             if image_above {
                 if let Some(img) = image {
-                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"{}\" onerror=\"this.classList.add('broken');this.onerror=null\"></div>", escape_html(img), escape_html(alt)));
+                    // data-img-fallback replaces the inline onerror handler
+                    // (TT sink) — see the Figure arm note.
+                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\"></div>", escape_html(img), escape_html(alt)));
                 }
             }
             if let Some(b) = badge {
@@ -3781,7 +3884,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 parts.push(format!("<h1 class=\"surfdoc-hero-headline\">{}</h1>", render_inline_markdown_phrasing(h)));
             }
             if let Some(s) = subtitle {
-                parts.push(format!("<p class=\"surfdoc-hero-subtitle\">{}</p>", render_inline_markdown_phrasing(s)));
+                parts.push(render_wrapped_phrasing_or_blocks(Some("surfdoc-hero-subtitle"), s));
             }
             if !buttons.is_empty() {
                 parts.push("<div class=\"surfdoc-hero-actions\">".to_string());
@@ -3796,7 +3899,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             // Left-aligned layout: image to the side (side-by-side)
             if image_side {
                 if let Some(img) = image {
-                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"{}\" onerror=\"this.classList.add('broken');this.onerror=null\"></div>", escape_html(img), escape_html(alt)));
+                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\"></div>", escape_html(img), escape_html(alt)));
                 }
             }
             parts.push("</section>".to_string());
@@ -3816,7 +3919,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 }
                 parts.push(format!("<h3 class=\"surfdoc-feature-title\">{}</h3>", render_inline_markdown_phrasing(&card.title)));
                 if !card.body.is_empty() {
-                    parts.push(format!("<p class=\"surfdoc-feature-body\">{}</p>", render_inline_markdown_phrasing(&card.body)));
+                    parts.push(render_wrapped_phrasing_or_blocks(Some("surfdoc-feature-body"), &card.body));
                 }
                 if let (Some(label), Some(href)) = (&card.link_label, &card.link_href) {
                     parts.push(format!("<a href=\"{}\" class=\"surfdoc-feature-link\">{} \u{2192}</a>", escape_html(href), escape_html(label)));
@@ -3837,7 +3940,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 let time_html = step.time.as_ref().map(|t| format!("<span class=\"surfdoc-step-time\">{}</span>", escape_html(t))).unwrap_or_default();
                 parts.push(format!("<h3 class=\"surfdoc-step-title\">{}{}</h3>", render_inline_markdown_phrasing(&step.title), time_html));
                 if !step.body.is_empty() {
-                    parts.push(format!("<p class=\"surfdoc-step-body\">{}</p>", render_inline_markdown_phrasing(&step.body)));
+                    parts.push(render_wrapped_phrasing_or_blocks(Some("surfdoc-step-body"), &step.body));
                 }
                 parts.push("</div>".to_string());
                 parts.push("</li>".to_string());
@@ -3990,7 +4093,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                     html.push_str(&format!("<h2>{}</h2>", render_inline_markdown_phrasing(h)));
                 }
                 if let Some(s) = subtitle {
-                    html.push_str(&format!("<p>{}</p>", render_inline_markdown_phrasing(s)));
+                    html.push_str(&render_wrapped_phrasing_or_blocks(None, s));
                 }
                 html.push_str("</div>");
             }
@@ -4019,7 +4122,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             parts.push("<div class=\"surfdoc-product-titles\">".to_string());
             parts.push(format!("<h3 class=\"surfdoc-product-title\">{}</h3>", escape_html(title)));
             if let Some(s) = subtitle {
-                parts.push(format!("<p class=\"surfdoc-product-subtitle\">{}</p>", render_inline_markdown_phrasing(s)));
+                parts.push(render_wrapped_phrasing_or_blocks(Some("surfdoc-product-subtitle"), s));
             }
             parts.push("</div>".to_string());
             if let Some(b) = badge {
@@ -4468,32 +4571,8 @@ pub(crate) fn render_block(block: &Block) -> String {
                     escape_html(t)
                 ));
             }
-            html.push_str(
-                "<div class=\"surfdoc-store-layout\">\
-                   <div class=\"surfdoc-store-main\">\
-                     <div class=\"surfdoc-store-filters\" data-st-filters></div>\
-                     <div class=\"surfdoc-store-grid\" data-st-grid></div>\
-                   </div>\
-                   <aside class=\"surfdoc-store-cart\" data-st-cart aria-label=\"Cart\">\
-                     <div class=\"surfdoc-store-cart-head\">Your cart</div>\
-                     <div class=\"surfdoc-store-cart-items\" data-st-items aria-live=\"polite\"></div>\
-                     <div class=\"surfdoc-store-cart-foot\">\
-                       <div class=\"surfdoc-store-total\">Total <span data-st-total></span></div>\
-                       <button type=\"button\" class=\"surfdoc-store-checkout-btn\" data-st-checkout disabled>Checkout</button>\
-                     </div>\
-                   </aside>\
-                 </div>",
-            );
-            html.push_str(
-                "<form class=\"surfdoc-store-form\" data-st-form hidden>\
-                   <div class=\"surfdoc-store-form-title\">Checkout</div>\
-                   <label class=\"surfdoc-store-field\">Name<input type=\"text\" name=\"name\" autocomplete=\"name\" required></label>\
-                   <label class=\"surfdoc-store-field\">Email<input type=\"email\" name=\"email\" autocomplete=\"email\" required></label>\
-                   <label class=\"surfdoc-store-field\">Shipping address<input type=\"text\" name=\"address\" autocomplete=\"street-address\" required></label>\
-                   <button type=\"submit\" class=\"surfdoc-store-place-btn\">Place order</button>\
-                 </form>\
-                 <div class=\"surfdoc-store-confirm\" data-st-confirm hidden aria-live=\"polite\"></div>",
-            );
+            html.push_str(STORE_LAYOUT_HTML);
+            html.push_str(STORE_FORM_HTML);
             html.push_str(&format!(
                 "<script type=\"application/json\" data-st-data>{data_json}</script>"
             ));
@@ -4578,30 +4657,9 @@ pub(crate) fn render_block(block: &Block) -> String {
                     escape_html(label),
                 ));
             }
-            html.push_str(
-                "<div class=\"surfdoc-booking-col surfdoc-booking-cal\">\
-                   <div class=\"surfdoc-booking-cal-head\">\
-                     <button type=\"button\" class=\"surfdoc-booking-nav\" data-bk-prev aria-label=\"Previous month\">&lsaquo;</button>\
-                     <span class=\"surfdoc-booking-month\" data-bk-month aria-live=\"polite\"></span>\
-                     <button type=\"button\" class=\"surfdoc-booking-nav\" data-bk-next aria-label=\"Next month\">&rsaquo;</button>\
-                   </div>\
-                   <div class=\"surfdoc-booking-weekdays\"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>\
-                   <div class=\"surfdoc-booking-days\" data-bk-days></div>\
-                 </div>\
-                 <div class=\"surfdoc-booking-col surfdoc-booking-slots\" data-bk-slots>\
-                   <p class=\"surfdoc-booking-hint\">Select an available date to see open times.</p>\
-                 </div>",
-            );
+            html.push_str(BOOKING_CAL_HTML);
             html.push_str("</div>"); // .surfdoc-booking-grid
-            html.push_str(
-                "<form class=\"surfdoc-booking-form\" data-bk-form hidden>\
-                   <div class=\"surfdoc-booking-summary\" data-bk-summary></div>\
-                   <label class=\"surfdoc-booking-field\">Name<input type=\"text\" name=\"name\" autocomplete=\"name\" required></label>\
-                   <label class=\"surfdoc-booking-field\">Email<input type=\"email\" name=\"email\" autocomplete=\"email\" required></label>\
-                   <button type=\"submit\" class=\"surfdoc-booking-confirm-btn\">Confirm booking</button>\
-                 </form>\
-                 <div class=\"surfdoc-booking-confirm\" data-bk-confirm hidden aria-live=\"polite\"></div>",
-            );
+            html.push_str(BOOKING_FORM_HTML);
             html.push_str(&format!(
                 "<script type=\"application/json\" data-bk-data>{data_json}</script>"
             ));
@@ -5750,7 +5808,7 @@ fn auth_provider_str(p: crate::types::AuthProvider) -> &'static str {
     }
 }
 
-fn callout_type_str(ct: CalloutType) -> &'static str {
+pub(crate) fn callout_type_str(ct: CalloutType) -> &'static str {
     match ct {
         CalloutType::Info => "info",
         CalloutType::Warning => "warning",
@@ -5837,7 +5895,7 @@ fn render_code_with_highlights(content: &str, highlight: &[String]) -> String {
 
 /// Inline SVG icon for a callout, per the reference block spec (Feather style).
 /// Emitted with the `surfdoc-callout-icon` class so CSS can size/color it.
-fn callout_icon_svg(ct: CalloutType) -> &'static str {
+pub(crate) fn callout_icon_svg(ct: CalloutType) -> &'static str {
     // Paths sourced from A1-reference-block-spec.md §Callout.
     match ct {
         CalloutType::Warning => {
@@ -7122,7 +7180,11 @@ mod tests {
         let html = to_html(&doc);
         assert!(html.contains("<figure class=\"surfdoc-figure\">"));
         assert!(html.contains("img src=\"arch.png\" alt=\"System architecture\""));
-        assert!(html.contains("onerror="));
+        assert!(html.contains("data-img-fallback=\"hide\""));
+        assert!(
+            !html.contains("onerror="),
+            "figure fallback must be the data attribute, not an inline handler (TT sink)"
+        );
         assert!(html.contains("Architecture diagram"));
     }
 
@@ -9303,6 +9365,157 @@ mod tests {
         let html = to_html(&doc);
         assert!(!html.contains("<script>"), "raw HTML must be escaped");
         assert!(html.contains("&lt;script&gt;"), "escaped form must be present");
+    }
+
+    /// Scan `html` and fail if any block-level start tag opens while a `<p>`
+    /// is still open. The HTML parser auto-closes an open `<p>` at the first
+    /// block-level start tag and hoists the block out as a sibling, so
+    /// block-in-p bytes re-parse to a DIFFERENT tree than the literal one the
+    /// constructive renderer (render_dom) builds — serialized bytes match
+    /// while the parsed DOM diverges. Emitted HTML must be parser-stable.
+    fn assert_no_block_inside_p(html: &str) {
+        const BLOCK_TAGS: &[&str] = &[
+            "p", "ul", "ol", "div", "blockquote", "pre", "table", "section", "article",
+            "aside", "nav", "header", "footer", "form", "fieldset", "figure", "hr", "h1",
+            "h2", "h3", "h4", "h5", "h6", "dl", "details", "main", "address",
+        ];
+        let mut p_depth = 0usize;
+        let bytes = html.as_bytes();
+        let mut i = 0usize;
+        while i < bytes.len() {
+            if bytes[i] != b'<' {
+                i += 1;
+                continue;
+            }
+            let closing = bytes.get(i + 1) == Some(&b'/');
+            let name_start = if closing { i + 2 } else { i + 1 };
+            let mut j = name_start;
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric()) {
+                j += 1;
+            }
+            let name = html[name_start..j].to_ascii_lowercase();
+            if name == "p" {
+                if closing {
+                    p_depth = p_depth.saturating_sub(1);
+                } else {
+                    assert!(
+                        p_depth == 0,
+                        "parser-stability violation: <p> opened inside an open <p> at byte {i}: …{}…",
+                        &html[i.saturating_sub(120)..(i + 120).min(html.len())]
+                    );
+                    p_depth += 1;
+                }
+            } else if !closing && p_depth > 0 && BLOCK_TAGS.contains(&name.as_str()) {
+                panic!(
+                    "parser-stability violation: <{name}> opened inside an open <p> at byte {i} \
+                     (the HTML parser would auto-close the <p> and hoist it out): …{}…",
+                    &html[i.saturating_sub(120)..(i + 120).min(html.len())]
+                );
+            }
+            i = j.max(i + 1);
+        }
+    }
+
+    /// Parser-stability pin (NEVER weaken): a feature-card body containing
+    /// block-level markdown (a list) must not be emitted inside a `<p>`.
+    /// This is the thelove222 pilot defect: `<p class="surfdoc-feature-body">
+    /// <ul>…</ul></p>` serialized identically to render_dom's literal tree,
+    /// but the browser hoisted the <ul> out of the <p> on parse, so the
+    /// SSR-parsed DOM diverged from the constructive DOM (attest hash
+    /// mismatch). Block-bearing bodies must use a parser-stable wrapper.
+    #[test]
+    fn feature_body_with_list_is_parser_stable() {
+        let doc = doc_with(vec![Block::Features {
+            cards: vec![
+                crate::types::FeatureCard {
+                    title: "Location".into(),
+                    icon: None,
+                    body: "- ROSE & RAE TATTOO\n- 5770 S DURANGO DRIVE".into(),
+                    link_label: None,
+                    link_href: None,
+                },
+                crate::types::FeatureCard {
+                    title: "Hours".into(),
+                    icon: None,
+                    body: "Intro line.\n\n- BY APPOINTMENT ONLY".into(),
+                    link_label: None,
+                    link_href: None,
+                },
+                crate::types::FeatureCard {
+                    title: "Plain".into(),
+                    icon: None,
+                    body: "Phrasing-only body stays a paragraph.".into(),
+                    link_label: None,
+                    link_href: None,
+                },
+            ],
+            cols: Some(3),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert_no_block_inside_p(&html);
+        // List-bearing bodies wrap in a div (same class, parser-stable) …
+        assert!(
+            html.contains("<div class=\"surfdoc-feature-body\"><ul>"),
+            "list-only body must render as div-wrapped block content: {html}"
+        );
+        assert!(
+            html.contains("<div class=\"surfdoc-feature-body\"><p>Intro line.</p>"),
+            "mixed body must keep its intro paragraph inside the div: {html}"
+        );
+        // … while phrasing-only bodies keep the historical <p> wrapper.
+        assert!(
+            html.contains("<p class=\"surfdoc-feature-body\">Phrasing-only body stays a paragraph.</p>"),
+            "phrasing-only body must keep the <p> wrapper: {html}"
+        );
+    }
+
+    /// Same pin for the sibling emit sites that share the wrap-phrasing-in-p
+    /// pattern: hero subtitle, step body, section subtitle, product-card
+    /// subtitle. All go through render_wrapped_phrasing_or_blocks.
+    #[test]
+    fn block_bearing_prose_fields_are_parser_stable() {
+        let doc = doc_with(vec![
+            Block::Hero {
+                headline: Some("H".into()),
+                subtitle: Some("- a\n- b".into()),
+                badge: None,
+                align: "center".into(),
+                image: None,
+                image_alt: None,
+                layout: None,
+                transparent: false,
+                buttons: vec![],
+                content: String::new(),
+                span: span(),
+            },
+            Block::Steps {
+                steps: vec![crate::types::StepItem {
+                    title: "Step".into(),
+                    time: None,
+                    body: "Do this:\n\n- first\n- second".into(),
+                }],
+                span: span(),
+            },
+            Block::Section {
+                bg: None,
+                headline: Some("S".into()),
+                subtitle: Some("- x".into()),
+                content: String::new(),
+                children: vec![],
+                span: span(),
+            },
+        ]);
+        let html = to_html(&doc);
+        assert_no_block_inside_p(&html);
+        assert!(
+            html.contains("<div class=\"surfdoc-hero-subtitle\"><ul>"),
+            "hero subtitle with a list must be div-wrapped: {html}"
+        );
+        assert!(
+            html.contains("<div class=\"surfdoc-step-body\"><p>Do this:</p>"),
+            "step body with block content must be div-wrapped: {html}"
+        );
     }
 
     // p1-fill-render: a FILL default containing markdown emphasis must not

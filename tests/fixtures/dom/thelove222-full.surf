@@ -1,0 +1,287 @@
+::site
+name: SAM ROSE ART
+domain: thelove222.com
+description: LOVE 2:22 TATTOO — Sam Rose, Las Vegas tattoo artist. Black work, black & grey, realism, and geometric tattoos.
+accent: #ffd814
+theme: dark
+::
+
+::page[route="/" title="HOME"]
+
+::hero[layout=stacked align=center transparent image="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_2888%202_1736935488.jpg" image-alt="LOVE 2:22 Tattoo"]
+# LOVE 222 Tattoo
+
+WHATS BETTER THERAPY THAN A TATTOO?
+
+[Book Now](/book){primary}
+::
+
+::section
+## Our Services
+
+### tattoo styles
+
+- BLACK WORK
+- BLACK & GREY
+- REALISM
+- GEOMETRIC
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_2917%202_1736935531.jpg" alt="Tattoo work by Sam Rose"]
+
+::banner
+# LOVE 2:22 TATTOO
+::
+
+::section
+## making art since 2:22
+
+Learn more about my journey as an artist in and outside tattooing
+
+[Learn More](/about)
+::
+
+::section
+## Shop original art
+
+Paintings, prints, tufted pieces, and photography — straight from my studio to your walls.
+
+[Shop the collection](/shop)
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/2025-01-15_02-29-29_1736936979.png" alt="Portrait of Sam Rose — photo by @taylorjean.photos"]
+
+::banner
+# Follow
+
+[See full feed](https://instagram.com/love222tattoo){primary external}
+::
+
+::features[cols=3]
+### Location
+
+- ROSE & RAE TATTOO
+- 5770 S DURANGO DRIVE
+- STE.110
+- LAS VEGAS,NV 89113
+- UNITED STATES
+
+### my Hours
+
+- BY APPOINTMENT ONLY PLEASE
+- EMAIL ME : SAM@ROSEANDRAETATTOO
+- TEXT ME: 702-370-1380
+
+### Follow
+
+- Instagram : [@love222tattoo](https://instagram.com/love222tattoo)
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/Love-3_1736907268.png" alt="LOVE 2:22 logo" width="180"]
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::
+
+::page[route="/gallery" title="PORTFOLIO"]
+
+::hero[align=center transparent]
+# Portfolio
+::
+
+::gallery
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/6E198348-9E3D-4F62-8BF6-4F1051892BF1_1737060749.JPG)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_2942_1737060757.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/448C8020-8950-4267-98F7-1BDF4682CA71_1737060749.JPG)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_8278E023CBEA-1_1737061492.jpeg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_AD2C656D5DB6-1_1737061541.jpeg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/9ACA6C31-848E-4C7E-81EC-C6A9752D0088_1737958221.JPG)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/F33FCE03-5B91-4820-AA72-EA9659685EC6_1737958249.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_1146%202_1737958324.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_1149_1737959108.jpg)
+![](https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/IMG_1150_1737959338.jpg)
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::
+
+::page[route="/shop" title="SHOP"]
+
+::hero[align=center transparent]
+# Shop
+
+Original art by Sam Rose — paintings, prints, tufted pieces, and photography, made in Las Vegas between tattoo sessions.
+::
+
+::store[title="Sam Rose Art — originals & prints" currency="$"]
+category: Original Paintings
+item: Desert Bloom | 650 | Acrylic on canvas, 24x36in — cactus flowers at golden hour | One of a kind
+item: 2:22 | 480 | Mixed media on wood panel, 18x24in — the numbers that started it all
+item: Neon Bones | 720 | Acrylic + ink on canvas, 30x40in — Vegas glow over black work linework
+category: Prints
+item: Desert Bloom — Print | 35 | Archival giclee print, 11x14in, signed
+item: Flash Sheet No. 7 — Print | 28 | Classic flash designs, 8x10in on heavyweight matte
+item: Neon Bones — Print | 40 | Archival giclee print, 12x16in, signed & numbered | Bestseller
+category: Tufted Pieces
+item: Heart Eyes Rug | 260 | Hand-tufted wall rug, 20x20in, soft acrylic yarn
+item: 2:22 Clock Rug | 320 | Hand-tufted, 24in round — it is always 2:22 somewhere | New
+category: Photography
+item: Vegas After Rain | 90 | Fine-art photo print, 16x20in, limited run of 25
+item: Studio Mornings | 75 | Behind-the-scenes film series, 11x14in print
+item: Mojave Light | 120 | Framed 16x20in desert landscape, ready to hang
+::
+
+::callout[type=note title="Demo checkout — no real payments"]
+The cart and checkout here are a demo — no card is charged and no order ships from this preview. The live shop will check out through Square. Want to buy a piece today? DM [@love222tattoo](https://instagram.com/love222tattoo) and we'll set it up directly.
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::
+
+::page[route="/about" title="ABOUT"]
+
+::hero[align=center transparent]
+# ABOUT ME
+::
+
+::figure[src="https://www.thelove222.com/uploads/b/1c0960a3b5325571048d104ea639be151445b6354237423f2bef8aeb86cda231/2025-01-15_02-32-51_1736937186.png" alt="Sam Rose — photo by @taylorjean.photos"]
+
+IM A LAS VEGAS BORN & RAISED ARTIST.
+
+ART HAS BEEN MY PASSION EVER SINCE I WAS LITTLE. I DABBLE IN PAINTING, PHOTOGRAPHY, TUFTING, AND DRAWING. I GRADUATED WITH A BACHELORS OF FINE ART DEGREE AT UNLV
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::
+
+::page[route="/book" title="BOOK"]
+
+::hero[align=center transparent]
+# Booking Is a Conversation
+
+No set days, no rigid slots — Sam and her sister share one studio chair, so every booking starts as a request. Send yours below and you'll get a text back to confirm the details, human to human.
+::
+
+::features[cols=3]
+### 1. Send the request
+
+Tell us your idea, placement, size, and the days that work for you. Reference photos and Instagram links welcome — the more detail, the faster the yes.
+
+### 2. Get instant answers
+
+The studio assistant replies right away with pricing, aftercare, and availability info. Anything custom pings Sam directly on her phone — a real person confirms every booking before it's real.
+
+### 3. Deposit & lock it in
+
+Once you settle the details over text, you get a Square deposit link — pay it from your phone and your session lands on the shared studio-chair calendar, locked in.
+::
+
+::section
+## Studio chair availability — one chair, two artists
+
+Sam and Rae trade time on the same chair, so the calendar below shows when the chair itself is open — not fixed appointment slots. Picking a window here just attaches a time preference to your request (this is a demo — nothing is reserved until a human texts you to confirm).
+::
+
+::booking[title="Studio chair availability — one chair, two artists" service-label="Choose a service"]
+service: Consultation | 30 min | Free
+service: Flash / Small Tattoo | 2 hr | $250
+service: Half-Day Session | 4 hr | $500
+service: Full-Day Session | 8 hr | $950
+day: 2026-08-12 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-08-13 | 12:00 PM, 2:00 PM
+day: 2026-08-14 | full
+day: 2026-08-15 | 11:00 AM, 2:00 PM, 4:00 PM
+day: 2026-08-18 | 11:00 AM, 1:00 PM
+day: 2026-08-19 | 12:00 PM, 3:00 PM
+day: 2026-08-21 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-08-22 | full
+day: 2026-08-25 | 11:00 AM, 2:00 PM
+day: 2026-08-26 | 12:00 PM, 2:00 PM, 4:00 PM
+day: 2026-08-28 | 11:00 AM, 1:00 PM
+day: 2026-08-29 | 11:00 AM, 3:00 PM
+day: 2026-09-01 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-09-02 | 12:00 PM, 2:00 PM
+day: 2026-09-04 | 11:00 AM, 2:00 PM, 4:00 PM
+day: 2026-09-05 | full
+day: 2026-09-08 | 11:00 AM, 1:00 PM
+day: 2026-09-09 | 12:00 PM, 3:00 PM
+day: 2026-09-11 | 11:00 AM, 1:00 PM, 3:00 PM
+day: 2026-09-12 | 11:00 AM, 2:00 PM
+::
+
+::section
+## Send your booking request
+
+The whole booking happens on the site — request, confirmation, then your Square deposit once a time is set. Coming from Instagram? DMs land in the same queue, or just fill this out and you'll hear back by text.
+::
+
+::form[submit="Send booking request"]
+- Name (text) *
+- Phone or Instagram (text) *
+- Email (email)
+- Artist (select: Sam Rose | Rae — her sister | Either) *
+- Service (select: Consultation | Flash / Small Tattoo | Half-Day Session | Full-Day Session | Custom project) *
+- Placement (text)
+- Size (select: Small | Medium | Large | Full piece)
+- Tattoo idea + reference links (textarea) *
+- Preferred days & times (textarea) *
+::
+
+::callout[type=tip title="How support works: AI answers, human confirmation"]
+The live site pairs an AI studio assistant with real-person escalation: routine questions — pricing, aftercare, healing, which days the chair is free — get an instant answer any hour, while anything custom (your design, a cover-up, a budget question) goes straight to Sam's phone. No matter what the assistant says, a human confirms every appointment before it's on the books. The assistant isn't wired up in this demo — for now, text 702-370-1380 or DM [@love222tattoo](https://instagram.com/love222tattoo).
+::
+
+::callout[type=note title="Demo — no payment taken online"]
+Payments are disabled in this preview. On the live site, deposits run through Square the moment your time is confirmed — nothing is charged before that. Questions? Text 702-370-1380 or email [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com).
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::
+
+::page[route="/admin" title="ADMIN"]
+
+::hero[align=center transparent]
+# Artist Admin
+
+One login for the studio — Sam and Rae each sign in with their own Google account to run the chair, the requests, and the deposits.
+::
+
+::form[submit="Sign in with Google"]
+- Email (email) *
+- Password (password) *
+::
+
+::callout[type=note title="Demo — login not wired up"]
+On the live site this is one-tap Google sign-in, no separate password to manage. The dashboard below is what each artist sees after signing in.
+::
+
+::section
+## The shared studio dashboard
+::
+
+::features[cols=3]
+### Shared chair calendar
+
+Both artists' personal Google Calendars sync in and overlay onto the one chair. If either calendar is busy, that window shows as taken — for both of them.
+
+### No double-booking
+
+Confirming a request checks both Google Calendars first — one conflict and it will not confirm. A clean confirm writes the session to both calendars and blocks the chair.
+
+### Requests & deposits
+
+Booking requests from the site and Instagram DMs land in one inbox. Confirm a time and the client gets a Square deposit link by text — paid means locked.
+::
+
+::infocard[title="How conflict-checking works"]
+- **Connect once** — Sam and Rae each link their own Google Calendar the first time they sign in.
+- **One chair, one truth** — the public chair calendar is a live overlay of both artists' busy times.
+- **Confirm safely** — a request can only be confirmed into a window that is clear on both calendars; confirming writes the event to both and sends the Square deposit link.
+::
+
+::section
+[Rose & Rae Tattoo](http://roseandraetattoo.com) · [SAM ROSE ART](http://samroseartist.com) · [Instagram](https://instagram.com/love222tattoo) · [love222tattoo@gmail.com](mailto:love222tattoo@gmail.com)
+::

@@ -1,6 +1,6 @@
 [package]
 name = "surf-parse"
-version = "0.14.1"
+version = "0.15.0"
 edition = "2024"
 license = "MIT"
 authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
@@ -31,6 +31,10 @@ pdf = ["typst", "typst-pdf", "typst-as-lib"]
 native = []
 uniffi = ["dep:uniffi", "native"]
 wasm = ["wasm-bindgen"]
+# Constructive DOM rendering (SurfDoc zero-sink pilot). OFF by default.
+# web-sys is only compiled into wasm32 builds; the native DomSink used by
+# tests has no extra dependencies.
+dom = ["dep:web-sys"]
 cli = ["dep:clap"]
 
 [dependencies]
@@ -48,6 +52,7 @@ typst-as-lib = { version = "0.15", optional = true, features = ["typst-kit-fonts
 typst-pdf = { version = "0.14", optional = true }
 clap = { version = "4", optional = true, features = ["derive"] }
 wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["Document", "Element", "Node", "Text", "Window", "HtmlElement"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
