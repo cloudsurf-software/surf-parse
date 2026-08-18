@@ -3,6 +3,17 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.16.0 — 2026-08-16 (SplitPane crosses the native FFI)
+
+### Added
+- `NativeBlock::SplitPane`: `::split-pane` crosses the native FFI boundary
+  as a recursive NativeBlock — `ratio`, optional `back_label` /
+  `back_action`, and `left` / `right` child block lists (recursive like
+  `SectionContainer` and `Slide`; UniFFI boxes recursive enums). Depth
+  guard degrades to Markdown at `MAX_SECTION_DEPTH`, matching the other
+  containers. Promoted from tier-4 degraded to tier-3 chrome in
+  `block_tier`.
+
 ## 0.15.0 — 2026-08-13 (zero-sink train: `dom` backend + TT-clean SSR)
 
 The zero-sink pilot train. Adds the constructive DOM render backend and

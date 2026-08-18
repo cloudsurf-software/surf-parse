@@ -20,7 +20,8 @@ use crate::types::{
 const MAX_SECTION_DEPTH: u32 = 8;
 
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 28 native variants
+// NativeBlock enum — 74 native variants (pinned cross-platform by the
+// SurfDocKit DispatchCoverageTests / Android NativeBlockCoverageTest census)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Simplified block representation for native mobile rendering via UniFFI.
@@ -585,6 +586,18 @@ pub enum NativeBlock {
         kicker: Option<String>,
         notes: Option<String>,
         children: Vec<NativeBlock>,
+    },
+
+    /// Resizable side-by-side layout (::split-pane) with left/right planes.
+    /// `back_label` / `back_action` drive the small-screen back control in
+    /// the right plane. Recursive like `SectionContainer` and `Slide`
+    /// (UniFFI boxes recursive enums).
+    SplitPane {
+        ratio: String,
+        back_label: Option<String>,
+        back_action: Option<String>,
+        left: Vec<NativeBlock>,
+        right: Vec<NativeBlock>,
     },
 }
 
@@ -2159,6 +2172,30 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             }
         }
 
+        // A `::split-pane` carries two recursive child planes (left/right)
+        // plus the small-screen back control metadata.
+        Block::SplitPane {
+            ratio,
+            back_label,
+            back_action,
+            left,
+            right,
+            ..
+        } => {
+            if depth >= MAX_SECTION_DEPTH {
+                let md = render_md::render_block(block);
+                NativeBlock::Markdown { content: md }
+            } else {
+                NativeBlock::SplitPane {
+                    ratio: ratio.clone(),
+                    back_label: back_label.clone(),
+                    back_action: back_action.clone(),
+                    left: convert_children(left, depth + 1),
+                    right: convert_children(right, depth + 1),
+                }
+            }
+        }
+
         Block::Nav { logo, items, .. } => NativeBlock::Nav {
             logo: logo.clone(),
             items: items
@@ -2363,7 +2400,6 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         | Block::Booking { .. }
         | Block::Store { .. }
         | Block::Editor { .. }
-        | Block::SplitPane { .. }
         | Block::App { .. }
         | Block::Build { .. }
         | Block::InfraDatabase { .. }
@@ -2666,7 +2702,9 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Search { .. }
         // Messages/Contacts vocabulary (0.12).
         | Block::RecipientPicker { .. }
-        | Block::Qr { .. } => BlockTier::Chrome,
+        | Block::Qr { .. }
+        // Split-pane layout crosses the FFI boundary natively (0.16).
+        | Block::SplitPane { .. } => BlockTier::Chrome,
 
         // ── Tier 4: explicit markdown degradation ────────────────────
         Block::Unknown { .. }
@@ -2679,7 +2717,6 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Booking { .. }
         | Block::Store { .. }
         | Block::Editor { .. }
-        | Block::SplitPane { .. }
         | Block::App { .. }
         | Block::Build { .. }
         | Block::InfraDatabase { .. }
@@ -2832,6 +2869,93 @@ mod tests {
                 assert_eq!(del.payload.as_deref(), Some("id"));
             }
             other => panic!("expected NavTree, got {other:?}"),
+        }
+    }
+
+    /// 0.16: messages-shaped `::split-pane` markup crosses the FFI as a
+    /// recursive NativeBlock with structured children on BOTH panes.
+    #[test]
+    fn split_pane_messages_markup_crosses_ffi() {
+        let source = "::split-pane[ratio=\"30:70\" back-label=\"Chats\" back-action=closeConversation]\n::pane[side=left]\n::row[icon=knowledge href=#]\nSam Rose\n::\n::\n::pane[side=right]\nThread body\n::\n::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::SplitPane {
+                ratio,
+                back_label,
+                back_action,
+                left,
+                right,
+            } => {
+                assert_eq!(ratio, "30:70");
+                assert_eq!(back_label.as_deref(), Some("Chats"));
+                assert_eq!(back_action.as_deref(), Some("closeConversation"));
+                assert!(!left.is_empty(), "left pane must carry children");
+                assert!(!right.is_empty(), "right pane must carry children");
+                assert!(
+                    left.iter().any(|b| matches!(b, NativeBlock::Row { .. })),
+                    "left pane row converts structurally: {left:?}"
+                );
+                assert!(
+                    right.iter().any(|b| matches!(b, NativeBlock::Markdown { content } if content.contains("Thread body"))),
+                    "right pane thread body crosses: {right:?}"
+                );
+            }
+            other => panic!("expected SplitPane, got {other:?}"),
+        }
+    }
+
+    /// 0.16: optional back attrs stay None when absent; ratio passes through.
+    #[test]
+    fn split_pane_optional_attrs_passthrough() {
+        let source = "::split-pane[ratio=\"60:40\"]\n::pane\nRail\n::\n::pane\nThread\n::\n::";
+        let native = to_native_blocks(&crate::parse(source).doc);
+        match &native[0] {
+            NativeBlock::SplitPane {
+                ratio,
+                back_label,
+                back_action,
+                left,
+                right,
+            } => {
+                assert_eq!(ratio, "60:40");
+                assert!(back_label.is_none());
+                assert!(back_action.is_none());
+                assert_eq!(left.len(), 1);
+                assert_eq!(right.len(), 1);
+            }
+            other => panic!("expected SplitPane, got {other:?}"),
+        }
+    }
+
+    /// 0.16: depth guard — at MAX_SECTION_DEPTH a split-pane degrades to
+    /// Markdown just like SectionContainer and Slide.
+    #[test]
+    fn native_split_pane_depth_limit() {
+        let block = Block::SplitPane {
+            ratio: "50:50".to_string(),
+            back_label: Some("Back".to_string()),
+            back_action: None,
+            left: vec![Block::Markdown {
+                content: "left body".to_string(),
+                span: syn(),
+            }],
+            right: vec![Block::Markdown {
+                content: "right body".to_string(),
+                span: syn(),
+            }],
+            span: syn(),
+        };
+        match convert_block(&block, 7) {
+            NativeBlock::SplitPane { left, right, .. } => {
+                assert_eq!(left.len(), 1);
+                assert_eq!(right.len(), 1);
+            }
+            other => panic!("expected SplitPane at depth 7, got {other:?}"),
+        }
+        match convert_block(&block, 8) {
+            NativeBlock::Markdown { .. } => {}
+            other => panic!("expected Markdown fallback at depth 8, got {other:?}"),
         }
     }
 
