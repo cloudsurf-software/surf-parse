@@ -440,6 +440,11 @@ fn parse_tasks(content: &str, span: Span) -> Block {
             (true, rest)
         } else if let Some(rest) = trimmed.strip_prefix("- [ ] ") {
             (false, rest)
+        } else if let Some(rest) = strip_plain_list_marker(trimmed) {
+            // `::action-items` bodies are routinely written as plain `- text`
+            // or `1. text` lists (the documented shape is "numbered action
+            // list"); treat those as not-done items instead of dropping them.
+            (false, rest)
         } else {
             continue;
         };
@@ -455,6 +460,51 @@ fn parse_tasks(content: &str, span: Span) -> Block {
     }
 
     Block::Tasks { items, span }
+}
+
+/// Strip a plain (checkbox-less) list marker: `- `, `* `, or `1.` / `1)`
+/// ordered markers. Returns the text after the marker, or None if the line
+/// isn't a list item.
+fn strip_plain_list_marker(trimmed: &str) -> Option<&str> {
+    let rest = if let Some(rest) = trimmed
+        .strip_prefix("- ")
+        .or_else(|| trimmed.strip_prefix("* "))
+    {
+        rest.trim_start()
+    } else {
+        let digits = trimmed.chars().take_while(|c| c.is_ascii_digit()).count();
+        if digits == 0 {
+            return None;
+        }
+        let after = &trimmed[digits..];
+        let rest = after
+            .strip_prefix('.')
+            .or_else(|| after.strip_prefix(')'))?;
+        rest.strip_prefix(' ')?.trim_start()
+    };
+
+    // A remainder that itself opens with a checkbox marker (`- [ ]` with no
+    // trailing space, `- [x]done`, `* [ ] foo`) keeps falling through to the
+    // skip arm exactly as it did before plain markers were accepted. Capturing
+    // it here would push the literal brackets into the task text and re-emit
+    // them *inside* the generated checkbox.
+    if starts_with_checkbox_marker(rest) {
+        return None;
+    }
+    Some(rest)
+}
+
+/// True when `rest` opens with a `[]`, `[ ]`, or `[x]`-style checkbox marker.
+fn starts_with_checkbox_marker(rest: &str) -> bool {
+    let mut chars = rest.chars();
+    if chars.next() != Some('[') {
+        return false;
+    }
+    match chars.next() {
+        Some(']') => true,
+        Some(_) => chars.next() == Some(']'),
+        None => false,
+    }
 }
 
 /// Extract a trailing `@username` from the end of a task text.
@@ -5087,6 +5137,147 @@ mod tests {
             }
             other => panic!("Expected Tasks, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn resolve_action_items_plain_numbered_and_bulleted() {
+        let content = "1. Sign off ownership split\n2) Migrate the dossier\n- Ship the bridge page\n* Build the dashboard\nnot a list line";
+        let block = unknown("action-items", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Tasks { items, .. } => {
+                assert_eq!(items.len(), 4);
+                assert!(items.iter().all(|i| !i.done));
+                assert_eq!(items[0].text, "Sign off ownership split");
+                assert_eq!(items[1].text, "Migrate the dossier");
+                assert_eq!(items[2].text, "Ship the bridge page");
+                assert_eq!(items[3].text, "Build the dashboard");
+            }
+            other => panic!("Expected Tasks, got {other:?}"),
+        }
+    }
+
+    /// Helper: resolve a directive body straight to its task items.
+    fn task_items(name: &str, content: &str) -> Vec<TaskItem> {
+        match resolve_block(unknown(name, Attrs::new(), content)) {
+            Block::Tasks { items, .. } => items,
+            other => panic!("Expected Tasks, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_items_star_bullet_alone() {
+        let items = task_items("action-items", "* Only a star bullet");
+        assert_eq!(items.len(), 1);
+        assert!(!items[0].done);
+        assert_eq!(items[0].text, "Only a star bullet");
+    }
+
+    #[test]
+    fn resolve_action_items_close_paren_ordered_variant() {
+        let items = task_items("action-items", "1) First\n2) Second");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].text, "First");
+        assert_eq!(items[1].text, "Second");
+    }
+
+    #[test]
+    fn resolve_action_items_multi_digit_ordered_marker() {
+        let items = task_items(
+            "action-items",
+            "9. Nine\n12. Twelve\n103) One hundred three",
+        );
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].text, "Nine");
+        assert_eq!(items[1].text, "Twelve");
+        assert_eq!(items[2].text, "One hundred three");
+    }
+
+    #[test]
+    fn resolve_action_items_indented_markers() {
+        let items = task_items(
+            "action-items",
+            "    - Indented dash\n\t* Tabbed star\n      3. Indented ordered",
+        );
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].text, "Indented dash");
+        assert_eq!(items[1].text, "Tabbed star");
+        assert_eq!(items[2].text, "Indented ordered");
+    }
+
+    #[test]
+    fn resolve_action_items_skips_non_list_lines() {
+        // Scope fence: marker-less prose in an `::action-items` body keeps
+        // dropping — plain markers are the only newly accepted shape.
+        let items = task_items(
+            "action-items",
+            "Some framing prose.\n\n- A real item\nTrailing prose without a marker.",
+        );
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].text, "A real item");
+    }
+
+    #[test]
+    fn resolve_action_items_ordered_marker_requires_space() {
+        // `1.Text` and a bare `5.` are not list markers.
+        let items = task_items("action-items", "1.NoSpace\n5.\n- Real");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].text, "Real");
+    }
+
+    #[test]
+    fn resolve_action_items_plain_markers_extract_assignee() {
+        // Assignee extraction is the shared `extract_assignee` call in
+        // `parse_tasks`, so plain-marker items must behave exactly like
+        // checkbox items (see `resolve_tasks_with_assignee`).
+        let items = task_items(
+            "action-items",
+            "- Fix the bridge page @brady\n2. Migrate the dossier @donovan",
+        );
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].text, "Fix the bridge page");
+        assert_eq!(items[0].assignee, Some("brady".to_string()));
+        assert_eq!(items[1].text, "Migrate the dossier");
+        assert_eq!(items[1].assignee, Some("donovan".to_string()));
+    }
+
+    #[test]
+    fn resolve_tasks_malformed_checkbox_still_skipped() {
+        // Guard: a bracket-form remainder must NOT be captured as plain-list
+        // text, or the literal brackets would land inside the emitted
+        // checkbox. These lines were skipped before plain markers were
+        // accepted and stay skipped.
+        let items = task_items(
+            "tasks",
+            "- []\n- [ ]\n- [x]done\n* [ ] star checkbox\n- [ ] Real item",
+        );
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].text, "Real item");
+        assert!(!items[0].done);
+    }
+
+    #[test]
+    fn action_items_plain_markers_are_stable_across_reserialization() {
+        // D-A3: plain markers normalize to checkbox form on emit. That is a
+        // one-way normalization, so assert the SECOND round-trip is a
+        // fixed point — builder output must not drift on every save.
+        let src = "---\ntitle: T\ntype: doc\n---\n::action-items\n1. Sign off the split @brady\n- Ship the bridge page\n::";
+        let first = crate::builder::to_surf_source(&crate::parse::parse(src).doc);
+        let second = crate::builder::to_surf_source(&crate::parse::parse(&first).doc);
+        assert_eq!(first, second, "re-serialization must be a fixed point");
+
+        let items = match crate::parse::parse(&first)
+            .doc
+            .blocks
+            .into_iter()
+            .find(|b| matches!(b, Block::Tasks { .. }))
+        {
+            Some(Block::Tasks { items, .. }) => items,
+            other => panic!("Expected Tasks after round-trip, got {other:?}"),
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].text, "Sign off the split");
+        assert_eq!(items[0].assignee, Some("brady".to_string()));
+        assert_eq!(items[1].text, "Ship the bridge page");
     }
 
     // -- Decision --------------------------------------------------

@@ -3,6 +3,27 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.17.2 — 2026-08-20 (action-items: plain list markers no longer dropped)
+
+### Fixed
+
+- `::action-items` (and `::tasks`) bodies written as plain lists silently
+  dropped every line: `parse_tasks` only accepted `- [ ]` / `- [x]`
+  checkboxes, so `- text`, `* text`, `1. text`, and `1) text` items parsed
+  to an empty `Block::Tasks`. Plain markers are now stripped and captured as
+  not-done items, sharing the existing `extract_assignee` path so a trailing
+  `@username` behaves identically to the checkbox form. Ordered markers
+  require a space after the `.` or `)`, and indented markers are accepted.
+  Malformed checkbox remainders (`- []`, `- [ ]` with no trailing space,
+  `- [x]done`, `* [ ] text`) keep falling through to the skip arm as before,
+  so the literal brackets never land inside an emitted checkbox.
+  Marker-less prose lines still drop — unchanged behavior.
+- Note on re-emission: typed `Block::Tasks` stores no source marker, so the
+  builder normalizes plain markers to `- [ ]` checkbox form and the directive
+  name to `::tasks` — the same normalization `::action-items` already
+  received on 0.17.1. A test pins re-serialization as a fixed point.
+- No uniffi interface changes; FFI binding checksums unaffected.
+
 ## 0.17.1 — 2026-08-19 (builder round-trip fix: bracket-leading chat message text)
 
 ### Fixed
