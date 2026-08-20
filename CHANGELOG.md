@@ -3,6 +3,17 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.17.1 — 2026-08-19 (builder round-trip fix: bracket-leading chat message text)
+
+### Fixed
+
+- Builder round-trip data loss: an attr-less chat message whose text starts
+  with `[` lost the leading bracket group to the attrs parse on reparse. The
+  builder now emits an explicit empty `[]` attrs group when the message text
+  starts with `[`. Regression test added
+  (`test_roundtrip_chat_message_bracket_leading_text`). No uniffi interface
+  changes; FFI binding checksums unaffected.
+
 ## 0.17.0 — 2026-08-19 (Messages mockup-fidelity round: chat-thread children, chip-input, roster rows, shark fin)
 
 Native schema v4 (`NATIVE_DOC_SCHEMA_VERSION` 3 → 4).

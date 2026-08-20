@@ -3149,7 +3149,10 @@ fn serialize_block(block: &Block) -> String {
                     mparts.push(format!("reactions=\"{}\"", escape_attr(&entries.join("|"))));
                 }
                 let mattrs = if mparts.is_empty() {
-                    String::new()
+                    // Attr-less message whose text starts with `[`: emit an
+                    // explicit empty attrs group so the reparse doesn't eat
+                    // the leading bracket group as attrs (data loss).
+                    if m.text.starts_with('[') { "[]".to_string() } else { String::new() }
                 } else {
                     format!("[{}]", mparts.join(" "))
                 };
@@ -4286,6 +4289,41 @@ mod tests {
                 assert_eq!(messages[0].reactions[0].count, Some(2));
                 assert!(messages[0].reactions[0].mine);
                 assert_eq!(messages[1].side, "own");
+            }
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_chat_message_bracket_leading_text() {
+        // An attr-less message whose text starts with `[` must not lose
+        // the bracket group to the attrs parse on the way back in.
+        let doc = SurfDoc {
+            front_matter: None,
+            blocks: vec![Block::ChatThread {
+                source: None,
+                on_action: None,
+                on_react: None,
+                on_doc_open: None,
+                messages: vec![crate::types::ChatMessage {
+                    side: "own".into(),
+                    sender: None,
+                    timestamp: None,
+                    text: "[2pm?] works for me".into(),
+                    reactions: vec![],
+                }],
+                span: Span::SYNTHETIC,
+            }],
+            source: String::new(),
+        };
+        let out = to_surf_source(&doc);
+        let reparsed = parse::parse(&out);
+        match &reparsed.doc.blocks[0] {
+            Block::ChatThread { messages, .. } => {
+                assert_eq!(messages.len(), 1);
+                assert_eq!(messages[0].text, "[2pm?] works for me");
+                assert_eq!(messages[0].sender, None);
+                assert_eq!(messages[0].timestamp, None);
             }
             other => panic!("Expected ChatThread, got {other:?}"),
         }
