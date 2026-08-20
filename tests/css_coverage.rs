@@ -134,7 +134,7 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("use", "::use\n- serde\n::"),
     ("app-env", "::app-env\nKEY: value\n::"),
     ("app-deploy", "::app-deploy[region=sjc scale=1]\n::"),
-    ("row", "::row[icon=doc href=\"/docs\" unread=true trailing-label=\"Open\" trailing-action=open progress=0.42]\nTitle\nDescription\naction: Accept | invoke:contacts.accept\n::"),
+    ("row", "::row[icon=doc href=\"/docs\" unread=true avatar=auto rtime=\"1:42 PM\" unread-count=3 trailing-label=\"Open\" trailing-action=open progress=0.42]\nTitle\nDescription\naction: Accept | invoke:contacts.accept\n::"),
     ("infocard", "::infocard[intent=success image=\"/img/a.png\"]\n# Card\nSubtitle\n\nSummary text.\n\n1. Step one\n\nVersion: 1.0\n::"),
     // Full shell shape (0.14): sidebar rows + divider + hub row (drives the
     // generated tab-bar), topbar, tab-content, and a RIGHT panel (drives
@@ -158,8 +158,9 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("suggestion-chips", "::suggestion-chips[source=ai.suggestions max=3 dismissible=true]\n::"),
     ("recipient-picker", "::recipient-picker[source=contacts mode=multi on-submit=\"invoke:messages.compose\"]\n::"),
     ("qr", "::qr[mode=show]\n::"),
-    ("chat-thread", "::chat-thread[source=chat.thread on-action=run_action]\n::"),
+    ("chat-thread", "::chat-thread[source=chat.thread on-action=run_action]\n- them[sender=\"Danny\" time=\"1:42 PM\" reactions=\"Love:2:mine|Wave\"] Tahoe update finished\n- them[sender=\"Surfy\"] Enrollment retried\n- own[time=\"1:44 PM\"] Yes, retry now\n::"),
     ("chat-input-simple", "::chat-input-simple[placeholder=\"Ask…\" action=send]\n::"),
+    ("chip-input", "::chip-input[label=\"To:\" placeholder=\"Type a name…\" source=contacts on-change=\"invoke:messages.compose\"]\n- Danny Pappageorge\n::"),
     ("log-stream", "::log-stream[source=build.log tail=100]\n::"),
     ("problem-list", "::problem-list[source=diagnostics]\n::"),
 ];

@@ -3,6 +3,43 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.17.0 — 2026-08-19 (Messages mockup-fidelity round: chat-thread children, chip-input, roster rows, shark fin)
+
+Native schema v4 (`NATIVE_DOC_SCHEMA_VERSION` 3 → 4).
+
+### Added
+- `::chat-thread` renders REAL message children: `- side[sender= time=
+  reactions=] text` dash items parse into `ChatThread.messages`
+  (`ChatMessage` / `ChatReaction`). HTML render: mockup bubble anatomy —
+  width cap `min(75%, 640px)`, timestamp INSIDE the bubble, sender-name
+  lead above incoming bubbles in group threads (>= 2 distinct incoming
+  senders), the named Surfy sender always leads (accent variant), and
+  read-only reaction pills (ruling D-3: static spans, no button, `mine`
+  variant). Attrs-only threads keep the pre-0.17 two-message sample
+  preview byte-identical — the parse shape is backward-compatible.
+  Native parity: `NativeBlock::ChatThread.messages`
+  (`NativeChatMessage` / `NativeChatReaction`); builder round-trips the
+  children; markdown degrades to a sequential message list.
+- New `chip-input` kind (registry #113) — the compose "To:" line: `label`,
+  removable chips (`- ` content lines) with a close glyph per dismiss
+  canon, and an inline filter input. HTML carries the SHAPE only (the
+  /next dispatcher owns behavior); native `NativeBlock::ChipInput` with a
+  typed `on_change`; markdown degrades to a labeled chip list.
+- `::row` roster meta: `avatar=` (initials text, `group` = users glyph,
+  `auto` = initials derived from the title at parse), `rtime=` right-side
+  bucketed time meta, `unread-count=` count pill that replaces the unread
+  dot when present (right-side elements only — accent-left-border stays
+  BANNED). Avatar swaps the icon slot; avatar-absent rows render
+  byte-identical to 0.16. Native `Row.avatar/rtime/unread_count`.
+- Golden union fixture `tests/golden/union-0_17.surf` + pinned HTML
+  snapshot covering the whole round.
+
+### Changed
+- `surfy-fin` vendored glyph replaced with the full Surfy shark mark
+  (ruling D-2, re-authored from `brand/surfy/surfy-final.svg` to
+  16×16 `currentColor`); all clients inherit via the icon registry —
+  no call-site change.
+
 ## 0.16.0 — 2026-08-16 (SplitPane crosses the native FFI)
 
 ### Added

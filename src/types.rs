@@ -984,6 +984,18 @@ pub enum Block {
         /// parse; absent = no bar, output byte-identical to 0.14.0.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         progress: Option<f32>,
+        /// Avatar spec (0.17): initials text ("DP"), "group" for the
+        /// users glyph, or `avatar=auto` which derives initials from the
+        /// title at parse. Absent = classic icon slot, output unchanged.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        avatar: Option<String>,
+        /// Right-side bucketed relative-time meta (0.17): rendered
+        /// verbatim ("1:42 PM", "Yesterday"); bucketing is runtime-owned.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rtime: Option<String>,
+        /// Unread count pill (0.17); when present it replaces the dot.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        unread_count: Option<u32>,
         /// Per-row actions mapping labels to action strings. (0.12)
         actions: Vec<RowAction>,
         span: Span,
@@ -1150,6 +1162,24 @@ pub enum Block {
         on_react: Option<String>,
         /// Doc-chip open seam (`on-doc-open=`). (0.12)
         on_doc_open: Option<String>,
+        /// Authored message children (0.17): `- side[attrs] text` content
+        /// lines. Empty = registry-bound thread; renderers keep the
+        /// pre-0.17 two-message sample preview so the parse shape stays
+        /// backward-compatible.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        messages: Vec<ChatMessage>,
+        span: Span,
+    },
+    /// Recipient chip input (0.17) — the compose "To:" line: a label,
+    /// removable chips (top-right close glyph), and an inline filter
+    /// input. HTML carries the SHAPE only; the /next dispatcher owns
+    /// behavior.
+    ChipInput {
+        label: Option<String>,
+        placeholder: Option<String>,
+        source: Option<String>,
+        on_change: Option<String>,
+        chips: Vec<String>,
         span: Span,
     },
     /// Simple chat message input (distinct from app-bound ChatInput).
@@ -1219,6 +1249,35 @@ pub struct RowAction {
     /// Authored action string in the minimal action grammar
     /// (`verb:target[:payload]`, bare name = invoke).
     pub action: String,
+}
+
+/// One authored message child of a `::chat-thread` block (0.17).
+/// Content grammar: `- side[sender="Danny" time="1:42 PM"] Message text`
+/// where side is `own`/`me` (outgoing) or `them` (incoming).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessage {
+    /// "own" (outgoing) or "them" (incoming).
+    pub side: String,
+    /// Sender display name. Rendered as a name lead above the bubble for
+    /// incoming messages in group threads (>= 2 distinct incoming
+    /// senders); the named "Surfy" sender always shows its lead.
+    pub sender: Option<String>,
+    /// Display timestamp — rendered INSIDE the bubble.
+    pub timestamp: Option<String>,
+    pub text: String,
+    /// Read-only reaction pills under the bubble (0.17, ruling D-3).
+    /// Authored as `reactions="Label:2:mine|Label"` on the message item.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reactions: Vec<ChatReaction>,
+}
+
+/// A read-only reaction pill on a chat message (0.17, ruling D-3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatReaction {
+    pub label: String,
+    pub count: Option<u32>,
+    /// The viewer's own reaction — accent "mine" variant.
+    pub mine: bool,
 }
 
 /// A tab item within a `TabBar` block.

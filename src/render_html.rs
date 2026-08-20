@@ -5061,13 +5061,37 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, action, progress, actions, .. } => {
+        Block::Row { icon, title, description, href, state, unread, avatar, rtime, unread_count, trailing_label, trailing_action, action, progress, actions, .. } => {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
                 _ => "",
             };
             let icon_svg = row_icon_svg(icon);
+            // 0.17: avatar spec swaps the icon slot for a circular
+            // initials avatar; "group" falls back to the users glyph.
+            // Absent avatar keeps the classic icon slot byte-identical.
+            let lead_slot = match avatar {
+                Some(a) if a == "group" => {
+                    let users = crate::icons::get_icon("users").unwrap_or("");
+                    format!(
+                        "<span class=\"surfdoc-row-avatar surfdoc-row-avatar-group\">{users}</span>"
+                    )
+                }
+                Some(a) => format!(
+                    "<span class=\"surfdoc-row-avatar\">{}</span>",
+                    escape_html(a),
+                ),
+                None => format!("<span class=\"surfdoc-row-icon\">{icon_svg}</span>"),
+            };
+            // 0.17: right-side bucketed time meta, rendered verbatim.
+            let rtime_meta = match rtime {
+                Some(t) => format!(
+                    "<span class=\"surfdoc-row-time\">{}</span>",
+                    escape_html(t),
+                ),
+                None => String::new(),
+            };
             let arrow_svg = "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"9 18 15 12 9 6\"/></svg>";
             let tag = if href.is_some() { "a" } else { "div" };
             let href_attr = match href {
@@ -5083,10 +5107,16 @@ pub(crate) fn render_block(block: &Block) -> String {
                 None => String::new(),
             };
             // Unread: right-side dot only — accent-left-border is BANNED.
-            let unread_dot = if *unread {
-                "<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span>"
-            } else {
-                ""
+            // 0.17: an unread COUNT renders a right-side pill instead of
+            // the dot (never both).
+            let unread_dot = match unread_count {
+                Some(c) => format!(
+                    "<span class=\"surfdoc-row-badge\" aria-label=\"{c} unread\">{c}</span>"
+                ),
+                None if *unread => {
+                    "<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span>".to_string()
+                }
+                None => String::new(),
             };
             // Interactive content is invalid inside <a> — and a real <button>
             // in a link row would ALSO navigate on click. Link rows demote
@@ -5164,12 +5194,13 @@ pub(crate) fn render_block(block: &Block) -> String {
             };
             format!(
                 "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}{action_attr}>\
-                 <span class=\"surfdoc-row-icon\">{icon_svg}</span>\
+                 {lead_slot}\
                  <span class=\"surfdoc-row-body\">\
                    <span class=\"surfdoc-row-title\">{title}</span>\
                    <span class=\"surfdoc-row-desc\">{desc}</span>\
                    {progress_bar}\
                  </span>\
+                 {rtime_meta}\
                  {unread_dot}\
                  {trailing}\
                  {tail}\
@@ -5604,7 +5635,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::ChatThread { source, on_react, on_doc_open, .. } => {
+        Block::ChatThread { source, on_react, on_doc_open, messages, .. } => {
             let mut source_attr = match source {
                 Some(s) => format!(" data-source=\"{}\"", escape_html(s)),
                 None => String::new(),
@@ -5615,11 +5646,111 @@ pub(crate) fn render_block(block: &Block) -> String {
             if let Some(a) = on_doc_open {
                 source_attr.push_str(&format!(" data-on-doc-open=\"{}\"", escape_html(a)));
             }
-            // Static preview: sample 2-message thread so the block is never empty
-            format!("<div class=\"surfdoc-chat-thread\"{source_attr}>\
-              <div class=\"surfdoc-chat-msg surfdoc-chat-msg-user\">How do I add a new task?</div>\
-              <div class=\"surfdoc-chat-msg surfdoc-chat-msg-assistant\">Click <strong>+ New Task</strong> in the board toolbar, fill in the title, and assign an owner — it&rsquo;ll appear in the Todo column instantly.</div>\
-            </div>")
+            if messages.is_empty() {
+                // Attrs-only thread (pre-0.17 shape): keep the sample
+                // 2-message preview byte-identical so the block is never
+                // empty and existing renders do not drift.
+                format!("<div class=\"surfdoc-chat-thread\"{source_attr}>\
+                  <div class=\"surfdoc-chat-msg surfdoc-chat-msg-user\">How do I add a new task?</div>\
+                  <div class=\"surfdoc-chat-msg surfdoc-chat-msg-assistant\">Click <strong>+ New Task</strong> in the board toolbar, fill in the title, and assign an owner — it&rsquo;ll appear in the Todo column instantly.</div>\
+                </div>")
+            } else {
+                // 0.17: real message children. Bubble cap min(75%, 640px)
+                // and in-bubble timestamp per the surfspace mockup; a
+                // sender-name lead renders above incoming bubbles in group
+                // threads (>= 2 distinct incoming senders); the named
+                // Surfy sender always shows its lead. Reaction pills
+                // (ruling D-3) are read-only spans — no button element.
+                let distinct_incoming: std::collections::BTreeSet<&str> = messages
+                    .iter()
+                    .filter(|m| m.side != "own")
+                    .filter_map(|m| m.sender.as_deref())
+                    .collect();
+                let is_group = distinct_incoming.len() >= 2;
+                let mut html = format!("<div class=\"surfdoc-chat-thread\"{source_attr}>");
+                for m in messages {
+                    let own = m.side == "own";
+                    let side = if own { "own" } else { "them" };
+                    html.push_str(&format!(
+                        "<div class=\"surfdoc-chat-msg-row surfdoc-chat-msg-row-{side}\">"
+                    ));
+                    if let Some(sender) = &m.sender {
+                        let surfy = sender == "Surfy";
+                        if !own && (is_group || surfy) {
+                            let surfy_cls = if surfy { " surfdoc-chat-sender-surfy" } else { "" };
+                            html.push_str(&format!(
+                                "<span class=\"surfdoc-chat-sender{surfy_cls}\">{}</span>",
+                                escape_html(sender),
+                            ));
+                        }
+                    }
+                    let time = match &m.timestamp {
+                        Some(t) => format!(
+                            "<span class=\"surfdoc-chat-time\">{}</span>",
+                            escape_html(t),
+                        ),
+                        None => String::new(),
+                    };
+                    html.push_str(&format!(
+                        "<div class=\"surfdoc-chat-bubble surfdoc-chat-bubble-{side}\">{}{time}</div>",
+                        escape_html(&m.text),
+                    ));
+                    if !m.reactions.is_empty() {
+                        html.push_str("<div class=\"surfdoc-chat-reacts\">");
+                        for r in &m.reactions {
+                            let mine_cls = if r.mine { " surfdoc-chat-react-pill-mine" } else { "" };
+                            let count = match r.count {
+                                Some(c) => format!(
+                                    "<span class=\"surfdoc-chat-react-count\">{c}</span>"
+                                ),
+                                None => String::new(),
+                            };
+                            html.push_str(&format!(
+                                "<span class=\"surfdoc-chat-react-pill{mine_cls}\">{}{count}</span>",
+                                escape_html(&r.label),
+                            ));
+                        }
+                        html.push_str("</div>");
+                    }
+                    html.push_str("</div>");
+                }
+                html.push_str("</div>");
+                html
+            }
+        }
+
+        Block::ChipInput { label, placeholder, source, on_change, chips, .. } => {
+            // 0.17: compose "To:" line — shape only; the /next dispatcher
+            // owns add/remove behavior. Chip close glyph per dismiss canon.
+            let mut data_attrs = String::new();
+            if let Some(s) = source {
+                data_attrs.push_str(&format!(" data-source=\"{}\"", escape_html(s)));
+            }
+            if let Some(a) = on_change {
+                data_attrs.push_str(&format!(" data-on-change=\"{}\"", escape_html(a)));
+            }
+            let mut html = format!("<div class=\"surfdoc-chip-input\"{data_attrs}>");
+            if let Some(l) = label {
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-chip-input-label\">{}</span>",
+                    escape_html(l),
+                ));
+            }
+            let close_svg = "<svg width=\"10\" height=\"10\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" aria-hidden=\"true\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"/><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/></svg>";
+            for chip in chips {
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-chip-input-chip\">{}<button type=\"button\" class=\"surfdoc-chip-input-remove\" aria-label=\"Remove {}\">{close_svg}</button></span>",
+                    escape_html(chip),
+                    escape_html(chip),
+                ));
+            }
+            let ph = placeholder.as_deref().unwrap_or("");
+            html.push_str(&format!(
+                "<input type=\"text\" class=\"surfdoc-chip-input-field\" placeholder=\"{}\">",
+                escape_html(ph),
+            ));
+            html.push_str("</div>");
+            html
         }
 
         Block::ChatInputSimple { placeholder, action, .. } => {
@@ -11668,6 +11799,9 @@ About
             trailing_action: None,
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }
@@ -12342,6 +12476,9 @@ About
             trailing_action: Some("install_app".into()),
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12370,6 +12507,9 @@ About
             trailing_action: None,
             action: None,
             progress: Some(0.42),
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12397,6 +12537,9 @@ About
             trailing_action: None,
             action: None,
             progress: Some(0.425),
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12416,6 +12559,9 @@ About
             trailing_action: None,
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12439,6 +12585,9 @@ About
             trailing_action: Some("install_app".into()),
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![crate::types::RowAction {
                 label: "Accept".into(),
                 action: "invoke:contacts.accept".into(),
@@ -12470,6 +12619,9 @@ About
                 trailing_action: Some("open_thread".into()),
                 action: None,
                 progress: None,
+                avatar: None,
+                rtime: None,
+                unread_count: None,
                 actions: vec![crate::types::RowAction {
                     label: "Accept".into(),
                     action: "invoke:contacts.accept".into(),
@@ -12487,6 +12639,9 @@ About
                 trailing_action: Some("install_app".into()),
                 action: None,
                 progress: None,
+                avatar: None,
+                rtime: None,
+                unread_count: None,
                 actions: vec![],
                 span: span(),
             },
@@ -12613,6 +12768,9 @@ About
             trailing_action: None,
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12636,6 +12794,9 @@ About
             trailing_action: None,
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         }]);
@@ -12675,6 +12836,9 @@ About
             trailing_action: None,
             action: None,
             progress: None,
+            avatar: None,
+            rtime: None,
+            unread_count: None,
             actions: vec![],
             span: span(),
         };
@@ -12970,6 +13134,7 @@ About
             on_action: None,
             on_react: Some("react".into()),
             on_doc_open: Some("open:/docs/1".into()),
+            messages: vec![],
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -12977,6 +13142,123 @@ About
         assert!(html.contains("data-source=\"mako.conversation\""));
         assert!(html.contains("data-on-react=\"react\""));
         assert!(html.contains("data-on-doc-open=\"open:/docs/1\""));
+    }
+
+    #[test]
+    fn html_chat_thread_real_children() {
+        // 0.17: authored messages render real bubbles — side variants,
+        // in-bubble timestamp, sender lead for incoming group messages.
+        let source = "::chat-thread[source=chat.thread]\n\
+            - them[sender=\"Danny\" time=\"1:42 PM\"] Tahoe update finished\n\
+            - them[sender=\"Ash\"] Second sender makes it a group\n\
+            - own[time=\"1:44 PM\"] Yes, retry now\n\
+            ::";
+        let html = crate::parse(source).doc.to_html();
+        assert!(html.contains("surfdoc-chat-msg-row surfdoc-chat-msg-row-them"));
+        assert!(html.contains("surfdoc-chat-msg-row surfdoc-chat-msg-row-own"));
+        assert!(html.contains("surfdoc-chat-bubble surfdoc-chat-bubble-them"));
+        assert!(html.contains("surfdoc-chat-bubble surfdoc-chat-bubble-own"));
+        // Timestamp INSIDE the bubble.
+        assert!(html.contains("Tahoe update finished<span class=\"surfdoc-chat-time\">1:42 PM</span></div>"));
+        // Group thread (2 distinct incoming senders): sender leads render.
+        assert!(html.contains("<span class=\"surfdoc-chat-sender\">Danny</span>"));
+        assert!(html.contains("<span class=\"surfdoc-chat-sender\">Ash</span>"));
+        // Authored messages replace the sample preview.
+        assert!(!html.contains("How do I add a new task?"));
+    }
+
+    #[test]
+    fn html_chat_thread_dm_hides_sender_lead_but_surfy_shows() {
+        // One distinct incoming sender = DM: no sender lead...
+        let dm = "::chat-thread\n- them[sender=\"Danny\"] Hi\n- own Reply\n::";
+        let html = crate::parse(dm).doc.to_html();
+        assert!(!html.contains("surfdoc-chat-sender"));
+        // ...except the named Surfy sender, which always shows its lead.
+        let surfy = "::chat-thread\n- them[sender=\"Surfy\"] On it\n::";
+        let html = crate::parse(surfy).doc.to_html();
+        assert!(html.contains("surfdoc-chat-sender surfdoc-chat-sender-surfy"));
+        assert!(html.contains(">Surfy</span>"));
+    }
+
+    #[test]
+    fn html_chat_thread_reaction_pills_read_only() {
+        // Ruling D-3: reaction pills are static spans — no button element.
+        let source = "::chat-thread\n- them[sender=\"Ash\" reactions=\"Love:2:mine|Wave\"] Hi\n::";
+        let html = crate::parse(source).doc.to_html();
+        assert!(html.contains("surfdoc-chat-reacts"));
+        assert!(html.contains("surfdoc-chat-react-pill surfdoc-chat-react-pill-mine"));
+        assert!(html.contains("<span class=\"surfdoc-chat-react-count\">2</span>"));
+        assert!(html.contains("Wave"));
+        let thread_start = html.find("surfdoc-chat-thread").unwrap();
+        let thread_end = html.rfind("surfdoc-chat-reacts").unwrap();
+        assert!(!html[thread_start..thread_end].contains("<button"), "pills must be read-only");
+    }
+
+    #[test]
+    fn html_chat_thread_empty_keeps_sample_preview() {
+        // Backward compatibility: attrs-only thread keeps the 2-message
+        // sample preview so the block is never empty.
+        let html = crate::parse("::chat-thread[source=chat.thread]\n::").doc.to_html();
+        assert!(html.contains("How do I add a new task?"));
+        assert!(html.contains("surfdoc-chat-msg surfdoc-chat-msg-user"));
+    }
+
+    #[test]
+    fn html_chip_input() {
+        let doc = doc_with(vec![Block::ChipInput {
+            label: Some("To:".into()),
+            placeholder: Some("Type a name…".into()),
+            source: Some("contacts".into()),
+            on_change: Some("invoke:messages.compose".into()),
+            chips: vec!["Danny Pappageorge".into()],
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(html.contains("surfdoc-chip-input"));
+        assert!(html.contains("data-source=\"contacts\""));
+        assert!(html.contains("data-on-change=\"invoke:messages.compose\""));
+        assert!(html.contains("<span class=\"surfdoc-chip-input-label\">To:</span>"));
+        assert!(html.contains("surfdoc-chip-input-chip"));
+        assert!(html.contains("Danny Pappageorge"));
+        // Removable chip: close-glyph button with an accessible label.
+        assert!(html.contains("surfdoc-chip-input-remove"));
+        assert!(html.contains("aria-label=\"Remove Danny Pappageorge\""));
+        // Inline filter input with the placeholder.
+        assert!(html.contains("surfdoc-chip-input-field"));
+        assert!(html.contains("placeholder=\"Type a name…\""));
+    }
+
+    #[test]
+    fn html_row_avatar_rtime_and_count_pill() {
+        let source = "::row[icon=doc avatar=\"DP\" rtime=\"1:42 PM\" unread-count=3]\nDanny Pappageorge\nDirect message\n::";
+        let html = crate::parse(source).doc.to_html();
+        // Avatar swaps the icon slot for circular initials.
+        assert!(html.contains("<span class=\"surfdoc-row-avatar\">DP</span>"));
+        assert!(!html.contains("surfdoc-row-icon"));
+        // Right-side time meta + unread count pill (pill replaces dot).
+        assert!(html.contains("<span class=\"surfdoc-row-time\">1:42 PM</span>"));
+        assert!(html.contains("surfdoc-row-badge"));
+        assert!(html.contains("aria-label=\"3 unread\""));
+        assert!(!html.contains("surfdoc-unread-dot"));
+    }
+
+    #[test]
+    fn html_row_group_avatar_uses_users_glyph() {
+        let source = "::row[icon=doc avatar=group]\nSurf Team\nGroup thread\n::";
+        let html = crate::parse(source).doc.to_html();
+        assert!(html.contains("surfdoc-row-avatar surfdoc-row-avatar-group"));
+        assert!(html.contains("<svg"), "group avatar must carry the users glyph");
+    }
+
+    #[test]
+    fn html_row_without_avatar_keeps_icon_slot_and_dot() {
+        let source = "::row[icon=doc unread=true]\nTitle\nDesc\n::";
+        let html = crate::parse(source).doc.to_html();
+        assert!(html.contains("surfdoc-row-icon"));
+        assert!(!html.contains("surfdoc-row-avatar"));
+        assert!(!html.contains("surfdoc-row-time"));
+        assert!(!html.contains("surfdoc-row-badge"));
+        assert!(html.contains("surfdoc-unread-dot"));
     }
 
     #[test]

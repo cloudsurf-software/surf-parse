@@ -318,11 +318,23 @@ pub enum NativeBlock {
         on_react: Option<NativeAction>,
         /// Doc-chip open seam (0.12).
         on_doc_open: Option<NativeAction>,
+        /// Authored message children (0.17); empty = registry-bound thread.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        messages: Vec<NativeChatMessage>,
     },
     /// Simple chat message input.
     ChatInputSimple {
         placeholder: Option<String>,
         action: Option<NativeAction>,
+    },
+    /// Recipient chip input (0.17) — the compose "To:" line: label,
+    /// removable chips, inline filter input.
+    ChipInput {
+        label: Option<String>,
+        placeholder: Option<String>,
+        source: Option<String>,
+        on_change: Option<NativeAction>,
+        chips: Vec<String>,
     },
     /// Step/progress indicator.
     Progress {
@@ -491,6 +503,16 @@ pub enum NativeBlock {
         description: String,
         href: Option<String>,
         state: String,
+        /// Avatar spec (0.17): initials text or "group" for the users
+        /// glyph; `auto` is already derived to initials at parse.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        avatar: Option<String>,
+        /// Right-side bucketed relative-time meta (0.17).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rtime: Option<String>,
+        /// Unread count pill (0.17); replaces the dot when present.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        unread_count: Option<u32>,
         /// Labelled per-row actions, typed through the action grammar (0.12).
         actions: Vec<NativeRowAction>,
     },
@@ -648,6 +670,29 @@ pub struct NativeInfoFact {
 pub struct NativeRowAction {
     pub label: String,
     pub action: NativeAction,
+}
+
+/// One authored message child of a chat thread (0.17).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeChatMessage {
+    /// "own" (outgoing) or "them" (incoming).
+    pub side: String,
+    pub sender: Option<String>,
+    /// Display timestamp, rendered inside the bubble.
+    pub timestamp: Option<String>,
+    pub text: String,
+    /// Read-only reaction pills (0.17, ruling D-3).
+    pub reactions: Vec<NativeChatReaction>,
+}
+
+/// A read-only reaction pill on a chat message (0.17, ruling D-3).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeChatReaction {
+    pub label: String,
+    pub count: Option<u32>,
+    pub mine: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1104,7 +1149,16 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// 7. `Qr` — new platform-conditional kind (show/scan mode, on_resolve).
 /// 8. Bare registry names accepted in `List`/`Search` `source=` (parse-side;
 ///    previously lifted as empty strings).
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 3;
+///
+/// v4 (0.17) — the Messages mockup-fidelity round, four additions:
+/// 1. `ChatThread.messages` — authored message children (side, sender,
+///    in-bubble timestamp, text, read-only reaction pills).
+/// 2. `ChipInput` — new kind (the compose "To:" line: label, removable
+///    chips, inline filter input, on_change seam).
+/// 3. `Row.avatar` + `Row.rtime` + `Row.unread_count` — roster-row
+///    initials/group avatar, right-side time meta, unread count pill.
+/// 4. `NativeChatMessage`/`NativeChatReaction` — new child records.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 4;
 
 /// A parsed document plus its resolved theme — the unit that crosses the
 /// FFI for themed native rendering.
@@ -1483,6 +1537,9 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             description,
             href,
             state,
+            avatar,
+            rtime,
+            unread_count,
             actions,
             ..
         } => NativeBlock::Row {
@@ -1491,6 +1548,9 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             description: description.clone(),
             href: href.clone(),
             state: row_state_str(state).to_string(),
+            avatar: avatar.clone(),
+            rtime: rtime.clone(),
+            unread_count: *unread_count,
             actions: actions
                 .iter()
                 .map(|a| NativeRowAction {
@@ -1980,12 +2040,31 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             on_action,
             on_react,
             on_doc_open,
+            messages,
             ..
         } => NativeBlock::ChatThread {
             source: source.clone(),
             on_action: on_action.as_deref().map(parse_native_action),
             on_react: on_react.as_deref().map(parse_native_action),
             on_doc_open: on_doc_open.as_deref().map(parse_native_action),
+            messages: messages
+                .iter()
+                .map(|m| NativeChatMessage {
+                    side: m.side.clone(),
+                    sender: m.sender.clone(),
+                    timestamp: m.timestamp.clone(),
+                    text: m.text.clone(),
+                    reactions: m
+                        .reactions
+                        .iter()
+                        .map(|r| NativeChatReaction {
+                            label: r.label.clone(),
+                            count: r.count,
+                            mine: r.mine,
+                        })
+                        .collect(),
+                })
+                .collect(),
         },
 
         Block::ChatInputSimple {
@@ -1995,6 +2074,21 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         } => NativeBlock::ChatInputSimple {
             placeholder: placeholder.clone(),
             action: action.as_deref().map(parse_native_action),
+        },
+
+        Block::ChipInput {
+            label,
+            placeholder,
+            source,
+            on_change,
+            chips,
+            ..
+        } => NativeBlock::ChipInput {
+            label: label.clone(),
+            placeholder: placeholder.clone(),
+            source: source.clone(),
+            on_change: on_change.as_deref().map(parse_native_action),
+            chips: chips.clone(),
         },
 
         Block::Progress {
@@ -2692,6 +2786,7 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::SuggestionChips { .. }
         | Block::ChatThread { .. }
         | Block::ChatInputSimple { .. }
+        | Block::ChipInput { .. }
         | Block::Progress { .. }
         | Block::LogStream { .. }
         | Block::ProblemList { .. }
@@ -2847,6 +2942,86 @@ mod tests {
                 assert_eq!(doc_open.target, "/docs/123");
             }
             other => panic!("expected ChatThread, got {other:?}"),
+        }
+    }
+
+    /// 0.17: authored chat-thread message children cross the FFI —
+    /// side/sender/timestamp/text plus read-only reaction pills.
+    #[test]
+    fn chat_thread_messages_cross_native() {
+        let source = "::chat-thread[source=chat.thread]\n\
+            - them[sender=\"Danny\" time=\"1:42 PM\" reactions=\"Love:2:mine|Wave\"] Tahoe update finished\n\
+            - own[time=\"1:44 PM\"] Yes, retry now\n\
+            ::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::ChatThread { messages, .. } => {
+                assert_eq!(messages.len(), 2);
+                assert_eq!(messages[0].side, "them");
+                assert_eq!(messages[0].sender.as_deref(), Some("Danny"));
+                assert_eq!(messages[0].timestamp.as_deref(), Some("1:42 PM"));
+                assert_eq!(messages[0].text, "Tahoe update finished");
+                assert_eq!(messages[0].reactions.len(), 2);
+                assert_eq!(messages[0].reactions[0].label, "Love");
+                assert_eq!(messages[0].reactions[0].count, Some(2));
+                assert!(messages[0].reactions[0].mine);
+                assert!(!messages[0].reactions[1].mine);
+                assert_eq!(messages[1].side, "own");
+                assert_eq!(messages[1].sender, None);
+            }
+            other => panic!("expected ChatThread, got {other:?}"),
+        }
+    }
+
+    /// 0.17: attrs-only chat-thread keeps empty native messages (the
+    /// registry-bound shape, backward-compatible).
+    #[test]
+    fn chat_thread_attrs_only_crosses_with_empty_messages() {
+        let result = crate::parse("::chat-thread[source=chat.thread]\n::");
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::ChatThread { messages, .. } => assert!(messages.is_empty()),
+            other => panic!("expected ChatThread, got {other:?}"),
+        }
+    }
+
+    /// 0.17: the chip-input kind crosses the FFI with a typed on_change.
+    #[test]
+    fn chip_input_crosses_native() {
+        let source = "::chip-input[label=\"To:\" placeholder=\"Type a name…\" source=contacts on-change=\"invoke:messages.compose\"]\n\
+            - Danny Pappageorge\n\
+            ::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::ChipInput { label, placeholder, source, on_change, chips } => {
+                assert_eq!(label.as_deref(), Some("To:"));
+                assert_eq!(placeholder.as_deref(), Some("Type a name…"));
+                assert_eq!(source.as_deref(), Some("contacts"));
+                let ch = on_change.as_ref().expect("on_change");
+                assert_eq!(ch.verb, "invoke");
+                assert_eq!(ch.target, "messages.compose");
+                assert_eq!(chips, &["Danny Pappageorge".to_string()]);
+            }
+            other => panic!("expected ChipInput, got {other:?}"),
+        }
+    }
+
+    /// 0.17: row avatar/rtime/unread-count cross the FFI.
+    #[test]
+    fn row_avatar_rtime_unread_count_cross_native() {
+        let source = "::row[icon=doc avatar=auto rtime=\"1:42 PM\" unread-count=3]\nDanny Pappageorge\nDirect message\n::";
+        let result = crate::parse(source);
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::Row { avatar, rtime, unread_count, .. } => {
+                // avatar=auto is derived to initials at parse.
+                assert_eq!(avatar.as_deref(), Some("DP"));
+                assert_eq!(rtime.as_deref(), Some("1:42 PM"));
+                assert_eq!(*unread_count, Some(3));
+            }
+            other => panic!("expected Row, got {other:?}"),
         }
     }
 
@@ -4455,10 +4630,10 @@ mod tests {
         assert_eq!(n.doc_page_bg, "var(--surface)");
         assert_eq!(n.drawer_link_size, "0.9375rem");
         assert_eq!(n.drawer_link_weight, "500");
-        // 0.12: the NativeBlock shape grew the Messages/Contacts vocabulary
-        // (list stream/on-select, chat-thread seams, row actions, toolbar
-        // titles, recipientPicker + qr kinds) — schema v3.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 3);
+        // 0.17: the NativeBlock shape grew the Messages mockup-fidelity
+        // round (chat-thread message children, chipInput kind, row
+        // avatar/rtime/unread-count) — schema v4.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 4);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

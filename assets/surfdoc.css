@@ -2784,6 +2784,16 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-chat-input > button { padding: 0.55rem 1.1rem; border: none; border-radius: var(--radius-sm); background: var(--accent, #3b82f6); color: var(--accent-text, #fff); cursor: pointer; font-size: 0.875rem; font-weight: 500; white-space: nowrap; }
 .surfdoc-chat-input:has(> input[type="text"]) { display: flex; gap: 0.5rem; align-items: center; border: 1px solid var(--border, #333); padding: 0.4rem; }
 
+/* 0.17 chip-input — the compose "To:" line: label, removable chips
+   (close glyph per dismiss canon), inline filter input. Shape only;
+   the /next dispatcher owns add/remove behavior. */
+.surfdoc-chip-input { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 1rem 0; padding: 0.6rem 1rem; border: var(--ws-border-w, 1px) var(--ws-border-style, solid) var(--border, #dde2ec); border-radius: var(--radius-sm); background: var(--surface, #fff); }
+.surfdoc-chip-input-label { color: var(--text-muted, #64748b); font-size: 0.8125rem; font-weight: 600; }
+.surfdoc-chip-input-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--accent-soft, #e3ebff); color: var(--accent, #2e8ad8); font-size: 0.78rem; font-weight: 600; }
+.surfdoc-chip-input-remove { appearance: none; border: none; background: transparent; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--accent, #2e8ad8); cursor: pointer; padding: 0; }
+.surfdoc-chip-input-remove:hover { background: var(--surface-alt, #eef1f7); }
+.surfdoc-chip-input-field { flex: 1; min-width: 130px; background: none; border: none; outline: none; color: var(--text, #0f1422); font: inherit; font-size: 0.845rem; padding: 3px 0; }
+
 /* Feed */
 .surfdoc-feed { margin: 1rem 0; }
 .surfdoc-feed-items { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -2864,6 +2874,15 @@ ol.surfdoc-steps { padding-left: 1rem; }
    border-left rule keyed off the unread dot, in any theme. */
 .surfdoc .surfdoc-unread-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #2e8ad8); flex-shrink: 0; margin-left: auto; }
 .surfdoc-row .surfdoc-unread-dot { margin-left: 0; }
+/* 0.17 roster-row meta: circular initials avatar (group = users glyph),
+   right-side bucketed time, unread COUNT pill (replaces the dot when a
+   count is present). Right-side elements only — accent-left-border stays
+   BANNED for unread states. */
+.surfdoc-row-avatar { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft, #e3ebff); color: var(--accent, #2e8ad8); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
+.surfdoc-row-avatar svg { width: 18px; height: 18px; }
+.surfdoc-row-avatar-group { background: var(--surface-alt, #eef1f7); color: var(--text-muted, #64748b); }
+.surfdoc-row-time { flex-shrink: 0; align-self: flex-start; margin-top: 2px; color: var(--text-faint, #94a3b8); font-size: 0.6875rem; }
+.surfdoc-row-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent, #2e8ad8); color: var(--accent-text, #fff); font-size: 0.6875rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 /* Trailing action — right-side control next to the arrow */
 .surfdoc .surfdoc-row-trailing { appearance: none; background: transparent; border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 6px); color: var(--accent, #2e8ad8); cursor: pointer; font-size: 0.75rem; font-weight: 500; line-height: 1; padding: 5px 10px; flex-shrink: 0; white-space: nowrap; transition: background var(--sd-ease, 120ms ease-out), border-color var(--sd-ease, 120ms ease-out); }
 .surfdoc .surfdoc-row-trailing:hover { background: var(--accent-soft, #e3ebff); border-color: var(--accent, #2563eb); }
@@ -3269,6 +3288,22 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-chat-msg { max-width: 85%; padding: 0.5rem 0.85rem; border-radius: var(--radius-sm); font-size: 0.875rem; line-height: 1.5; }
 .surfdoc-chat-msg-user { align-self: flex-end; background: var(--accent-soft, #e3ebff); color: var(--text, #0f1422); }
 .surfdoc-chat-msg-assistant { align-self: flex-start; background: var(--surface-alt, #eef1f7); color: var(--text, #0f1422); }
+/* 0.17 chat-thread real children — mockup bubble anatomy: width cap
+   min(75%, 640px), timestamp INSIDE the bubble, sender-name lead above
+   incoming bubbles in group threads, read-only reaction pills below. */
+.surfdoc-chat-msg-row { display: flex; flex-direction: column; gap: 2px; }
+.surfdoc-chat-msg-row-own { align-items: flex-end; }
+.surfdoc-chat-msg-row-them { align-items: flex-start; }
+.surfdoc-chat-sender { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted, #64748b); margin: 0 4px; }
+.surfdoc-chat-sender-surfy { color: var(--accent, #2e8ad8); }
+.surfdoc-chat-bubble { max-width: min(75%, 640px); padding: 9px 13px; border-radius: 16px; font-size: 0.845rem; line-height: 1.45; }
+.surfdoc-chat-bubble-them { background: var(--surface-alt, #eef1f7); border: 1px solid var(--border, #dde2ec); color: var(--text, #0f1422); border-bottom-left-radius: 6px; }
+.surfdoc-chat-bubble-own { background: var(--accent, #2e8ad8); color: var(--accent-text, #fff); border-bottom-right-radius: 6px; }
+.surfdoc-chat-time { display: block; font-size: 0.656rem; opacity: 0.6; margin-top: 3px; }
+.surfdoc-chat-reacts { display: flex; gap: 4px; margin-top: 2px; }
+.surfdoc-chat-react-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--surface, #fff); border: 1px solid var(--border, #dde2ec); font-size: 0.75rem; color: var(--text, #0f1422); }
+.surfdoc-chat-react-pill-mine { border-color: var(--accent, #2e8ad8); background: var(--accent-soft, #e3ebff); color: var(--accent, #2e8ad8); font-weight: 600; }
+.surfdoc-chat-react-count { font-size: 0.6875rem; opacity: 0.75; }
 .surfdoc .surfdoc-chat-input { border-top: 1px solid var(--border, #30363d); padding: 12px; flex-shrink: 0; }
 .surfdoc .surfdoc-chat-form { display: flex; gap: 8px; }
 .surfdoc .surfdoc-chat-form input { flex: 1; background: var(--bg, #0a0a0f); border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 8px); color: var(--text, #e6edf3); padding: 8px 12px; font-size: 0.8125rem; font-family: inherit; outline: none; transition: border-color var(--sd-ease, 120ms ease-out), box-shadow var(--sd-ease, 120ms ease-out); }

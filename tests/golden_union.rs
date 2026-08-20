@@ -61,6 +61,54 @@ fn golden_union_html_pinned() {
     assert_snapshot("union-0_12-0_13.html.snap", &result.doc.to_html());
 }
 
+/// 0.17 union — the Messages mockup-fidelity round in one document:
+/// chip-input (label/chips/filter input), row avatar (initials, group
+/// glyph, auto-derivation), rtime meta, unread count pill, chat-thread
+/// message children (sides, sender leads, in-bubble timestamps, read-only
+/// reaction pills) plus the backward-compatible attrs-only preview.
+#[test]
+fn golden_union_0_17_html_pinned() {
+    let src = fs::read_to_string(golden_dir().join("union-0_17.surf"))
+        .expect("0.17 union source exists");
+    let result = surf_parse::parse(&src);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == surf_parse::Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "0.17 union source must parse without errors: {errors:?}");
+    assert_snapshot("union-0_17.html.snap", &result.doc.to_html());
+}
+
+/// The 0.17 union source actually covers the round's vocabulary.
+#[test]
+fn golden_union_0_17_covers_the_new_kinds() {
+    let src = fs::read_to_string(golden_dir().join("union-0_17.surf"))
+        .expect("0.17 union source exists");
+    let html = surf_parse::parse(&src).doc.to_html();
+    for marker in [
+        "surfdoc-chip-input",
+        "surfdoc-chip-input-chip",
+        "surfdoc-chip-input-remove",
+        "surfdoc-chip-input-field",
+        "surfdoc-row-avatar",
+        "surfdoc-row-avatar-group",
+        "surfdoc-row-time",
+        "surfdoc-row-badge",
+        "surfdoc-chat-bubble-them",
+        "surfdoc-chat-bubble-own",
+        "surfdoc-chat-time",
+        "surfdoc-chat-sender-surfy",
+        "surfdoc-chat-react-pill-mine",
+        // attrs-only thread keeps the sample preview
+        "surfdoc-chat-msg-user",
+    ] {
+        assert!(html.contains(marker), "0.17 union render must contain {marker}");
+    }
+    // avatar=auto derived initials from "sam rose".
+    assert!(html.contains(">SR</span>"));
+}
+
 /// The union source actually covers the 0.12/0.13 vocabulary — guards the
 /// fixture itself against decay when someone trims it.
 #[test]

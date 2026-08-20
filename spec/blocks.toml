@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 112
-registry_updated = "2026-08-11"
+total_blocks = 113
+registry_updated = "2026-08-19"
 
 [blocks.ai-context]
 status = "planned"
@@ -726,8 +726,8 @@ enum_variant = "AppDeploy"
 [blocks.row]
 status = "implemented"
 category = "utility"
-purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states, a right-side unread dot, and an optional usage/progress fraction bar"
-attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action", "action", "progress"]
+purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states, a right-side unread dot, an optional usage/progress fraction bar, and (0.17) initials/group avatar, right-side rtime meta, and an unread count pill"
+attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action", "action", "progress", "avatar", "rtime", "unread-count"]
 degradation = "single-line description"
 enum_variant = "Row"
 
@@ -896,7 +896,7 @@ enum_variant = "Qr"
 [blocks.chat-thread]
 status = "implemented"
 category = "advanced"
-purpose = "Chat conversation thread display from source with optional action callback"
+purpose = "Chat conversation thread display from source with optional action callback; 0.17 adds authored message children (side, sender, in-bubble timestamp, read-only reaction pills)"
 attributes = ["source", "on_action", "on_react", "on_doc_open"]
 degradation = "sequential message list"
 enum_variant = "ChatThread"
@@ -908,6 +908,14 @@ purpose = "Simple chat message input with placeholder and action (distinct from 
 attributes = ["placeholder", "action"]
 degradation = "text input description"
 enum_variant = "ChatInputSimple"
+
+[blocks.chip-input]
+status = "implemented"
+category = "advanced"
+purpose = "Recipient chip input (compose To: line): label, removable chips with a close glyph, inline filter input; shape-only in HTML, behavior dispatcher-owned"
+attributes = ["label", "placeholder", "source", "on_change"]
+degradation = "labeled chip list"
+enum_variant = "ChipInput"
 
 [blocks.log-stream]
 status = "implemented"

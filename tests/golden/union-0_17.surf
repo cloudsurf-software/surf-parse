@@ -1,0 +1,30 @@
+# Union — 0.17 Messages mockup-fidelity round
+
+::chip-input[label="To:" placeholder="Type a name…" source=contacts on-change="invoke:messages.compose"]
+- Danny Pappageorge
+- Ashley
+::
+
+::row[icon=knowledge href="/messages/danny" avatar="DP" rtime="1:42 PM" unread-count=3]
+Danny Pappageorge
+Tahoe update finished
+::
+
+::row[icon=knowledge avatar=group rtime="Yesterday"]
+Surf Team
+Donovan: shipped the fix
+::
+
+::row[icon=doc avatar=auto]
+sam rose
+Direct message
+::
+
+::chat-thread[source=chat.thread on-react="mutate:messages.react:emoji"]
+- them[sender="Danny" time="1:42 PM"] Tahoe update finished — should I retry the enrollment now?
+- them[sender="Surfy" reactions="Love:2:mine|Wave"] Enrollment profile is staged.
+- own[time="1:44 PM"] Yes — retry now.
+::
+
+::chat-thread[source=chat.empty]
+::

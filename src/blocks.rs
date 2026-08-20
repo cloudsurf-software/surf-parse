@@ -6,7 +6,8 @@
 use crate::citation::{parse_authors, Reference, RefType};
 use crate::types::{
     AttrValue, Attrs, AuthProvider, BeforeAfterItem, BindingEvent, Block, BookingDay,
-    BookingService, CalloutType, ChartData, ChartSeries, ChartType, Format, StoreItem,
+    BookingService, CalloutType, ChartData, ChartSeries, ChartType, ChatMessage, ChatReaction,
+    Format, StoreItem,
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter,
@@ -136,8 +137,9 @@ pub fn resolve_block(block: Block) -> Block {
         "nav-tree" => parse_nav_tree(attrs, *span),
         "badge" => parse_badge(attrs, *span),
         "suggestion-chips" => parse_suggestion_chips(attrs, *span),
-        "chat-thread" => parse_chat_thread(attrs, *span),
+        "chat-thread" => parse_chat_thread(attrs, content, *span),
         "chat-input-simple" => parse_chat_input_simple(attrs, *span),
+        "chip-input" => parse_chip_input(attrs, content, *span),
         "recipient-picker" => parse_recipient_picker(attrs, *span),
         "qr" => parse_qr(attrs, *span),
         "progress" => parse_progress(attrs, content, *span),
@@ -3840,6 +3842,17 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
     let title = attr_title.unwrap_or_else(|| lines.next().unwrap_or("").trim().to_string());
     let description = attr_description.unwrap_or_else(|| lines.next().unwrap_or("").trim().to_string());
 
+    // Avatar (0.17): initials text or "group"; `avatar=auto` derives
+    // initials from the title at parse (first letters of the first two
+    // words, uppercased) so native clients get concrete initials.
+    let avatar = attr_string(attrs, "avatar").map(|a| {
+        if a == "auto" {
+            derive_initials(&title)
+        } else {
+            a
+        }
+    });
+
     Block::Row {
         icon,
         title,
@@ -3847,6 +3860,9 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         href,
         state,
         unread: attr_bool(attrs, "unread"),
+        avatar,
+        rtime: attr_string(attrs, "rtime"),
+        unread_count: attr_u32(attrs, "unread-count"),
         trailing_label: attr_string(attrs, "trailing-label"),
         trailing_action: attr_string(attrs, "trailing-action"),
         action: attr_string(attrs, "action"),
@@ -3859,6 +3875,17 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
         actions,
         span,
     }
+}
+
+/// First letters of the first two whitespace-separated words, uppercased —
+/// the `avatar=auto` derivation (0.17).
+fn derive_initials(title: &str) -> String {
+    title
+        .split_whitespace()
+        .take(2)
+        .filter_map(|w| w.chars().next())
+        .flat_map(|c| c.to_uppercase())
+        .collect()
 }
 
 // ------------------------------------------------------------------
@@ -4616,16 +4643,110 @@ fn parse_suggestion_chips(attrs: &Attrs, span: Span) -> Block {
     }
 }
 
-fn parse_chat_thread(attrs: &Attrs, span: Span) -> Block {
+fn parse_chat_thread(attrs: &Attrs, content: &str, span: Span) -> Block {
     let source = attr_string(attrs, "source");
     let on_action = attr_string(attrs, "on-action");
     let on_react = attr_string(attrs, "on-react");
     let on_doc_open = attr_string(attrs, "on-doc-open");
+    // 0.17: authored message children — the toolbar dash-item grammar:
+    // `- side[sender="Danny" time="1:42 PM" reactions="Love:2:mine"] Text`
+    // side is `own`/`me` (outgoing) or `them` (incoming); the bracket
+    // group is optional. Lines with an unknown side token are skipped
+    // (same forgiveness as unknown toolbar items). An attrs-only block
+    // (no dash items) keeps `messages` empty — backward-compatible.
+    let mut messages = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("- ") else {
+            continue;
+        };
+        let rest = rest.trim();
+        let side_end = rest
+            .find(|c: char| c == '[' || c.is_whitespace())
+            .unwrap_or(rest.len());
+        let side = match &rest[..side_end] {
+            "own" | "me" => "own",
+            "them" => "them",
+            _ => continue,
+        };
+        let remainder = rest[side_end..].trim_start();
+        let (mattrs, text) = if let Some(after) = remainder.strip_prefix('[') {
+            match after.find(']') {
+                Some(end) => (
+                    crate::attrs::parse_attrs(&format!("[{}]", &after[..end]))
+                        .unwrap_or_default(),
+                    after[end + 1..].trim().to_string(),
+                ),
+                None => (Attrs::default(), remainder.to_string()),
+            }
+        } else {
+            (Attrs::default(), remainder.to_string())
+        };
+        // Reactions (0.17, ruling D-3): pipe-separated entries, each
+        // `label[:count][:mine]` — count is the first numeric part, the
+        // literal `mine` marks the viewer's own reaction.
+        let reactions = attr_string(&mattrs, "reactions")
+            .map(|s| {
+                s.split('|')
+                    .filter_map(|entry| {
+                        let mut parts = entry.trim().split(':');
+                        let label = parts.next().unwrap_or("").trim().to_string();
+                        if label.is_empty() {
+                            return None;
+                        }
+                        let mut count = None;
+                        let mut mine = false;
+                        for p in parts {
+                            let p = p.trim();
+                            if p.eq_ignore_ascii_case("mine") {
+                                mine = true;
+                            } else if let Ok(n) = p.parse::<u32>() {
+                                count = Some(n);
+                            }
+                        }
+                        Some(ChatReaction { label, count, mine })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        messages.push(ChatMessage {
+            side: side.to_string(),
+            sender: attr_string(&mattrs, "sender"),
+            timestamp: attr_string(&mattrs, "time"),
+            text,
+            reactions,
+        });
+    }
     Block::ChatThread {
         source,
         on_action,
         on_react,
         on_doc_open,
+        messages,
+        span,
+    }
+}
+
+fn parse_chip_input(attrs: &Attrs, content: &str, span: Span) -> Block {
+    // 0.17: the compose "To:" line. Chips are `- ` content lines; the
+    // HTML render carries the SHAPE only (the /next dispatcher owns
+    // add/remove behavior through `on-change`).
+    let label = attr_string(attrs, "label");
+    let placeholder = attr_string(attrs, "placeholder");
+    let source = attr_string(attrs, "source");
+    let on_change = attr_string(attrs, "on-change");
+    let chips = content
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("- "))
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+    Block::ChipInput {
+        label,
+        placeholder,
+        source,
+        on_change,
+        chips,
         span,
     }
 }
@@ -8924,6 +9045,143 @@ Note
                 assert_eq!(*on_doc_open, None);
             }
             other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chat_thread_message_children() {
+        // 0.17: dash-item message grammar — side + optional attrs + text.
+        let source = "::chat-thread[source=chat.thread]\n\
+            - them[sender=\"Danny\" time=\"1:42 PM\"] Tahoe update finished\n\
+            - own[time=\"1:44 PM\"] Yes, retry now\n\
+            - me Bare own message\n\
+            - unknown-side skipped line\n\
+            not a dash item\n\
+            ::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::ChatThread { messages, .. } => {
+                assert_eq!(messages.len(), 3);
+                assert_eq!(messages[0].side, "them");
+                assert_eq!(messages[0].sender.as_deref(), Some("Danny"));
+                assert_eq!(messages[0].timestamp.as_deref(), Some("1:42 PM"));
+                assert_eq!(messages[0].text, "Tahoe update finished");
+                assert!(messages[0].reactions.is_empty());
+                assert_eq!(messages[1].side, "own");
+                assert_eq!(messages[1].sender, None);
+                // `me` normalizes to own; attrs group optional.
+                assert_eq!(messages[2].side, "own");
+                assert_eq!(messages[2].text, "Bare own message");
+            }
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chat_thread_reactions() {
+        let source = "::chat-thread\n\
+            - them[sender=\"Ash\" reactions=\"Love:2:mine|Wave|Laugh:3\"] Hi\n\
+            ::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::ChatThread { messages, .. } => {
+                let r = &messages[0].reactions;
+                assert_eq!(r.len(), 3);
+                assert_eq!(r[0].label, "Love");
+                assert_eq!(r[0].count, Some(2));
+                assert!(r[0].mine);
+                assert_eq!(r[1].label, "Wave");
+                assert_eq!(r[1].count, None);
+                assert!(!r[1].mine);
+                assert_eq!(r[2].count, Some(3));
+                assert!(!r[2].mine);
+            }
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chat_thread_attrs_only_keeps_empty_messages() {
+        // Pre-0.17 shape stays backward-compatible: no dash items = empty
+        // messages, renderers keep the sample preview.
+        let source = "::chat-thread[source=chat.thread]\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::ChatThread { messages, .. } => assert!(messages.is_empty()),
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chip_input_block() {
+        let source = "::chip-input[label=\"To:\" placeholder=\"Type a name…\" source=contacts on-change=\"invoke:messages.compose\"]\n\
+            - Danny Pappageorge\n\
+            - Ashley\n\
+            ::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::ChipInput { label, placeholder, source, on_change, chips, .. } => {
+                assert_eq!(label.as_deref(), Some("To:"));
+                assert_eq!(placeholder.as_deref(), Some("Type a name…"));
+                assert_eq!(source.as_deref(), Some("contacts"));
+                assert_eq!(on_change.as_deref(), Some("invoke:messages.compose"));
+                assert_eq!(chips, &["Danny Pappageorge".to_string(), "Ashley".to_string()]);
+            }
+            other => panic!("Expected ChipInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chip_input_defaults_empty() {
+        let source = "::chip-input\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::ChipInput { label, placeholder, source, on_change, chips, .. } => {
+                assert_eq!(*label, None);
+                assert_eq!(*placeholder, None);
+                assert_eq!(*source, None);
+                assert_eq!(*on_change, None);
+                assert!(chips.is_empty());
+            }
+            other => panic!("Expected ChipInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_row_avatar_rtime_unread_count() {
+        let source = "::row[icon=doc avatar=\"DP\" rtime=\"1:42 PM\" unread-count=3]\nDanny Pappageorge\nDirect message\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { avatar, rtime, unread_count, .. } => {
+                assert_eq!(avatar.as_deref(), Some("DP"));
+                assert_eq!(rtime.as_deref(), Some("1:42 PM"));
+                assert_eq!(*unread_count, Some(3));
+            }
+            other => panic!("Expected Row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_row_avatar_auto_derives_initials_from_title() {
+        let source = "::row[icon=doc avatar=auto]\nsam rose\nDM\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { avatar, .. } => assert_eq!(avatar.as_deref(), Some("SR")),
+            other => panic!("Expected Row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_row_without_new_attrs_keeps_none() {
+        let source = "::row[icon=doc]\nTitle\nDesc\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::Row { avatar, rtime, unread_count, .. } => {
+                assert_eq!(*avatar, None);
+                assert_eq!(*rtime, None);
+                assert_eq!(*unread_count, None);
+            }
+            other => panic!("Expected Row, got {other:?}"),
         }
     }
 

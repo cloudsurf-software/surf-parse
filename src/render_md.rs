@@ -1189,7 +1189,31 @@ pub(crate) fn render_block(block: &Block) -> String {
 
         Block::SuggestionChips { .. } => "*Suggestion chips*".to_string(),
 
-        Block::ChatThread { .. } => "*Chat thread*".to_string(),
+        Block::ChatThread { messages, .. } => {
+            if messages.is_empty() {
+                "*Chat thread*".to_string()
+            } else {
+                // Sequential message list (registry degradation string).
+                messages
+                    .iter()
+                    .map(|m| match m.sender.as_deref() {
+                        Some(s) => format!("- **{s}**: {}", m.text),
+                        None => format!("- {}", m.text),
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
+
+        Block::ChipInput { label, chips, .. } => {
+            // Labeled chip list (registry degradation string).
+            let lead = label.as_deref().unwrap_or("Recipients:");
+            if chips.is_empty() {
+                format!("**{lead}**")
+            } else {
+                format!("**{lead}** {}", chips.join(", "))
+            }
+        }
 
         Block::RecipientPicker { source, mode, .. } => {
             let mode_str = if mode == "multi" { "multi-select" } else { "single-select" };

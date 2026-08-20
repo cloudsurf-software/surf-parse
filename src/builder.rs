@@ -2780,11 +2780,16 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Row { icon, title, description, href, state, unread, trailing_label, trailing_action, action, actions, .. } => {
+        Block::Row { icon, title, description, href, state, unread, avatar, rtime, unread_count, trailing_label, trailing_action, action, actions, .. } => {
             let mut attrs_parts = vec![format!("icon={icon}")];
             if let Some(h) = href { attrs_parts.push(format!("href=\"{}\"", escape_attr(h))); }
             match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
             if *unread { attrs_parts.push("unread=true".to_string()); }
+            // 0.17: avatar serializes the resolved value (auto is already
+            // derived to initials at parse, so round-trips are stable).
+            if let Some(a) = avatar { attrs_parts.push(format!("avatar=\"{}\"", escape_attr(a))); }
+            if let Some(t) = rtime { attrs_parts.push(format!("rtime=\"{}\"", escape_attr(t))); }
+            if let Some(c) = unread_count { attrs_parts.push(format!("unread-count={c}")); }
             if let Some(l) = trailing_label { attrs_parts.push(format!("trailing-label=\"{}\"", escape_attr(l))); }
             if let Some(a) = trailing_action { attrs_parts.push(format!("trailing-action={a}")); }
             if let Some(a) = action { attrs_parts.push(format!("action={a}")); }
@@ -3116,7 +3121,7 @@ fn serialize_block(block: &Block) -> String {
             format!("::suggestion-chips{attrs_str}\n::")
         }
 
-        Block::ChatThread { source, on_action, on_react, on_doc_open, .. } => {
+        Block::ChatThread { source, on_action, on_react, on_doc_open, messages, .. } => {
             let mut attrs_parts = Vec::new();
             if let Some(s) = source { attrs_parts.push(format!("source={s}")); }
             if let Some(a) = on_action { attrs_parts.push(format!("on-action={a}")); }
@@ -3127,7 +3132,53 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::chat-thread{attrs_str}\n::")
+            // 0.17: message children round-trip as dash items in the
+            // parse grammar (`- side[attrs] text`).
+            let mut lines = Vec::new();
+            for m in messages {
+                let mut mparts = Vec::new();
+                if let Some(s) = &m.sender { mparts.push(format!("sender=\"{}\"", escape_attr(s))); }
+                if let Some(t) = &m.timestamp { mparts.push(format!("time=\"{}\"", escape_attr(t))); }
+                if !m.reactions.is_empty() {
+                    let entries: Vec<String> = m.reactions.iter().map(|r| {
+                        let mut e = r.label.clone();
+                        if let Some(c) = r.count { e.push_str(&format!(":{c}")); }
+                        if r.mine { e.push_str(":mine"); }
+                        e
+                    }).collect();
+                    mparts.push(format!("reactions=\"{}\"", escape_attr(&entries.join("|"))));
+                }
+                let mattrs = if mparts.is_empty() {
+                    String::new()
+                } else {
+                    format!("[{}]", mparts.join(" "))
+                };
+                lines.push(format!("- {}{mattrs} {}", m.side, m.text));
+            }
+            if lines.is_empty() {
+                format!("::chat-thread{attrs_str}\n::")
+            } else {
+                format!("::chat-thread{attrs_str}\n{}\n::", lines.join("\n"))
+            }
+        }
+
+        Block::ChipInput { label, placeholder, source, on_change, chips, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(l) = label { attrs_parts.push(format!("label=\"{}\"", escape_attr(l))); }
+            if let Some(p) = placeholder { attrs_parts.push(format!("placeholder=\"{}\"", escape_attr(p))); }
+            if let Some(s) = source { attrs_parts.push(format!("source={s}")); }
+            if let Some(a) = on_change { attrs_parts.push(format!("on-change=\"{}\"", escape_attr(a))); }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            let lines: Vec<String> = chips.iter().map(|c| format!("- {c}")).collect();
+            if lines.is_empty() {
+                format!("::chip-input{attrs_str}\n::")
+            } else {
+                format!("::chip-input{attrs_str}\n{}\n::", lines.join("\n"))
+            }
         }
 
         Block::ChatInputSimple { placeholder, action, .. } => {
@@ -4179,7 +4230,7 @@ mod tests {
         // every serialized row silently lost icon/href/action on re-parse
         // (the block fell back to defaults). Also pins the new split-pane
         // pane-children serialization shape end to end.
-        let source = "::split-pane[ratio=\"40:60\" back-label=\"Chats\" back-action=closeConversation]\n:::pane[side=left]\n::::row[icon=knowledge href=\"/messages/sam\" action=openConversation]\nSam Rose\n::::\n:::\n:::pane[side=right]\nThread body\n:::\n::";
+        let source = "::split-pane[ratio=\"40:60\" back-label=\"Chats\" back-action=closeConversation]\n:::pane[side=left]\n::::row[icon=knowledge href=\"/messages/sam\" action=openConversation avatar=\"SR\" rtime=\"1:42 PM\" unread-count=3]\nSam Rose\n::::\n:::\n:::pane[side=right]\nThread body\n:::\n::";
         let parsed = parse::parse(source);
         let out = to_surf_source(&parsed.doc);
         let reparsed = parse::parse(&out);
@@ -4194,15 +4245,70 @@ mod tests {
                 assert_eq!(back_action.as_deref(), Some("closeConversation"));
                 assert_eq!(right.len(), 1);
                 match &left[0] {
-                    Block::Row { icon, href, action, .. } => {
+                    Block::Row { icon, href, action, avatar, rtime, unread_count, .. } => {
                         assert_eq!(icon, "knowledge");
                         assert_eq!(href.as_deref(), Some("/messages/sam"));
                         assert_eq!(action.as_deref(), Some("openConversation"));
+                        // 0.17 roster meta survives the round-trip.
+                        assert_eq!(avatar.as_deref(), Some("SR"));
+                        assert_eq!(rtime.as_deref(), Some("1:42 PM"));
+                        assert_eq!(*unread_count, Some(3));
                     }
                     other => panic!("Expected Row in left pane, got {other:?}"),
                 }
             }
             other => panic!("Expected SplitPane, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_chat_thread_messages() {
+        // 0.17: message children (side/sender/time/text/reactions) must
+        // survive serialize -> reparse, or the builder drops data.
+        let source = "::chat-thread[source=chat.thread on-react=\"mutate:messages.react:emoji\"]\n\
+            - them[sender=\"Danny\" time=\"1:42 PM\" reactions=\"Love:2:mine|Wave\"] Tahoe update finished\n\
+            - own[time=\"1:44 PM\"] Yes, retry now\n\
+            ::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        let reparsed = parse::parse(&out);
+        assert_eq!(
+            parsed.doc.to_html(),
+            reparsed.doc.to_html(),
+            "chat-thread messages must survive a builder round-trip"
+        );
+        match &reparsed.doc.blocks[0] {
+            Block::ChatThread { messages, on_react, .. } => {
+                assert_eq!(on_react.as_deref(), Some("mutate:messages.react:emoji"));
+                assert_eq!(messages.len(), 2);
+                assert_eq!(messages[0].sender.as_deref(), Some("Danny"));
+                assert_eq!(messages[0].reactions.len(), 2);
+                assert_eq!(messages[0].reactions[0].count, Some(2));
+                assert!(messages[0].reactions[0].mine);
+                assert_eq!(messages[1].side, "own");
+            }
+            other => panic!("Expected ChatThread, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_chip_input() {
+        let source = "::chip-input[label=\"To:\" placeholder=\"Type a name…\" source=contacts on-change=\"invoke:messages.compose\"]\n- Danny Pappageorge\n- Ashley\n::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        let reparsed = parse::parse(&out);
+        assert_eq!(
+            parsed.doc.to_html(),
+            reparsed.doc.to_html(),
+            "chip-input must survive a builder round-trip"
+        );
+        match &reparsed.doc.blocks[0] {
+            Block::ChipInput { label, chips, on_change, .. } => {
+                assert_eq!(label.as_deref(), Some("To:"));
+                assert_eq!(on_change.as_deref(), Some("invoke:messages.compose"));
+                assert_eq!(chips.len(), 2);
+            }
+            other => panic!("Expected ChipInput, got {other:?}"),
         }
     }
 

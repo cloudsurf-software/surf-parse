@@ -29,7 +29,7 @@ const ENUM_VARIANTS: &[&str] = &[
     // Compact display
     "Badge", "InfoCard", "Row",
     // App shell / interactive
-    "AppShell", "BlockEditor", "ChatInputSimple", "ChatThread",
+    "AppShell", "BlockEditor", "ChatInputSimple", "ChatThread", "ChipInput",
     "CodeEditor", "CommandPalette", "Drawer", "DropdownSelect", "LogStream", "Modal",
     "NavTree", "Panel", "ProblemList", "Progress", "SegmentedControl", "Sidebar",
     "SuggestionChips", "TabBar", "TabContent", "Terminal", "Toolbar",
