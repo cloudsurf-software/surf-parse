@@ -4245,18 +4245,27 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     for line in content.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("- ") {
-            // Expected format: id "Label" {icon=token}
+            // Expected format: id "Label" {icon=token role=search}
             let mut rest = rest.trim();
             let mut icon = None;
+            let mut role = None;
             if let Some(brace_start) = rest.rfind('{')
                 && let Some(brace) = rest[brace_start + 1..].strip_suffix('}')
             {
+                // 0.12: strip the brace when ANY known token parsed, not only
+                // `icon=` — a role-only brace used to leak into the label.
+                let mut parsed_any = false;
                 for tok in brace.split_whitespace() {
                     if let Some(v) = tok.strip_prefix("icon=") {
                         icon = Some(v.trim_matches('"').to_string());
+                        parsed_any = true;
+                    } else if let Some(v) = tok.strip_prefix("role=") {
+                        // Carried verbatim; unknown values are never diagnosed.
+                        role = Some(v.trim_matches('"').to_string());
+                        parsed_any = true;
                     }
                 }
-                if icon.is_some() {
+                if parsed_any {
                     rest = rest[..brace_start].trim_end();
                 }
             }
@@ -4266,12 +4275,14 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     id: id.to_string(),
                     label,
                     icon,
+                    role,
                 });
             } else {
                 items.push(TabBarItem {
                     id: rest.to_string(),
                     label: rest.to_string(),
                     icon,
+                    role,
                 });
             }
         }
@@ -8184,9 +8195,80 @@ Note
                 assert_eq!(items[0].label, "Docs");
                 assert_eq!(items[1].icon.as_deref(), Some("checklist"));
                 assert_eq!(items[2].icon, None);
+                // 0.11 items author no role.
+                assert!(items.iter().all(|i| i.role.is_none()));
             }
             other => panic!("Expected TabBar, got {other:?}"),
         }
+    }
+
+    /// 0.12: the trailing brace also carries `role=`. `search` is the only
+    /// value the train recognizes; the value is carried verbatim and NEVER
+    /// diagnosed, so a player lacking the concept renders a plain tab.
+    #[test]
+    fn parse_tab_bar_item_role() {
+        let source = "::tab-bar[active=docs]\n- docs \"Docs\" {icon=doc.text}\n- search \"Search\" {icon=magnifyingglass role=search}\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::TabBar { items, .. } => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].role, None);
+                assert_eq!(items[1].id, "search");
+                assert_eq!(items[1].label, "Search");
+                assert_eq!(items[1].icon.as_deref(), Some("magnifyingglass"));
+                assert_eq!(items[1].role.as_deref(), Some("search"));
+            }
+            other => panic!("Expected TabBar, got {other:?}"),
+        }
+        assert!(
+            result.diagnostics.is_empty(),
+            "role= must not diagnose: {:?}",
+            result.diagnostics
+        );
+    }
+
+    /// Regression: a role-ONLY brace (no `icon=`) used to leak into the
+    /// label because the brace was stripped only when an icon parsed.
+    #[test]
+    fn parse_tab_bar_item_role_only_brace_leaves_label_clean() {
+        let source = "::tab-bar[active=docs]\n- search \"Search\" {role=search}\n- quoted \"Quoted\" {role=\"search\"}\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::TabBar { items, .. } => {
+                assert_eq!(items[0].label, "Search");
+                assert_eq!(items[0].role.as_deref(), Some("search"));
+                assert_eq!(items[0].icon, None);
+                // Quotes around the value are stripped, same as `icon=`.
+                assert_eq!(items[1].label, "Quoted");
+                assert_eq!(items[1].role.as_deref(), Some("search"));
+            }
+            other => panic!("Expected TabBar, got {other:?}"),
+        }
+        assert!(result.diagnostics.is_empty());
+    }
+
+    /// An unrecognized role value is carried, not rejected — and a brace
+    /// holding ONLY unknown tokens is left alone rather than half-stripped.
+    #[test]
+    fn parse_tab_bar_item_unknown_role_is_silent() {
+        let source = "::tab-bar\n- a \"A\" {role=compose}\n- b \"B\" {unknown=x}\n::";
+        let result = crate::parse(source);
+        match &result.doc.blocks[0] {
+            Block::TabBar { items, .. } => {
+                assert_eq!(items[0].role.as_deref(), Some("compose"));
+                assert_eq!(items[0].label, "A");
+                // No known token parsed, so the brace stays in the label —
+                // the pre-0.12 behaviour for unrecognized braces, unchanged.
+                assert_eq!(items[1].role, None);
+                assert!(items[1].label.contains("{unknown=x}"));
+            }
+            other => panic!("Expected TabBar, got {other:?}"),
+        }
+        assert!(
+            result.diagnostics.is_empty(),
+            "unknown role must be silent: {:?}",
+            result.diagnostics
+        );
     }
 
     #[test]
@@ -8257,6 +8339,77 @@ Note
                 assert_eq!(*trigger, Some("icon".to_string()));
             }
             other => panic!("Expected Drawer, got {:?}", other),
+        }
+    }
+
+    /// 0.12 contract item (b): the drawer's SHELL shape — the pre-2026-07-31
+    /// grammar — parses clean and nests two levels deep. `::drawer` wraps a
+    /// `::sidebar`, which carries the workspace-switcher `::toolbar` and then
+    /// the `drawerDestinations` nav-tree. No new vocabulary is involved: the
+    /// switcher region is a plain v0.11 toolbar button, and drawer ROWS are
+    /// deliberately NOT authored (a row carries no action, so it could not
+    /// bind a verb).
+    #[test]
+    fn parse_drawer_shell_shape_nests_sidebar_toolbar_nav_tree() {
+        let source = "\
+::drawer[name=main position=left width=320 trigger=\"Menu\"]
+::sidebar[position=left width=320]
+::toolbar
+- button[label=\"Workspace\" icon=person.2 action=switchWorkspace]
+::
+::nav-tree[source=drawerDestinations on-select=switch_root]
+::
+::
+::
+";
+        let result = crate::parse(source);
+        assert!(
+            result.diagnostics.is_empty(),
+            "drawer shell shape must parse clean: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(result.doc.blocks.len(), 1, "blocks: {:?}", result.doc.blocks);
+
+        match &result.doc.blocks[0] {
+            Block::Drawer { name, position, width, trigger, children, .. } => {
+                assert_eq!(name, "main");
+                assert_eq!(position, "left");
+                assert_eq!(*width, Some(320));
+                assert_eq!(trigger.as_deref(), Some("Menu"));
+                assert_eq!(children.len(), 1, "drawer children: {children:?}");
+
+                match &children[0] {
+                    Block::Sidebar { position, width, children, .. } => {
+                        assert_eq!(position, "left");
+                        assert_eq!(*width, Some(320));
+                        // Switcher region FIRST, destinations SECOND.
+                        assert_eq!(children.len(), 2, "sidebar children: {children:?}");
+                        match &children[0] {
+                            Block::Toolbar { items, .. } => {
+                                assert_eq!(items.len(), 1);
+                                match &items[0] {
+                                    ToolbarItem::Button { label, action, icon, .. } => {
+                                        assert_eq!(label.as_deref(), Some("Workspace"));
+                                        assert_eq!(action.as_deref(), Some("switchWorkspace"));
+                                        assert_eq!(icon.as_deref(), Some("person.2"));
+                                    }
+                                    other => panic!("expected Button, got {other:?}"),
+                                }
+                            }
+                            other => panic!("expected Toolbar, got {other:?}"),
+                        }
+                        match &children[1] {
+                            Block::NavTree { source, on_select, .. } => {
+                                assert_eq!(source.as_deref(), Some("drawerDestinations"));
+                                assert_eq!(on_select.as_deref(), Some("switch_root"));
+                            }
+                            other => panic!("expected NavTree, got {other:?}"),
+                        }
+                    }
+                    other => panic!("expected Sidebar, got {other:?}"),
+                }
+            }
+            other => panic!("Expected Drawer, got {other:?}"),
         }
     }
 

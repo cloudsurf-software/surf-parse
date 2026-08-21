@@ -14,11 +14,14 @@ type: app
 - button[label="Run" action=run icon=play style=primary]
 - separator
 - badge[value="Live" color=green]
+- spacer
+- button[label="Ask Surfy" action=askSurfy icon=sparkles]
 ::
 
 ::tab-bar[active=preview]
 - preview "Preview" {icon=eye}
 - edit "Edit" {icon=pencil}
+- search "Search" {icon=magnifyingglass role=search}
 ::
 
 ::tab-content[tab=preview]
@@ -40,6 +43,16 @@ Preview pane content.
 
 ::drawer[name=filters position=right width=320 trigger="Filters"]
 Drawer body content.
+::
+
+::drawer[name=main position=left width=320 trigger="Menu"]
+::sidebar[position=left width=320]
+::toolbar
+- button[label="Workspace" icon=person.2 action=switchWorkspace]
+::
+::nav-tree[source=drawerDestinations on-select=switch_root]
+::
+::
 ::
 
 ::modal[name=confirm title="Confirm shipment"]

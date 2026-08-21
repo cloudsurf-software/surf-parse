@@ -4599,10 +4599,18 @@ pub(crate) fn render_block(block: &Block) -> String {
                     .as_ref()
                     .map(|i| format!(" data-icon=\"{}\"", escape_html(i)))
                     .unwrap_or_default();
+                // 0.12: the semantic role rides as `data-role`; the ARIA
+                // `role="tab"` stays untouched.
+                let role_attr = item
+                    .role
+                    .as_ref()
+                    .map(|r| format!(" data-role=\"{}\"", escape_html(r)))
+                    .unwrap_or_default();
                 html.push_str(&format!(
-                    "<button role=\"tab\" data-tab=\"{}\"{}{} aria-selected=\"{}\">{}</button>",
+                    "<button role=\"tab\" data-tab=\"{}\"{}{}{} aria-selected=\"{}\">{}</button>",
                     escape_html(&item.id),
                     icon_attr,
+                    role_attr,
                     active_cls,
                     is_active,
                     escape_html(&item.label),
@@ -10683,8 +10691,9 @@ About
         let doc = doc_with(vec![Block::TabBar {
             active: Some("preview".into()),
             items: vec![
-                TabBarItem { id: "preview".into(), label: "Preview".into(), icon: None },
-                TabBarItem { id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()) },
+                TabBarItem { id: "preview".into(), label: "Preview".into(), icon: None, role: None },
+                TabBarItem { id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()), role: None },
+                TabBarItem { id: "search".into(), label: "Search".into(), icon: Some("magnifyingglass".into()), role: Some("search".into()) },
             ],
             span: span(),
         }]);
@@ -10693,6 +10702,11 @@ About
         assert!(html.contains("role=\"tablist\""));
         assert!(html.contains("data-tab=\"preview\""));
         assert!(html.contains("class=\"active\""));
+        // 0.12: the semantic role rides as `data-role`, only on the item
+        // that authored one, and never displaces the ARIA `role="tab"`.
+        assert!(html.contains("data-role=\"search\""));
+        assert!(html.contains("data-tab=\"search\" data-icon=\"magnifyingglass\" data-role=\"search\""));
+        assert!(!html.contains("data-tab=\"preview\" data-role"));
         assert!(html.contains("Preview"));
         assert!(html.contains("data-icon=\"pencil\""));
     }

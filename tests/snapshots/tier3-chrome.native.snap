@@ -65,6 +65,33 @@
             "value": "Live",
             "color": "green",
             "options": null
+          },
+          {
+            "kind": "spacer",
+            "label": null,
+            "action": null,
+            "icon": null,
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
+          },
+          {
+            "kind": "button",
+            "label": "Ask Surfy",
+            "action": {
+              "verb": "invoke",
+              "target": "askSurfy",
+              "payload": null,
+              "raw": "askSurfy"
+            },
+            "icon": "sparkles",
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
           }
         ]
       },
@@ -75,12 +102,20 @@
           {
             "id": "preview",
             "label": "Preview",
-            "icon": "eye"
+            "icon": "eye",
+            "role": null
           },
           {
             "id": "edit",
             "label": "Edit",
-            "icon": "pencil"
+            "icon": "pencil",
+            "role": null
+          },
+          {
+            "id": "search",
+            "label": "Search",
+            "icon": "magnifyingglass",
+            "role": "search"
           }
         ]
       },
@@ -132,6 +167,58 @@
       {
         "type": "markdown",
         "content": "Drawer body content."
+      }
+    ]
+  },
+  {
+    "type": "drawer",
+    "name": "main",
+    "position": "left",
+    "width": 320,
+    "trigger": "Menu",
+    "children": [
+      {
+        "type": "sidebar",
+        "position": "left",
+        "collapsible": false,
+        "width": 320,
+        "children": [
+          {
+            "type": "toolbar",
+            "title": null,
+            "title_source": null,
+            "items": [
+              {
+                "kind": "button",
+                "label": "Workspace",
+                "action": {
+                  "verb": "invoke",
+                  "target": "switchWorkspace",
+                  "payload": null,
+                  "raw": "switchWorkspace"
+                },
+                "icon": "person.2",
+                "style": null,
+                "disabled": false,
+                "value": null,
+                "color": null,
+                "options": null
+              }
+            ]
+          },
+          {
+            "type": "nav_tree",
+            "source": "drawerDestinations",
+            "on_select": {
+              "verb": "invoke",
+              "target": "switch_root",
+              "payload": null,
+              "raw": "switch_root"
+            },
+            "on_rename": null,
+            "on_delete": null
+          }
+        ]
       }
     ]
   },

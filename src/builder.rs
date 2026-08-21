@@ -2836,16 +2836,24 @@ fn serialize_block(block: &Block) -> String {
             };
             let mut lines = Vec::new();
             for item in items {
-                match &item.icon {
-                    Some(icon) => lines.push(format!(
-                        "- {} \"{}\" {{icon={}}}",
+                // 0.12: the trailing brace carries `icon=` and/or `role=`;
+                // it is omitted entirely when neither is present.
+                let mut brace_toks = Vec::new();
+                if let Some(icon) = &item.icon {
+                    brace_toks.push(format!("icon={icon}"));
+                }
+                if let Some(role) = &item.role {
+                    brace_toks.push(format!("role={role}"));
+                }
+                if brace_toks.is_empty() {
+                    lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)));
+                } else {
+                    lines.push(format!(
+                        "- {} \"{}\" {{{}}}",
                         item.id,
                         escape_attr(&item.label),
-                        icon
-                    )),
-                    None => {
-                        lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)))
-                    }
+                        brace_toks.join(" ")
+                    ));
                 }
             }
             let content = lines.join("\n");
@@ -3813,6 +3821,36 @@ mod tests {
         assert!(hero[0].primary && hero[0].external);
         assert!(!hero[1].primary && hero[1].external);
         assert!(!hero[2].primary && !hero[2].external);
+    }
+
+    /// 0.12: `role=` survives serialize → reparse, alone and beside `icon=`,
+    /// and a role-less item still emits no brace at all.
+    #[test]
+    fn test_serialize_tab_bar_role_round_trip() {
+        let doc = crate::parse(
+            "::tab-bar[active=docs]\n- docs \"Docs\" {icon=doc.text}\n- search \"Search\" {icon=magnifyingglass role=search}\n- plain \"Plain\"\n- roleonly \"Role Only\" {role=search}\n::",
+        )
+        .doc;
+        let source = to_surf_source(&doc);
+        assert!(source.contains("- search \"Search\" {icon=magnifyingglass role=search}"));
+        assert!(source.contains("- roleonly \"Role Only\" {role=search}"));
+        assert!(source.contains("- plain \"Plain\"\n"));
+
+        let reparsed = crate::parse(&source).doc;
+        let items = reparsed
+            .blocks
+            .iter()
+            .find_map(|b| match b {
+                Block::TabBar { items, .. } => Some(items.clone()),
+                _ => None,
+            })
+            .expect("tab bar present");
+        assert_eq!(items[0].role, None);
+        assert_eq!(items[1].icon.as_deref(), Some("magnifyingglass"));
+        assert_eq!(items[1].role.as_deref(), Some("search"));
+        assert_eq!(items[2].role, None);
+        assert_eq!(items[3].label, "Role Only");
+        assert_eq!(items[3].role.as_deref(), Some("search"));
     }
 
     #[test]

@@ -1170,6 +1170,13 @@ pub struct TabBarItem {
     /// Optional icon token (SF-symbol-ish, e.g. "doc.text"); native clients
     /// map it to an SFSymbol/Material icon, the web emits it as `data-icon`.
     pub icon: Option<String>,
+    /// Optional semantic role for the item (`role=`). (0.12)
+    ///
+    /// Only `search` is recognized this train: it marks the tab that owns the
+    /// search surface so a player can host it in its platform's search slot.
+    /// The value is carried verbatim and never diagnosed — a player that
+    /// lacks the concept renders a plain trailing tab.
+    pub role: Option<String>,
 }
 
 /// An item within a `Toolbar` block.

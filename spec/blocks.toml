@@ -760,7 +760,7 @@ enum_variant = "Panel"
 [blocks.tab-bar]
 status = "implemented"
 category = "advanced"
-purpose = "Tab strip navigation with labeled tab items and active tab control"
+purpose = "Tab strip navigation with labeled tab items and active tab control; each item row takes an optional trailing brace with icon= and role= (0.12: role=search marks the tab owning the search surface, carried verbatim and never diagnosed)"
 attributes = ["active"]
 degradation = "bulleted tab labels"
 enum_variant = "TabBar"
@@ -784,7 +784,7 @@ enum_variant = "Toolbar"
 [blocks.drawer]
 status = "implemented"
 category = "advanced"
-purpose = "Slide-out drawer panel with name, position, width, and optional trigger"
+purpose = "Slide-out drawer panel with name, position, width, and optional trigger; nests child chrome (0.12 shell shape: a sidebar carrying a switcher toolbar then a destinations nav-tree) so it can serve as the root-switching seam"
 attributes = ["name", "position", "width", "trigger"]
 degradation = "sequential child blocks"
 enum_variant = "Drawer"

@@ -716,6 +716,11 @@ pub struct NativeTabBarItem {
     /// Optional icon token (SF-symbol-ish, e.g. "doc.text"); clients map it
     /// to an SFSymbol (iOS/macOS) or Material icon (Android).
     pub icon: Option<String>,
+    /// Optional semantic role (`role=`), carried verbatim. (0.12)
+    ///
+    /// Only `search` is recognized this train — it marks the tab owning the
+    /// search surface. Clients without the concept render a plain tab.
+    pub role: Option<String>,
 }
 
 /// An item within a native `Toolbar`.
@@ -1091,6 +1096,9 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// 7. `Qr` — new platform-conditional kind (show/scan mode, on_resolve).
 /// 8. Bare registry names accepted in `List`/`Search` `source=` (parse-side;
 ///    previously lifted as empty strings).
+/// 9. `TabBarItem.role` — semantic role for a tab item (`role=search` marks
+///    the tab that owns the search surface). Additive and optional, so v3
+///    stands: a client reading the v3 shape simply ignores an absent role.
 pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 3;
 
 /// A parsed document plus its resolved theme — the unit that crosses the
@@ -1814,6 +1822,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                     id: i.id.clone(),
                     label: i.label.clone(),
                     icon: i.icon.clone(),
+                    role: i.role.clone(),
                 })
                 .collect(),
         },
@@ -3761,6 +3770,127 @@ mod tests {
         assert!(matches!(&native[0], NativeBlock::Markdown { .. }));
         assert!(matches!(&native[1], NativeBlock::Callout { .. }));
         assert!(matches!(&native[2], NativeBlock::Nav { .. }));
+    }
+
+    /// 0.12: `TabBarItem.role` crosses to `NativeTabBarItem.role` verbatim
+    /// (v3 addition 9), and the markdown degradation is UNCHANGED — a role
+    /// is chrome intent, never document text.
+    #[test]
+    fn to_native_tab_bar_item_role_crosses() {
+        let doc = crate::parse(
+            "::tab-bar[active=docs]\n- docs \"Docs\" {icon=doc.text}\n- search \"Search\" {icon=magnifyingglass role=search}\n::",
+        )
+        .doc;
+        let native = to_native_blocks(&doc);
+        match &native[0] {
+            NativeBlock::TabBar { active, items } => {
+                assert_eq!(active.as_deref(), Some("docs"));
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].role, None);
+                assert_eq!(items[1].id, "search");
+                assert_eq!(items[1].icon.as_deref(), Some("magnifyingglass"));
+                assert_eq!(items[1].role.as_deref(), Some("search"));
+            }
+            other => panic!("Expected TabBar, got {other:?}"),
+        }
+        // Markdown degradation stays label-only.
+        let md = crate::render_md::to_markdown(&doc);
+        assert!(md.contains("- Search"));
+        assert!(!md.contains("role"));
+        assert!(!md.contains("magnifyingglass"));
+    }
+
+    /// 0.12 contract item (c): `askSurfy` needs NO new parser syntax. A plain
+    /// v0.11 toolbar button with `action=askSurfy` already lifts to a typed
+    /// native action — verb `invoke`, target `askSurfy`, raw preserved. The
+    /// registry name itself belongs to the client lane, not this crate.
+    #[test]
+    fn toolbar_button_ask_surfy_is_expressible_without_new_syntax() {
+        let source = "::toolbar[title=\"Docs\"]\n- spacer\n- button[icon=sparkles action=askSurfy]\n::";
+        let result = crate::parse(source);
+        assert!(
+            result.diagnostics.is_empty(),
+            "askSurfy toolbar button must parse clean: {:?}",
+            result.diagnostics
+        );
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::Toolbar { items, .. } => {
+                let btn = items
+                    .iter()
+                    .find(|i| i.kind == "button")
+                    .expect("button item present");
+                assert_eq!(btn.icon.as_deref(), Some("sparkles"));
+                let action = btn.action.as_ref().expect("action typed");
+                assert_eq!(action.verb, "invoke");
+                assert_eq!(action.target, "askSurfy");
+                assert_eq!(action.payload, None);
+                assert_eq!(action.raw, "askSurfy");
+            }
+            other => panic!("Expected Toolbar, got {other:?}"),
+        }
+    }
+
+    /// 0.12 contract item (b): the restored drawer crosses the FFI with its
+    /// nesting intact — Drawer > Sidebar > (Toolbar, NavTree) — and the
+    /// destinations nav-tree's `switch_root` arrives TYPED (verb `invoke`,
+    /// target `switch_root`, raw preserved). No new native vocabulary: the
+    /// switcher region is an ordinary toolbar button.
+    #[test]
+    fn to_native_drawer_shell_shape_crosses_with_typed_switch_root() {
+        let source = "\
+::drawer[name=main position=left width=320 trigger=\"Menu\"]
+::sidebar[position=left width=320]
+::toolbar
+- button[label=\"Workspace\" icon=person.2 action=switchWorkspace]
+::
+::nav-tree[source=drawerDestinations on-select=switch_root]
+::
+::
+::
+";
+        let result = crate::parse(source);
+        assert!(
+            result.diagnostics.is_empty(),
+            "drawer shell shape must parse clean: {:?}",
+            result.diagnostics
+        );
+        let native = to_native_blocks(&result.doc);
+        match &native[0] {
+            NativeBlock::Drawer { name, position, width, trigger, children } => {
+                assert_eq!(name, "main");
+                assert_eq!(position, "left");
+                assert_eq!(*width, Some(320));
+                assert_eq!(trigger.as_deref(), Some("Menu"));
+                match &children[0] {
+                    NativeBlock::Sidebar { children, .. } => {
+                        assert_eq!(children.len(), 2, "sidebar children: {children:?}");
+                        match &children[0] {
+                            NativeBlock::Toolbar { items, .. } => {
+                                let action =
+                                    items[0].action.as_ref().expect("switcher action typed");
+                                assert_eq!(action.verb, "invoke");
+                                assert_eq!(action.target, "switchWorkspace");
+                            }
+                            other => panic!("expected Toolbar, got {other:?}"),
+                        }
+                        match &children[1] {
+                            NativeBlock::NavTree { source, on_select, .. } => {
+                                assert_eq!(source.as_deref(), Some("drawerDestinations"));
+                                let sel = on_select.as_ref().expect("on_select typed");
+                                assert_eq!(sel.verb, "invoke");
+                                assert_eq!(sel.target, "switch_root");
+                                assert_eq!(sel.payload, None);
+                                assert_eq!(sel.raw, "switch_root");
+                            }
+                            other => panic!("expected NavTree, got {other:?}"),
+                        }
+                    }
+                    other => panic!("expected Sidebar, got {other:?}"),
+                }
+            }
+            other => panic!("expected Drawer, got {other:?}"),
+        }
     }
 
     #[test]
