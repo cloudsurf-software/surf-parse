@@ -855,7 +855,8 @@ fn render_block(block: &Block, out: &mut String) {
         }
 
         Block::Features { cards, cols, .. } => {
-            let ncols = cols.unwrap_or(3);
+            // Print is a fixed-width medium: always the DESKTOP class.
+            let ncols = cols.map(|c| c.desktop).unwrap_or(3);
             let cols_str = (0..ncols).map(|_| "1fr").collect::<Vec<_>>().join(", ");
             out.push_str(&format!(
                 "#grid(\n  columns: ({}),\n  gutter: 1.5em,\n",
@@ -984,7 +985,8 @@ fn render_block(block: &Block, out: &mut String) {
         }
 
         Block::Gallery { items, columns, .. } => {
-            let ncols = columns.unwrap_or(3);
+            // Print is a fixed-width medium: always the DESKTOP class.
+            let ncols = columns.map(|c| c.desktop).unwrap_or(3);
             let cols_str = (0..ncols).map(|_| "1fr").collect::<Vec<_>>().join(", ");
             out.push_str(&format!(
                 "#grid(\n  columns: ({}),\n  gutter: 1em,\n",

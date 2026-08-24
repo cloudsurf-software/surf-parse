@@ -12,7 +12,7 @@ const ENUM_VARIANTS: &[&str] = &[
     // Web / landing page
     "BeforeAfter", "Comparison", "Cta", "Embed", "Faq", "Features",
     "Footer", "Form", "Gallery", "Gate", "Hero", "HeroImage", "Logo",
-    "Nav", "Pipeline", "PostGrid", "PricingTable", "ProductCard", "Site", "Page",
+    "Nav", "Pipeline", "PostGrid", "PricingTable", "ProductCard", "ProductGrid", "Site", "Page",
     "Stats", "Steps", "Style", "Testimonial", "Toc",
     // App description (data-bound UI)
     "Action", "Board", "ChatInput", "Dashboard", "Feed", "FilterBar",

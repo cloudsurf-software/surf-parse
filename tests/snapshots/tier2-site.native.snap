@@ -31,7 +31,8 @@
       },
       {
         "type": "features",
-        "cards": []
+        "cards": [],
+        "cols": null
       },
       {
         "type": "stats",

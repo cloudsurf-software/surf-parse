@@ -1,0 +1,14 @@
+---
+title: "Deprecated desktop-only Alias"
+type: doc
+status: active
+created: "2026-08-24"
+---
+
+::summary
+The pre-0.18 spelling of classes=desktop still parses and still lints.
+::
+
+::panel[position=bottom desktop-only=true]
+Body.
+::

@@ -58,6 +58,7 @@
   {
     "type": "product_grid",
     "tiles": true,
+    "cols": null,
     "groups": [
       {
         "label": "Platforms",

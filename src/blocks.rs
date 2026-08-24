@@ -11,8 +11,9 @@ use crate::types::{
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter,
-    ModelField, ModelFieldType, NavGroup, NavItem, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
-    RowAction, RowState, SchemaField, SegmentItem,
+    AdaptiveLayout, AdaptiveMode, AppShellLayout,
+    ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
+    RowAction, RowState, SchemaField, SegmentItem, SizeClass, PAGE_LAYOUTS,
     SlideLayout, SmokeCheck, SocialLink, SortSpec, Span, StatItem, StepItem,
     StyleProperty, TabBarItem, TabPanel, TaskItem, ToolbarItem, Trend, VolumeEntry,
 };
@@ -63,7 +64,7 @@ pub fn resolve_block(block: Block) -> Block {
         "product-grid" => parse_product_grid(attrs, content, *span),
         "post-grid" => parse_post_grid(attrs, content, *span),
         "gate" => parse_gate(attrs, content, *span),
-        "gallery" => parse_gallery(content, *span),
+        "gallery" => parse_gallery(attrs, content, *span),
         "footer" => parse_footer(attrs, content, *span),
         "details" => parse_details(attrs, content, *span),
         "divider" => parse_divider(attrs, *span),
@@ -942,7 +943,16 @@ fn parse_site(attrs: &Attrs, content: &str, span: Span) -> Block {
 
 fn parse_page(attrs: &Attrs, content: &str, span: Span) -> Block {
     let route = attr_string(attrs, "route").unwrap_or_default();
-    let layout = attr_string(attrs, "layout");
+    // 0.18: recognized set {default, hero, cards, split}; anything else
+    // degrades to `default` and raises lint L041.
+    let layout = attr_string(attrs, "layout").map(|l| {
+        let lower = l.trim().to_ascii_lowercase();
+        if PAGE_LAYOUTS.contains(&lower.as_str()) {
+            lower
+        } else {
+            "default".to_string()
+        }
+    });
     let title = attr_string(attrs, "title");
     let sidebar = attr_bool(attrs, "sidebar");
 
@@ -1384,7 +1394,7 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
     }
 }
 
-fn parse_gallery(content: &str, span: Span) -> Block {
+fn parse_gallery(attrs: &Attrs, content: &str, span: Span) -> Block {
     let mut items = Vec::new();
 
     for line in content.lines() {
@@ -1442,6 +1452,14 @@ fn parse_gallery(content: &str, span: Span) -> Block {
         Some(3)
     } else {
         Some(4)
+    };
+
+    // 0.18: an authored `columns=` (scalar or per-class triple) wins over
+    // the item-count heuristic; the registry has listed the attribute since
+    // 0.1 but nothing read it.
+    let columns = match attr_per_class_u32(attrs, "columns") {
+        Some(p) => Some(p),
+        None => columns.map(PerClass::uniform),
     };
 
     Block::Gallery {
@@ -1902,6 +1920,9 @@ fn parse_banner(attrs: &Attrs, content: &str, span: Span) -> Block {
 /// with a trailing ` dark` token for light-on-dark text.
 fn parse_product_grid(attrs: &Attrs, content: &str, span: Span) -> Block {
     let tiles = attr_bool(attrs, "tiles");
+    // 0.18: block-level per-size-class column count. Per-GROUP `{cols=N}`
+    // braces on a heading line stay exactly as they were and win locally.
+    let cols = attr_per_class_u32(attrs, "cols");
     let mut groups: Vec<ProductGroup> = Vec::new();
     let mut current = ProductGroup {
         label: None,
@@ -1997,7 +2018,12 @@ fn parse_product_grid(attrs: &Attrs, content: &str, span: Span) -> Block {
         groups.push(current);
     }
 
-    Block::ProductGrid { groups, tiles, span }
+    Block::ProductGrid {
+        groups,
+        cols,
+        tiles,
+        span,
+    }
 }
 
 /// Parse a `::post-grid` block: a card grid for a blog/news/events index.
@@ -2114,7 +2140,7 @@ fn parse_gate(attrs: &Attrs, content: &str, span: Span) -> Block {
 }
 
 fn parse_features(attrs: &Attrs, content: &str, span: Span) -> Block {
-    let cols = attr_string(attrs, "cols").and_then(|s| s.parse::<u32>().ok());
+    let cols = attr_per_class_u32(attrs, "cols");
     let mut cards: Vec<FeatureCard> = Vec::new();
     let mut current_title: Option<String> = None;
     let mut current_icon: Option<String> = None;
@@ -2713,6 +2739,70 @@ fn attr_u32(attrs: &Attrs, key: &str) -> Option<u32> {
         AttrValue::String(s) => s.parse().ok(),
         _ => None,
     })
+}
+
+/// Parse a per-size-class numeric attribute (0.18).
+///
+/// The authored form is a whitespace-separated list in mobile/tablet/desktop
+/// order (`cols="1 2 3"`). Degradation ladder — this never fails a render:
+///
+/// * one token  → broadcast to all three classes (byte-identical to the
+///   pre-0.18 scalar attribute)
+/// * two tokens → mobile, tablet; desktop inherits tablet
+/// * three+     → mobile, tablet, desktop (extra tokens ignored)
+/// * empty, or ANY non-numeric token → `None`, i.e. the block's default
+pub(crate) fn parse_per_class_u32(raw: &str) -> Option<PerClass<u32>> {
+    let mut vals: Vec<u32> = Vec::new();
+    for tok in raw.split_whitespace().take(3) {
+        match tok.parse::<u32>() {
+            Ok(n) => vals.push(n),
+            Err(_) => return None,
+        }
+    }
+    match vals.len() {
+        1 => Some(PerClass::uniform(vals[0])),
+        2 => Some(PerClass {
+            mobile: vals[0],
+            tablet: vals[1],
+            desktop: vals[1],
+        }),
+        3 => Some(PerClass {
+            mobile: vals[0],
+            tablet: vals[1],
+            desktop: vals[2],
+        }),
+        _ => None,
+    }
+}
+
+/// `attr_u32`'s per-class sibling. A bare `Number` attribute broadcasts, so
+/// `cols=3` and `cols="3 3 3"` are the same value.
+fn attr_per_class_u32(attrs: &Attrs, key: &str) -> Option<PerClass<u32>> {
+    attrs.get(key).and_then(|v| match v {
+        AttrValue::Number(n) => Some(PerClass::uniform(*n as u32)),
+        AttrValue::String(s) => parse_per_class_u32(s),
+        _ => None,
+    })
+}
+
+/// Parse a `classes=` comma list into the set of size classes a block is
+/// visible in. Unknown tokens are dropped; an all-unknown or empty list
+/// yields `None` (block shows in every class).
+pub(crate) fn parse_size_class_list(raw: &str) -> Option<Vec<SizeClass>> {
+    let mut out: Vec<SizeClass> = Vec::new();
+    for tok in raw.split(',') {
+        if let Some(c) = SizeClass::parse(tok)
+            && !out.contains(&c)
+        {
+            out.push(c);
+        }
+    }
+    if out.is_empty() {
+        None
+    } else {
+        out.sort();
+        Some(out)
+    }
 }
 
 /// Validate a URL-like source/action path.
@@ -4319,26 +4409,72 @@ fn parse_app_deploy(attrs: &Attrs, content: &str, span: Span) -> Block {
 // ------------------------------------------------------------------
 
 fn parse_app_shell(attrs: &Attrs, content: &str, span: Span) -> Block {
-    let layout = attr_string(attrs, "layout").unwrap_or_else(|| "sidebar-main-panel".to_string());
+    // 0.18: typed vocabulary. An unknown value degrades to the default
+    // shell and raises lint L041 — never a failed render.
+    let layout = attr_string(attrs, "layout")
+        .as_deref()
+        .and_then(AppShellLayout::parse)
+        .unwrap_or(AppShellLayout::DEFAULT);
+    let adaptive = if layout == AppShellLayout::Adaptive {
+        let d = AdaptiveLayout::default();
+        Some(AdaptiveLayout {
+            mobile: adaptive_mode(attrs, "mobile", d.mobile),
+            tablet: adaptive_mode(attrs, "tablet", d.tablet),
+            desktop: adaptive_mode(attrs, "desktop", d.desktop),
+        })
+    } else {
+        None
+    };
     let height = attr_u32(attrs, "height");
     let children = parse_page_children(content);
     Block::AppShell {
         layout,
+        adaptive,
         height,
         children,
         span,
     }
 }
 
+/// One `mobile=`/`tablet=`/`desktop=` sub-attr of `layout=adaptive`.
+/// Absent or unknown falls back to the platform default for that class.
+fn adaptive_mode(attrs: &Attrs, key: &str, fallback: AdaptiveMode) -> AdaptiveMode {
+    attr_string(attrs, key)
+        .as_deref()
+        .and_then(AdaptiveMode::parse)
+        .unwrap_or(fallback)
+}
+
+/// Shared `classes=` / `min-class=` parsing for the chrome blocks (0.18).
+///
+/// `extra` seeds the class set from a deprecated alias (`desktop-only=true`);
+/// an explicit `classes=` always wins over it.
+fn parse_class_conditional(
+    attrs: &Attrs,
+    extra: Option<Vec<SizeClass>>,
+) -> (Option<Vec<SizeClass>>, Option<SizeClass>) {
+    let classes = attr_string(attrs, "classes")
+        .as_deref()
+        .and_then(parse_size_class_list)
+        .or(extra);
+    let min_class = attr_string(attrs, "min-class")
+        .as_deref()
+        .and_then(SizeClass::parse);
+    (classes, min_class)
+}
+
 fn parse_sidebar(attrs: &Attrs, content: &str, span: Span) -> Block {
     let position = attr_string(attrs, "position").unwrap_or_else(|| "left".to_string());
     let collapsible = attr_bool(attrs, "collapsible");
-    let width = attr_u32(attrs, "width");
+    let width = attr_per_class_u32(attrs, "width");
+    let (classes, min_class) = parse_class_conditional(attrs, None);
     let children = parse_page_children(content);
     Block::Sidebar {
         position,
         collapsible,
         width,
+        classes,
+        min_class,
         children,
         span,
     }
@@ -4348,13 +4484,24 @@ fn parse_panel(attrs: &Attrs, content: &str, span: Span) -> Block {
     let position = attr_string(attrs, "position").unwrap_or_else(|| "bottom".to_string());
     let resizable = attr_bool(attrs, "resizable");
     let height = attr_u32(attrs, "height");
+    // 0.18: `desktop-only=true` is a DEPRECATED alias for `classes=desktop`.
+    // The raw flag is preserved so the builder re-emits the source form it
+    // read; the resolved answer lives in `classes`.
     let desktop_only = attr_bool(attrs, "desktop-only");
+    let alias = if desktop_only {
+        Some(vec![SizeClass::Desktop])
+    } else {
+        None
+    };
+    let (classes, min_class) = parse_class_conditional(attrs, alias);
     let children = parse_page_children(content);
     Block::Panel {
         position,
         resizable,
         height,
         desktop_only,
+        classes,
+        min_class,
         children,
         span,
     }
@@ -4370,17 +4517,24 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
             let mut rest = rest.trim();
             let mut icon = None;
             let mut unread = false;
+            let mut role: Option<String> = None;
             if let Some(brace_start) = rest.rfind('{')
                 && let Some(brace) = rest[brace_start + 1..].strip_suffix('}')
             {
                 for tok in brace.split_whitespace() {
                     if let Some(v) = tok.strip_prefix("icon=") {
                         icon = Some(v.trim_matches('"').to_string());
+                    } else if let Some(v) = tok.strip_prefix("role=") {
+                        // 0.18: semantic role, carried verbatim to native.
+                        let v = v.trim_matches('"').trim();
+                        if !v.is_empty() {
+                            role = Some(v.to_string());
+                        }
                     } else if tok == "unread" || tok == "unread=true" {
                         unread = true;
                     }
                 }
-                if icon.is_some() || unread {
+                if icon.is_some() || unread || role.is_some() {
                     rest = rest[..brace_start].trim_end();
                 }
             }
@@ -4391,6 +4545,7 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     label,
                     icon,
                     unread,
+                    role,
                 });
             } else {
                 items.push(TabBarItem {
@@ -4398,6 +4553,7 @@ fn parse_tab_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     label: rest.to_string(),
                     icon,
                     unread,
+                    role,
                 });
             }
         }
@@ -4445,13 +4601,16 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
 fn parse_tab_content(attrs: &Attrs, content: &str, span: Span) -> Block {
     let tab = attr_string(attrs, "tab").unwrap_or_default();
     // 0.13: ruled centered-column idiom (`width=880 align=center`).
-    let width = attr_u32(attrs, "width");
+    let width = attr_per_class_u32(attrs, "width");
     let align = attr_string(attrs, "align");
+    let (classes, min_class) = parse_class_conditional(attrs, None);
     let children = parse_page_children(content);
     Block::TabContent {
         tab,
         width,
         align,
+        classes,
+        min_class,
         children,
         span,
     }
@@ -4536,14 +4695,17 @@ fn parse_toolbar(attrs: &Attrs, content: &str, span: Span) -> Block {
 fn parse_drawer(attrs: &Attrs, content: &str, span: Span) -> Block {
     let name = attr_string(attrs, "name").unwrap_or_default();
     let position = attr_string(attrs, "position").unwrap_or_else(|| "right".to_string());
-    let width = attr_u32(attrs, "width");
+    let width = attr_per_class_u32(attrs, "width");
     let trigger = attr_string(attrs, "trigger");
+    let (classes, min_class) = parse_class_conditional(attrs, None);
     let children = parse_page_children(content);
     Block::Drawer {
         name,
         position,
         width,
         trigger,
+        classes,
+        min_class,
         children,
         span,
     }
@@ -6594,7 +6756,7 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(items[0].caption, Some("Classic black tuxedo".to_string()));
                 assert_eq!(items[1].src, "vest.jpg");
                 assert_eq!(items[1].category, Some("Accessories".to_string()));
-                assert_eq!(columns, Some(2));
+                assert_eq!(columns, Some(PerClass::uniform(2)));
             }
             other => panic!("Expected Gallery, got {other:?}"),
         }
@@ -6609,7 +6771,7 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(items.len(), 3);
                 assert!(items[0].category.is_none());
                 assert_eq!(items[0].caption, Some("Photo one".to_string()));
-                assert_eq!(columns, Some(3));
+                assert_eq!(columns, Some(PerClass::uniform(3)));
             }
             other => panic!("Expected Gallery, got {other:?}"),
         }
@@ -6633,7 +6795,7 @@ Saturday 7am-4pm, Sunday 8am-2pm.
         match resolve_block(block) {
             Block::Gallery { items, columns, .. } => {
                 assert_eq!(items.len(), 7);
-                assert_eq!(columns, Some(4));
+                assert_eq!(columns, Some(PerClass::uniform(4)));
             }
             other => panic!("Expected Gallery, got {other:?}"),
         }
@@ -7020,7 +7182,7 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(cards[0].link_label, Some("Read Docs".to_string()));
                 assert_eq!(cards[0].link_href, Some("/docs".to_string()));
                 assert!(!cards[0].body.contains("[Read Docs]"));
-                assert_eq!(cols, Some(2));
+                assert_eq!(cols, Some(PerClass::uniform(2)));
             }
             other => panic!("Expected Features, got {other:?}"),
         }
@@ -8535,7 +8697,7 @@ Saturday 7am-4pm, Sunday 8am-2pm.
         let result = crate::parse(source);
         let block = &result.doc.blocks[0];
         match block {
-            Block::AppShell { layout, .. } => assert_eq!(layout, "sidebar-main-panel"),
+            Block::AppShell { layout, .. } => assert_eq!(*layout, AppShellLayout::SidebarMainPanel),
             other => panic!("Expected AppShell, got {:?}", other),
         }
     }
@@ -8582,7 +8744,7 @@ Saturday 7am-4pm, Sunday 8am-2pm.
 
         match &result.doc.blocks[0] {
             Block::AppShell { layout, children, .. } => {
-                assert_eq!(layout, "tabs");
+                assert_eq!(*layout, AppShellLayout::Tabs);
                 let kinds: Vec<&'static str> = children
                     .iter()
                     .map(|b| match b {
@@ -8666,7 +8828,7 @@ Note
             Block::Sidebar { position, collapsible, width, .. } => {
                 assert_eq!(position, "left");
                 assert!(*collapsible);
-                assert_eq!(*width, Some(250));
+                assert_eq!(*width, Some(PerClass::uniform(250)));
             }
             other => panic!("Expected Sidebar, got {:?}", other),
         }
@@ -8748,7 +8910,7 @@ Note
         match block {
             Block::TabContent { tab, width, align, .. } => {
                 assert_eq!(tab, "main");
-                assert_eq!(*width, Some(880));
+                assert_eq!(*width, Some(PerClass::uniform(880)));
                 assert_eq!(align.as_deref(), Some("center"));
             }
             other => panic!("Expected TabContent, got {:?}", other),
@@ -8774,11 +8936,13 @@ Note
 
     #[test]
     fn parse_app_shell_height() {
+        // 0.18: `sidebar-main` is OUTSIDE the ratified vocabulary and
+        // degrades to the default shell (lint L041 reports it).
         let source = "::app-shell[layout=sidebar-main height=720]\nInner\n::";
         let result = crate::parse(source);
         match &result.doc.blocks[0] {
             Block::AppShell { layout, height, .. } => {
-                assert_eq!(layout, "sidebar-main");
+                assert_eq!(*layout, AppShellLayout::DEFAULT);
                 assert_eq!(*height, Some(720));
             }
             other => panic!("Expected AppShell, got {:?}", other),
@@ -8881,7 +9045,7 @@ Note
             Block::Drawer { name, position, width, trigger, .. } => {
                 assert_eq!(name, "mako");
                 assert_eq!(position, "right");
-                assert_eq!(*width, Some(320));
+                assert_eq!(*width, Some(PerClass::uniform(320)));
                 assert_eq!(*trigger, Some("icon".to_string()));
             }
             other => panic!("Expected Drawer, got {:?}", other),
@@ -9659,7 +9823,7 @@ Note
         );
         match resolve_block(block) {
             Block::Features { cards, cols, .. } => {
-                assert_eq!(cols, Some(3), "cols=3 honored");
+                assert_eq!(cols, Some(PerClass::uniform(3)), "cols=3 honored");
                 assert_eq!(cards.len(), 2);
                 for card in &cards {
                     assert!(
@@ -9694,5 +9858,191 @@ Note
             }
             other => panic!("Expected Callout, got {other:?}"),
         }
+    }
+
+    // ── Per-size-class attribute parsing (0.18) ──────────────────────
+
+    /// A single value must behave exactly like the pre-0.18 scalar, or every
+    /// existing snapshot moves.
+    #[test]
+    fn per_class_single_value_broadcasts_like_the_old_scalar() {
+        let p = parse_per_class_u32("3").expect("single value parses");
+        assert_eq!(p, PerClass::uniform(3));
+        assert_eq!(p.as_uniform(), Some(3));
+        // A bare Number attribute takes the same path.
+        let a = attrs(&[("cols", AttrValue::Number(3.0))]);
+        assert_eq!(attr_per_class_u32(&a, "cols"), Some(PerClass::uniform(3)));
+    }
+
+    #[test]
+    fn per_class_two_tokens_let_desktop_inherit_tablet() {
+        assert_eq!(
+            parse_per_class_u32("1 2"),
+            Some(PerClass {
+                mobile: 1,
+                tablet: 2,
+                desktop: 2
+            })
+        );
+    }
+
+    #[test]
+    fn per_class_three_tokens_map_in_mobile_tablet_desktop_order() {
+        assert_eq!(
+            parse_per_class_u32("1 2 3"),
+            Some(PerClass {
+                mobile: 1,
+                tablet: 2,
+                desktop: 3
+            })
+        );
+        // Extra tokens are ignored, never an error.
+        assert_eq!(
+            parse_per_class_u32("1 2 3 4"),
+            Some(PerClass {
+                mobile: 1,
+                tablet: 2,
+                desktop: 3
+            })
+        );
+    }
+
+    #[test]
+    fn per_class_non_numeric_and_empty_degrade_to_none() {
+        assert_eq!(parse_per_class_u32(""), None);
+        assert_eq!(parse_per_class_u32("   "), None);
+        assert_eq!(parse_per_class_u32("auto"), None);
+        assert_eq!(parse_per_class_u32("1 wide 3"), None);
+        assert_eq!(parse_per_class_u32("-1"), None);
+    }
+
+    /// C4: the deprecated alias and the ratified spelling must BOTH be
+    /// fixed points of parse -> serialize -> parse, and the builder must
+    /// re-emit the source form it read (never both spellings at once).
+    #[test]
+    fn class_conditional_forms_are_builder_fixed_points() {
+        for source in [
+            "::panel[position=bottom desktop-only=true]\nBody\n::",
+            "::panel[position=bottom classes=desktop]\nBody\n::",
+            "::panel[position=bottom classes=tablet,desktop min-class=tablet]\nBody\n::",
+            "::sidebar[position=left width=\"0 72 260\" min-class=tablet]\nBody\n::",
+            "::tab-content[tab=\"main\" width=880 align=center classes=desktop]\nBody\n::",
+            "::drawer[name=\"f\" position=right width=\"320 380 420\"]\nBody\n::",
+        ] {
+            let first = crate::builder::to_surf_source(&crate::parse(source).doc);
+            let second = crate::builder::to_surf_source(&crate::parse(&first).doc);
+            assert_eq!(first, second, "not a fixed point for {source:?}");
+        }
+
+        // The alias resolves into the class set but is re-emitted as the
+        // alias — emitting both spellings would break the fixed point.
+        let out = crate::builder::to_surf_source(
+            &crate::parse("::panel[position=bottom desktop-only=true]\nBody\n::").doc,
+        );
+        assert!(out.contains("desktop-only=true"), "{out}");
+        assert!(!out.contains("classes=desktop"), "{out}");
+
+        // And the alias really does populate the resolved class set.
+        match &crate::parse("::panel[position=bottom desktop-only=true]\nBody\n::").doc.blocks[0] {
+            Block::Panel { classes, desktop_only, .. } => {
+                assert!(*desktop_only);
+                assert_eq!(classes.as_deref(), Some(&[SizeClass::Desktop][..]));
+            }
+            other => panic!("Expected Panel, got {other:?}"),
+        }
+    }
+
+    /// A per-class triple survives the round trip QUOTED; a single value
+    /// survives bare, exactly as pre-0.18 sources spell it.
+    #[test]
+    fn per_class_width_round_trips_in_its_authored_shape() {
+        let out = crate::builder::to_surf_source(
+            &crate::parse("::sidebar[position=left width=\"0 72 260\"]\nB\n::").doc,
+        );
+        assert!(out.contains("width=\"0 72 260\""), "{out}");
+        let out = crate::builder::to_surf_source(
+            &crate::parse("::sidebar[position=left width=240]\nB\n::").doc,
+        );
+        assert!(out.contains("width=240"), "{out}");
+    }
+
+    /// C3: adaptive sub-attrs parse, and unknown values fall back per class.
+    #[test]
+    fn adaptive_shell_sub_attrs_parse_and_degrade() {
+        let doc = crate::parse(
+            "::app-shell[layout=adaptive mobile=rail tablet=nonsense]\nB\n::",
+        )
+        .doc;
+        match &doc.blocks[0] {
+            Block::AppShell { layout, adaptive, .. } => {
+                assert_eq!(*layout, AppShellLayout::Adaptive);
+                let a = adaptive.expect("adaptive triple present");
+                assert_eq!(a.mobile, AdaptiveMode::Rail);
+                // Unknown -> the platform default for that class.
+                assert_eq!(a.tablet, AdaptiveMode::Rail);
+                assert_eq!(a.desktop, AdaptiveMode::Sidebar);
+            }
+            other => panic!("Expected AppShell, got {other:?}"),
+        }
+        // A non-adaptive shell carries no triple.
+        match &crate::parse("::app-shell[layout=tabs]\nB\n::").doc.blocks[0] {
+            Block::AppShell { adaptive, .. } => assert!(adaptive.is_none()),
+            other => panic!("Expected AppShell, got {other:?}"),
+        }
+    }
+
+    /// C3: the page layout recognized set, and its degradation.
+    #[test]
+    fn page_layout_degrades_to_default_outside_the_recognized_set() {
+        for (authored, expected) in [
+            ("hero", "hero"),
+            ("cards", "cards"),
+            ("split", "split"),
+            ("default", "default"),
+            ("collage", "default"),
+            ("HERO", "hero"),
+        ] {
+            let src = format!("::page[route=/ layout={authored}]\nB\n::");
+            match &crate::parse(&src).doc.blocks[0] {
+                Block::Page { layout, .. } => {
+                    assert_eq!(layout.as_deref(), Some(expected), "for {authored}");
+                }
+                other => panic!("Expected Page, got {other:?}"),
+            }
+        }
+    }
+
+    /// C6: `role=` in the tab-bar brace grammar, alongside icon and unread.
+    #[test]
+    fn tab_bar_item_role_parses_and_round_trips() {
+        let source = "::tab-bar[active=\"a\"]\n- a \"Alpha\" {icon=book role=primary}\n- b \"Beta\" {role=more unread}\n::";
+        match &crate::parse(source).doc.blocks[0] {
+            Block::TabBar { items, .. } => {
+                assert_eq!(items[0].role.as_deref(), Some("primary"));
+                assert_eq!(items[0].icon.as_deref(), Some("book"));
+                assert!(!items[0].unread);
+                assert_eq!(items[1].role.as_deref(), Some("more"));
+                assert!(items[1].unread);
+            }
+            other => panic!("Expected TabBar, got {other:?}"),
+        }
+        let first = crate::builder::to_surf_source(&crate::parse(source).doc);
+        let second = crate::builder::to_surf_source(&crate::parse(&first).doc);
+        assert_eq!(first, second, "tab-bar role must be a builder fixed point");
+        assert!(first.contains("role=primary"), "{first}");
+    }
+
+    #[test]
+    fn size_class_list_parses_and_drops_unknown_tokens() {
+        assert_eq!(
+            parse_size_class_list("tablet,mobile"),
+            Some(vec![SizeClass::Mobile, SizeClass::Tablet])
+        );
+        assert_eq!(
+            parse_size_class_list(" desktop , desktop "),
+            Some(vec![SizeClass::Desktop])
+        );
+        assert_eq!(parse_size_class_list("watch,tv"), None);
+        assert_eq!(parse_size_class_list(""), None);
     }
 }

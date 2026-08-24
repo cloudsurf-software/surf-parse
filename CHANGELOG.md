@@ -3,6 +3,76 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.18.0 — 2026-08-24 (size-class axis: typed layouts, per-class values, schema v5)
+
+### Added
+
+- **Size-class axis.** `SizeClass {Mobile, Tablet, Desktop}` with the two
+  breakpoint constants `SIZE_CLASS_TABLET_MIN = 768` and
+  `SIZE_CLASS_DESKTOP_MIN = 1024` (logical pt / dp / css-px at 1x) and the
+  total resolver `resolve_size_class(width)`. Resolution happens ONCE, in
+  Rust, beside style-pack resolution — no client carries its own breakpoint
+  table. Spec: `spec/size-class-axis.surf`.
+- **Typed `layout=`.** `::app-shell[layout=]` is the closed set
+  `{sidebar-main-panel, tabs, adaptive}`; `layout=adaptive` takes
+  `mobile=`/`tablet=`/`desktop=` sub-attrs from `{tabs, rail, sidebar}`.
+  `::page[layout=]` is the recognized set `{default, hero, cards, split}`.
+  Unknown values degrade to the default and raise new lint **L041** — an
+  out-of-vocabulary layout is never a failed render.
+- **Per-size-class attribute values.** `cols="1 2 3"` (mobile/tablet/desktop
+  order) on `::features` and `::product-grid`, `columns=` on `::gallery`,
+  and `width=` on `::sidebar`, `::drawer` and `::tab-content`. A single
+  value broadcasts to all three classes and round-trips byte-identically;
+  two values let desktop inherit tablet; a non-numeric token degrades the
+  attribute to absent.
+- **Class conditionals.** `classes=` (comma list) and `min-class=` on
+  `::sidebar`, `::panel`, `::tab-content` and `::drawer`.
+- `SurfDoc::for_width(width)` / `for_size_class(class)` — the width seam.
+  The render paths still take no width; the projection collapses per-class
+  values and drops gated chrome, then the ordinary renderers run. Documents
+  that use none of the 0.18 attributes project to themselves.
+- `role=` in the `::tab-bar` item brace grammar, alongside `icon=` and
+  `unread`.
+- `::product-grid` is now registered in `spec/blocks.toml` (it was
+  implemented but unregistered); `total_blocks` 113 -> 114.
+- Front matter: `type: contract` (`DocType::Contract`) and
+  `status: ratified` (`DocStatus::Ratified`) — the header values governing
+  contract documents carry. Previously serde rejected both, which discarded
+  the entire front matter (P005) and cascaded V001/V002 from that one
+  cause.
+- `assets/surfdoc.css` Section 80 — the axis stylesheet. Chrome media
+  queries are restricted to 767/768/1023/1024, and a new `css_coverage`
+  test asserts those numbers equal the exported Rust constants. The
+  480/640/720 content-block queries are untouched.
+
+### Changed
+
+- **`NATIVE_DOC_SCHEMA_VERSION` 4 -> 5.** New records `NativePerClassU32`,
+  `NativeAdaptiveLayout` and `NativeClassGate`; `Sidebar.width`,
+  `Drawer.width` and `TabContent.width` are now per-class; `Gallery.columns`
+  and `Features.cols` / `ProductGrid.cols` cross as triples;
+  `AppShell.adaptive` is new. The breakpoints cross as the exported
+  functions `size_class_tablet_min()` / `size_class_desktop_min()` /
+  `resolve_size_class()` (UniFFI 0.28 has no plain-const export).
+- `Block::AppShell.layout` is now the typed `AppShellLayout` instead of a
+  free `String`, and carries `adaptive: Option<AdaptiveLayout>`.
+- `::gallery[columns=]` is now READ. The attribute has been registered since
+  0.1 but nothing consumed it; an authored value now wins over the
+  item-count heuristic.
+
+### Fixed
+
+- **Three FFI holes closed at schema v5.** `NativeTabBarItem` gained
+  `unread` and `role`, and `NativeBlock::TabContent` gained `width` and
+  `align` — all four reached HTML but died at the native boundary.
+
+### Deprecated
+
+- `::panel[desktop-only=true]` is a deprecated alias for `classes=desktop`.
+  It still parses and normalizes into the same class set; new lint **L042**
+  reports it with a safe fix. The raw flag is preserved so re-serialization
+  stays a fixed point.
+
 ## 0.17.2 — 2026-08-20 (action-items: plain list markers no longer dropped)
 
 ### Fixed

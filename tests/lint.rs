@@ -59,6 +59,8 @@ const LINT_CORPUS: &[(&str, &[&str])] = &[
     ("l030-derivable-updated.surf", &["L030"]),
     ("l030-missing-fields.surf", &["L030", "L030"]),
     ("l031-enum-case.surf", &["L031"]),
+    ("l041-unknown-layout.surf", &["L041", "L041"]),
+    ("l042-desktop-only.surf", &["L042"]),
     ("p001-unclosed.surf", &[]),
     ("p002-unclosed-frontmatter.surf", &[]),
 ];
@@ -233,6 +235,7 @@ const FIX_CORPUS: &[(&str, FixSafety, &str)] = &[
     ("l005-nesting", FixSafety::Safe, "L005"),
     ("l030-derivable-updated", FixSafety::Safe, "L030"),
     ("l031-enum-case", FixSafety::Safe, "L031"),
+    ("l042-desktop-only", FixSafety::Safe, "L042"),
     ("l010-missing-summary", FixSafety::Suggested, "L010"),
     ("l020-unknown-block", FixSafety::Suggested, "L020"),
 ];
@@ -391,5 +394,29 @@ fn fixable_count_is_real_on_fixtures() {
             .iter()
             .filter(|d| d.fix.is_some())
             .count()
+    );
+}
+
+#[test]
+fn contract_type_and_ratified_status_parse_with_front_matter_intact() {
+    // 0.18: `type: contract` / `status: ratified` are the header values the
+    // clients/spec contract documents carry (LAYOUT-CONTRACT.surf). Before
+    // 0.18 serde rejected both, which discarded the ENTIRE front matter and
+    // cascaded V001/V002 from that one cause.
+    let source = "---\ntitle: \"Surfspace spec layout contract\"\ntype: contract\nversion: 1\ncreated: 2026-08-24\nstatus: ratified\n---\n\n::summary\nThe frozen layout contract.\n::\n\nBody.\n";
+    let doc = surf_parse::parse(source);
+    assert_eq!(
+        doc.doc.front_matter.as_ref().and_then(|f| f.title.as_deref()),
+        Some("Surfspace spec layout contract"),
+        "front matter must survive a contract/ratified header"
+    );
+    let codes: Vec<_> = doc
+        .diagnostics
+        .iter()
+        .filter_map(|d| d.code.as_deref())
+        .collect();
+    assert!(
+        !codes.contains(&"P005") && !codes.contains(&"P002"),
+        "contract/ratified must be in-schema, got {codes:?}"
     );
 }

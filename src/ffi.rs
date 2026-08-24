@@ -98,6 +98,35 @@ pub fn parse_to_native_styled(
     })
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Size-class axis (schema v5)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Minimum viewport width (logical pt/dp/css-px at 1x) for the `tablet`
+/// size class.
+///
+/// UniFFI 0.28 cannot export a plain constant, so the two breakpoints cross
+/// as functions. Clients MUST read them here rather than hard-coding a
+/// second breakpoint table — resolution happens once, in Rust.
+#[uniffi::export]
+pub fn size_class_tablet_min() -> u32 {
+    crate::types::SIZE_CLASS_TABLET_MIN
+}
+
+/// Minimum viewport width (logical pt/dp/css-px at 1x) for the `desktop`
+/// size class. See [`size_class_tablet_min`].
+#[uniffi::export]
+pub fn size_class_desktop_min() -> u32 {
+    crate::types::SIZE_CLASS_DESKTOP_MIN
+}
+
+/// Resolve a viewport width to its size-class token ("mobile", "tablet",
+/// "desktop"). Total — every width resolves, nothing throws.
+#[uniffi::export]
+pub fn resolve_size_class(width: u32) -> String {
+    resolve::resolve_size_class(width).as_str().to_string()
+}
+
 /// Shared parse + fatal-diagnostic routing for the FFI entry points.
 fn parse_checked(source: &str) -> Result<crate::types::SurfDoc, SurfDocError> {
     let result = crate::parse(source);
@@ -135,6 +164,28 @@ fn parse_checked(source: &str) -> Result<crate::types::SurfDoc, SurfDocError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The breakpoint pair is the whole client contract: it must cross the
+    /// FFI, and it must equal the Rust constants (schema v5).
+    #[test]
+    fn breakpoint_constants_cross_the_ffi() {
+        assert_eq!(size_class_tablet_min(), crate::types::SIZE_CLASS_TABLET_MIN);
+        assert_eq!(size_class_desktop_min(), crate::types::SIZE_CLASS_DESKTOP_MIN);
+        assert_eq!(size_class_tablet_min(), 768);
+        assert_eq!(size_class_desktop_min(), 1024);
+        assert_eq!(resolve_size_class(767), "mobile");
+        assert_eq!(resolve_size_class(768), "tablet");
+        assert_eq!(resolve_size_class(1023), "tablet");
+        assert_eq!(resolve_size_class(1024), "desktop");
+    }
+
+    /// Schema v5 is what tells a client the new fields are present.
+    #[test]
+    fn native_doc_schema_version_is_five() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 5);
+        let doc = parse_to_native("# Hi\n".into()).expect("parse");
+        assert_eq!(doc.schema_version, 5);
+    }
 
     #[test]
     fn happy_path_heading_paragraph_code() {

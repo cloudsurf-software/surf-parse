@@ -1,13 +1,22 @@
 [
   {
     "type": "app_shell",
-    "layout": "sidebar",
+    "layout": "sidebar-main-panel",
+    "adaptive": null,
     "children": [
       {
         "type": "sidebar",
         "position": "left",
         "collapsible": true,
-        "width": 240,
+        "width": {
+          "mobile": 240,
+          "tablet": 240,
+          "desktop": 240
+        },
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
         "children": [
           {
             "type": "nav_tree",
@@ -75,18 +84,28 @@
           {
             "id": "preview",
             "label": "Preview",
-            "icon": "eye"
+            "icon": "eye",
+            "unread": false,
+            "role": null
           },
           {
             "id": "edit",
             "label": "Edit",
-            "icon": "pencil"
+            "icon": "pencil",
+            "unread": false,
+            "role": null
           }
         ]
       },
       {
         "type": "tab_content",
         "tab": "preview",
+        "width": null,
+        "align": null,
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
         "children": [
           {
             "type": "markdown",
@@ -97,6 +116,12 @@
       {
         "type": "tab_content",
         "tab": "edit",
+        "width": null,
+        "align": null,
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
         "children": [
           {
             "type": "code_editor",
@@ -113,6 +138,12 @@
         "resizable": false,
         "height": 160,
         "desktop_only": true,
+        "gate": {
+          "classes": [
+            "desktop"
+          ],
+          "min_class": null
+        },
         "children": [
           {
             "type": "problem_list",
@@ -126,8 +157,16 @@
     "type": "drawer",
     "name": "filters",
     "position": "right",
-    "width": 320,
+    "width": {
+      "mobile": 320,
+      "tablet": 320,
+      "desktop": 320
+    },
     "trigger": "Filters",
+    "gate": {
+      "classes": [],
+      "min_class": null
+    },
     "children": [
       {
         "type": "markdown",

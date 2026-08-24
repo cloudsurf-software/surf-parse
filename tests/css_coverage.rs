@@ -53,6 +53,10 @@ const ALLOWLIST: &[&str] = &[
     // ::progress status hook (`surfdoc-step-<status>`); rows are styled
     // via `.surfdoc-progress li`, the status class is a styling hook.
     "surfdoc-step-pending",
+    // ::product-grid link-card text column — a bare flow wrapper inside
+    // the styled `.surfdoc-pg-body` flex row; its children
+    // (`.surfdoc-pg-name`, `.surfdoc-pg-tagline`) carry the type rules.
+    "surfdoc-pg-text",
 ];
 
 /// One minimal source document per implemented registry kind
@@ -82,6 +86,7 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("page", "::page[route=/ title=\"Home\"]\nBody\n::"),
     ("pricing-table", "::pricing-table\n| Plan | Price |\n|------|-------|\n| Free | $0 |\n::"),
     ("post-grid", "::post-grid[title=\"Posts\" subtitle=\"Latest\"]\n::"),
+    ("product-grid", "::product-grid[cols=3]\n- Surf CLI /cli\n::"),
     ("gate", "::gate[title=\"Members\" action=/api/gate field=email submit=\"Enter\"]\n::"),
     ("progress", "::progress[source=deploy.progress]\n- Parse\n- Ship\n::"),
     ("quote", "::quote[by=\"Ada\" cite=\"Notes\"]\nAll that is gold.\n::"),
@@ -743,6 +748,127 @@ fn css_allowlist_entries_are_still_ruleless() {
         assert!(
             !css_has_rule(surf_parse::SURFDOC_CSS, class),
             ".{class} now has a rule in assets/surfdoc.css — remove it from the allowlist"
+        );
+    }
+}
+
+// ------------------------------------------------------------------
+// Size-class axis (0.18) — the CSS breakpoints ARE the Rust constants
+// ------------------------------------------------------------------
+
+/// The chrome layer may use exactly four breakpoint numbers, and all four
+/// are derived from the two exported Rust constants. If someone changes
+/// `SIZE_CLASS_TABLET_MIN`/`SIZE_CLASS_DESKTOP_MIN` without editing
+/// `assets/surfdoc.css` (or the reverse), this fails.
+#[test]
+fn chrome_media_query_numbers_equal_the_exported_rust_consts() {
+    let css = surf_parse::SURFDOC_CSS;
+    let tablet_min = surf_parse::SIZE_CLASS_TABLET_MIN;
+    let desktop_min = surf_parse::SIZE_CLASS_DESKTOP_MIN;
+    assert_eq!(tablet_min, 768, "tablet breakpoint moved — update the CSS too");
+    assert_eq!(desktop_min, 1024, "desktop breakpoint moved — update the CSS too");
+
+    // The four chrome preludes, each spelled from the constants.
+    for prelude in [
+        format!("max-width: {}px", tablet_min - 1),
+        format!("min-width: {tablet_min}px"),
+        format!("max-width: {}px", desktop_min - 1),
+        format!("min-width: {desktop_min}px"),
+    ] {
+        assert!(
+            css.contains(&format!("@media ({prelude})"))
+                || css.contains(&format!("@media ({prelude}) and")),
+            "assets/surfdoc.css is missing a chrome media query for {prelude:?}"
+        );
+    }
+}
+
+/// Every media block whose prelude contains `needle`, concatenated. The
+/// 0.18 axis reuses preludes that older sections already spell, so the
+/// axis tests must look at ALL matching blocks, not just the first.
+fn media_blocks_all(css: &str, needle: &str) -> String {
+    let mut out = String::new();
+    let mut from = 0;
+    while let Some(pos) = css[from..].find("@media") {
+        let abs = from + pos;
+        let brace = css[abs..].find('{').expect("media block opens") + abs;
+        if css[abs..brace].contains(needle) {
+            let mut depth = 0i64;
+            for (i, c) in css[brace..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            out.push_str(&css[brace + 1..brace + i]);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        from = brace;
+    }
+    assert!(!out.is_empty(), "no media query with prelude containing {needle:?}");
+    out
+}
+
+/// The Section 80 axis block selects the per-class width custom properties
+/// at each boundary, and never writes an inline-losing bare shorthand at
+/// the mobile tier only.
+#[test]
+fn size_class_width_vars_are_selected_at_both_boundaries() {
+    let css = surf_parse::SURFDOC_CSS;
+    for var in ["--sc-w-mobile", "--sc-w-tablet", "--sc-w-desktop"] {
+        assert!(
+            css.contains(&format!("var({var})")),
+            "assets/surfdoc.css must consume {var}"
+        );
+    }
+    let tablet = media_blocks_all(css, "min-width: 768px");
+    assert!(
+        tablet.contains("--sc-w-tablet"),
+        "the 768px block must switch the per-class width to the tablet value"
+    );
+    let desktop = media_blocks_all(css, "min-width: 1024px");
+    assert!(
+        desktop.contains("--sc-w-desktop"),
+        "the 1024px block must switch the per-class width to the desktop value"
+    );
+}
+
+/// The class-conditional attributes actually gate something in every tier.
+#[test]
+fn class_conditional_attrs_are_gated_in_every_tier() {
+    let css = surf_parse::SURFDOC_CSS;
+    for (prelude, needle) in [
+        ("max-width: 767px", "data-size-class~=\"mobile\""),
+        ("min-width: 768px) and (max-width: 1023px", "data-size-class~=\"tablet\""),
+        ("min-width: 1024px", "data-size-class~=\"desktop\""),
+    ] {
+        let body = media_blocks_all(css, prelude);
+        assert!(
+            body.contains(needle),
+            "the {prelude} block must gate {needle}"
+        );
+    }
+    assert!(
+        css.contains("data-min-size-class"),
+        "min-class= needs a gating rule"
+    );
+}
+
+/// The content-block breakpoints are NOT part of this axis and must not
+/// have been rewritten by the 0.18 freeze.
+#[test]
+fn content_block_breakpoints_are_untouched_by_the_size_class_axis() {
+    let css = surf_parse::SURFDOC_CSS;
+    for n in ["max-width: 480px", "max-width: 640px", "max-width: 720px"] {
+        assert!(
+            css.contains(n),
+            "content-block query {n} disappeared — the 0.18 axis must not \
+             reopen the visual canon"
         );
     }
 }

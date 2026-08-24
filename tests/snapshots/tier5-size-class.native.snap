@@ -1,0 +1,249 @@
+[
+  {
+    "type": "summary",
+    "content": "The 0.18 responsive axis: typed layouts, per-size-class values, and\nclass-conditional chrome. Rendered at 390 / 834 / 1280 to pin all three\nclasses."
+  },
+  {
+    "type": "app_shell",
+    "layout": "adaptive",
+    "adaptive": {
+      "mobile": "tabs",
+      "tablet": "rail",
+      "desktop": "sidebar"
+    },
+    "children": [
+      {
+        "type": "sidebar",
+        "position": "left",
+        "collapsible": true,
+        "width": {
+          "mobile": 0,
+          "tablet": 72,
+          "desktop": 260
+        },
+        "gate": {
+          "classes": [],
+          "min_class": "tablet"
+        },
+        "children": [
+          {
+            "type": "nav_tree",
+            "source": "files",
+            "on_select": null,
+            "on_rename": null,
+            "on_delete": null
+          }
+        ]
+      },
+      {
+        "type": "toolbar",
+        "title": "Library",
+        "title_source": null,
+        "items": [
+          {
+            "kind": "button",
+            "label": "button \"Run\" action=run icon=play primary",
+            "action": null,
+            "icon": null,
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
+          }
+        ]
+      },
+      {
+        "type": "tab_bar",
+        "active": "library",
+        "items": [
+          {
+            "id": "library",
+            "label": "Library",
+            "icon": "book",
+            "unread": false,
+            "role": "primary"
+          },
+          {
+            "id": "inbox",
+            "label": "Inbox",
+            "icon": "tray",
+            "unread": true,
+            "role": null
+          },
+          {
+            "id": "more",
+            "label": "More",
+            "icon": "ellipsis",
+            "unread": false,
+            "role": "more"
+          }
+        ]
+      },
+      {
+        "type": "tab_content",
+        "tab": "library",
+        "width": {
+          "mobile": 0,
+          "tablet": 700,
+          "desktop": 880
+        },
+        "align": "center",
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "markdown",
+            "content": "Ruled centered column: full-bleed on mobile, 700 on tablet, 880 on desktop."
+          }
+        ]
+      },
+      {
+        "type": "panel",
+        "position": "bottom",
+        "resizable": false,
+        "height": 160,
+        "desktop_only": false,
+        "gate": {
+          "classes": [
+            "desktop"
+          ],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "problem_list",
+            "source": "diagnostics"
+          }
+        ]
+      },
+      {
+        "type": "panel",
+        "position": "right",
+        "resizable": false,
+        "height": null,
+        "desktop_only": true,
+        "gate": {
+          "classes": [
+            "desktop"
+          ],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "markdown",
+            "content": "Deprecated alias — still parses, lints as L042."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "drawer",
+    "name": "filters",
+    "position": "right",
+    "width": {
+      "mobile": 320,
+      "tablet": 380,
+      "desktop": 420
+    },
+    "trigger": null,
+    "gate": {
+      "classes": [],
+      "min_class": "tablet"
+    },
+    "children": [
+      {
+        "type": "markdown",
+        "content": "Filters live in a drawer from tablet up."
+      }
+    ]
+  },
+  {
+    "type": "features",
+    "cards": [
+      {
+        "title": "One column on phones",
+        "icon": "phone",
+        "body": "The triple is mobile / tablet / desktop."
+      },
+      {
+        "title": "Two on tablets",
+        "icon": "tablet",
+        "body": "A single value would broadcast to all three."
+      },
+      {
+        "title": "Three on desktop",
+        "icon": "monitor",
+        "body": "Unknown tokens degrade; they never fail a render."
+      }
+    ],
+    "cols": {
+      "mobile": 1,
+      "tablet": 2,
+      "desktop": 3
+    }
+  },
+  {
+    "type": "gallery",
+    "items": [],
+    "columns": {
+      "mobile": 1,
+      "tablet": 2,
+      "desktop": 3
+    }
+  },
+  {
+    "type": "product_grid",
+    "tiles": false,
+    "cols": {
+      "mobile": 1,
+      "tablet": 2,
+      "desktop": 2
+    },
+    "groups": [
+      {
+        "label": null,
+        "cols": null,
+        "items": [
+          {
+            "name": "Surfspace /surfspace \"Your team's surf HQ\"",
+            "href": "",
+            "emblem": null,
+            "tagline": null,
+            "cta1_label": null,
+            "cta1_href": null,
+            "cta2_label": null,
+            "cta2_href": null,
+            "bg": null
+          },
+          {
+            "name": "WaveSite /wavesite \"Websites that write themselves\"",
+            "href": "",
+            "emblem": null,
+            "tagline": null,
+            "cta1_label": null,
+            "cta1_href": null,
+            "cta2_label": null,
+            "cta2_href": null,
+            "bg": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "page",
+    "route": "/",
+    "title": "Degrade me",
+    "layout": "default",
+    "children": [
+      {
+        "type": "markdown",
+        "content": "An unratified page layout degrades to `default` and raises L041."
+      }
+    ]
+  }
+]

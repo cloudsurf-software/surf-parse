@@ -6,7 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, RowState, StyleProperty, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, StyleProperty, SurfDoc, Trend};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -2096,10 +2096,70 @@ fn render_app_tabbar(children: &[Block]) -> String {
     html
 }
 
+
+// ------------------------------------------------------------------
+// Size-class hooks (0.18)
+// ------------------------------------------------------------------
+
+/// Emit the class-conditional hooks for a chrome block.
+///
+/// Returns an EMPTY string when neither attribute was authored, so every
+/// pre-0.18 document renders byte-identically.
+fn size_class_attrs(classes: &Option<Vec<SizeClass>>, min_class: &Option<SizeClass>) -> String {
+    let mut out = String::new();
+    if let Some(cs) = classes {
+        let joined: Vec<&str> = cs.iter().map(|c| c.as_str()).collect();
+        out.push_str(&format!(" data-size-class=\"{}\"", joined.join(" ")));
+    }
+    if let Some(m) = min_class {
+        out.push_str(&format!(" data-min-size-class=\"{}\"", m.as_str()));
+    }
+    out
+}
+
+/// Per-size-class pixel value → (style declarations, extra attribute).
+///
+/// A uniform value keeps the pre-0.18 single declaration and emits no
+/// attribute. A varying value emits ONLY the three custom properties plus
+/// `data-size-class-width`; `assets/surfdoc.css` selects among them at the
+/// 768/1024 breakpoints (an inline `width` would out-specify the media
+/// queries, so the shorthand is deliberately not written inline).
+fn per_class_px(prop: &str, w: &PerClass<u32>) -> (Vec<String>, String) {
+    match w.as_uniform() {
+        Some(v) => (vec![format!("{prop}:{v}px")], String::new()),
+        None => (
+            vec![
+                format!("--sc-w-mobile:{}px", w.mobile),
+                format!("--sc-w-tablet:{}px", w.tablet),
+                format!("--sc-w-desktop:{}px", w.desktop),
+            ],
+            format!(
+                " data-size-class-width=\"{} {} {}\"",
+                w.mobile, w.tablet, w.desktop
+            ),
+        ),
+    }
+}
+
+/// Per-size-class column count → the `data-cols*` attribute set. A uniform
+/// value emits exactly the pre-0.18 `data-cols="N"`.
+fn per_class_cols_attr(cols: &Option<PerClass<u32>>) -> String {
+    match cols {
+        None => String::new(),
+        Some(c) => match c.as_uniform() {
+            Some(v) => format!(" data-cols=\"{v}\""),
+            None => format!(
+                " data-cols=\"{}\" data-cols-tablet=\"{}\" data-cols-desktop=\"{}\"",
+                c.mobile, c.tablet, c.desktop
+            ),
+        },
+    }
+}
+
 /// Render a tab-content pane. `active` marks the initially visible pane
 /// (class `active`); width/align emit the ruled centered-column styles.
 fn render_tab_content(block: &Block, active: bool) -> String {
-    let Block::TabContent { tab, width, align, children, .. } = block else {
+    let Block::TabContent { tab, width, align, classes, min_class, children, .. } = block else {
         return String::new();
     };
     let class = if active {
@@ -2108,8 +2168,11 @@ fn render_tab_content(block: &Block, active: bool) -> String {
         "surfdoc-tab-content"
     };
     let mut styles: Vec<String> = Vec::new();
+    let mut width_attr = String::new();
     if let Some(w) = width {
-        styles.push(format!("max-width:{w}px"));
+        let (decls, attr) = per_class_px("max-width", w);
+        styles.extend(decls);
+        width_attr = attr;
     }
     if align.as_deref() == Some("center") {
         styles.push("margin-left:auto".to_string());
@@ -2122,9 +2185,11 @@ fn render_tab_content(block: &Block, active: bool) -> String {
         format!(" style=\"{}\"", styles.join(";"))
     };
     let mut html = format!(
-        "<div class=\"{}\" data-tab=\"{}\" role=\"tabpanel\"{}>",
+        "<div class=\"{}\" data-tab=\"{}\" role=\"tabpanel\"{}{}{}>",
         class,
         escape_html(tab),
+        width_attr,
+        size_class_attrs(classes, min_class),
         style_attr,
     );
     for child in children {
@@ -3454,10 +3519,13 @@ pub(crate) fn render_block(block: &Block) -> String {
             parts.join("")
         }
 
-        Block::ProductGrid { groups, .. } => {
+        Block::ProductGrid { groups, cols, .. } => {
             const ARROW: &str = "<svg class=\"surfdoc-pg-arrow\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/><polyline points=\"12 5 19 12 12 19\"/></svg>";
             let mut parts = Vec::new();
-            parts.push("<section class=\"surfdoc-product-grid\">".to_string());
+            parts.push(format!(
+                "<section class=\"surfdoc-product-grid\"{}>",
+                per_class_cols_attr(cols)
+            ));
             parts.push("<div class=\"surfdoc-pg-inner\">".to_string());
             for group in groups {
                 if let Some(label) = &group.label {
@@ -3647,7 +3715,9 @@ pub(crate) fn render_block(block: &Block) -> String {
         }
 
         Block::Gallery { items, columns, .. } => {
-            let cols = columns.unwrap_or(3);
+            let cols_attr = per_class_cols_attr(&Some(
+                columns.unwrap_or_else(|| PerClass::uniform(3)),
+            ));
             // Collect unique categories for filter
             let categories: Vec<&str> = {
                 let mut cats: Vec<&str> = items.iter()
@@ -3657,7 +3727,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 cats.dedup();
                 cats
             };
-            let mut html = format!("<div class=\"surfdoc-gallery\" data-cols=\"{}\">", cols);
+            let mut html = format!("<div class=\"surfdoc-gallery\"{}>", cols_attr);
             if !categories.is_empty() {
                 html.push_str("<div class=\"surfdoc-gallery-filters\">");
                 html.push_str("<button class=\"filter-btn active\" data-filter=\"all\">All</button>");
@@ -3907,7 +3977,7 @@ pub(crate) fn render_block(block: &Block) -> String {
         }
 
         Block::Features { cards, cols, .. } => {
-            let col_attr = cols.map(|c| format!(" data-cols=\"{}\"", c)).unwrap_or_default();
+            let col_attr = per_class_cols_attr(cols);
             let mut parts = Vec::new();
             parts.push(format!("<div class=\"surfdoc-features\"{}>", col_attr));
             for card in cards {
@@ -5256,7 +5326,7 @@ pub(crate) fn render_block(block: &Block) -> String {
 
         // ── Interactive / application blocks ──────────────────────
 
-        Block::AppShell { layout, height, children, .. } => {
+        Block::AppShell { layout, adaptive, height, children, .. } => {
             // The static-render containment CSS pins `height: auto !important`
             // with a 460px max-height clamp; an inline `height` alone would
             // lose to the !important. Inline min-height + max-height carry no
@@ -5289,9 +5359,22 @@ pub(crate) fn render_block(block: &Block) -> String {
             } else {
                 ""
             };
+            // 0.18: an `adaptive` shell advertises its per-class navigation
+            // mode so the live layer and native clients read one resolved
+            // answer instead of re-deriving breakpoints.
+            let adaptive_attr = match adaptive {
+                Some(a) => format!(
+                    " data-adaptive-mobile=\"{}\" data-adaptive-tablet=\"{}\" \
+                     data-adaptive-desktop=\"{}\"",
+                    a.mobile.as_str(),
+                    a.tablet.as_str(),
+                    a.desktop.as_str()
+                ),
+                None => String::new(),
+            };
             let mut html = format!(
-                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}{}{}>",
-                escape_html(layout), state_attr, thread_attr, style,
+                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}{}{}{}>",
+                layout.as_str(), adaptive_attr, state_attr, thread_attr, style,
             );
             html.push_str(&render_chrome_children(children));
             // Ruling R-A (0.14): ONE responsive shell — the small-screen
@@ -5318,25 +5401,30 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
-        Block::Sidebar { position, collapsible, width, children, .. } => {
-            let style = match width {
-                Some(w) => format!(" style=\"width:{}px\"", w),
-                None => String::new(),
+        Block::Sidebar { position, collapsible, width, classes, min_class, children, .. } => {
+            let (style, width_attr) = match width {
+                Some(w) => {
+                    let (decls, attr) = per_class_px("width", w);
+                    (format!(" style=\"{}\"", decls.join(";")), attr)
+                }
+                None => (String::new(), String::new()),
             };
             let mut html = format!(
-                "<aside class=\"surfdoc-sidebar surfdoc-sidebar-{}\" data-collapsible=\"{}\"{}>",
-                escape_html(position), collapsible, style,
+                "<aside class=\"surfdoc-sidebar surfdoc-sidebar-{}\" data-collapsible=\"{}\"{}{}{}>",
+                escape_html(position), collapsible, width_attr,
+                size_class_attrs(classes, min_class), style,
             );
             html.push_str(&render_chrome_children(children));
             html.push_str("</aside>");
             html
         }
 
-        Block::Panel { position, resizable, height, desktop_only, children, .. } => {
+        Block::Panel { position, resizable, height, desktop_only, classes, min_class, children, .. } => {
             let style = match height {
                 Some(h) => format!(" style=\"height:{}px\"", h),
                 None => String::new(),
             };
+            let sc_attr = size_class_attrs(classes, min_class);
             // WP-R2 (0.14): a RIGHT panel is the Surfy drawer — closed by
             // default (aria-hidden), with a fixed-width inner wrapper so
             // the content does not squash while the outer width animates
@@ -5346,8 +5434,8 @@ pub(crate) fn render_block(block: &Block) -> String {
                 let mut html = format!(
                     "<div class=\"surfdoc-panel surfdoc-panel-right\" id=\"surfdoc-panel-right\" \
                      role=\"complementary\" aria-hidden=\"true\" data-resizable=\"{}\" \
-                     data-desktop-only=\"{}\"{}>",
-                    resizable, desktop_only, style,
+                     data-desktop-only=\"{}\"{}{}>",
+                    resizable, desktop_only, sc_attr, style,
                 );
                 html.push_str("<div class=\"surfdoc-panel-inner\">");
                 html.push_str(&render_surfy_panel_children(children));
@@ -5355,8 +5443,8 @@ pub(crate) fn render_block(block: &Block) -> String {
                 return html;
             }
             let mut html = format!(
-                "<div class=\"surfdoc-panel surfdoc-panel-{}\" data-resizable=\"{}\" data-desktop-only=\"{}\"{}>",
-                escape_html(position), resizable, desktop_only, style,
+                "<div class=\"surfdoc-panel surfdoc-panel-{}\" data-resizable=\"{}\" data-desktop-only=\"{}\"{}{}>",
+                escape_html(position), resizable, desktop_only, sc_attr, style,
             );
             html.push_str(&render_chrome_children(children));
             html.push_str("</div>");
@@ -5374,15 +5462,22 @@ pub(crate) fn render_block(block: &Block) -> String {
                     .map(|i| format!(" data-icon=\"{}\"", escape_html(i)))
                     .unwrap_or_default();
                 // Unread: right-side dot only — accent-left-border is BANNED.
+                // 0.18: semantic role hook, mirrored across the FFI.
+                let role_attr = item
+                    .role
+                    .as_ref()
+                    .map(|r| format!(" data-role=\"{}\"", escape_html(r)))
+                    .unwrap_or_default();
                 let unread_dot = if item.unread {
                     "<span class=\"surfdoc-unread-dot\" aria-label=\"Unread\"></span>"
                 } else {
                     ""
                 };
                 html.push_str(&format!(
-                    "<button role=\"tab\" data-tab=\"{}\"{}{} aria-selected=\"{}\">{}{}</button>",
+                    "<button role=\"tab\" data-tab=\"{}\"{}{}{} aria-selected=\"{}\">{}{}</button>",
                     escape_html(&item.id),
                     icon_attr,
+                    role_attr,
                     active_cls,
                     is_active,
                     escape_html(&item.label),
@@ -5445,14 +5540,18 @@ pub(crate) fn render_block(block: &Block) -> String {
             html
         }
 
-        Block::Drawer { name, position, width, children, .. } => {
-            let style = match width {
-                Some(w) => format!(" style=\"width:{}px\"", w),
-                None => String::new(),
+        Block::Drawer { name, position, width, classes, min_class, children, .. } => {
+            let (style, width_attr) = match width {
+                Some(w) => {
+                    let (decls, attr) = per_class_px("width", w);
+                    (format!(" style=\"{}\"", decls.join(";")), attr)
+                }
+                None => (String::new(), String::new()),
             };
             let mut html = format!(
-                "<div class=\"surfdoc-drawer surfdoc-drawer-{}\" data-name=\"{}\"{}>",
-                escape_html(position), escape_html(name), style,
+                "<div class=\"surfdoc-drawer surfdoc-drawer-{}\" data-name=\"{}\"{}{}{}>",
+                escape_html(position), escape_html(name), width_attr,
+                size_class_attrs(classes, min_class), style,
             );
             for child in children { html.push_str(&render_block(child)); }
             html.push_str("</div>");
@@ -8031,6 +8130,7 @@ mod tests {
     #[test]
     fn html_product_grid_groups_and_cards() {
         let doc = doc_with(vec![Block::ProductGrid {
+            cols: None,
             groups: vec![crate::types::ProductGroup {
                 label: Some("Platforms".into()),
                 cols: None,
@@ -9580,7 +9680,7 @@ mod tests {
                     link_href: None,
                 },
             ],
-            cols: Some(3),
+            cols: Some(PerClass::uniform(3)),
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -11737,8 +11837,8 @@ About
 
     #[test]
     fn html_app_shell() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
             children: vec![Block::Markdown { content: "Inner".into(), span: span() }],
             span: span(),
@@ -11750,10 +11850,10 @@ About
 
     #[test]
     fn html_sidebar() {
-        let doc = doc_with(vec![Block::Sidebar {
+        let doc = doc_with(vec![Block::Sidebar { classes: None, min_class: None,
             position: "left".into(),
             collapsible: true,
-            width: Some(250),
+            width: Some(PerClass::uniform(250)),
             children: vec![],
             span: span(),
         }]);
@@ -11765,7 +11865,7 @@ About
 
     #[test]
     fn html_panel() {
-        let doc = doc_with(vec![Block::Panel {
+        let doc = doc_with(vec![Block::Panel { classes: None, min_class: None,
             position: "bottom".into(),
             resizable: true,
             height: Some(200),
@@ -11808,7 +11908,7 @@ About
     }
 
     fn right_panel() -> Block {
-        Block::Panel {
+        Block::Panel { classes: None, min_class: None,
             position: "right".into(),
             resizable: false,
             height: None,
@@ -11832,8 +11932,8 @@ About
 
     #[test]
     fn html_app_shell_right_panel_stamps_state_fab_and_script() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
             children: vec![right_panel()],
             span: span(),
@@ -11922,8 +12022,8 @@ About
 
     #[test]
     fn html_app_shell_without_split_pane_has_no_data_thread() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
             children: vec![right_panel()],
             span: span(),
@@ -11974,10 +12074,10 @@ About
 
     #[test]
     fn html_app_shell_without_right_panel_has_no_drawer_chrome() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
-            children: vec![Block::Panel {
+            children: vec![Block::Panel { classes: None, min_class: None,
                 position: "bottom".into(),
                 resizable: false,
                 height: Some(160),
@@ -11995,14 +12095,14 @@ About
 
     #[test]
     fn html_app_tabbar_generated_from_sidebar_rows() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
             children: vec![
-                Block::Sidebar {
+                Block::Sidebar { classes: None, min_class: None,
                     position: "left".into(),
                     collapsible: false,
-                    width: Some(240),
+                    width: Some(PerClass::uniform(240)),
                     children: vec![
                         nav_row("doc", "Docs", false),
                         nav_row("task", "Tasks", false),
@@ -12013,7 +12113,7 @@ About
                     ],
                     span: span(),
                 },
-                Block::TabContent {
+                Block::TabContent { classes: None, min_class: None,
                     tab: "main".into(),
                     width: None,
                     align: None,
@@ -12046,11 +12146,11 @@ About
 
     #[test]
     fn html_app_tabbar_active_follows_active_pane() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
             children: vec![
-                Block::Sidebar {
+                Block::Sidebar { classes: None, min_class: None,
                     position: "left".into(),
                     collapsible: false,
                     width: None,
@@ -12060,7 +12160,7 @@ About
                     ],
                     span: span(),
                 },
-                Block::TabContent {
+                Block::TabContent { classes: None, min_class: None,
                     tab: "messages".into(),
                     width: None,
                     align: None,
@@ -12077,8 +12177,8 @@ About
 
     #[test]
     fn html_app_shell_without_sidebar_has_no_tabbar() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
             children: vec![Block::Markdown { content: "Inner".into(), span: span() }],
             span: span(),
@@ -12092,8 +12192,8 @@ About
         let doc = doc_with(vec![Block::TabBar {
             active: Some("preview".into()),
             items: vec![
-                TabBarItem { id: "preview".into(), label: "Preview".into(), icon: None, unread: false },
-                TabBarItem { id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()), unread: true },
+                TabBarItem { role: None, id: "preview".into(), label: "Preview".into(), icon: None, unread: false },
+                TabBarItem { role: None, id: "edit".into(), label: "Edit".into(), icon: Some("pencil".into()), unread: true },
             ],
             span: span(),
         }]);
@@ -12108,7 +12208,7 @@ About
 
     #[test]
     fn html_tab_content() {
-        let doc = doc_with(vec![Block::TabContent {
+        let doc = doc_with(vec![Block::TabContent { classes: None, min_class: None,
             tab: "preview".into(),
             width: None,
             align: None,
@@ -12126,9 +12226,9 @@ About
         // Regression (da0a6ab): width/align must actually reach the style
         // attribute even for a tab-content outside any app-shell.
         let mk = |width: Option<u32>, align: Option<&str>| {
-            let doc = doc_with(vec![Block::TabContent {
+            let doc = doc_with(vec![Block::TabContent { classes: None, min_class: None,
                 tab: "main".into(),
-                width,
+                width: width.map(PerClass::uniform),
                 align: align.map(|a| a.to_string()),
                 children: vec![],
                 span: span(),
@@ -12168,12 +12268,12 @@ About
         // A single pane with no tab-bar must be visible on first paint:
         // CSS hides panes without `.active`/`data-tab="preview"`, and the
         // switch script only runs on click.
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main-panel".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: None,
-            children: vec![Block::TabContent {
+            children: vec![Block::TabContent { classes: None, min_class: None,
                 tab: "main".into(),
-                width: Some(880),
+                width: Some(PerClass::uniform(880)),
                 align: Some("center".into()),
                 children: vec![Block::Markdown { content: "List body".into(), span: span() }],
                 span: span(),
@@ -12190,26 +12290,26 @@ About
 
     #[test]
     fn html_tab_bar_active_pane_visible_on_first_paint() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "tabs".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::Tabs,
             height: None,
             children: vec![
                 Block::TabBar {
                     active: Some("second".into()),
                     items: vec![
-                        crate::types::TabBarItem { id: "first".into(), label: "First".into(), icon: None, unread: false },
-                        crate::types::TabBarItem { id: "second".into(), label: "Second".into(), icon: None, unread: false },
+                        crate::types::TabBarItem { role: None, id: "first".into(), label: "First".into(), icon: None, unread: false },
+                        crate::types::TabBarItem { role: None, id: "second".into(), label: "Second".into(), icon: None, unread: false },
                     ],
                     span: span(),
                 },
-                Block::TabContent {
+                Block::TabContent { classes: None, min_class: None,
                     tab: "first".into(),
                     width: None,
                     align: None,
                     children: vec![],
                     span: span(),
                 },
-                Block::TabContent {
+                Block::TabContent { classes: None, min_class: None,
                     tab: "second".into(),
                     width: None,
                     align: None,
@@ -12229,18 +12329,18 @@ About
     fn html_preview_pane_suppresses_extra_activation() {
         // `data-tab="preview"` is already CSS-visible; activating a sibling
         // would double-show two panes.
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "tabs".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::Tabs,
             height: None,
             children: vec![
-                Block::TabContent {
+                Block::TabContent { classes: None, min_class: None,
                     tab: "preview".into(),
                     width: None,
                     align: None,
                     children: vec![],
                     span: span(),
                 },
-                Block::TabContent {
+                Block::TabContent { classes: None, min_class: None,
                     tab: "other".into(),
                     width: None,
                     align: None,
@@ -12435,8 +12535,8 @@ About
 
     #[test]
     fn html_app_shell_height_survives_containment_clamp() {
-        let doc = doc_with(vec![Block::AppShell {
-            layout: "sidebar-main".into(),
+        let doc = doc_with(vec![Block::AppShell { adaptive: None,
+            layout: crate::types::AppShellLayout::SidebarMainPanel,
             height: Some(720),
             children: vec![],
             span: span(),
@@ -12695,10 +12795,10 @@ About
 
     #[test]
     fn html_drawer() {
-        let doc = doc_with(vec![Block::Drawer {
+        let doc = doc_with(vec![Block::Drawer { classes: None, min_class: None,
             name: "mako".into(),
             position: "right".into(),
-            width: Some(320),
+            width: Some(PerClass::uniform(320)),
             trigger: Some("icon".into()),
             children: vec![],
             span: span(),
@@ -12808,8 +12908,8 @@ About
         let doc = doc_with(vec![Block::TabBar {
             active: Some("inbox".into()),
             items: vec![
-                TabBarItem { id: "inbox".into(), label: "Inbox".into(), icon: None, unread: true },
-                TabBarItem { id: "sent".into(), label: "Sent".into(), icon: None, unread: false },
+                TabBarItem { role: None, id: "inbox".into(), label: "Inbox".into(), icon: None, unread: true },
+                TabBarItem { role: None, id: "sent".into(), label: "Sent".into(), icon: None, unread: false },
             ],
             span: span(),
         }]);
@@ -12843,14 +12943,14 @@ About
             span: span(),
         };
         let contexts: Vec<(&str, Block)> = vec![
-            ("sidebar", Block::Sidebar {
+            ("sidebar", Block::Sidebar { classes: None, min_class: None,
                 position: "left".into(),
                 collapsible: false,
                 width: None,
                 children: vec![unread_row()],
                 span: span(),
             }),
-            ("panel", Block::Panel {
+            ("panel", Block::Panel { classes: None, min_class: None,
                 position: "bottom".into(),
                 resizable: false,
                 height: None,
@@ -12858,14 +12958,14 @@ About
                 children: vec![unread_row()],
                 span: span(),
             }),
-            ("tab-content", Block::TabContent {
+            ("tab-content", Block::TabContent { classes: None, min_class: None,
                 tab: "main".into(),
                 width: None,
                 align: None,
                 children: vec![unread_row()],
                 span: span(),
             }),
-            ("drawer", Block::Drawer {
+            ("drawer", Block::Drawer { classes: None, min_class: None,
                 name: "inbox".into(),
                 position: "right".into(),
                 width: None,
@@ -12882,10 +12982,10 @@ About
                 children: vec![unread_row()],
                 span: span(),
             }),
-            ("app-shell", Block::AppShell {
-                layout: "tabs".into(),
+            ("app-shell", Block::AppShell { adaptive: None,
+                layout: crate::types::AppShellLayout::Tabs,
                 height: None,
-                children: vec![Block::TabContent {
+                children: vec![Block::TabContent { classes: None, min_class: None,
                     tab: "main".into(),
                     width: None,
                     align: None,

@@ -89,6 +89,70 @@ fn corpus_to_native_pinned() {
     }
 }
 
+/// The three widths the 0.18 axis is pinned at — one per size class,
+/// taken from real devices (iPhone portrait, iPad portrait, laptop).
+const CORPUS_WIDTHS: [u32; 3] = [390, 834, 1280];
+
+/// Pin BOTH renderers for the width-varying fixture at every size class.
+///
+/// The render paths take no width, so the width is threaded the only way
+/// it can be: `SurfDoc::for_width` projects the document onto one class
+/// (collapsing per-class values, dropping gated chrome) and the ordinary
+/// renderers run on the projection. Three widths x two targets = six new
+/// pins per width-varying fixture.
+#[test]
+fn corpus_width_varying_pinned() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/corpus/tier5-size-class.surf");
+    let src = fs::read_to_string(&fixture).unwrap();
+    let doc = surf_parse::parse(&src).doc;
+    for width in CORPUS_WIDTHS {
+        let class = surf_parse::resolve_size_class(width);
+        let projected = doc.for_width(width);
+        assert_snapshot(&fixture, &format!("w{width}.html"), &projected.to_html());
+        let native = render_native::to_native_blocks(&projected);
+        assert_snapshot(
+            &fixture,
+            &format!("w{width}.native"),
+            &serde_json::to_string_pretty(&native).unwrap(),
+        );
+        // The resolver agrees with the class the projection was built for.
+        assert_eq!(
+            class,
+            surf_parse::resolve_size_class(width),
+            "resolver must be pure"
+        );
+    }
+}
+
+/// The projection is a no-op for a document that uses none of the 0.18
+/// attributes: every other corpus fixture renders identically at all three
+/// widths, so the axis cannot silently change existing documents.
+#[test]
+fn projection_is_identity_for_documents_without_the_axis() {
+    for fixture in corpus_files() {
+        let src = fs::read_to_string(&fixture).unwrap();
+        // `desktop-only=` counts: it is the deprecated spelling of
+        // `classes=desktop` and gates the block exactly the same way.
+        if ["classes=", "min-class=", "desktop-only=", "cols=\"", "columns=\"", "width=\""]
+            .iter()
+            .any(|marker| src.contains(marker))
+        {
+            continue;
+        }
+        let doc = surf_parse::parse(&src).doc;
+        let baseline = doc.to_html();
+        for width in CORPUS_WIDTHS {
+            assert_eq!(
+                baseline,
+                doc.for_width(width).to_html(),
+                "{} must render identically at {width}px — it uses no size-class attributes",
+                fixture.display()
+            );
+        }
+    }
+}
+
 /// Pin the resolved theme for a style-packed parse of the site fixture,
 /// under both packs. Theme resolution lives in Rust (resolve.rs); this
 /// pin is what makes "pack values resolve once" enforceable.

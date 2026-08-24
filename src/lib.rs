@@ -78,6 +78,7 @@ pub use lint::{
     apply_fixes_once, check, check_with,
 };
 pub use parse::parse;
+pub use resolve::{resolve_blocks_for_class, resolve_size_class};
 pub use template::TemplateContext;
 pub use types::*;
 pub use diagram_scene::{
@@ -184,6 +185,27 @@ impl SurfDoc {
     #[cfg(feature = "native")]
     pub fn to_native_blocks(&self) -> Vec<render_native::NativeBlock> {
         render_native::to_native_blocks(self)
+    }
+
+    /// Project this document onto the size class a viewport `width`
+    /// resolves to (0.18).
+    ///
+    /// The render paths take no width — they never have. This is the seam:
+    /// resolve the class once (`resolve_size_class`), collapse every
+    /// per-class value to that class's value, drop the chrome blocks the
+    /// class gates out, and hand the renderers an ordinary document. A
+    /// document that uses none of the 0.18 attributes comes back unchanged.
+    pub fn for_width(&self, width: u32) -> SurfDoc {
+        self.for_size_class(resolve::resolve_size_class(width))
+    }
+
+    /// [`Self::for_width`] with the class already resolved.
+    pub fn for_size_class(&self, class: SizeClass) -> SurfDoc {
+        SurfDoc {
+            front_matter: self.front_matter.clone(),
+            blocks: resolve::resolve_blocks_for_class(&self.blocks, class),
+            source: self.source.clone(),
+        }
     }
 
     /// The [`RenderProfile`] for this document, resolved from its front-matter

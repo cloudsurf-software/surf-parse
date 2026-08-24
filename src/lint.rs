@@ -184,7 +184,142 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(MissingRequiredFrontMatter),
         Box::new(FrontMatterEnumCase),
         Box::new(MermaidConstructSkipped),
+        Box::new(UnknownLayoutValue),
+        Box::new(DeprecatedDesktopOnly),
     ]
+}
+
+// ------------------------------------------------------------------
+// L041 — out-of-vocabulary layout value (0.18 size-class axis)
+// ------------------------------------------------------------------
+
+/// Flags `layout=` (and the `layout=adaptive` sub-attrs) whose value sits
+/// outside the ratified vocabulary.
+///
+/// Source-scanning, not tree-walking: the parser has already degraded the
+/// value by the time a `Block` exists, so the authored spelling only
+/// survives in the source text.
+struct UnknownLayoutValue;
+
+/// One attribute whose value is checked against a closed vocabulary.
+fn layout_vocab(block: &str, attr: &str) -> Option<(&'static [&'static str], &'static str)> {
+    const SHELL: &[&str] = &["sidebar-main-panel", "tabs", "adaptive"];
+    const MODES: &[&str] = &["tabs", "rail", "sidebar"];
+    const PAGES: &[&str] = &["default", "hero", "cards", "split"];
+    match (block, attr) {
+        ("app-shell", "layout") => Some((SHELL, "sidebar-main-panel")),
+        ("app-shell", "mobile") => Some((MODES, "tabs")),
+        ("app-shell", "tablet") => Some((MODES, "rail")),
+        ("app-shell", "desktop") => Some((MODES, "sidebar")),
+        ("page", "layout") => Some((PAGES, "default")),
+        _ => None,
+    }
+}
+
+impl LintRule for UnknownLayoutValue {
+    fn id(&self) -> &'static str {
+        "L041"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        for line in scan_lines(source) {
+            if line.literal {
+                continue;
+            }
+            let Some((_, name, attrs_str)) = opening_directive(line.trimmed) else {
+                continue;
+            };
+            if attrs_str.is_empty() {
+                continue;
+            }
+            let Ok(attrs) = parse_attrs(&attrs_str) else {
+                continue;
+            };
+            for (key, value) in attrs.iter() {
+                let Some((expected, fallback)) = layout_vocab(&name, key.as_str()) else {
+                    continue;
+                };
+                let raw = match value {
+                    AttrValue::String(v) => v.clone(),
+                    AttrValue::Number(n) => format!("{n}"),
+                    AttrValue::Bool(b) => format!("{b}"),
+                    AttrValue::Null => continue,
+                };
+                let normalized = raw.trim().to_ascii_lowercase();
+                if normalized.is_empty() || expected.contains(&normalized.as_str()) {
+                    continue;
+                }
+                out.push(diag(
+                    "L041",
+                    format!(
+                        "Unknown {key} value '{raw}' on '::{name}' — degraded to \
+                         '{fallback}' (expected one of: {})",
+                        expected.join(", ")
+                    ),
+                    Some(line.span()),
+                ));
+            }
+        }
+        out
+    }
+}
+
+// ------------------------------------------------------------------
+// L042 — deprecated `desktop-only=` alias (0.18)
+// ------------------------------------------------------------------
+
+/// `::panel[desktop-only=true]` is the pre-0.18 spelling of
+/// `classes=desktop`. Still parsed, still normalized into the class set —
+/// but the ratified attribute is `classes=`.
+struct DeprecatedDesktopOnly;
+
+impl LintRule for DeprecatedDesktopOnly {
+    fn id(&self) -> &'static str {
+        "L042"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        for line in scan_lines(source) {
+            if line.literal {
+                continue;
+            }
+            let Some((_, _, attrs_str)) = opening_directive(line.trimmed) else {
+                continue;
+            };
+            // Locate the literal alias so the fix edits exactly its extent.
+            let Some(rel) = line.trimmed.find("desktop-only=") else {
+                continue;
+            };
+            if attrs_str.is_empty() {
+                continue;
+            }
+            let Ok(attrs) = parse_attrs(&attrs_str) else {
+                continue;
+            };
+            if !matches!(attrs.get("desktop-only"), Some(AttrValue::Bool(true))) {
+                continue;
+            }
+            let start = line.indent() + rel;
+            let end = start + "desktop-only=true".len();
+            let fix = rule_fix(
+                "L042",
+                "rewrite 'desktop-only=true' as 'classes=desktop'".to_string(),
+                vec![TextEdit {
+                    span: line.sub_span(start, end),
+                    replacement: "classes=desktop".to_string(),
+                }],
+            );
+            out.push(diag_fix(
+                "L042",
+                "'desktop-only=true' is deprecated — use 'classes=desktop'".to_string(),
+                Some(line.span()),
+                Some(fix),
+            ));
+        }
+        out
+    }
 }
 
 // ------------------------------------------------------------------
@@ -852,6 +987,7 @@ fn doc_type_name(doc_type: DocType) -> &'static str {
         DocType::Slides => "slides",
         DocType::Presentation => "presentation",
         DocType::Paper => "paper",
+        DocType::Contract => "contract",
     }
 }
 
@@ -1207,11 +1343,18 @@ const FM_ENUM_FIELDS: &[(&str, &[&str])] = &[
             "app",
             "manifest",
             "website",
+            "web",
             "deck",
             "slides",
+            "presentation",
+            "paper",
+            "contract",
         ],
     ),
-    ("status", &["draft", "active", "closed", "archived"]),
+    (
+        "status",
+        &["draft", "active", "closed", "archived", "ratified"],
+    ),
     (
         "scope",
         &[

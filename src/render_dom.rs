@@ -38,7 +38,7 @@ use std::collections::HashMap;
 use crate::render_html::{
     self, escape_markdown_in_slot_markers, slugify, split_explicit_anchor,
 };
-use crate::types::{Block, FormFieldType, RowState, SurfDoc};
+use crate::types::{Block, FormFieldType, PerClass, RowState, SurfDoc};
 
 /// Typed failure of the constructive DOM path.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -1161,6 +1161,19 @@ fn js_opt(v: &Option<String>) -> String {
 }
 
 /// Serde tag name of a block (`"kind"`), used for typed decline messages.
+/// Emit the `data-cols*` attribute set for a per-size-class column count.
+/// Byte-for-byte the same output as `render_html::per_class_cols_attr`.
+fn emit_cols_attrs<S: DomSink>(dom: &mut Dom<'_, S>, c: &PerClass<u32>) {
+    match c.as_uniform() {
+        Some(v) => dom.attr("data-cols", AttrVal::Markup(&v.to_string())),
+        None => {
+            dom.attr("data-cols", AttrVal::Markup(&c.mobile.to_string()));
+            dom.attr("data-cols-tablet", AttrVal::Markup(&c.tablet.to_string()));
+            dom.attr("data-cols-desktop", AttrVal::Markup(&c.desktop.to_string()));
+        }
+    }
+}
+
 fn block_kind(b: &Block) -> String {
     serde_json::to_value(b)
         .ok()
@@ -1490,8 +1503,10 @@ fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), Re
         Block::Features { cards, cols, .. } => {
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-features"));
+            // Mirror render_html's per-class emission exactly, or the
+            // byte-identity suite breaks.
             if let Some(c) = cols {
-                dom.attr("data-cols", AttrVal::Markup(&c.to_string()));
+                emit_cols_attrs(dom, c);
             }
             for card in cards {
                 dom.open("div", CloseStyle::Normal);
@@ -1567,7 +1582,7 @@ fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), Re
         }
 
         Block::Gallery { items, columns, .. } => {
-            let cols = columns.unwrap_or(3);
+            let cols = columns.unwrap_or_else(|| PerClass::uniform(3));
             let categories: Vec<&str> = {
                 let mut cats: Vec<&str> =
                     items.iter().filter_map(|i| i.category.as_deref()).collect();
@@ -1577,7 +1592,7 @@ fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), Re
             };
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-gallery"));
-            dom.attr("data-cols", AttrVal::Markup(&cols.to_string()));
+            emit_cols_attrs(dom, &cols);
             if !categories.is_empty() {
                 dom.open("div", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-gallery-filters"));

@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::diagram_scene::NativeDiagramScene;
 use crate::render_md;
 use crate::types::{
-    Block, CalloutType, DecisionStatus, EmbedType, FormFieldType, RowState, SurfDoc,
-    ToolbarItem, Trend,
+    Block, CalloutType, DecisionStatus, EmbedType, FormFieldType, PerClass, RowState, SizeClass,
+    SurfDoc, ToolbarItem, Trend,
 };
 
 /// Maximum nesting depth for SectionContainer children.
@@ -149,7 +149,11 @@ pub enum NativeBlock {
     },
 
     /// Feature card grid.
-    Features { cards: Vec<NativeFeatureCard> },
+    Features {
+        cards: Vec<NativeFeatureCard>,
+        /// Per-size-class column count (schema v5); `None` = client default.
+        cols: Option<NativePerClassU32>,
+    },
 
     /// Numbered process/timeline steps.
     Steps { steps: Vec<NativeStepItem> },
@@ -190,7 +194,9 @@ pub enum NativeBlock {
     /// Image gallery with grid layout and optional category filtering.
     Gallery {
         items: Vec<NativeGalleryItem>,
-        columns: u32,
+        /// Per-size-class column count (schema v5); a document that authored
+        /// a single value carries the same number in all three fields.
+        columns: NativePerClassU32,
     },
 
     /// Page section container with optional background and headline.
@@ -210,6 +216,8 @@ pub enum NativeBlock {
     /// `layout` is one of: "sidebar", "split", "tabs".
     AppShell {
         layout: String,
+        /// Present only for `layout == "adaptive"` (schema v5).
+        adaptive: Option<NativeAdaptiveLayout>,
         children: Vec<NativeBlock>,
     },
     /// Collapsible sidebar navigation panel.
@@ -217,7 +225,9 @@ pub enum NativeBlock {
     Sidebar {
         position: String,
         collapsible: bool,
-        width: Option<u32>,
+        /// Per-size-class since schema v5.
+        width: Option<NativePerClassU32>,
+        gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
     /// Resizable panel (bottom or side).
@@ -226,7 +236,9 @@ pub enum NativeBlock {
         position: String,
         resizable: bool,
         height: Option<u32>,
+        /// DEPRECATED at schema v5 — read `gate` instead.
         desktop_only: bool,
+        gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
 
@@ -239,6 +251,12 @@ pub enum NativeBlock {
     /// Content pane associated with a specific tab.
     TabContent {
         tab: String,
+        /// Content-column width cap, per size class. Reached HTML from 0.13
+        /// but died at the FFI until schema v5.
+        width: Option<NativePerClassU32>,
+        /// Horizontal alignment of the capped column ("center"). Same hole.
+        align: Option<String>,
+        gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
     /// Horizontal toolbar with buttons, separators, badges, dropdowns.
@@ -257,8 +275,10 @@ pub enum NativeBlock {
     Drawer {
         name: String,
         position: String,
-        width: Option<u32>,
+        /// Per-size-class since schema v5.
+        width: Option<NativePerClassU32>,
         trigger: Option<String>,
+        gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
     /// Dialog overlay / modal.
@@ -590,6 +610,9 @@ pub enum NativeBlock {
     /// `tiles` selects the full-bleed promo-tile rendering.
     ProductGrid {
         tiles: bool,
+        /// Block-level per-size-class column count (schema v5). Per-group
+        /// `cols` on [`NativeProductGroup`] still wins locally.
+        cols: Option<NativePerClassU32>,
         groups: Vec<NativeProductGroup>,
     },
 
@@ -765,6 +788,59 @@ pub struct NativeGalleryItem {
     pub category: Option<String>,
 }
 
+/// A value that varies per size class, crossing the FFI as a resolved
+/// triple (schema v5). Clients pick with the class the host resolved from
+/// [`crate::resolve::resolve_size_class`] — they never re-derive
+/// breakpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativePerClassU32 {
+    pub mobile: u32,
+    pub tablet: u32,
+    pub desktop: u32,
+}
+
+impl From<PerClass<u32>> for NativePerClassU32 {
+    fn from(p: PerClass<u32>) -> Self {
+        NativePerClassU32 {
+            mobile: p.mobile,
+            tablet: p.tablet,
+            desktop: p.desktop,
+        }
+    }
+}
+
+/// The resolved `mobile=`/`tablet=`/`desktop=` navigation modes of an
+/// `::app-shell[layout=adaptive]` (schema v5). Values are the
+/// [`crate::types::AdaptiveMode`] tokens: "tabs", "rail", "sidebar".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeAdaptiveLayout {
+    pub mobile: String,
+    pub tablet: String,
+    pub desktop: String,
+}
+
+/// The class-conditional visibility of a chrome block (schema v5).
+/// `classes` empty means "every class"; `min_class` is `None` when
+/// unconstrained.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeClassGate {
+    pub classes: Vec<String>,
+    pub min_class: Option<String>,
+}
+
+fn class_gate(classes: &Option<Vec<SizeClass>>, min_class: &Option<SizeClass>) -> NativeClassGate {
+    NativeClassGate {
+        classes: classes
+            .as_ref()
+            .map(|cs| cs.iter().map(|c| c.as_str().to_string()).collect())
+            .unwrap_or_default(),
+        min_class: min_class.map(|c| c.as_str().to_string()),
+    }
+}
+
 /// A tab item within a native `TabBar`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -774,6 +850,12 @@ pub struct NativeTabBarItem {
     /// Optional icon token (SF-symbol-ish, e.g. "doc.text"); clients map it
     /// to an SFSymbol (iOS/macOS) or Material icon (Android).
     pub icon: Option<String>,
+    /// Right-side unread dot. Reached HTML from 0.13 but died at the FFI
+    /// until schema v5.
+    pub unread: bool,
+    /// Semantic role token, carried verbatim. New at schema v5 — the second
+    /// half of the same FFI hole.
+    pub role: Option<String>,
 }
 
 /// An item within a native `Toolbar`.
@@ -1158,7 +1240,18 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// 3. `Row.avatar` + `Row.rtime` + `Row.unread_count` — roster-row
 ///    initials/group avatar, right-side time meta, unread count pill.
 /// 4. `NativeChatMessage`/`NativeChatReaction` — new child records.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 4;
+/// v5 (0.18) — the size-class axis, plus the FFI holes it exposed:
+/// 1. `NativePerClassU32` — a resolved mobile/tablet/desktop triple, now
+///    carried by `Sidebar.width`, `Drawer.width` and `TabContent.width`.
+/// 2. `NativeClassGate` on `Sidebar`/`Panel`/`TabContent`/`Drawer` — the
+///    `classes=` / `min-class=` conditional (`Panel.desktop_only` is the
+///    deprecated alias and stays only for source fidelity).
+/// 3. `AppShell.adaptive` — the resolved `layout=adaptive` navigation modes.
+/// 4. `NativeTabBarItem.unread` + `.role`, and `TabContent.width`/`.align`:
+///    three values that reached HTML but died at the FFI before v5.
+/// 5. `size_class_tablet_min()` / `size_class_desktop_min()` /
+///    `resolve_size_class()` exported so clients share one breakpoint table.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 5;
 
 /// A parsed document plus its resolved theme — the unit that crosses the
 /// FFI for themed native rendering.
@@ -1690,7 +1783,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             content: content.clone(),
         },
 
-        Block::Features { cards, .. } => NativeBlock::Features {
+        Block::Features { cards, cols, .. } => NativeBlock::Features {
+            cols: cols.map(NativePerClassU32::from),
             cards: cards
                 .iter()
                 .map(|c| NativeFeatureCard {
@@ -1816,7 +1910,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                     category: i.category.clone(),
                 })
                 .collect(),
-            columns: columns.unwrap_or(3),
+            columns: NativePerClassU32::from(columns.unwrap_or_else(|| PerClass::uniform(3))),
         },
 
         Block::Section {
@@ -1844,9 +1938,17 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
 
         // Layout
         Block::AppShell {
-            layout, children, ..
+            layout,
+            adaptive,
+            children,
+            ..
         } => NativeBlock::AppShell {
-            layout: layout.clone(),
+            layout: layout.as_str().to_string(),
+            adaptive: adaptive.map(|a| NativeAdaptiveLayout {
+                mobile: a.mobile.as_str().to_string(),
+                tablet: a.tablet.as_str().to_string(),
+                desktop: a.desktop.as_str().to_string(),
+            }),
             children: convert_children(children, depth + 1),
         },
 
@@ -1854,12 +1956,15 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             position,
             collapsible,
             width,
+            classes,
+            min_class,
             children,
             ..
         } => NativeBlock::Sidebar {
             position: position.clone(),
             collapsible: *collapsible,
-            width: *width,
+            width: width.map(NativePerClassU32::from),
+            gate: class_gate(classes, min_class),
             children: convert_children(children, depth + 1),
         },
 
@@ -1868,6 +1973,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             resizable,
             height,
             desktop_only,
+            classes,
+            min_class,
             children,
             ..
         } => NativeBlock::Panel {
@@ -1875,6 +1982,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             resizable: *resizable,
             height: *height,
             desktop_only: *desktop_only,
+            gate: class_gate(classes, min_class),
             children: convert_children(children, depth + 1),
         },
 
@@ -1887,12 +1995,25 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                     id: i.id.clone(),
                     label: i.label.clone(),
                     icon: i.icon.clone(),
+                    unread: i.unread,
+                    role: i.role.clone(),
                 })
                 .collect(),
         },
 
-        Block::TabContent { tab, children, .. } => NativeBlock::TabContent {
+        Block::TabContent {
+            tab,
+            width,
+            align,
+            classes,
+            min_class,
+            children,
+            ..
+        } => NativeBlock::TabContent {
             tab: tab.clone(),
+            width: width.map(NativePerClassU32::from),
+            align: align.clone(),
+            gate: class_gate(classes, min_class),
             children: convert_children(children, depth + 1),
         },
 
@@ -1913,13 +2034,16 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             position,
             width,
             trigger,
+            classes,
+            min_class,
             children,
             ..
         } => NativeBlock::Drawer {
             name: name.clone(),
             position: position.clone(),
-            width: *width,
+            width: width.map(NativePerClassU32::from),
             trigger: trigger.clone(),
+            gate: class_gate(classes, min_class),
             children: convert_children(children, depth + 1),
         },
 
@@ -1945,6 +2069,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                     id: s.id.clone(),
                     label: s.label.clone(),
                     icon: None,
+                    unread: false,
+                    role: None,
                 })
                 .collect(),
         },
@@ -2435,8 +2561,9 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             error: error.clone(),
         },
 
-        Block::ProductGrid { groups, tiles, .. } => NativeBlock::ProductGrid {
+        Block::ProductGrid { groups, cols, tiles, .. } => NativeBlock::ProductGrid {
             tiles: *tiles,
+            cols: cols.map(NativePerClassU32::from),
             groups: groups
                 .iter()
                 .map(|g| NativeProductGroup {
@@ -3752,12 +3879,13 @@ mod tests {
                 link_label: Some("Learn more".to_string()),
                 link_href: Some("/fast".to_string()),
             }],
-            cols: Some(2),
+            cols: Some(PerClass::uniform(2)),
             span: syn(),
         };
         assert_eq!(
             convert_block(&block, 0),
             NativeBlock::Features {
+                cols: Some(NativePerClassU32 { mobile: 2, tablet: 2, desktop: 2 }),
                 cards: vec![NativeFeatureCard {
                     title: "Fast".to_string(),
                     icon: Some("bolt".to_string()),
@@ -4266,7 +4394,7 @@ mod tests {
                     category: None,
                 },
             ],
-            columns: Some(4),
+            columns: Some(PerClass::uniform(4)),
             span: syn(),
         };
         assert_eq!(
@@ -4286,7 +4414,7 @@ mod tests {
                         category: None,
                     },
                 ],
-                columns: 4,
+                columns: NativePerClassU32 { mobile: 4, tablet: 4, desktop: 4 },
             }
         );
     }
@@ -4300,7 +4428,7 @@ mod tests {
         };
         match convert_block(&block, 0) {
             NativeBlock::Gallery { columns, items } => {
-                assert_eq!(columns, 3);
+                assert_eq!(columns, NativePerClassU32 { mobile: 3, tablet: 3, desktop: 3 });
                 assert!(items.is_empty());
             }
             other => panic!("Expected Gallery, got {:?}", other),
@@ -4476,7 +4604,7 @@ mod tests {
                         alt: None,
                         category: None,
                     }],
-                    columns: Some(2),
+                    columns: Some(PerClass::uniform(2)),
                     span: syn(),
                 },
                 Block::Section {
@@ -4633,7 +4761,8 @@ mod tests {
         // 0.17: the NativeBlock shape grew the Messages mockup-fidelity
         // round (chat-thread message children, chipInput kind, row
         // avatar/rtime/unread-count) — schema v4.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 4);
+        // 0.18: the size-class axis + the FFI holes it closed — schema v5.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 5);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

@@ -214,3 +214,22 @@ fn coverage_declines_added_uncovered_kind() {
     let doc = surf_parse::parse(&src).doc;
     assert!(!coverage_check(&doc));
 }
+
+/// 0.18: the per-size-class `data-cols*` attribute set must be mirrored in
+/// the constructive DOM path byte-for-byte — a varying triple AND the
+/// uniform single value that every pre-0.18 document carries.
+#[test]
+fn per_class_cols_attrs_are_mirrored_in_the_dom_path() {
+    assert_identity("dom/per-class-cols.surf");
+    let src = fixture("dom/per-class-cols.surf");
+    let doc = surf_parse::parse(&src).doc;
+    let html = doc.to_html_fragment();
+    assert!(
+        html.contains("data-cols=\"1\" data-cols-tablet=\"2\" data-cols-desktop=\"3\""),
+        "varying triple must widen: {html}"
+    );
+    assert!(
+        html.contains("data-cols=\"3\">"),
+        "a uniform value must stay the bare pre-0.18 attribute: {html}"
+    );
+}

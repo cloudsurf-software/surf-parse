@@ -4826,3 +4826,49 @@ button.surfdoc-booking-day.is-sel { background: var(--accent); color: var(--acce
 
 /* ===== Image slot placeholders (unresolved «IMG:» generation slots) ===== */
 .surfdoc-img-slot { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--ws-radius-img); border: var(--ws-border-w) var(--ws-border-style) var(--border); background: color-mix(in srgb, var(--accent) 6%, var(--surface-alt)); }
+
+/* ============================================================
+   80. SIZE-CLASS AXIS (0.18)
+
+   One responsive axis for chrome: three classes (mobile / tablet /
+   desktop) split at 768 and 1024 logical px. These four numbers —
+   767, 768, 1023, 1024 — are the ONLY breakpoints the chrome layer
+   may use, and tests/css_coverage.rs pins them against the exported
+   Rust constants SIZE_CLASS_TABLET_MIN / SIZE_CLASS_DESKTOP_MIN.
+   The content-block queries (480 / 640 / 720) are a separate, frozen
+   canon and are NOT part of this axis.
+
+   `data-size-class` (from classes=) and `data-min-size-class` (from
+   min-class=) gate visibility. `data-size-class-width` marks an
+   element whose width varies per class: the renderer emits only the
+   three --sc-w-* custom properties inline, and the property itself is
+   selected here — an inline shorthand would out-specify these rules.
+   ============================================================ */
+
+.surfdoc .surfdoc-tab-content[data-size-class-width] { max-width: var(--sc-w-mobile); }
+.surfdoc .surfdoc-sidebar[data-size-class-width],
+.surfdoc .surfdoc-drawer[data-size-class-width] { width: var(--sc-w-mobile); }
+
+@media (max-width: 767px) {
+    .surfdoc [data-size-class]:not([data-size-class~="mobile"]) { display: none; }
+    .surfdoc [data-min-size-class="tablet"],
+    .surfdoc [data-min-size-class="desktop"] { display: none; }
+}
+
+@media (min-width: 768px) {
+    .surfdoc .surfdoc-tab-content[data-size-class-width] { max-width: var(--sc-w-tablet); }
+    .surfdoc .surfdoc-sidebar[data-size-class-width],
+    .surfdoc .surfdoc-drawer[data-size-class-width] { width: var(--sc-w-tablet); }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .surfdoc [data-size-class]:not([data-size-class~="tablet"]) { display: none; }
+    .surfdoc [data-min-size-class="desktop"] { display: none; }
+}
+
+@media (min-width: 1024px) {
+    .surfdoc .surfdoc-tab-content[data-size-class-width] { max-width: var(--sc-w-desktop); }
+    .surfdoc .surfdoc-sidebar[data-size-class-width],
+    .surfdoc .surfdoc-drawer[data-size-class-width] { width: var(--sc-w-desktop); }
+    .surfdoc [data-size-class]:not([data-size-class~="desktop"]) { display: none; }
+}

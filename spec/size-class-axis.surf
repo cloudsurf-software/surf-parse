@@ -1,0 +1,161 @@
+---
+title: SurfDoc Size-Class Axis
+type: spec
+status: active
+created: "2026-08-24"
+updated: "2026-08-24"
+---
+
+::summary
+The 0.18 responsive axis. Three size classes, two breakpoints, resolved
+ONCE in Rust and consumed unchanged by web, iOS and Android. Authors write
+per-class values and class conditionals; no client carries its own
+breakpoint table.
+::
+
+## The three classes
+
+::data
+| Class | Width range (logical pt / dp / css-px @1x) | Constant |
+|---|---|---|
+| `mobile` | `width < 768` | — |
+| `tablet` | `768 <= width < 1024` | `SIZE_CLASS_TABLET_MIN = 768` |
+| `desktop` | `width >= 1024` | `SIZE_CLASS_DESKTOP_MIN = 1024` |
+::
+
+Boundaries are half-open: 767 is still `mobile`, 768 is `tablet`, 1023 is
+still `tablet`, 1024 is `desktop`. The resolver `resolve_size_class(width)`
+is total — every `u32`, including 0 and `u32::MAX`, resolves. An
+out-of-range or nonsense width can never break a render.
+
+The two constants are the whole contract with clients. They cross the FFI
+as `size_class_tablet_min()` and `size_class_desktop_min()` (UniFFI 0.28
+cannot export a plain constant), and `assets/surfdoc.css` spells the same
+four numbers — 767, 768, 1023, 1024 — in its chrome media queries.
+`tests/css_coverage.rs` asserts the CSS numbers equal the Rust constants,
+so the two can never drift apart.
+
+::callout[type=warning title="Two breakpoint canons, not one"]
+The content-block queries at 480, 640 and 720 are a SEPARATE, frozen
+visual canon. The size-class axis does not touch them, and no chrome rule
+may use them.
+::
+
+## Typed layouts
+
+`::app-shell[layout=]` is a closed three-value set:
+
+::data
+| Value | Meaning |
+|---|---|
+| `sidebar-main-panel` | The classic three-column desktop shell (default) |
+| `tabs` | Tab-bar-first at every class |
+| `adaptive` | Per-class navigation, configured by sub-attrs |
+::
+
+`layout=adaptive` takes `mobile=` / `tablet=` / `desktop=` sub-attrs drawn
+from `{tabs, rail, sidebar}`. Absent sub-attrs take the platform defaults:
+tabs on mobile, rail on tablet, sidebar on desktop.
+
+`::page[layout=]` is the recognized set `{default, hero, cards, split}`.
+
+Unknown values in either vocabulary DEGRADE to the default and raise lint
+**L041**. A stale or misspelled layout is a warning, never a failed render
+— the same discipline as `resolve_style_pack`.
+
+## Per-size-class values
+
+An attribute that varies by class is authored as a whitespace-separated
+list in mobile / tablet / desktop order:
+
+::code[lang=surf]
+::sidebar[position=left width="0 72 260"]
+::features[cols="1 2 3"]
+::tab-content[tab="main" width="0 700 880"]
+::
+
+Degradation ladder — parsing never fails:
+
+- one token: broadcasts to all three classes, byte-identical to the
+  pre-0.18 scalar attribute
+- two tokens: mobile, tablet; desktop inherits tablet
+- three or more: mobile, tablet, desktop (extras ignored)
+- empty, or ANY non-numeric token: the attribute is absent, i.e. the
+  block's default applies
+
+Carriers today: `cols` on `::features` and `::product-grid`, `columns` on
+`::gallery` (the attribute name differs and both names are frozen), and
+`width` on `::sidebar`, `::drawer` and `::tab-content`.
+
+A uniform value re-serializes as the bare scalar and serializes over the
+wire as the bare scalar; only a genuinely varying triple widens. Every
+pre-0.18 document therefore round-trips byte-identically.
+
+## Class conditionals
+
+::data
+| Attribute | Meaning |
+|---|---|
+| `classes=` | Comma list of classes the block is shown in |
+| `min-class=` | Smallest class the block appears in |
+::
+
+Both are accepted on `::sidebar`, `::panel`, `::tab-content` and
+`::drawer`. Unknown tokens are dropped; an all-unknown list is treated as
+absent (block shows everywhere).
+
+`::panel[desktop-only=true]` is a DEPRECATED alias for `classes=desktop`.
+It still parses, still normalizes into the same class set, and lint
+**L042** offers a safe fix that rewrites it. The raw flag is preserved so
+the re-serializer emits the source form it read and never both spellings.
+
+## Resolving once
+
+The render paths take no width and never have. The seam is the
+projection:
+
+::code[lang=rust]
+let class = surf_parse::resolve_size_class(width);   // 390 -> Mobile
+let doc = parsed.for_width(390);                     // or .for_size_class(class)
+let html = doc.to_html();
+::
+
+`for_width` collapses every per-class value to that class's value and
+drops the chrome blocks the class gates out. A document that uses none of
+the 0.18 attributes comes back unchanged — pinned by
+`projection_is_identity_for_documents_without_the_axis` in
+`tests/corpus.rs`.
+
+## What crosses the FFI
+
+Native schema **v5** (`NATIVE_DOC_SCHEMA_VERSION`):
+
+- `NativePerClassU32` — a resolved mobile/tablet/desktop triple, carried by
+  `Sidebar.width`, `Drawer.width`, `TabContent.width`, `Gallery.columns`,
+  `Features.cols` and `ProductGrid.cols`
+- `NativeClassGate` on `Sidebar` / `Panel` / `TabContent` / `Drawer`
+- `AppShell.adaptive` — the resolved navigation modes
+- `NativeTabBarItem.unread` and `.role`, plus `TabContent.width` / `.align`
+  — values that reached HTML but died at the FFI before v5
+- `size_class_tablet_min()`, `size_class_desktop_min()`,
+  `resolve_size_class(width)`
+
+## HTML hooks
+
+::data
+| Attribute | Source |
+|---|---|
+| `data-size-class="mobile tablet"` | `classes=` |
+| `data-min-size-class="tablet"` | `min-class=` |
+| `data-size-class-width="0 700 880"` | a varying `width=` |
+| `data-cols` / `data-cols-tablet` / `data-cols-desktop` | a varying `cols=` |
+| `data-adaptive-mobile` / `-tablet` / `-desktop` | `layout=adaptive` |
+::
+
+For a varying width the renderer emits ONLY the three `--sc-w-*` custom
+properties inline; the property itself is selected in `assets/surfdoc.css`
+Section 80. An inline shorthand would out-specify the media queries and the
+element would never resize.
+
+When a block authors none of these attributes, no hook is emitted and the
+markup is byte-identical to 0.17.

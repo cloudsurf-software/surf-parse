@@ -1,0 +1,20 @@
+---
+title: "Unknown Layout Values"
+type: doc
+status: active
+created: "2026-08-24"
+---
+
+::summary
+Layout values outside the ratified vocabulary degrade instead of failing.
+::
+
+::app-shell[layout=sidebar]
+::: tab-content[tab="main"]
+Body.
+:::
+::
+
+::page[route=/ layout=collage title="Home"]
+Body.
+::

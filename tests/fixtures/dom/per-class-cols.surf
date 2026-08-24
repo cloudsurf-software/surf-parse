@@ -1,0 +1,15 @@
+::features[cols="1 2 3"]
+### One {icon=phone}
+Mobile.
+
+### Two {icon=tablet}
+Tablet.
+
+### Three {icon=monitor}
+Desktop.
+::
+
+::features[cols=3]
+### Uniform {icon=grid}
+A single value must emit exactly the pre-0.18 data-cols attribute.
+::

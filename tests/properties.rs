@@ -120,7 +120,7 @@ fn synth_form(fields: Vec<FormField>, submit_label: Option<&str>) -> Block {
 fn synth_gallery(items: Vec<GalleryItem>, columns: Option<u32>) -> Block {
     Block::Gallery {
         items,
-        columns,
+        columns: columns.map(surf_parse::PerClass::uniform),
         span: Span::SYNTHETIC,
     }
 }
@@ -416,8 +416,12 @@ mod native_props {
                     prop_assert_eq!(&ni.alt, &i.alt);
                     prop_assert_eq!(&ni.category, &i.category);
                 }
+                // 0.18: a single authored value broadcasts to all three
+                // size classes, so the native triple is uniform.
                 let expected_cols = columns.unwrap_or(3);
-                prop_assert_eq!(*native_cols, expected_cols);
+                prop_assert_eq!(native_cols.mobile, expected_cols);
+                prop_assert_eq!(native_cols.tablet, expected_cols);
+                prop_assert_eq!(native_cols.desktop, expected_cols);
             } else {
                 prop_assert!(false, "Expected NativeBlock::Gallery, got {:?}", native[0]);
             }

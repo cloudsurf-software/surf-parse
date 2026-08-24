@@ -113,7 +113,11 @@
   {
     "type": "gallery",
     "items": [],
-    "columns": 2
+    "columns": {
+      "mobile": 2,
+      "tablet": 2,
+      "desktop": 2
+    }
   },
   {
     "type": "embed",

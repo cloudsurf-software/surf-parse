@@ -1,0 +1,75 @@
+---
+title: Size-class axis
+type: doc
+---
+
+::summary
+The 0.18 responsive axis: typed layouts, per-size-class values, and
+class-conditional chrome. Rendered at 390 / 834 / 1280 to pin all three
+classes.
+::
+
+::app-shell[layout=adaptive mobile=tabs tablet=rail desktop=sidebar]
+
+::: sidebar[position=left collapsible=true width="0 72 260" min-class=tablet]
+::: nav-tree[source=files]
+- src/
+  - main.rs *
+  - render_html.rs
+:::
+:::
+
+::: toolbar[title="Library"]
+- button "Run" action=run icon=play primary
+:::
+
+::: tab-bar[active=library]
+- library "Library" {icon=book role=primary}
+- inbox "Inbox" {icon=tray unread}
+- more "More" {icon=ellipsis role=more}
+:::
+
+::: tab-content[tab=library width="0 700 880" align=center]
+Ruled centered column: full-bleed on mobile, 700 on tablet, 880 on desktop.
+:::
+
+::: panel[position=bottom resizable=false height=160 classes=desktop]
+::: problem-list[source=diagnostics]
+:::
+:::
+
+::: panel[position=right resizable=false desktop-only=true]
+Deprecated alias — still parses, lints as L042.
+:::
+
+::
+
+::drawer[name=filters position=right width="320 380 420" min-class=tablet]
+Filters live in a drawer from tablet up.
+::
+
+::features[cols="1 2 3"]
+### One column on phones {icon=phone}
+The triple is mobile / tablet / desktop.
+
+### Two on tablets {icon=tablet}
+A single value would broadcast to all three.
+
+### Three on desktop {icon=monitor}
+Unknown tokens degrade; they never fail a render.
+::
+
+::gallery[columns="1 2 3"]
+- src=/img/a.png alt="A" caption="First"
+- src=/img/b.png alt="B" caption="Second"
+- src=/img/c.png alt="C" caption="Third"
+::
+
+::product-grid[cols="1 2 2"]
+- Surfspace /surfspace "Your team's surf HQ"
+- WaveSite /wavesite "Websites that write themselves"
+::
+
+::page[route=/ layout=collage title="Degrade me"]
+An unratified page layout degrades to `default` and raises L041.
+::

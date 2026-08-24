@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 113
-registry_updated = "2026-08-19"
+total_blocks = 114
+registry_updated = "2026-08-24"
 
 [blocks.ai-context]
 status = "planned"
@@ -184,7 +184,7 @@ enum_variant = "Form"
 [blocks.gallery]
 status = "implemented"
 category = "web"
-purpose = "Image gallery"
+purpose = "Image gallery. The attribute is spelled columns here (cols on ::features); it accepts a per-size-class triple and, when absent, falls back to the item-count heuristic"
 attributes = ["columns"]
 degradation = "sequential images"
 enum_variant = "Gallery"
@@ -240,10 +240,18 @@ enum_variant = "Output"
 [blocks.page]
 status = "implemented"
 category = "site"
-purpose = "Route/layout definition"
+purpose = "Route/layout definition. layout is the recognized set {default, hero, cards, split}; unknown values degrade to default (lint L041)"
 attributes = ["route", "layout", "title", "sidebar"]
 degradation = "heading with content"
 enum_variant = "Page"
+
+[blocks.product-grid]
+status = "implemented"
+category = "web"
+purpose = "Grid of product link-cards, optionally split into labelled groups; tiles selects the full-bleed promo-tile rendering. cols is a per-size-class column count for the block (per-group {cols=N} braces still win locally)"
+attributes = ["tiles", "cols"]
+degradation = "bulleted link list"
+enum_variant = "ProductGrid"
 
 [blocks.pricing-table]
 status = "implemented"
@@ -378,7 +386,7 @@ enum_variant = "Hero"
 [blocks.features]
 status = "implemented"
 category = "web"
-purpose = "Card grid for features, products, or value propositions"
+purpose = "Card grid for features, products, or value propositions. cols accepts a per-size-class triple (cols=\"1 2 3\", mobile/tablet/desktop order); a single value broadcasts to all classes"
 attributes = ["cols"]
 degradation = "heading/body pairs"
 enum_variant = "Features"
@@ -744,31 +752,31 @@ enum_variant = "InfoCard"
 [blocks.app-shell]
 status = "implemented"
 category = "advanced"
-purpose = "Root app container with layout mode, optional explicit height, and child blocks"
-attributes = ["layout", "height"]
+purpose = "Root app container with layout mode, optional explicit height, and child blocks. layout is the closed set {sidebar-main-panel, tabs, adaptive}; layout=adaptive takes mobile/tablet/desktop sub-attrs from {tabs, rail, sidebar}. Unknown values degrade to sidebar-main-panel (lint L041)"
+attributes = ["layout", "height", "mobile", "tablet", "desktop"]
 degradation = "sequential child blocks"
 enum_variant = "AppShell"
 
 [blocks.sidebar]
 status = "implemented"
 category = "advanced"
-purpose = "Collapsible side panel with position, width, and child blocks"
-attributes = ["position", "collapsible", "width"]
+purpose = "Collapsible side panel with position, width, and child blocks. width accepts a per-size-class triple (width=\"0 72 260\", mobile/tablet/desktop order); classes/min-class gate which size classes it appears in"
+attributes = ["position", "collapsible", "width", "classes", "min-class"]
 degradation = "sequential child blocks"
 enum_variant = "Sidebar"
 
 [blocks.panel]
 status = "implemented"
 category = "advanced"
-purpose = "Resizable bottom or side panel with height and desktop-only option"
-attributes = ["position", "resizable", "height", "desktop_only"]
+purpose = "Resizable bottom or side panel with height and class-conditional visibility. desktop-only=true is a DEPRECATED alias for classes=desktop (lint L042); it still parses and normalizes into the same class set"
+attributes = ["position", "resizable", "height", "desktop_only", "classes", "min-class"]
 degradation = "sequential child blocks"
 enum_variant = "Panel"
 
 [blocks.tab-bar]
 status = "implemented"
 category = "advanced"
-purpose = "Tab strip navigation with labeled tab items, active tab control, and per-item icon/unread tokens"
+purpose = "Tab strip navigation with labeled tab items, active tab control, and per-item icon/unread/role tokens ({icon=name role=primary unread} braces on an item line)"
 attributes = ["active"]
 degradation = "bulleted tab labels"
 enum_variant = "TabBar"
@@ -776,8 +784,8 @@ enum_variant = "TabBar"
 [blocks.tab-content]
 status = "implemented"
 category = "advanced"
-purpose = "Tab-associated content pane rendered when its named tab is active; width/align cap and center the content column"
-attributes = ["tab", "width", "align"]
+purpose = "Tab-associated content pane rendered when its named tab is active; width/align cap and center the content column. width accepts a per-size-class triple; classes/min-class gate which size classes it appears in"
+attributes = ["tab", "width", "align", "classes", "min-class"]
 degradation = "heading with content"
 enum_variant = "TabContent"
 
@@ -792,8 +800,8 @@ enum_variant = "Toolbar"
 [blocks.drawer]
 status = "implemented"
 category = "advanced"
-purpose = "Slide-out drawer panel with name, position, width, and optional trigger"
-attributes = ["name", "position", "width", "trigger"]
+purpose = "Slide-out drawer panel with name, position, width, and optional trigger. width accepts a per-size-class triple; classes/min-class gate which size classes it appears in"
+attributes = ["name", "position", "width", "trigger", "classes", "min-class"]
 degradation = "sequential child blocks"
 enum_variant = "Drawer"
 

@@ -18,6 +18,10 @@
 //! container remains the web injection point; this module is the canonical
 //! semantic owner for native targets and any future consolidation.
 
+use crate::types::{
+    Block, PerClass, SizeClass, SIZE_CLASS_DESKTOP_MIN, SIZE_CLASS_TABLET_MIN,
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // Fonts
 // ═══════════════════════════════════════════════════════════════════════
@@ -338,6 +342,28 @@ pub fn resolve_style_pack(key: &str) -> (&'static str, WsTokens) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// Size class — the responsive axis, resolved once (0.18)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Resolve a viewport width (logical pt/dp/css-px at 1x) to its
+/// [`SizeClass`].
+///
+/// Pure and total: every `u32` maps to a class, so a nonsense width can
+/// never break a render — the same discipline as [`resolve_style_pack`].
+/// Boundaries are half-open: `width < SIZE_CLASS_TABLET_MIN` is Mobile,
+/// `SIZE_CLASS_TABLET_MIN..SIZE_CLASS_DESKTOP_MIN` is Tablet, and
+/// `>= SIZE_CLASS_DESKTOP_MIN` is Desktop.
+pub fn resolve_size_class(width: u32) -> SizeClass {
+    if width >= SIZE_CLASS_DESKTOP_MIN {
+        SizeClass::Desktop
+    } else if width >= SIZE_CLASS_TABLET_MIN {
+        SizeClass::Tablet
+    } else {
+        SizeClass::Mobile
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Resolved theme — what both renderers project
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -390,6 +416,237 @@ pub fn resolve_theme(
         pack_id: pack_id.to_string(),
         tokens,
     }
+}
+
+/// Project a block tree onto ONE size class (0.18).
+///
+/// Two things happen, both pure:
+///
+/// * **gating** — a chrome block whose `classes=` set excludes `class`, or
+///   whose `min-class=` is above it, is dropped entirely.
+/// * **collapse** — every [`PerClass`] value is replaced by the single
+///   value that class selects, so the downstream renderers (which take no
+///   width) see an ordinary pre-0.18 document.
+///
+/// This is the width seam: hosts call [`resolve_size_class`] once, then
+/// project, then render. Blocks with no size-class attributes are cloned
+/// unchanged, so a document that never uses the axis round-trips exactly.
+pub fn resolve_blocks_for_class(blocks: &[Block], class: SizeClass) -> Vec<Block> {
+    blocks
+        .iter()
+        .filter_map(|b| project_block(b, class))
+        .collect()
+}
+
+/// True when a block gated by `classes` / `min_class` is visible in `class`.
+fn gate_admits(
+    classes: &Option<Vec<SizeClass>>,
+    min_class: &Option<SizeClass>,
+    class: SizeClass,
+) -> bool {
+    if let Some(cs) = classes
+        && !cs.contains(&class)
+    {
+        return false;
+    }
+    if let Some(m) = min_class
+        && class < *m
+    {
+        return false;
+    }
+    true
+}
+
+fn collapse(v: &Option<PerClass<u32>>, class: SizeClass) -> Option<PerClass<u32>> {
+    v.map(|p| PerClass::uniform(p.get(class)))
+}
+
+fn project_block(block: &Block, class: SizeClass) -> Option<Block> {
+    let recurse = |children: &Vec<Block>| resolve_blocks_for_class(children, class);
+    Some(match block {
+        Block::Sidebar {
+            position,
+            collapsible,
+            width,
+            classes,
+            min_class,
+            children,
+            span,
+        } => {
+            if !gate_admits(classes, min_class, class) {
+                return None;
+            }
+            Block::Sidebar {
+                position: position.clone(),
+                collapsible: *collapsible,
+                width: collapse(width, class),
+                classes: classes.clone(),
+                min_class: *min_class,
+                children: recurse(children),
+                span: *span,
+            }
+        }
+        Block::Panel {
+            position,
+            resizable,
+            height,
+            desktop_only,
+            classes,
+            min_class,
+            children,
+            span,
+        } => {
+            if !gate_admits(classes, min_class, class) {
+                return None;
+            }
+            Block::Panel {
+                position: position.clone(),
+                resizable: *resizable,
+                height: *height,
+                desktop_only: *desktop_only,
+                classes: classes.clone(),
+                min_class: *min_class,
+                children: recurse(children),
+                span: *span,
+            }
+        }
+        Block::TabContent {
+            tab,
+            width,
+            align,
+            classes,
+            min_class,
+            children,
+            span,
+        } => {
+            if !gate_admits(classes, min_class, class) {
+                return None;
+            }
+            Block::TabContent {
+                tab: tab.clone(),
+                width: collapse(width, class),
+                align: align.clone(),
+                classes: classes.clone(),
+                min_class: *min_class,
+                children: recurse(children),
+                span: *span,
+            }
+        }
+        Block::Drawer {
+            name,
+            position,
+            width,
+            trigger,
+            classes,
+            min_class,
+            children,
+            span,
+        } => {
+            if !gate_admits(classes, min_class, class) {
+                return None;
+            }
+            Block::Drawer {
+                name: name.clone(),
+                position: position.clone(),
+                width: collapse(width, class),
+                trigger: trigger.clone(),
+                classes: classes.clone(),
+                min_class: *min_class,
+                children: recurse(children),
+                span: *span,
+            }
+        }
+        Block::Features { cards, cols, span } => Block::Features {
+            cards: cards.clone(),
+            cols: collapse(cols, class),
+            span: *span,
+        },
+        Block::Gallery {
+            items,
+            columns,
+            span,
+        } => Block::Gallery {
+            items: items.clone(),
+            columns: collapse(columns, class),
+            span: *span,
+        },
+        Block::ProductGrid {
+            groups,
+            cols,
+            tiles,
+            span,
+        } => Block::ProductGrid {
+            groups: groups.clone(),
+            cols: collapse(cols, class),
+            tiles: *tiles,
+            span: *span,
+        },
+        // Containers with no size-class attributes of their own: recurse so
+        // gated descendants are still resolved.
+        Block::AppShell {
+            layout,
+            adaptive,
+            height,
+            children,
+            span,
+        } => Block::AppShell {
+            layout: *layout,
+            adaptive: *adaptive,
+            height: *height,
+            children: recurse(children),
+            span: *span,
+        },
+        Block::Modal {
+            name,
+            title,
+            width,
+            placement,
+            dismissible,
+            children,
+            span,
+        } => Block::Modal {
+            name: name.clone(),
+            title: title.clone(),
+            width: *width,
+            placement: placement.clone(),
+            dismissible: *dismissible,
+            children: recurse(children),
+            span: *span,
+        },
+        Block::Section {
+            bg,
+            headline,
+            subtitle,
+            content,
+            children,
+            span,
+        } => Block::Section {
+            bg: bg.clone(),
+            headline: headline.clone(),
+            subtitle: subtitle.clone(),
+            content: content.clone(),
+            children: recurse(children),
+            span: *span,
+        },
+        Block::Page {
+            route,
+            layout,
+            title,
+            sidebar,
+            content,
+            children,
+            span,
+        } => Block::Page {
+            route: route.clone(),
+            layout: layout.clone(),
+            title: title.clone(),
+            sidebar: *sidebar,
+            content: content.clone(),
+            children: recurse(children),
+            span: *span,
+        },
+        other => other.clone(),
+    })
 }
 
 #[cfg(test)]
@@ -576,5 +833,65 @@ mod tests {
         let t = resolve_theme(None, Some("surf-display"), None);
         assert!(t.font_display.as_deref().unwrap().contains("Surf Display"));
         assert!(t.font_body.as_deref().unwrap().contains("Surf Display"));
+    }
+
+    // ── Size class (0.18) ────────────────────────────────────────────
+
+    /// The two breakpoints are the whole contract with the clients; they are
+    /// pinned here and re-asserted against `assets/surfdoc.css` in
+    /// `tests/css_coverage.rs`.
+    #[test]
+    fn size_class_breakpoint_constants_are_768_and_1024() {
+        assert_eq!(SIZE_CLASS_TABLET_MIN, 768);
+        assert_eq!(SIZE_CLASS_DESKTOP_MIN, 1024);
+    }
+
+    /// Half-open boundaries: 767 is still Mobile, 768 is Tablet, 1023 is
+    /// still Tablet, 1024 is Desktop.
+    #[test]
+    fn size_class_boundaries_are_half_open() {
+        assert_eq!(resolve_size_class(767), SizeClass::Mobile);
+        assert_eq!(resolve_size_class(768), SizeClass::Tablet);
+        assert_eq!(resolve_size_class(1023), SizeClass::Tablet);
+        assert_eq!(resolve_size_class(1024), SizeClass::Desktop);
+    }
+
+    /// Total function: zero and saturated widths resolve, never panic.
+    #[test]
+    fn size_class_resolves_extreme_widths() {
+        assert_eq!(resolve_size_class(0), SizeClass::Mobile);
+        assert_eq!(resolve_size_class(1), SizeClass::Mobile);
+        assert_eq!(resolve_size_class(u32::MAX), SizeClass::Desktop);
+        // The three corpus widths this release pins.
+        assert_eq!(resolve_size_class(390), SizeClass::Mobile);
+        assert_eq!(resolve_size_class(834), SizeClass::Tablet);
+        assert_eq!(resolve_size_class(1280), SizeClass::Desktop);
+    }
+
+    /// Token round-trip, and unknown tokens degrade to `None`.
+    #[test]
+    fn size_class_token_round_trip() {
+        for c in SizeClass::ALL {
+            assert_eq!(SizeClass::parse(c.as_str()), Some(c));
+        }
+        assert_eq!(SizeClass::parse("  DESKTOP "), Some(SizeClass::Desktop));
+        assert_eq!(SizeClass::parse("watch"), None);
+        assert_eq!(SizeClass::parse(""), None);
+    }
+
+    /// A uniform PerClass is indistinguishable from the old scalar.
+    #[test]
+    fn per_class_uniform_broadcasts_and_detects() {
+        let p = PerClass::uniform(3u32);
+        assert_eq!(p.get(SizeClass::Mobile), 3);
+        assert_eq!(p.get(SizeClass::Desktop), 3);
+        assert_eq!(p.as_uniform(), Some(3));
+        let v = PerClass {
+            mobile: 1u32,
+            tablet: 2,
+            desktop: 3,
+        };
+        assert_eq!(v.as_uniform(), None);
+        assert_eq!(v.get(SizeClass::Tablet), 2);
     }
 }

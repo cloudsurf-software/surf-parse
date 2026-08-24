@@ -7,6 +7,7 @@
 
 use crate::citation::{Author, Reference, RefType};
 use crate::types::{
+    AdaptiveLayout, PerClass, SizeClass,
     Block, CalloutType, ChartType, ColumnContent, DataFormat, DecisionStatus, EmbedType, FaqItem,
     FeatureCard, Format, FooterSection, FormField, FormFieldType, FrontMatter, GalleryItem, HeroButton,
     HttpMethod, ListDisplay, NavItem, RowState, SocialLink, Span, StatItem, StepItem,
@@ -474,7 +475,7 @@ impl SurfDocBuilder {
     pub fn gallery(mut self, items: Vec<GalleryItem>, columns: Option<u32>) -> Self {
         self.blocks.push(Block::Gallery {
             items,
-            columns,
+            columns: columns.map(PerClass::uniform),
             span: Span::SYNTHETIC,
         });
         self
@@ -546,7 +547,7 @@ impl SurfDocBuilder {
     pub fn features(mut self, cards: Vec<FeatureCard>, cols: Option<u32>) -> Self {
         self.blocks.push(Block::Features {
             cards,
-            cols,
+            cols: cols.map(PerClass::uniform),
             span: Span::SYNTHETIC,
         });
         self
@@ -877,6 +878,7 @@ fn doc_type_str(dt: crate::types::DocType) -> &'static str {
         DocType::Slides => "slides",
         DocType::Presentation => "presentation",
         DocType::Paper => "paper",
+        DocType::Contract => "contract",
     }
 }
 
@@ -887,6 +889,7 @@ fn doc_status_str(s: crate::types::DocStatus) -> &'static str {
         DocStatus::Active => "active",
         DocStatus::Closed => "closed",
         DocStatus::Archived => "archived",
+        DocStatus::Ratified => "ratified",
     }
 }
 
@@ -1817,7 +1820,7 @@ fn serialize_block(block: &Block) -> String {
 
         Block::Features { cards, cols, .. } => {
             let attrs_str = cols
-                .map(|c| format!("[cols={}]", c))
+                .map(|c| format!("[cols={}]", c.to_attr_source()))
                 .unwrap_or_default();
             let mut content_lines = Vec::new();
             for card in cards {
@@ -2824,8 +2827,14 @@ fn serialize_block(block: &Block) -> String {
 
         // ── Interactive / application blocks ──────────────────────
 
-        Block::AppShell { layout, height, children, .. } => {
-            let mut attrs_parts = vec![format!("layout=\"{}\"", escape_attr(layout))];
+        Block::AppShell { layout, adaptive, height, children, .. } => {
+            let mut attrs_parts = vec![format!("layout=\"{}\"", layout.as_str())];
+            if let Some(a) = adaptive {
+                let d = AdaptiveLayout::default();
+                if a.mobile != d.mobile { attrs_parts.push(format!("mobile={}", a.mobile.as_str())); }
+                if a.tablet != d.tablet { attrs_parts.push(format!("tablet={}", a.tablet.as_str())); }
+                if a.desktop != d.desktop { attrs_parts.push(format!("desktop={}", a.desktop.as_str())); }
+            }
             if let Some(h) = height { attrs_parts.push(format!("height={h}")); }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
@@ -2836,10 +2845,11 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Sidebar { position, collapsible, width, children, .. } => {
+        Block::Sidebar { position, collapsible, width, classes, min_class, children, .. } => {
             let mut attrs_parts = vec![format!("position={position}")];
             if *collapsible { attrs_parts.push("collapsible=true".to_string()); }
-            if let Some(w) = width { attrs_parts.push(format!("width={w}")); }
+            if let Some(w) = width { attrs_parts.push(format!("width={}", w.to_attr_source())); }
+            attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
@@ -2849,11 +2859,16 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Panel { position, resizable, height, desktop_only, children, .. } => {
+        Block::Panel { position, resizable, height, desktop_only, classes, min_class, children, .. } => {
             let mut attrs_parts = vec![format!("position={position}")];
             if *resizable { attrs_parts.push("resizable=true".to_string()); }
             if let Some(h) = height { attrs_parts.push(format!("height={h}")); }
             if *desktop_only { attrs_parts.push("desktop-only=true".to_string()); }
+            // The deprecated alias already spells `classes=desktop`; do not
+            // emit both forms or the round-trip stops being a fixed point.
+            let alias_covered =
+                *desktop_only && classes.as_deref() == Some(&[SizeClass::Desktop][..]);
+            attrs_parts.extend(class_conditional_attrs(classes, min_class, alias_covered));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
@@ -2872,6 +2887,7 @@ fn serialize_block(block: &Block) -> String {
             for item in items {
                 let mut brace_parts = Vec::new();
                 if let Some(icon) = &item.icon { brace_parts.push(format!("icon={icon}")); }
+                if let Some(role) = &item.role { brace_parts.push(format!("role={role}")); }
                 if item.unread { brace_parts.push("unread".to_string()); }
                 if brace_parts.is_empty() {
                     lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)));
@@ -2892,10 +2908,11 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::TabContent { tab, width, align, children, .. } => {
+        Block::TabContent { tab, width, align, classes, min_class, children, .. } => {
             let mut attrs_parts = vec![format!("tab=\"{}\"", escape_attr(tab))];
-            if let Some(w) = width { attrs_parts.push(format!("width={w}")); }
+            if let Some(w) = width { attrs_parts.push(format!("width={}", w.to_attr_source())); }
             if let Some(a) = align { attrs_parts.push(format!("align={a}")); }
+            attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
@@ -2959,10 +2976,11 @@ fn serialize_block(block: &Block) -> String {
             }
         }
 
-        Block::Drawer { name, position, width, trigger, children, .. } => {
+        Block::Drawer { name, position, width, trigger, classes, min_class, children, .. } => {
             let mut attrs_parts = vec![format!("name=\"{}\"", escape_attr(name)), format!("position={position}")];
-            if let Some(w) = width { attrs_parts.push(format!("width={w}")); }
+            if let Some(w) = width { attrs_parts.push(format!("width={}", w.to_attr_source())); }
             if let Some(t) = trigger { attrs_parts.push(format!("trigger={t}")); }
+            attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let inner = serialize_children(children);
             if inner.is_empty() {
@@ -3258,6 +3276,28 @@ fn serialize_block(block: &Block) -> String {
 // -----------------------------------------------------------------------
 
 /// Serialize child blocks into a single string for container blocks.
+/// Re-emit the 0.18 class-conditional attributes. `alias_covered` is true
+/// when a deprecated alias (`desktop-only=true`) already carries exactly
+/// this class set — the builder then re-emits the SOURCE form it read and
+/// stays fixed-point.
+fn class_conditional_attrs(
+    classes: &Option<Vec<SizeClass>>,
+    min_class: &Option<SizeClass>,
+    alias_covered: bool,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(cs) = classes
+        && !alias_covered
+    {
+        let joined: Vec<&str> = cs.iter().map(|c| c.as_str()).collect();
+        out.push(format!("classes={}", joined.join(",")));
+    }
+    if let Some(m) = min_class {
+        out.push(format!("min-class={}", m.as_str()));
+    }
+    out
+}
+
 fn serialize_children(children: &[Block]) -> String {
     let parts: Vec<String> = children.iter().map(|b| serialize_block(b)).collect();
     parts.join("\n\n")

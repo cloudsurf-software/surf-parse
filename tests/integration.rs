@@ -281,7 +281,7 @@ Automatic time tracking.
     assert!(features.is_some(), "Should contain a Features block");
 
     if let Some(Block::Features { cards, cols, .. }) = features {
-        assert_eq!(*cols, Some(3));
+        assert_eq!(*cols, Some(surf_parse::PerClass::uniform(3)));
         assert_eq!(cards.len(), 3);
         assert_eq!(cards[0].icon.as_deref(), Some("zap"));
         assert_eq!(cards[1].icon.as_deref(), Some("shield"));

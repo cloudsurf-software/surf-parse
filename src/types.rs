@@ -127,6 +127,9 @@ pub enum DocType {
     /// Scientific/academic paper. Pairs with a [`Format`] (`ieee`/`acm`/
     /// `article`) to select a paper template at render time.
     Paper,
+    /// Governing contract document: ratified law a build validates
+    /// against, not a plan.
+    Contract,
 }
 
 /// Publication / citation format for papers and reports (front matter
@@ -158,6 +161,289 @@ pub enum Format {
     #[serde(alias = "Chicago", alias = "CHICAGO")]
     Chicago,
 }
+
+/// Minimum viewport width (logical pt/dp/css-px at 1x) for the
+/// [`SizeClass::Tablet`] class. Below this the class is
+/// [`SizeClass::Mobile`].
+pub const SIZE_CLASS_TABLET_MIN: u32 = 768;
+
+/// Minimum viewport width (logical pt/dp/css-px at 1x) for the
+/// [`SizeClass::Desktop`] class.
+pub const SIZE_CLASS_DESKTOP_MIN: u32 = 1024;
+
+/// The resolved viewport size class — the single axis every chrome block
+/// selects on (0.18).
+///
+/// Resolved ONCE in Rust from a viewport width (see
+/// [`crate::resolve::resolve_size_class`]); clients never re-derive it and
+/// never carry their own breakpoint table. The two boundaries are
+/// [`SIZE_CLASS_TABLET_MIN`] and [`SIZE_CLASS_DESKTOP_MIN`], expressed in
+/// logical points (iOS), density-independent pixels (Android) or CSS pixels
+/// (web) at 1x.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SizeClass {
+    /// Width < [`SIZE_CLASS_TABLET_MIN`] — phone portrait, narrow web.
+    Mobile,
+    /// [`SIZE_CLASS_TABLET_MIN`] <= width < [`SIZE_CLASS_DESKTOP_MIN`].
+    Tablet,
+    /// Width >= [`SIZE_CLASS_DESKTOP_MIN`].
+    Desktop,
+}
+
+impl SizeClass {
+    /// The wire/attribute token for this class (`"mobile"`, `"tablet"`,
+    /// `"desktop"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SizeClass::Mobile => "mobile",
+            SizeClass::Tablet => "tablet",
+            SizeClass::Desktop => "desktop",
+        }
+    }
+
+    /// Parse an authored token. Case- and whitespace-insensitive; unknown
+    /// tokens yield `None` (callers degrade, never fail).
+    pub fn parse(token: &str) -> Option<SizeClass> {
+        match token.trim().to_ascii_lowercase().as_str() {
+            "mobile" => Some(SizeClass::Mobile),
+            "tablet" => Some(SizeClass::Tablet),
+            "desktop" => Some(SizeClass::Desktop),
+            _ => None,
+        }
+    }
+
+    /// All three classes in ascending width order.
+    pub const ALL: [SizeClass; 3] = [SizeClass::Mobile, SizeClass::Tablet, SizeClass::Desktop];
+}
+
+/// A value that may vary per [`SizeClass`], authored as a whitespace
+/// separated triple in mobile/tablet/desktop order (`cols="1 2 3"`).
+///
+/// A single authored value broadcasts to all three classes and MUST
+/// round-trip byte-identically to the pre-0.18 scalar form — the whole
+/// existing corpus depends on it.
+/// Serde note: a uniform `PerClass` serializes as the BARE scalar it came
+/// from, so every pre-0.18 document round-trips byte-identically; only a
+/// genuinely varying triple widens to a `[mobile, tablet, desktop]` array.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PerClass<T> {
+    pub mobile: T,
+    pub tablet: T,
+    pub desktop: T,
+}
+
+/// Re-emits the authored form: a uniform triple prints as the bare scalar
+/// (so `width=880` round-trips byte-identically through the builder), a
+/// varying one as the space-separated mobile/tablet/desktop triple.
+impl<T: std::fmt::Display + Copy + PartialEq> std::fmt::Display for PerClass<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.as_uniform() {
+            Some(v) => write!(f, "{v}"),
+            None => write!(f, "{} {} {}", self.mobile, self.tablet, self.desktop),
+        }
+    }
+}
+
+impl<T: std::fmt::Display + Copy + PartialEq> PerClass<T> {
+    /// The form a re-serializer writes back into `::block[...]` attributes:
+    /// a bare scalar when uniform (byte-identical to pre-0.18 sources), a
+    /// QUOTED triple when the value varies (it contains spaces).
+    pub fn to_attr_source(&self) -> String {
+        match self.as_uniform() {
+            Some(v) => format!("{v}"),
+            None => format!("\"{} {} {}\"", self.mobile, self.tablet, self.desktop),
+        }
+    }
+}
+
+impl<T: Serialize + Copy + PartialEq> Serialize for PerClass<T> {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        match self.as_uniform() {
+            Some(v) => v.serialize(ser),
+            None => {
+                use serde::ser::SerializeSeq;
+                let mut seq = ser.serialize_seq(Some(3))?;
+                seq.serialize_element(&self.mobile)?;
+                seq.serialize_element(&self.tablet)?;
+                seq.serialize_element(&self.desktop)?;
+                seq.end()
+            }
+        }
+    }
+}
+
+impl<'de, T> Deserialize<'de> for PerClass<T>
+where
+    T: Deserialize<'de> + Copy,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<PerClass<T>, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Wire<T> {
+            Triple([T; 3]),
+            One(T),
+        }
+        Ok(match Wire::<T>::deserialize(de)? {
+            Wire::One(v) => PerClass {
+                mobile: v,
+                tablet: v,
+                desktop: v,
+            },
+            Wire::Triple([m, t, d]) => PerClass {
+                mobile: m,
+                tablet: t,
+                desktop: d,
+            },
+        })
+    }
+}
+
+impl<T: Copy> PerClass<T> {
+    /// One value for every class.
+    pub fn uniform(v: T) -> PerClass<T> {
+        PerClass {
+            mobile: v,
+            tablet: v,
+            desktop: v,
+        }
+    }
+
+    /// The value selected for `class`.
+    pub fn get(&self, class: SizeClass) -> T {
+        match class {
+            SizeClass::Mobile => self.mobile,
+            SizeClass::Tablet => self.tablet,
+            SizeClass::Desktop => self.desktop,
+        }
+    }
+}
+
+impl<T: Copy + PartialEq> PerClass<T> {
+    /// `Some(v)` when all three classes carry the same value — the
+    /// byte-identity path for re-serialization and HTML/native emission.
+    pub fn as_uniform(&self) -> Option<T> {
+        if self.mobile == self.tablet && self.tablet == self.desktop {
+            Some(self.mobile)
+        } else {
+            None
+        }
+    }
+}
+
+/// The ratified `::app-shell[layout=]` vocabulary (0.18).
+///
+/// Unknown authored values DEGRADE to [`AppShellLayout::SidebarMainPanel`]
+/// and raise lint L041 — an out-of-vocabulary layout is never a failed
+/// render.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AppShellLayout {
+    /// The classic three-column desktop shell (default).
+    SidebarMainPanel,
+    /// A tab-bar-first shell at every size class.
+    Tabs,
+    /// Per-size-class navigation, configured by the `mobile=`/`tablet=`/
+    /// `desktop=` sub-attrs (see [`AdaptiveLayout`]).
+    Adaptive,
+}
+
+impl AppShellLayout {
+    /// The canonical attribute token.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AppShellLayout::SidebarMainPanel => "sidebar-main-panel",
+            AppShellLayout::Tabs => "tabs",
+            AppShellLayout::Adaptive => "adaptive",
+        }
+    }
+
+    /// Parse an authored token; `None` for anything outside the vocabulary.
+    pub fn parse(token: &str) -> Option<AppShellLayout> {
+        match token.trim().to_ascii_lowercase().as_str() {
+            "sidebar-main-panel" => Some(AppShellLayout::SidebarMainPanel),
+            "tabs" => Some(AppShellLayout::Tabs),
+            "adaptive" => Some(AppShellLayout::Adaptive),
+            _ => None,
+        }
+    }
+
+    /// The value an unknown token degrades to.
+    pub const DEFAULT: AppShellLayout = AppShellLayout::SidebarMainPanel;
+
+    /// Every ratified token, for lint messages and the spec registry.
+    pub const TOKENS: [&'static str; 3] = ["sidebar-main-panel", "tabs", "adaptive"];
+}
+
+/// The navigation affordance an `layout=adaptive` shell uses in one size
+/// class (0.18).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AdaptiveMode {
+    /// Bottom tab bar.
+    Tabs,
+    /// Narrow icon rail.
+    Rail,
+    /// Full sidebar.
+    Sidebar,
+}
+
+impl AdaptiveMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AdaptiveMode::Tabs => "tabs",
+            AdaptiveMode::Rail => "rail",
+            AdaptiveMode::Sidebar => "sidebar",
+        }
+    }
+
+    pub fn parse(token: &str) -> Option<AdaptiveMode> {
+        match token.trim().to_ascii_lowercase().as_str() {
+            "tabs" => Some(AdaptiveMode::Tabs),
+            "rail" => Some(AdaptiveMode::Rail),
+            "sidebar" => Some(AdaptiveMode::Sidebar),
+            _ => None,
+        }
+    }
+
+    /// Every ratified token, for lint messages and the spec registry.
+    pub const TOKENS: [&'static str; 3] = ["tabs", "rail", "sidebar"];
+}
+
+/// The resolved `mobile=`/`tablet=`/`desktop=` triple of an
+/// `::app-shell[layout=adaptive]` (0.18). Absent sub-attrs take the
+/// platform defaults: tabs on mobile, rail on tablet, sidebar on desktop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdaptiveLayout {
+    pub mobile: AdaptiveMode,
+    pub tablet: AdaptiveMode,
+    pub desktop: AdaptiveMode,
+}
+
+impl Default for AdaptiveLayout {
+    fn default() -> Self {
+        AdaptiveLayout {
+            mobile: AdaptiveMode::Tabs,
+            tablet: AdaptiveMode::Rail,
+            desktop: AdaptiveMode::Sidebar,
+        }
+    }
+}
+
+impl AdaptiveLayout {
+    /// The mode selected for `class`.
+    pub fn get(&self, class: SizeClass) -> AdaptiveMode {
+        match class {
+            SizeClass::Mobile => self.mobile,
+            SizeClass::Tablet => self.tablet,
+            SizeClass::Desktop => self.desktop,
+        }
+    }
+}
+
+/// The ratified `::page[layout=]` vocabulary (0.18). Unknown values degrade
+/// to `default` and raise lint L041.
+pub const PAGE_LAYOUTS: [&str; 4] = ["default", "hero", "cards", "split"];
 
 /// A resolved rendering profile: the engine-level decision of *what kind of
 /// artifact* a document produces, derived once from `(DocType, Option<Format>)`
@@ -207,7 +493,8 @@ pub fn render_profile(doc_type: Option<DocType>, format: Option<Format>) -> Rend
             | DocType::Incident
             | DocType::Review
             | DocType::App
-            | DocType::Manifest => RenderProfile::Document,
+            | DocType::Manifest
+            | DocType::Contract => RenderProfile::Document,
         },
     }
 }
@@ -220,6 +507,8 @@ pub enum DocStatus {
     Active,
     Closed,
     Archived,
+    /// Approved and frozen — the terminal status of a contract document.
+    Ratified,
 }
 
 /// Visibility/access scope.
@@ -506,6 +795,10 @@ pub enum Block {
     /// Grid of product link-cards, optionally split into labelled groups.
     ProductGrid {
         groups: Vec<ProductGroup>,
+        /// Per-size-class column count (`cols="1 2 3"`). New in 0.18 — the
+        /// block carried no column attribute before.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cols: Option<PerClass<u32>>,
         /// `[tiles]` — apple.com-style promo tiles (full-bleed 2-up band,
         /// centered headline/tagline/CTA over a per-card background) instead
         /// of the compact emblem link-cards.
@@ -533,7 +826,10 @@ pub enum Block {
     /// Image gallery with optional categories.
     Gallery {
         items: Vec<GalleryItem>,
-        columns: Option<u32>,
+        /// Per-size-class since 0.18 (`columns="1 2 3"`); the attribute is
+        /// spelled `columns` here and `cols` on `::features` — both names
+        /// are frozen, only the per-class VALUE form is new.
+        columns: Option<PerClass<u32>>,
         span: Span,
     },
     /// Structured footer with sections, copyright, and social links.
@@ -590,7 +886,8 @@ pub enum Block {
     /// Card grid for features, products, or values.
     Features {
         cards: Vec<FeatureCard>,
-        cols: Option<u32>,
+        /// Per-size-class since 0.18 (`cols="1 2 3"`).
+        cols: Option<PerClass<u32>>,
         span: Span,
     },
     /// Numbered process/timeline steps.
@@ -1019,7 +1316,13 @@ pub enum Block {
 
     /// Root app container with layout mode.
     AppShell {
-        layout: String,
+        /// Typed since 0.18 — unknown authored values degrade to
+        /// [`AppShellLayout::DEFAULT`] and raise lint L041.
+        layout: AppShellLayout,
+        /// The `mobile=`/`tablet=`/`desktop=` triple, present only for
+        /// `layout=adaptive`. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        adaptive: Option<AdaptiveLayout>,
         /// Explicit shell height in px; overrides the static-render clamp.
         height: Option<u32>,
         children: Vec<Block>,
@@ -1029,7 +1332,15 @@ pub enum Block {
     Sidebar {
         position: String,
         collapsible: bool,
-        width: Option<u32>,
+        /// Per-size-class since 0.18 (`width="0 72 260"`); a single value
+        /// broadcasts and round-trips byte-identically.
+        width: Option<PerClass<u32>>,
+        /// `classes=` — the size classes this block is shown in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        classes: Option<Vec<SizeClass>>,
+        /// `min-class=` — the smallest size class this block appears in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_class: Option<SizeClass>,
         children: Vec<Block>,
         span: Span,
     },
@@ -1038,7 +1349,17 @@ pub enum Block {
         position: String,
         resizable: bool,
         height: Option<u32>,
+        /// DEPRECATED 0.18 — the authored `desktop-only=true` alias for
+        /// `classes=desktop`. Still parsed and re-emitted verbatim; lint
+        /// L042 flags it. Read `classes` for the resolved answer.
         desktop_only: bool,
+        /// `classes=` — the size classes this block is shown in. (0.18)
+        /// `desktop-only=true` normalizes into this set.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        classes: Option<Vec<SizeClass>>,
+        /// `min-class=` — the smallest size class this block appears in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_class: Option<SizeClass>,
         children: Vec<Block>,
         span: Span,
     },
@@ -1052,12 +1373,18 @@ pub enum Block {
     TabContent {
         tab: String,
         /// Content-column width cap in px (`width=880`) — the ruled
-        /// centered-column idiom for library lists. HTML-only, like
-        /// app-shell `height`. (0.13)
-        width: Option<u32>,
+        /// centered-column idiom for library lists. (0.13) Per-size-class
+        /// since 0.18 (`width="0 700 880"`).
+        width: Option<PerClass<u32>>,
         /// Horizontal alignment of the capped column (`align=center`).
         /// HTML-only. (0.13)
         align: Option<String>,
+        /// `classes=` — the size classes this block is shown in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        classes: Option<Vec<SizeClass>>,
+        /// `min-class=` — the smallest size class this block appears in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_class: Option<SizeClass>,
         children: Vec<Block>,
         span: Span,
     },
@@ -1075,8 +1402,15 @@ pub enum Block {
     Drawer {
         name: String,
         position: String,
-        width: Option<u32>,
+        /// Per-size-class since 0.18 (`width="320 380 420"`).
+        width: Option<PerClass<u32>>,
         trigger: Option<String>,
+        /// `classes=` — the size classes this block is shown in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        classes: Option<Vec<SizeClass>>,
+        /// `min-class=` — the smallest size class this block appears in. (0.18)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_class: Option<SizeClass>,
         children: Vec<Block>,
         span: Span,
     },
@@ -1290,6 +1624,11 @@ pub struct TabBarItem {
     pub icon: Option<String>,
     /// Right-side blue unread dot on the tab item.
     pub unread: bool,
+    /// Semantic role token carried verbatim to native clients
+    /// (e.g. "primary", "more", "compose"). New in 0.18 — before this the
+    /// value died at the FFI boundary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// An item within a `Toolbar` block.
