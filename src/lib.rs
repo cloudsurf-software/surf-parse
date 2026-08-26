@@ -14,6 +14,7 @@
 //! ```
 
 pub mod attrs;
+pub mod block_meta;
 pub mod blocks;
 pub mod builder;
 pub(crate) mod chart;

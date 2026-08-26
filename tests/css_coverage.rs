@@ -64,12 +64,17 @@ const ALLOWLIST: &[&str] = &[
 /// implemented of 112 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 const SNIPPETS: &[(&str, &str)] = &[
+    ("banner", "::banner[id=contact]\n# Talk to us\nWe reply within one business day.\n[Book a call](/book)\n::"),
+    ("bibliography", "::bibliography[style=apa]\n::"),
+    ("booking", "::booking[title=\"Book a session\" service-label=Service]\n- service: Strategy Call | 60 min | $200\n- day: 2026-09-01 | 09:00, 10:00\n::"),
     ("callout", "::callout[type=warning title=\"Heads up\"]\nBody\n::"),
+    ("cite", "::cite[key=bourne2026 type=article]\ntitle: Tidal Records\nauthor: R. Bourne\nyear: 2026\n::"),
     ("chart", "::chart[type=line source=\"/api/metrics\" period=weekly title=\"WAU\"]\n::"),
     ("code", "::code[lang=rust file=src/main.rs]\nfn main() {}\n::"),
     ("columns", "::columns\n::: column\nLeft\n:::\n::: column\nRight\n:::\n::"),
     ("cta", "::cta[label=\"Go\" href=/go primary=true]\n::"),
     ("data", "::data[sortable=true]\n| A | B |\n|---|---|\n| 1 | 2 |\n::"),
+    ("store", "::store[title=\"Sweet Delights Bakery\" currency=USD]\n- category: Pastries\n- item: Almond Croissant | 4.50 | Flaky and filled | New\n::"),
     ("decision", "::decision[status=accepted date=2026-06-11]\nShip it.\n::"),
     ("diagram", "::diagram[type=architecture title=\"Flow\"]\nweb: Web\napi: API\nweb -> api: HTTPS\n::"),
     ("details", "::details[title=\"More\" open=true]\nHidden\n::"),
@@ -78,7 +83,7 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("faq", "::faq\n- q=\"Fast?\" a=\"Yes.\"\n::"),
     ("figure", "::figure[src=/img/a.png alt=\"A\" caption=\"First\"]\n::"),
     ("footer", "::footer[copyright=\"© 2026\"]\n::"),
-    ("form", "::form[submit=\"Send\"]\n- name text \"Your name\" required\n- email email \"Email\"\n::"),
+    ("form", "::form[submit=\"Send\"]\ngroup: Contact\n- Name (text, \"Your name\") *\n- Email (email)\ngroup: Preferences\n- Plan (radio: Free | Pro)\n- Subscribe (checkbox)\n- Dark mode (toggle)\n- Resume (file)\n- Source (hidden, \"pricing\")\n::"),
     ("gallery", "::gallery[columns=2]\n- src=/img/a.png alt=\"A\" caption=\"First\"\n::"),
     ("hero-image", "::hero-image[src=/img/hero.png alt=\"Hero\"]\n::"),
     ("metric", "::metric[label=\"Tests\" value=42 trend=up unit=tests]\n::"),

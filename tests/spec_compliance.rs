@@ -7,16 +7,18 @@ const ENUM_VARIANTS: &[&str] = &[
     // Core document blocks
     "Callout", "Code", "Data", "Decision", "Details", "Diagram", "Figure",
     "Metric", "Quote", "Summary", "Tasks",
+    // Citations
+    "Cite", "Bibliography",
     // Layout
     "Columns", "Divider", "Section", "Tabs",
     // Web / landing page
     "BeforeAfter", "Comparison", "Cta", "Embed", "Faq", "Features",
     "Footer", "Form", "Gallery", "Gate", "Hero", "HeroImage", "Logo",
-    "Nav", "Pipeline", "PostGrid", "PricingTable", "ProductCard", "ProductGrid", "Site", "Page",
+    "Banner", "Nav", "Pipeline", "PostGrid", "PricingTable", "ProductCard", "ProductGrid", "Site", "Page",
     "Stats", "Steps", "Style", "Testimonial", "Toc",
     // App description (data-bound UI)
-    "Action", "Board", "ChatInput", "Dashboard", "Feed", "FilterBar",
-    "List", "Search",
+    "Action", "Board", "Booking", "ChatInput", "Dashboard", "Feed", "FilterBar",
+    "List", "Search", "Store",
     // Compound widget mount points
     "Chart", "Editor", "SplitPane",
     // Infrastructure manifest

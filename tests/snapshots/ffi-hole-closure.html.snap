@@ -1,4 +1,4 @@
-<section class="surfdoc-banner" id="announce"><div class="surfdoc-banner-inner"><h2 class="surfdoc-banner-headline">Surfspace 1.4 is here</h2><p class="surfdoc-banner-subtitle">One file, two native clients.</p><div class="surfdoc-banner-actions"><a href="/download" class="surfdoc-banner-btn surfdoc-banner-btn-primary">Get the update</a><a href="/notes" class="surfdoc-banner-btn surfdoc-banner-btn-secondary">Release notes</a></div></div></section>
+<section data-block-id="announce" class="surfdoc-banner" id="announce"><div class="surfdoc-banner-inner"><h2 class="surfdoc-banner-headline">Surfspace 1.4 is here</h2><p class="surfdoc-banner-subtitle">One file, two native clients.</p><div class="surfdoc-banner-actions"><a href="/download" class="surfdoc-banner-btn surfdoc-banner-btn-primary">Get the update</a><a href="/notes" class="surfdoc-banner-btn surfdoc-banner-btn-secondary">Release notes</a></div></div></section>
 
 
 <p>Inline citation <a class="surfdoc-cite" href="#ref-davis2026">(Davis, 2026)</a> backs the claim.</p>

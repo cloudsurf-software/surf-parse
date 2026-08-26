@@ -3,6 +3,161 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.18.1 — 2026-08-26 (registry drift closed, form vocabulary, block attributes, schema v6)
+
+An attributes-and-registry release: no new `Block` variant, no grammar change.
+Every addition is an attribute, an enum case, or a registry row.
+
+### Fixed
+
+- **Nested blocks now carry real spans.** Children of `::page`, `::section`,
+  `::slide`, `::app-shell`, `::sidebar`, `::panel`, `::tab-content`,
+  `::drawer`, `::modal`, `::split-pane` panes and `::app` used to be parsed
+  from the container's content string with a placeholder `0..0` span. With
+  0.18.1's span-keyed addressing table that placeholder collapsed every
+  nested sibling onto one entry, so a page holding `::hero[id=login-hero]`
+  and `::form[id=login-form]` rendered BOTH roots as
+  `data-block-id="login-form"`. `parse_page_children_in` now anchors each
+  child at the container's content start (`block_meta::content_start`), so
+  nested spans slice the source at the directive itself (line numbers too)
+  and every nested block keeps its own identity — in `data-block-id`, in
+  `NativeDoc.block_meta`, and in the native `span` field. Hand-built blocks
+  (no parse) keep the placeholder span. Regression:
+  `tests/block_addressing_nested.rs`.
+
+### Added
+
+- **Registry drift closed.** `spec/blocks.toml` now registers `banner`,
+  `booking`, `store`, `cite` and `bibliography` (all long since implemented in
+  the parser) plus `notes` as `planned` — the presenter-notes directive the
+  slide parser folds into `Slide.notes`, which has no standalone variant.
+  `::store`, `::booking`, `::banner`, `::cite` and `::bibliography` no longer
+  raise **L020**. The registry keeps ONE canonical name per directive; the
+  parser aliases `reference-def`, `references`, `speaker-notes` and
+  `presenter-notes` live in `lint::EXTRA_KNOWN_BLOCK_NAMES` beside the existing
+  `action-items` / `info-card` precedent. `meta.total_blocks` 114 → 120.
+- **Five form field types.** `FormFieldType` gains `Checkbox`, `Radio`,
+  `Toggle`, `File` and `Hidden` (serde lowercase). The grammar is
+  `- Label (checkbox)`, and `radio` reads its choices exactly the way `select`
+  does: `- Plan (radio: Free | Pro | Team)`. `switch` is an accepted alias of
+  `toggle`, `multiline` of `textarea`. The `- <type>: Label` colon shorthand
+  learned all five keywords. Both parse sites (`::form` and `::action`) now
+  share one spec parser, so they can never drift.
+  - HTML: `<input type="checkbox|radio|file|hidden">`; a toggle is a checkbox
+    carrying `role="switch"`; a radio group with options emits one
+    `<input type="radio">` per choice inside `.surfdoc-form-options`; a hidden
+    field emits no label and no wrapper and takes its value from the
+    placeholder slot (`- Source (hidden, "pricing-page")`).
+  - Native: `field_type` gains the five strings `checkbox`/`radio`/`toggle`/
+    `file`/`hidden`.
+- **Form field groups.** A `group: Label` line inside `::form` opens a
+  `<fieldset>` with that `<legend>`, running until the next `group:` line or
+  the end of the block; a bare `group:` closes the run. **Shape:** the group
+  name is carried as an optional `group` field on `FormField`, NOT as a new
+  vector on `Block::Form` — `Form`'s public fields are unchanged and every
+  existing construction site keeps compiling with `group: None`. Renderers
+  wrap each run of fields sharing a value. `::action` is unaffected.
+- **Block attributes.**
+  - `::product-card[price= currency=]` → `<span class="surfdoc-product-price"
+    data-currency="…">`. The price is emitted verbatim; the currency rides as
+    data so hosts can localise without the parser reformatting money.
+  - `::pricing-table[highlight= current=]` — the tier named by `highlight=`
+    renders featured and carries `data-highlight`; the tier named by
+    `current=` carries `data-current`. Matching is on the col-0 tier label,
+    case-insensitive, bold markers ignored.
+  - `::data[caption=]` → `<caption>`, and a trailing `total: a | b | c` line
+    becomes a `<tfoot>` summary row instead of a data row. Only a line whose
+    first token is `total:` counts, so a cell that merely says "Total revenue"
+    is untouched.
+  - `::metric[min= max=]` → a `<meter>` under the metric card when `max=` is
+    set and both numbers parse; a non-numeric value never produces a gauge.
+  - `::progress[value= max=]` → a determinate `<progress>` element. `max=`
+    defaults to 100. Without `value=` the block keeps its step list exactly as
+    before.
+  - Registry `attributes` lists updated for `data`, `metric`, `pricing-table`,
+    `progress`, `product-card` and `form` (whose row was also missing
+    `action`, `method` and `honeypot`).
+- **Block addressing — `id=` and `label=` on every block kind.** Both parsed
+  silently before; now they are captured and rendered. `id=` becomes
+  `data-block-id` and `label=` becomes `aria-label`, spliced into the block
+  root's opening tag ahead of the renderer's own attributes
+  (`<div data-block-id="hero" class="surfdoc-hero">`); values are
+  HTML-escaped. Nested blocks (inside `::page`, `::section`) are addressable
+  too. A directive that already spends `id=` on its own semantics — `::data`,
+  `::banner` — keeps that meaning and gains the addressing attribute beside
+  it.
+  - **Where they are captured (design decision).** In a span-keyed side table,
+    `src/block_meta.rs`, filled from `blocks::resolve_block` — the one funnel
+    both the top-level scan and `parse_page_children` pass through — and read
+    back by the renderers through the new `Block::span()` accessor. The two
+    alternatives were worse: a field on all 109 `Block` variants is exactly
+    what the drift guards exist to prevent, and a field on `SurfDoc` means 64
+    struct-literal construction sites plus a serde shape change for every
+    JSON/WASM consumer. The table is thread-local and holds one document —
+    `parse()` clears it, and the full-document renderers resolve lookups only
+    when a hash of `doc.source` matches the source that filled it, so a
+    hand-built or previously-parsed document emits nothing rather than
+    something wrong.
+  - **The `label=` gate.** Six implemented directives already spend `label=`
+    on their own semantics (`::metric`, `::cta`, `::divider`, `::action`,
+    `::dropdown-select`, `::chip-input`; `::countdown` is registered but
+    planned). On those, `label=` stays the caption or button text and no
+    `aria-label` is emitted. The gate reads the registry — a directive is
+    label-typed exactly when `spec/blocks.toml` lists `label` among its
+    `attributes` — so a future row that adopts `label=` is covered without a
+    code change.
+  - **Native.** `NativeDoc.block_meta`, a span-indexed `NativeBlockMeta` list
+    (`start_line`/`end_line`/`start_offset`/`end_offset`/`block_id`/`label`).
+    `NativeBlock` is a 75-variant enum, so flat fields on it were impossible;
+    the metadata rides beside the tree instead. Empty for documents that
+    author neither attribute.
+  - **DOM parity.** `render_dom` sets the same two attributes on the block
+    root before any other `setAttribute`, so the constructive path stays
+    byte-identical to the string path — pinned by a new corpus fixture
+    (`tests/fixtures/dom/block-ids.surf`) including a quote/ampersand/angle
+    bracket label.
+- **Lint L043 — duplicate block id within one page** (warning). Two blocks
+  sharing an `id=` make that address ambiguous: the first match wins and the
+  second block is unreachable. Scope is the **page**, not the document — a
+  site doc's `::page` blocks each serve as their own HTML document, so
+  `id=hero` on the home page and on the pricing page is correct authoring.
+  **Not fixable:** a machine rewrite would have to invent a new id while every
+  reference to the old spelling — a template manifest, an edit request, a
+  stylesheet — kept pointing at it, so `fix_source` leaves duplicates exactly
+  as authored and the author renames one. `spec/rules.toml` `total_rules`
+  18 → 19.
+
+### Changed
+
+- **Native schema v5 → v6** (one bump for the whole release):
+  `NativeDoc.block_meta`; `NativeFormField.group`; the five new
+  `field_type` strings;
+  `NativeBlock::Metric.min`/`.max`, `Progress.value`/`.max`,
+  `ProductCard.price`/`.currency`, `PricingTable.highlight`/`.current`,
+  `DataTable.caption`/`.total`. Every new field is `Option`/`Vec` with
+  `skip_serializing_if`, so existing JSON is byte-unchanged. Clients that pin
+  the version — including the Swift kit in `repos/surf` — repin with the
+  `v0.18.1` tag.
+- **README** block counts corrected from a stale 91 to the real registry
+  numbers (120 registered · 106 implemented), and the per-category variant
+  lists brought back in line with `spec/blocks.toml`.
+- **`docs/architecture.surf`** counts corrected from a stale 32 block types
+  (now 120 registered / 106 implemented) along with the line and test totals
+  in the same stats block.
+- `render_html` grew `render_form_field_html` / `render_form_fields_html`,
+  shared by the `::form` and `::action` renderers; `render_dom` mirrors both
+  and the byte-identity suite pins them together.
+- CSS: rules for `<meter>`, `<progress>`, `<caption>`, `<tfoot>`, fieldset and
+  legend, the radio option row, the product price, `[data-current]` tiers, and
+  the two previously ruleless store classes (`surfdoc-store-main`,
+  `surfdoc-store-cart-items`).
+- `Block::span()` — one or-pattern over all 109 variants, so a variant added
+  without a `span` field fails to compile.
+- One corpus snapshot moved: `tests/snapshots/ffi-hole-closure.html.snap`,
+  whose `::banner[id=announce]` is the only fixture block in the corpus that
+  authors `id=`. It now carries `data-block-id="announce"` beside its existing
+  `id="announce"`. No native snapshot moved.
+
 ## 0.18.0 — 2026-08-24 (size-class axis: typed layouts, per-class values, schema v5)
 
 ### Added

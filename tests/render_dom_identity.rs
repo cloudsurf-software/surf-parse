@@ -233,3 +233,21 @@ fn per_class_cols_attrs_are_mirrored_in_the_dom_path() {
         "a uniform value must stay the bare pre-0.18 attribute: {html}"
     );
 }
+
+/// 0.18.1 form vocabulary: the five new control types, the radio option
+/// group, the label-less hidden field, and `group:` fieldsets must serialize
+/// identically through the constructive DOM sink.
+#[test]
+fn form_controls_and_fieldsets_are_byte_identical() {
+    assert_identity("dom/form-controls.surf");
+}
+
+/// 0.18.1 block addressing: `data-block-id` / `aria-label` are spliced into
+/// the block root's opening tag by the string renderer and set on the root
+/// element before any other attribute by the constructive renderer — the two
+/// orders must agree, escaped values included.
+#[test]
+fn block_ids_and_labels_are_byte_identical() {
+    assert_identity("dom/block-ids.surf");
+}
+

@@ -444,6 +444,12 @@ struct Dom<'a, S: DomSink> {
     heading_text: Option<String>,
     /// Whether the current element context is inside an `<svg>` subtree.
     svg_depth: usize,
+    /// Generic addressing attributes (`data-block-id` / `aria-label`) waiting
+    /// for the current block's root element — set by [`build_block`], consumed
+    /// by the very next [`Dom::open_ns`]. Mirrors
+    /// `render_html::inject_root_attrs`, which splices them ahead of the
+    /// renderer's own attributes.
+    root_attrs: Option<Vec<(&'static str, String)>>,
 }
 
 impl<'a, S: DomSink> Dom<'a, S> {
@@ -455,6 +461,7 @@ impl<'a, S: DomSink> Dom<'a, S> {
             headings_seen: 0,
             heading_text: None,
             svg_depth: 0,
+            root_attrs: None,
         }
     }
 
@@ -482,6 +489,11 @@ impl<'a, S: DomSink> Dom<'a, S> {
             self.svg_depth += 1;
         }
         self.stack.push(Frame { node: el, pend_raw: String::new(), pend_dec: String::new() });
+        if let Some(attrs) = self.root_attrs.take() {
+            for (name, value) in attrs {
+                self.attr(name, AttrVal::Markup(&value));
+            }
+        }
     }
 
     fn close(&mut self) {
@@ -1182,6 +1194,15 @@ fn block_kind(b: &Block) -> String {
 }
 
 fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), RenderDomError> {
+    dom.root_attrs = crate::block_meta::root_attrs(block);
+    let built = build_block_inner(dom, block);
+    // A block that opened no element (an empty render) must not leak its
+    // attributes onto the next block's root.
+    dom.root_attrs = None;
+    built
+}
+
+fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), RenderDomError> {
     match block {
         Block::Markdown { content, .. } => build_markdown(dom, content)?,
 
@@ -1276,7 +1297,37 @@ fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), Re
             if *honeypot {
                 build_static(dom, render_html::FORM_HONEYPOT_HTML)?;
             }
+            // Mirror of `render_html::render_form_fields_html` — a run of
+            // fields sharing a `group` value is wrapped in one fieldset.
+            let mut open_group: Option<&str> = None;
             for field in fields {
+                let group = field.group.as_deref();
+                if group != open_group {
+                    if open_group.is_some() {
+                        dom.close();
+                    }
+                    if let Some(name) = group {
+                        dom.open("fieldset", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-form-group"));
+                        dom.open("legend", CloseStyle::Normal);
+                        dom.text_markup(name);
+                        dom.close();
+                    }
+                    open_group = group;
+                }
+                // Mirror of `render_html::render_form_field_html` — the
+                // byte-identity suite pins the two together.
+                if field.field_type == FormFieldType::Hidden {
+                    dom.open("input", CloseStyle::SelfClose);
+                    dom.attr("type", AttrVal::Markup("hidden"));
+                    dom.attr("name", AttrVal::Markup(&field.name));
+                    dom.attr(
+                        "value",
+                        AttrVal::Markup(field.placeholder.as_deref().unwrap_or("")),
+                    );
+                    dom.close();
+                    continue;
+                }
                 dom.open("div", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-form-field"));
                 dom.open("label", CloseStyle::Normal);
@@ -1319,6 +1370,46 @@ fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), Re
                         }
                         dom.close();
                     }
+                    FormFieldType::Radio if !field.options.is_empty() => {
+                        dom.open("div", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-form-options"));
+                        for opt in &field.options {
+                            dom.open("label", CloseStyle::Normal);
+                            dom.attr("class", AttrVal::Markup("surfdoc-form-option"));
+                            dom.open("input", CloseStyle::SelfClose);
+                            dom.attr("type", AttrVal::Markup("radio"));
+                            dom.attr("name", AttrVal::Markup(&field.name));
+                            dom.attr("value", AttrVal::Markup(opt));
+                            if field.required {
+                                dom.bool_attr("required");
+                            }
+                            dom.close();
+                            dom.text_markup(opt);
+                            dom.close();
+                        }
+                        dom.close();
+                    }
+                    FormFieldType::Checkbox
+                    | FormFieldType::Radio
+                    | FormFieldType::Toggle
+                    | FormFieldType::File => {
+                        let (input_type, role) = match field.field_type {
+                            FormFieldType::Radio => ("radio", None),
+                            FormFieldType::File => ("file", None),
+                            FormFieldType::Toggle => ("checkbox", Some("switch")),
+                            _ => ("checkbox", None),
+                        };
+                        dom.open("input", CloseStyle::SelfClose);
+                        dom.attr("type", AttrVal::Markup(input_type));
+                        dom.attr("name", AttrVal::Markup(&field.name));
+                        if let Some(r) = role {
+                            dom.attr("role", AttrVal::Markup(r));
+                        }
+                        if field.required {
+                            dom.bool_attr("required");
+                        }
+                        dom.close();
+                    }
                     _ => {
                         let input_type = match field.field_type {
                             FormFieldType::Email => "email",
@@ -1339,6 +1430,9 @@ fn build_block<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<(), Re
                         dom.close();
                     }
                 }
+                dom.close();
+            }
+            if open_group.is_some() {
                 dom.close();
             }
             dom.open("button", CloseStyle::Normal);

@@ -6,7 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, StyleProperty, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, StyleProperty, SurfDoc, Trend};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -1023,6 +1023,9 @@ fn toc_nested_ol(items: &[&(u32, String, String)]) -> String {
 }
 
 pub fn to_html(doc: &SurfDoc) -> String {
+    // Resolve `id=`/`label=` lookups only if this document is the one the
+    // block-metadata table was filled from (cleared on drop).
+    let _meta_scope = crate::block_meta::activate_for(&doc.source);
     // Install the citation context so inline `[@key]` cites + `::bibliography`
     // resolve during this render (cleared on drop).
     let _cite_scope = citation::install_context(citation::build_context(
@@ -1786,6 +1789,135 @@ pub(crate) const GALLERY_FILTER_JS: &str = r#"<script>document.querySelectorAll(
 pub(crate) const GALLERY_LIGHTBOX_JS: &str = r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(function(g){var lb=g.querySelector('.surfdoc-lightbox');if(!lb)return;var si=lb.querySelector('.sl-img'),sc=lb.querySelector('.sl-caption'),sn=lb.querySelector('.sl-counter'),items,idx;function vis(){return Array.prototype.filter.call(g.querySelectorAll('.surfdoc-gallery-item'),function(i){return i.style.display!=='none'})}function show(i){items=vis();idx=i;var f=items[idx],im=f.querySelector('img'),fc=f.querySelector('figcaption');si.src=im.src;si.alt=im.alt||'';sc.textContent=fc?fc.textContent:'';sn.textContent=(idx+1)+' / '+items.length;lb.hidden=false;document.body.style.overflow='hidden'}function hide(){lb.hidden=true;document.body.style.overflow=''}function nav(d){show((idx+d+items.length)%items.length)}g.querySelectorAll('.surfdoc-gallery-item').forEach(function(f){f.onclick=function(){var v=vis();show(v.indexOf(f))};f.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();f.onclick()}}});lb.querySelector('.sl-close').onclick=hide;lb.querySelector('.sl-prev').onclick=function(){nav(-1)};lb.querySelector('.sl-next').onclick=function(){nav(1)};lb.onclick=function(e){if(e.target===lb)hide()};document.addEventListener('keydown',function(e){if(lb.hidden)return;if(e.key==='Escape')hide();if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1)});var tx;lb.addEventListener('touchstart',function(e){tx=e.touches[0].clientX});lb.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)nav(dx>0?-1:1)})})</script>"#;
 
 /// `::form` honeypot input.
+/// Render a field list, wrapping each run of fields that share a `group`
+/// value in a `<fieldset>` with that `<legend>`. Ungrouped fields render
+/// exactly as before, so a form with no `group:` line is byte-unchanged.
+pub(crate) fn render_form_fields_html(html: &mut String, fields: &[FormField]) {
+    let mut open_group: Option<&str> = None;
+    for field in fields {
+        let group = field.group.as_deref();
+        if group != open_group {
+            if open_group.is_some() {
+                html.push_str("</fieldset>");
+            }
+            if let Some(name) = group {
+                html.push_str(&format!(
+                    "<fieldset class=\"surfdoc-form-group\"><legend>{}</legend>",
+                    escape_html(name),
+                ));
+            }
+            open_group = group;
+        }
+        render_form_field_html(html, field);
+    }
+    if open_group.is_some() {
+        html.push_str("</fieldset>");
+    }
+}
+
+/// Render one `::form` / `::action` field. Both form renderers call this, so
+/// the inbox form and the data-bound action form can never drift apart.
+///
+/// `Hidden` fields carry no label and no wrapper — they are submission
+/// payload, not UI, and take their value from `placeholder`.
+pub(crate) fn render_form_field_html(html: &mut String, field: &FormField) {
+    let req = if field.required { " required" } else { "" };
+    if field.field_type == FormFieldType::Hidden {
+        html.push_str(&format!(
+            "<input type=\"hidden\" name=\"{}\" value=\"{}\"/>",
+            escape_html(&field.name),
+            escape_html(field.placeholder.as_deref().unwrap_or("")),
+        ));
+        return;
+    }
+    let req_star = if field.required { " <span class=\"required\">*</span>" } else { "" };
+    html.push_str(&format!(
+        "<div class=\"surfdoc-form-field\"><label>{}{}</label>",
+        escape_html(&field.label),
+        req_star,
+    ));
+    match field.field_type {
+        FormFieldType::Textarea => {
+            let ph = field.placeholder.as_deref().unwrap_or("");
+            html.push_str(&format!(
+                "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}></textarea>",
+                escape_html(&field.name),
+                escape_html(ph),
+                req,
+            ));
+        }
+        FormFieldType::Select => {
+            html.push_str(&format!(
+                "<select name=\"{}\"{}>",
+                escape_html(&field.name),
+                req,
+            ));
+            html.push_str("<option value=\"\">Select...</option>");
+            for opt in &field.options {
+                html.push_str(&format!(
+                    "<option value=\"{}\">{}</option>",
+                    escape_html(opt),
+                    escape_html(opt),
+                ));
+            }
+            html.push_str("</select>");
+        }
+        // A radio group with choices: one input per option, all sharing the
+        // field name.
+        FormFieldType::Radio if !field.options.is_empty() => {
+            html.push_str("<div class=\"surfdoc-form-options\">");
+            for opt in &field.options {
+                html.push_str(&format!(
+                    "<label class=\"surfdoc-form-option\"><input type=\"radio\" name=\"{}\" value=\"{}\"{}/>{}</label>",
+                    escape_html(&field.name),
+                    escape_html(opt),
+                    req,
+                    escape_html(opt),
+                ));
+            }
+            html.push_str("</div>");
+        }
+        FormFieldType::Checkbox
+        | FormFieldType::Radio
+        | FormFieldType::Toggle
+        | FormFieldType::File => {
+            let (input_type, role) = match field.field_type {
+                FormFieldType::Radio => ("radio", ""),
+                FormFieldType::File => ("file", ""),
+                // A switch is a checkbox carrying an ARIA role — not a new control.
+                FormFieldType::Toggle => ("checkbox", " role=\"switch\""),
+                _ => ("checkbox", ""),
+            };
+            html.push_str(&format!(
+                "<input type=\"{}\" name=\"{}\"{}{}/>",
+                input_type,
+                escape_html(&field.name),
+                role,
+                req,
+            ));
+        }
+        _ => {
+            let input_type = match field.field_type {
+                FormFieldType::Email => "email",
+                FormFieldType::Tel => "tel",
+                FormFieldType::Date => "date",
+                FormFieldType::Number => "number",
+                FormFieldType::Password => "password",
+                _ => "text",
+            };
+            let ph = field.placeholder.as_deref().unwrap_or("");
+            html.push_str(&format!(
+                "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}/>",
+                input_type,
+                escape_html(&field.name),
+                escape_html(ph),
+                req,
+            ));
+        }
+    }
+    html.push_str("</div>");
+}
+
 pub(crate) const FORM_HONEYPOT_HTML: &str = "<input type=\"text\" name=\"_honey\" class=\"surfdoc-form-honey\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\">";
 
 /// Self-contained client script for every `::booking` widget on a page.
@@ -2510,6 +2642,44 @@ fn render_surfy_panel_children(children: &[Block]) -> String {
 }
 
 pub(crate) fn render_block(block: &Block) -> String {
+    let html = render_block_inner(block);
+    match crate::block_meta::root_attrs(block) {
+        Some(attrs) => inject_root_attrs(html, &attrs),
+        None => html,
+    }
+}
+
+/// Splice the generic addressing attributes into the block root's opening tag,
+/// ahead of the renderer's own attributes (`<div data-block-id="hero"
+/// class="surfdoc-hero">`). Position matters: the constructive DOM path
+/// (`render_dom::build_block`) attaches them to the root element before any
+/// other `setAttribute`, and the two paths must serialize byte-identically.
+///
+/// A block whose HTML does not *begin* with an element (an empty render, a
+/// bare markdown paragraph) has no root to carry them and is left untouched.
+fn inject_root_attrs(html: String, attrs: &[(&'static str, String)]) -> String {
+    let rest = match html.strip_prefix('<') {
+        Some(rest) if rest.starts_with(|c: char| c.is_ascii_alphabetic()) => rest,
+        _ => return html,
+    };
+    let name_len = rest
+        .find(|c: char| c == ' ' || c == '>' || c == '/' || c == '\n' || c == '\t')
+        .unwrap_or(rest.len());
+    let at = 1 + name_len;
+    let mut spliced = String::with_capacity(html.len() + 32 * attrs.len());
+    spliced.push_str(&html[..at]);
+    for (name, value) in attrs {
+        spliced.push(' ');
+        spliced.push_str(name);
+        spliced.push_str("=\"");
+        spliced.push_str(&escape_html(value));
+        spliced.push('"');
+    }
+    spliced.push_str(&html[at..]);
+    spliced
+}
+
+fn render_block_inner(block: &Block) -> String {
     match block {
         Block::Markdown { content, .. } => render_markdown(content),
 
@@ -2536,9 +2706,19 @@ pub(crate) fn render_block(block: &Block) -> String {
         }
 
         Block::Data {
-            headers, rows, ..
+            headers,
+            rows,
+            caption,
+            total,
+            ..
         } => {
             let mut html = String::from("<div class=\"surfdoc-table-wrap\"><table class=\"surfdoc-data\">");
+            if let Some(c) = caption {
+                html.push_str(&format!(
+                    "<caption>{}</caption>",
+                    render_cell_inline_markdown(c)
+                ));
+            }
             if !headers.is_empty() {
                 html.push_str("<thead><tr>");
                 for h in headers {
@@ -2561,7 +2741,19 @@ pub(crate) fn render_block(block: &Block) -> String {
                 }
                 html.push_str("</tr>");
             }
-            html.push_str("</tbody></table></div>");
+            html.push_str("</tbody>");
+            if !total.is_empty() {
+                html.push_str("<tfoot><tr>");
+                for cell in total {
+                    let num_class = if is_numeric_cell(cell) { " class=\"num\"" } else { "" };
+                    html.push_str(&format!(
+                        "<td{num_class}>{}</td>",
+                        render_cell_inline_markdown(cell)
+                    ));
+                }
+                html.push_str("</tr></tfoot>");
+            }
+            html.push_str("</table></div>");
             html
         }
 
@@ -2666,6 +2858,8 @@ pub(crate) fn render_block(block: &Block) -> String {
             value,
             trend,
             unit,
+            min,
+            max,
             ..
         } => {
             let trend_html = match trend {
@@ -2692,8 +2886,24 @@ pub(crate) fn render_block(block: &Block) -> String {
             // Metrics render one per block; still wrap the single card in a
             // `surfdoc-metric-row` so adjacent metrics lay out as a flex row and
             // each card carries the per-metric value/label structure.
+            // `max=` turns the metric into a gauge: the card keeps its
+            // number and gains a <meter> underneath. Non-numeric values (or
+            // no max) render exactly as before.
+            let meter_html = match (max.as_deref().and_then(parse_number), parse_number(value)) {
+                (Some(max_n), Some(value_n)) => {
+                    let min_n = min.as_deref().and_then(parse_number).unwrap_or(0.0);
+                    format!(
+                        "<meter class=\"surfdoc-metric-meter\" min=\"{}\" max=\"{}\" value=\"{}\">{}</meter>",
+                        fmt_number(min_n),
+                        fmt_number(max_n),
+                        fmt_number(value_n),
+                        escape_html(value),
+                    )
+                }
+                _ => String::new(),
+            };
             format!(
-                "<div class=\"surfdoc-metric-row\"><div class=\"surfdoc-metric\" role=\"group\" aria-label=\"{}\"><div class=\"surfdoc-metric-value\">{}{unit_html}</div><div class=\"surfdoc-metric-label\">{}{trend_html}</div></div></div>",
+                "<div class=\"surfdoc-metric-row\"><div class=\"surfdoc-metric\" role=\"group\" aria-label=\"{}\"><div class=\"surfdoc-metric-value\">{}{unit_html}</div><div class=\"surfdoc-metric-label\">{}{trend_html}</div>{meter_html}</div></div>",
                 escape_html(&aria_label),
                 escape_html(value),
                 escape_html(label),
@@ -2985,7 +3195,11 @@ pub(crate) fn render_block(block: &Block) -> String {
         }
 
         Block::PricingTable {
-            headers, rows, ..
+            headers,
+            rows,
+            highlight,
+            current,
+            ..
         } => {
             // Reference look (.sd-pricing): a grid of tier CARDS, not a table.
             // Each row is one tier — col 0 = tier name, col 1 = price, remaining
@@ -3006,12 +3220,26 @@ pub(crate) fn render_block(block: &Block) -> String {
                 } else {
                     (raw_name, false)
                 };
-                let tier_cls = if featured {
+                // `highlight=` / `current=` name a tier by its col-0 label
+                // (case-insensitive, bold markers ignored).
+                let matches_tier = |want: &Option<String>| {
+                    want.as_deref()
+                        .is_some_and(|w| w.trim().eq_ignore_ascii_case(name))
+                };
+                let is_highlight = matches_tier(highlight);
+                let is_current = matches_tier(current);
+                let tier_cls = if featured || is_highlight {
                     "surfdoc-tier surfdoc-tier-featured"
                 } else {
                     "surfdoc-tier"
                 };
-                html.push_str(&format!("<div class=\"{tier_cls}\">"));
+                let marks = match (is_highlight, is_current) {
+                    (true, true) => " data-highlight data-current",
+                    (true, false) => " data-highlight",
+                    (false, true) => " data-current",
+                    (false, false) => "",
+                };
+                html.push_str(&format!("<div class=\"{tier_cls}\"{marks}>"));
                 html.push_str(&format!(
                     "<div class=\"surfdoc-tier-name\">{}</div>",
                     escape_html(name)
@@ -3218,61 +3446,7 @@ pub(crate) fn render_block(block: &Block) -> String {
             if *honeypot {
                 html.push_str(FORM_HONEYPOT_HTML);
             }
-            for field in fields {
-                let req = if field.required { " required" } else { "" };
-                let req_star = if field.required { " <span class=\"required\">*</span>" } else { "" };
-                html.push_str(&format!(
-                    "<div class=\"surfdoc-form-field\"><label>{}{}</label>",
-                    escape_html(&field.label),
-                    req_star,
-                ));
-                match field.field_type {
-                    FormFieldType::Textarea => {
-                        let ph = field.placeholder.as_deref().unwrap_or("");
-                        html.push_str(&format!(
-                            "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}></textarea>",
-                            escape_html(&field.name),
-                            escape_html(ph),
-                            req,
-                        ));
-                    }
-                    FormFieldType::Select => {
-                        html.push_str(&format!(
-                            "<select name=\"{}\"{}>",
-                            escape_html(&field.name),
-                            req,
-                        ));
-                        html.push_str("<option value=\"\">Select...</option>");
-                        for opt in &field.options {
-                            html.push_str(&format!(
-                                "<option value=\"{}\">{}</option>",
-                                escape_html(opt),
-                                escape_html(opt),
-                            ));
-                        }
-                        html.push_str("</select>");
-                    }
-                    _ => {
-                        let input_type = match field.field_type {
-                            FormFieldType::Email => "email",
-                            FormFieldType::Tel => "tel",
-                            FormFieldType::Date => "date",
-                            FormFieldType::Number => "number",
-                            FormFieldType::Password => "password",
-                            _ => "text",
-                        };
-                        let ph = field.placeholder.as_deref().unwrap_or("");
-                        html.push_str(&format!(
-                            "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}/>",
-                            input_type,
-                            escape_html(&field.name),
-                            escape_html(ph),
-                            req,
-                        ));
-                    }
-                }
-                html.push_str("</div>");
-            }
+            render_form_fields_html(&mut html, fields);
             html.push_str(&format!(
                 "<button type=\"submit\" class=\"surfdoc-form-submit\">{}</button>",
                 escape_html(btn_label),
@@ -4184,6 +4358,8 @@ pub(crate) fn render_block(block: &Block) -> String {
             features,
             cta_label,
             cta_href,
+            price,
+            currency,
             ..
         } => {
             let mut parts = Vec::new();
@@ -4200,6 +4376,18 @@ pub(crate) fn render_block(block: &Block) -> String {
                 parts.push(format!("<span class=\"surfdoc-badge{color_cls}\">{}</span>", escape_html(b)));
             }
             parts.push("</div>".to_string());
+            // The price is kept verbatim; `currency=` rides along as data so a
+            // host can localise without the parser reformatting money.
+            if let Some(p) = price {
+                let currency_attr = currency
+                    .as_ref()
+                    .map(|c| format!(" data-currency=\"{}\"", escape_html(c)))
+                    .unwrap_or_default();
+                parts.push(format!(
+                    "<span class=\"surfdoc-product-price\"{currency_attr}>{}</span>",
+                    escape_html(p)
+                ));
+            }
             if !body.is_empty() {
                 parts.push(format!("<div class=\"surfdoc-product-body\">{}</div>", render_markdown(body)));
             }
@@ -4380,61 +4568,7 @@ pub(crate) fn render_block(block: &Block) -> String {
                 html.push_str(&format!(" data-surf-confirm=\"{}\"", escape_html(c)));
             }
             html.push('>');
-            for field in fields {
-                let req = if field.required { " required" } else { "" };
-                let req_star = if field.required { " <span class=\"required\">*</span>" } else { "" };
-                html.push_str(&format!(
-                    "<div class=\"surfdoc-form-field\"><label>{}{}</label>",
-                    escape_html(&field.label),
-                    req_star,
-                ));
-                match field.field_type {
-                    FormFieldType::Textarea => {
-                        let ph = field.placeholder.as_deref().unwrap_or("");
-                        html.push_str(&format!(
-                            "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}></textarea>",
-                            escape_html(&field.name),
-                            escape_html(ph),
-                            req,
-                        ));
-                    }
-                    FormFieldType::Select => {
-                        html.push_str(&format!(
-                            "<select name=\"{}\"{}>",
-                            escape_html(&field.name),
-                            req,
-                        ));
-                        html.push_str("<option value=\"\">Select...</option>");
-                        for opt in &field.options {
-                            html.push_str(&format!(
-                                "<option value=\"{}\">{}</option>",
-                                escape_html(opt),
-                                escape_html(opt),
-                            ));
-                        }
-                        html.push_str("</select>");
-                    }
-                    _ => {
-                        let input_type = match field.field_type {
-                            FormFieldType::Email => "email",
-                            FormFieldType::Tel => "tel",
-                            FormFieldType::Date => "date",
-                            FormFieldType::Number => "number",
-                            FormFieldType::Password => "password",
-                            _ => "text",
-                        };
-                        let ph = field.placeholder.as_deref().unwrap_or("");
-                        html.push_str(&format!(
-                            "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}/>",
-                            input_type,
-                            escape_html(&field.name),
-                            escape_html(ph),
-                            req,
-                        ));
-                    }
-                }
-                html.push_str("</div>");
-            }
+            render_form_fields_html(&mut html, fields);
             html.push_str(&format!(
                 "<button type=\"submit\" class=\"surfdoc-cta surfdoc-cta-primary\">{}</button>",
                 escape_html(label),
@@ -5864,7 +5998,26 @@ pub(crate) fn render_block(block: &Block) -> String {
             )
         }
 
-        Block::Progress { steps, .. } => {
+        Block::Progress {
+            steps, value, max, ..
+        } => {
+            // Numeric mode: `value=` (with an optional `max=`, default 100)
+            // renders a real <progress> bar. Without `value=` the block keeps
+            // its step list exactly as before.
+            if let Some(value_n) = value.as_deref().and_then(parse_number) {
+                let max_n = max.as_deref().and_then(parse_number).unwrap_or(100.0);
+                let pct = if max_n > 0.0 {
+                    (value_n / max_n * 100.0).clamp(0.0, 100.0)
+                } else {
+                    0.0
+                };
+                return format!(
+                    "<progress class=\"surfdoc-progress-bar\" value=\"{}\" max=\"{}\" aria-label=\"Progress\">{}%</progress>",
+                    fmt_number(value_n),
+                    fmt_number(max_n),
+                    fmt_number(pct.round()),
+                );
+            }
             let mut html = String::from("<ol class=\"surfdoc-progress\">");
             for step in steps {
                 html.push_str(&format!(
@@ -6052,6 +6205,28 @@ pub(crate) fn callout_type_str(ct: CalloutType) -> &'static str {
 
 /// Returns true when a data-table cell should be right-aligned as a number.
 /// Detects plain numbers, percentages, and currency-prefixed amounts after
+/// Read an author-supplied number for the `<meter>` / `<progress>` gauges,
+/// tolerating the same light formatting `is_numeric_cell` accepts (thousands
+/// separators, one leading currency symbol, one trailing `%`). Returns `None`
+/// for anything that is not a finite number, which is how a gauge stays off.
+fn parse_number(raw: &str) -> Option<f64> {
+    let trimmed = raw.trim();
+    let stripped = trimmed.strip_prefix(['$', '\u{20ac}', '\u{a3}', '\u{a5}']).unwrap_or(trimmed);
+    let stripped = stripped.strip_suffix('%').unwrap_or(stripped);
+    let cleaned: String = stripped.chars().filter(|c| *c != ',' && *c != '_').collect();
+    cleaned.parse::<f64>().ok().filter(|n| n.is_finite())
+}
+
+/// Serialize a gauge number without a trailing `.0` on whole values, so the
+/// emitted markup stays as tidy as the source.
+fn fmt_number(n: f64) -> String {
+    if n.fract() == 0.0 && n.abs() < 1e15 {
+        format!("{}", n as i64)
+    } else {
+        format!("{n}")
+    }
+}
+
 /// stripping common formatting (commas, surrounding whitespace, leading sign,
 /// and a single trailing `%` or leading currency symbol).
 fn is_numeric_cell(cell: &str) -> bool {
@@ -7067,6 +7242,8 @@ mod tests {
     #[test]
     fn html_data_table() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7088,6 +7265,8 @@ mod tests {
     #[test]
     fn data_table_cell_inline_link_relative() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7107,6 +7286,8 @@ mod tests {
     #[test]
     fn data_table_cell_inline_link_absolute() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7126,6 +7307,8 @@ mod tests {
     #[test]
     fn data_table_cell_inline_bold() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7145,6 +7328,8 @@ mod tests {
     #[test]
     fn data_table_cell_inline_italic() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7168,6 +7353,8 @@ mod tests {
     #[test]
     fn data_table_cell_fill_marker_resolves_cleanly() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7187,6 +7374,8 @@ mod tests {
     #[test]
     fn data_table_cell_inline_mixed() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7211,6 +7400,8 @@ mod tests {
     #[test]
     fn data_table_cell_inline_xss_safety() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7240,6 +7431,8 @@ mod tests {
     #[test]
     fn data_table_header_inline_markdown() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7266,6 +7459,8 @@ mod tests {
         // Row = tier: col 0 name, col 1 price, remaining cols = feature bullets
         // (which render inline markdown, so links work).
         let doc = doc_with(vec![Block::PricingTable {
+            highlight: None,
+            current: None,
             headers: vec!["Tier".into(), "Price".into(), "Docs".into()],
             rows: vec![vec![
                 "Pro".into(),
@@ -7285,6 +7480,8 @@ mod tests {
     #[test]
     fn data_table_cell_plain_text_unchanged() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -7384,6 +7581,8 @@ mod tests {
     #[test]
     fn html_metric() {
         let doc = doc_with(vec![Block::Metric {
+            min: None,
+            max: None,
             label: "Revenue".into(),
             value: "$10K".into(),
             trend: Some(Trend::Up),
@@ -7969,6 +8168,164 @@ mod tests {
     }
 
     #[test]
+    fn html_form_new_control_types() {
+        let src = "::form[submit=\"Send\"]\n                   - Plan (radio: Free | Pro) *\n                   - Subscribe (checkbox)\n                   - Dark mode (toggle)\n                   - Resume (file)\n                   - Source (hidden, \"pricing-page\")\n                   ::";
+        let html = to_html(&crate::parse(src).doc);
+        // Radio group: one input per option, all sharing the field name.
+        assert!(html.contains("<div class=\"surfdoc-form-options\">"), "{html}");
+        assert!(
+            html.contains(
+                "<label class=\"surfdoc-form-option\"><input type=\"radio\" name=\"plan\" value=\"Free\" required/>Free</label>"
+            ),
+            "{html}"
+        );
+        assert!(html.contains("<input type=\"checkbox\" name=\"subscribe\"/>"), "{html}");
+        // A toggle is a checkbox carrying role="switch".
+        assert!(
+            html.contains("<input type=\"checkbox\" name=\"dark_mode\" role=\"switch\"/>"),
+            "{html}"
+        );
+        assert!(html.contains("<input type=\"file\" name=\"resume\"/>"), "{html}");
+        // Hidden fields carry no label and no field wrapper.
+        assert!(
+            html.contains("<input type=\"hidden\" name=\"source\" value=\"pricing-page\"/>"),
+            "{html}"
+        );
+        assert!(!html.contains("<label>Source"), "{html}");
+    }
+
+    #[test]
+    fn html_form_group_lines_open_a_fieldset() {
+        let src = "::form\n                   group: Contact\n                   - Name (text)\n                   - Email (email)\n                   group: Shipping\n                   - Address (text)\n                   ::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(
+            html.contains("<fieldset class=\"surfdoc-form-group\"><legend>Contact</legend>"),
+            "{html}"
+        );
+        assert!(
+            html.contains("<fieldset class=\"surfdoc-form-group\"><legend>Shipping</legend>"),
+            "{html}"
+        );
+        assert_eq!(html.matches("<fieldset").count(), 2, "{html}");
+        assert_eq!(html.matches("</fieldset>").count(), 2, "{html}");
+        // The group runs until the next `group:` line: Name and Email share one.
+        let contact = html
+            .split("<legend>Contact</legend>")
+            .nth(1)
+            .and_then(|t| t.split("</fieldset>").next())
+            .expect("contact fieldset body");
+        assert!(contact.contains("name=\"name\""), "{contact}");
+        assert!(contact.contains("name=\"email\""), "{contact}");
+        assert!(!contact.contains("name=\"address\""), "{contact}");
+    }
+
+    #[test]
+    fn html_ungrouped_form_emits_no_fieldset() {
+        let src = "::form\n- Name (text)\n::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(!html.contains("fieldset"), "{html}");
+    }
+
+    // ── 0.18.1 block attributes ────────────────────────────────────
+
+    #[test]
+    fn html_data_caption_and_total_row() {
+        let src = "::data[caption=\"Q3 revenue by line\"]\n| Line | Amount |\n|---|---|\n| Pastries | 1200 |\n| Coffee | 800 |\ntotal: All | 2000\n::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(
+            html.contains("<caption>Q3 revenue by line</caption>"),
+            "{html}"
+        );
+        assert!(html.contains("<tfoot><tr><td>All</td>"), "{html}");
+        assert!(html.contains("<td class=\"num\">2000</td></tr></tfoot>"), "{html}");
+        // The total line is a summary row, never a body row.
+        let body = html.split("<tbody>").nth(1).unwrap().split("</tbody>").next().unwrap();
+        assert!(!body.contains("All"), "{body}");
+        assert_eq!(body.matches("<tr>").count(), 2, "{body}");
+    }
+
+    #[test]
+    fn html_data_without_caption_or_total_is_unchanged() {
+        let src = "::data\n| A | B |\n|---|---|\n| 1 | 2 |\n::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(!html.contains("<caption>"), "{html}");
+        assert!(!html.contains("<tfoot>"), "{html}");
+    }
+
+    #[test]
+    fn html_metric_renders_a_meter_only_when_max_is_set() {
+        let with_max = to_html(
+            &crate::parse("::metric[label=\"Seats used\" value=42 max=100 min=0]\n::").doc,
+        );
+        assert!(
+            with_max.contains(
+                "<meter class=\"surfdoc-metric-meter\" min=\"0\" max=\"100\" value=\"42\">42</meter>"
+            ),
+            "{with_max}"
+        );
+        let without = to_html(&crate::parse("::metric[label=Seats value=42]\n::").doc);
+        assert!(!without.contains("<meter"), "{without}");
+        // A non-numeric value can never produce a gauge.
+        let textual = to_html(&crate::parse("::metric[label=Tier value=Pro max=100]\n::").doc);
+        assert!(!textual.contains("<meter"), "{textual}");
+    }
+
+    #[test]
+    fn html_progress_numeric_mode_renders_a_progress_element() {
+        let numeric = to_html(&crate::parse("::progress[value=30 max=120]\n::").doc);
+        assert!(
+            numeric.contains(
+                "<progress class=\"surfdoc-progress-bar\" value=\"30\" max=\"120\" aria-label=\"Progress\">25%</progress>"
+            ),
+            "{numeric}"
+        );
+        // `max` defaults to 100.
+        let defaulted = to_html(&crate::parse("::progress[value=30]\n::").doc);
+        assert!(defaulted.contains("max=\"100\""), "{defaulted}");
+        // Steps mode survives untouched.
+        let steps = to_html(&crate::parse("::progress\n- Draft \u{2713}\n- Review \u{25CF}\n::").doc);
+        assert!(steps.contains("<ol class=\"surfdoc-progress\">"), "{steps}");
+        assert!(!steps.contains("<progress"), "{steps}");
+    }
+
+    #[test]
+    fn html_product_card_price_and_currency() {
+        let src = "::product-card[price=\"49\" currency=USD]\n## Corpus Co Pro\nEverything in Free, plus history.\n::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(
+            html.contains("<span class=\"surfdoc-product-price\" data-currency=\"USD\">49</span>"),
+            "{html}"
+        );
+        let bare = to_html(&crate::parse("::product-card\n## Corpus Co Free\nStarter.\n::").doc);
+        assert!(!bare.contains("surfdoc-product-price"), "{bare}");
+    }
+
+    #[test]
+    fn html_pricing_table_highlight_and_current_mark_their_tiers() {
+        let src = "::pricing-table[highlight=Pro current=Free]\n| Tier | Price | Seats |\n|---|---|---|\n| Free | $0 | 1 |\n| Pro | $20 | 10 |\n| Team | $50 | 50 |\n::";
+        let html = to_html(&crate::parse(src).doc);
+        // Free is the viewer's tier; Pro is the featured one; Team is neither.
+        assert!(
+            html.contains(
+                "<div class=\"surfdoc-tier\" data-current><div class=\"surfdoc-tier-name\">Free</div>"
+            ),
+            "{html}"
+        );
+        assert!(
+            html.contains(
+                "<div class=\"surfdoc-tier surfdoc-tier-featured\" data-highlight><div class=\"surfdoc-tier-name\">Pro</div>"
+            ),
+            "{html}"
+        );
+        assert!(
+            html.contains("<div class=\"surfdoc-tier\"><div class=\"surfdoc-tier-name\">Team</div>"),
+            "{html}"
+        );
+        assert_eq!(html.matches("data-highlight").count(), 1, "{html}");
+        assert_eq!(html.matches("data-current").count(), 1, "{html}");
+    }
+
+    #[test]
     fn html_banner_renders_band_with_buttons() {
         let doc = doc_with(vec![Block::Banner {
             headline: Some("Building something custom?".into()),
@@ -8267,6 +8624,8 @@ mod tests {
         // Each row is a tier card. A bold name (**Team**) is the featured tier;
         // a `/suffix` price renders as a muted span; remaining cols are bullets.
         let doc = doc_with(vec![Block::PricingTable {
+            highlight: None,
+            current: None,
             headers: vec!["Tier".into(), "Price".into(), "Seats".into()],
             rows: vec![
                 vec!["Free".into(), "$0".into(), "3".into()],
@@ -8663,6 +9022,8 @@ mod tests {
     #[test]
     fn aria_data_table_scope_col() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -8866,6 +9227,8 @@ mod tests {
     #[test]
     fn aria_metric_group_label() {
         let doc = doc_with(vec![Block::Metric {
+            min: None,
+            max: None,
             label: "MRR".into(),
             value: "$5K".into(),
             trend: Some(Trend::Up),
@@ -9054,6 +9417,8 @@ mod tests {
     #[test]
     fn aria_pricing_table_label() {
         let doc = doc_with(vec![Block::PricingTable {
+            highlight: None,
+            current: None,
             headers: vec!["Tier".into(), "Price".into()],
             rows: vec![vec!["Basic".into(), "$0".into()]],
             span: span(),
@@ -11066,6 +11431,8 @@ About
     #[test]
     fn html_product_card_full() {
         let doc = doc_with(vec![Block::ProductCard {
+            price: None,
+            currency: None,
             title: "Surf Browser".into(),
             subtitle: Some("Native viewer".into()),
             badge: Some("Available".into()),
@@ -11091,6 +11458,8 @@ About
     #[test]
     fn html_product_card_minimal() {
         let doc = doc_with(vec![Block::ProductCard {
+            price: None,
+            currency: None,
             title: "Basic".into(),
             subtitle: None,
             badge: None,
@@ -13378,6 +13747,8 @@ About
     #[test]
     fn html_progress() {
         let doc = doc_with(vec![Block::Progress {
+            value: None,
+            max: None,
             source: Some("deploy.progress".into()),
             steps: vec![
                 ProgressStep { label: "Parsing app".into(), status: "done".into() },
@@ -13826,5 +14197,81 @@ mod proptest_summary {
             }]);
             let _ = to_html(&doc);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 0.18.1 — generic block addressing (`id=` / `label=`)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod block_addressing_tests {
+    use super::*;
+
+    fn html(src: &str) -> String {
+        let doc = crate::parse::parse(src).doc;
+        to_html(&doc)
+    }
+
+    #[test]
+    fn id_becomes_data_block_id_on_the_block_root() {
+        let out = html("::callout[type=info id=intro]\nHello.\n::\n");
+        assert!(
+            out.contains("<div data-block-id=\"intro\" class=\"surfdoc-callout"),
+            "addressing attrs lead the root's own attributes: {out}"
+        );
+    }
+
+    #[test]
+    fn label_becomes_aria_label_and_both_are_escaped() {
+        let out = html("::callout[type=info id=\"a<b\" label=\"He said \\\"hi\\\" & left\"]\nx\n::\n");
+        assert!(out.contains("data-block-id=\"a&lt;b\""), "{out}");
+        assert!(
+            out.contains("aria-label=\"He said &quot;hi&quot; &amp; left\""),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn nested_blocks_are_addressable_too() {
+        let out = html(
+            "::page[route=/]\n::callout[type=info id=nested]\ninside\n::\n::\n",
+        );
+        assert!(out.contains("data-block-id=\"nested\""), "{out}");
+    }
+
+    #[test]
+    fn a_typed_label_keeps_its_own_meaning() {
+        // `::metric` spends `label=` on the metric's caption — it must not
+        // also become an accessibility name on the card.
+        let out = html("::metric[id=m1 label=\"Tests\" value=1437]\n");
+        assert!(out.contains("data-block-id=\"m1\""), "{out}");
+        assert!(!out.contains("aria-label=\"Tests\""), "{out}");
+    }
+
+    #[test]
+    fn a_block_without_the_attrs_is_byte_unchanged() {
+        let plain = html("::callout[type=info]\nHello.\n::\n");
+        assert!(!plain.contains("data-block-id"), "{plain}");
+        assert!(!plain.contains("aria-label=\"\""), "{plain}");
+    }
+
+    #[test]
+    fn a_programmatic_doc_emits_no_addressing_attrs() {
+        // The side table is pinned to the parsed source; a hand-built
+        // `SurfDoc` (no parse) resolves nothing rather than something wrong.
+        let _ = crate::parse::parse("::callout[type=info id=leak]\nx\n::\n");
+        let doc = SurfDoc {
+            front_matter: None,
+            blocks: vec![Block::Callout {
+                callout_type: CalloutType::Info,
+                title: None,
+                content: "x".into(),
+                span: crate::types::Span { start_line: 1, end_line: 3, start_offset: 0, end_offset: 32 },
+            }],
+            source: "hand built".into(),
+        };
+        let out = to_html(&doc);
+        assert!(!out.contains("data-block-id"), "{out}");
     }
 }

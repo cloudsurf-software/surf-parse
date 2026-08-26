@@ -1386,6 +1386,8 @@ mod tests {
     #[test]
     fn md_data_table() {
         let doc = doc_with(vec![Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -1454,6 +1456,8 @@ mod tests {
     #[test]
     fn md_metric() {
         let doc = doc_with(vec![Block::Metric {
+            min: None,
+            max: None,
             label: "MRR".into(),
             value: "$2K".into(),
             trend: Some(Trend::Up),
@@ -1567,6 +1571,8 @@ mod tests {
     #[test]
     fn md_pricing_table() {
         let doc = doc_with(vec![Block::PricingTable {
+            highlight: None,
+            current: None,
             headers: vec!["".into(), "Free".into(), "Pro".into()],
             rows: vec![vec!["Price".into(), "$0".into(), "$9/mo".into()]],
             span: span(),
@@ -1641,6 +1647,8 @@ mod tests {
                 span: span(),
             },
             Block::Metric {
+                min: None,
+                max: None,
                 label: "A".into(),
                 value: "1".into(),
                 trend: None,
@@ -1722,6 +1730,8 @@ mod tests {
     #[test]
     fn md_product_card() {
         let doc = doc_with(vec![Block::ProductCard {
+            price: None,
+            currency: None,
             title: "Surf".into(),
             subtitle: Some("Browser".into()),
             badge: Some("Available".into()),

@@ -16,9 +16,9 @@ surf-parse is a Rust library that parses SurfDoc (.surf) files — a typed docum
 ::
 
 ::stats
-14,340 lines of Rust
-344 passing tests
-32 block types
+68,998 lines of Rust
+1,455 passing tests
+120 registered blocks
 4 render targets
 0 unsafe blocks
 MIT licensed
@@ -47,7 +47,7 @@ The parser runs in three passes. Each pass transforms the document into a more s
 
 2. **Block Directive Scanning** (~100ms) — Line-by-line state machine with a nesting stack. Recognizes opening directives (`::name[attrs]`), closing markers (`::`) with depth matching (`::` vs `:::`), and Markdown gaps between directives. Outputs a flat `Vec<Block::Unknown>` with raw attributes and content, each tagged with a `Span` for source location.
 
-3. **Block Type Resolution** (~50ms) — Map each `Unknown { name, attrs, content }` to a typed `Block` variant. 32 block types recognized via `resolve_block()` dispatch. Per-block parser functions extract structured data (e.g., `parse_data()` extracts table headers and rows from CSV/pipe-delimited content). Unrecognized names pass through as `Block::Unknown`.
+3. **Block Type Resolution** (~50ms) — Map each `Unknown { name, attrs, content }` to a typed `Block` variant. 106 implemented block directives (of 120 in `spec/blocks.toml`) recognized via `resolve_block()` dispatch. Per-block parser functions extract structured data (e.g., `parse_data()` extracts table headers and rows from CSV/pipe-delimited content). Unrecognized names pass through as `Block::Unknown`. Resolution is also where the generic addressing attributes are captured: `id=` and `label=` are tolerated on every directive, and because a typed variant no longer carries its attribute map they are recorded in a span-keyed side table (`src/block_meta.rs`) that the renderers read back — a side table rather than a field on all 109 variants or on `SurfDoc`, both of which would be far more invasive.
 ::
 
 ::callout[type=info title="Non-Fatal Parsing"]
@@ -108,7 +108,9 @@ pub struct Span {
 
 ## Block Type Registry
 
-surf-parse supports 32 block types across six categories.
+`spec/blocks.toml` registers 120 block directives; 106 are implemented today
+(105 `Block` variants — `::split-pane` and `::pane` share one) and 14 are
+planned. The categories below are illustrative, not the full registry.
 
 ::tabs
 

@@ -30,6 +30,8 @@ pub fn parse(input: &str) -> ParseResult {
     // ---------------------------------------------------------------
     // Pass 1b: Line-by-line block directive scan.
     // ---------------------------------------------------------------
+    // Pin the block-metadata side table to this document; Pass 2 fills it.
+    crate::block_meta::begin(&normalised);
     let blocks = scan_blocks(&lines, body_start_line, &normalised, &mut diagnostics);
 
     // ---------------------------------------------------------------

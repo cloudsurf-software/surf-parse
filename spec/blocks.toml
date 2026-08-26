@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 114
-registry_updated = "2026-08-24"
+total_blocks = 120
+registry_updated = "2026-08-26"
 
 [blocks.ai-context]
 status = "planned"
@@ -96,8 +96,8 @@ enum_variant = "Cta"
 [blocks.data]
 status = "implemented"
 category = "data"
-purpose = "Structured data"
-attributes = ["id", "format", "sortable"]
+purpose = "Structured data table; a trailing `total: a | b | c` line becomes the summary row"
+attributes = ["id", "format", "sortable", "caption"]
 degradation = "markdown table"
 enum_variant = "Data"
 
@@ -176,8 +176,8 @@ enum_variant = "Footnote"
 [blocks.form]
 status = "implemented"
 category = "web"
-purpose = "Form with fields"
-attributes = ["submit"]
+purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden); a `group: Label` line opens a fieldset"
+attributes = ["submit", "action", "method", "honeypot"]
 degradation = "labeled list"
 enum_variant = "Form"
 
@@ -216,8 +216,8 @@ enum_variant = "LogoCloud"
 [blocks.metric]
 status = "implemented"
 category = "data"
-purpose = "Single metric display"
-attributes = ["label", "value", "trend", "unit"]
+purpose = "Single metric display; with max= it also draws a gauge"
+attributes = ["label", "value", "trend", "unit", "min", "max"]
 degradation = "bold label: value"
 enum_variant = "Metric"
 
@@ -256,8 +256,8 @@ enum_variant = "ProductGrid"
 [blocks.pricing-table]
 status = "implemented"
 category = "web"
-purpose = "Pricing comparison"
-attributes = []
+purpose = "Pricing comparison; highlight= features a tier, current= marks the viewer's own"
+attributes = ["highlight", "current"]
 degradation = "markdown table"
 enum_variant = "PricingTable"
 
@@ -280,8 +280,8 @@ enum_variant = "Gate"
 [blocks.progress]
 status = "implemented"
 category = "advanced"
-purpose = "Step/progress indicator with named steps and statuses"
-attributes = ["source"]
+purpose = "Progress indicator — named steps with statuses, or a determinate bar when value= is set"
+attributes = ["source", "value", "max"]
 degradation = "ordered list of step labels"
 enum_variant = "Progress"
 
@@ -459,7 +459,7 @@ enum_variant = "Section"
 status = "implemented"
 category = "web"
 purpose = "Rich product card with badge, body text, feature list, and CTA"
-attributes = ["title", "subtitle", "badge", "badge_color", "cta_label", "cta_href"]
+attributes = ["title", "subtitle", "badge", "badge_color", "cta_label", "cta_href", "price", "currency"]
 degradation = "heading with bulleted features and link"
 enum_variant = "ProductCard"
 
@@ -940,3 +940,57 @@ purpose = "Error/warning problem list from source, styled as diagnostic output"
 attributes = ["source"]
 degradation = "bulleted error list"
 enum_variant = "ProblemList"
+
+# ----- Registry drift closed in 0.18.1 -----
+# These directives were parser-implemented before they were registered, so
+# L020 flagged them as unknown. Aliases the parser also accepts
+# (`reference-def`, `references`, `speaker-notes`, `presenter-notes`) stay in
+# `lint::EXTRA_KNOWN_BLOCK_NAMES` — one canonical name per registry row.
+
+[blocks.banner]
+status = "implemented"
+category = "web"
+purpose = "Centered call-to-action band: headline, subtitle, and link buttons"
+attributes = ["id"]
+degradation = "heading with paragraph and links"
+enum_variant = "Banner"
+
+[blocks.booking]
+status = "implemented"
+category = "advanced"
+purpose = "Appointment booking surface: bookable services and per-day time slots"
+attributes = ["title", "service-label"]
+degradation = "service list with availability table"
+enum_variant = "Booking"
+
+[blocks.store]
+status = "implemented"
+category = "advanced"
+purpose = "Storefront product list with categories, prices, blurbs, and badges"
+attributes = ["title", "currency"]
+degradation = "markdown table of items"
+enum_variant = "Store"
+
+[blocks.cite]
+status = "implemented"
+category = "core"
+purpose = "Reference definition — one bibliographic entry addressed by key"
+attributes = ["key", "id", "type"]
+degradation = "omitted (definition only)"
+enum_variant = "Cite"
+
+[blocks.bibliography]
+status = "implemented"
+category = "core"
+purpose = "Formatted reference list built from the document's cite definitions"
+attributes = ["style"]
+degradation = "bulleted reference list"
+enum_variant = "Bibliography"
+
+[blocks.notes]
+status = "planned"
+category = "core"
+purpose = "Presenter notes — inside a ::slide the parser folds this into the slide's notes field; there is no standalone Block variant yet"
+attributes = []
+degradation = "omitted from the rendered deck"
+enum_variant = "Notes"

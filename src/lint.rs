@@ -125,13 +125,37 @@ fn rule_fix(id: &str, description: String, edits: Vec<TextEdit>) -> Fix {
 
 #[derive(Debug, Deserialize)]
 struct BlocksSpecFile {
-    blocks: BTreeMap<String, toml::Value>,
+    blocks: BTreeMap<String, BlockSpecRow>,
 }
 
+/// The registry columns this crate reads at runtime. Every other column
+/// (`status`, `category`, `purpose`, `degradation`, `enum_variant`) is the
+/// spec_compliance test's business, not the library's.
+#[derive(Debug, Deserialize)]
+struct BlockSpecRow {
+    #[serde(default)]
+    attributes: Vec<String>,
+}
+
+static BLOCKS_SPEC: LazyLock<BlocksSpecFile> = LazyLock::new(|| {
+    toml::from_str(include_str!("../spec/blocks.toml"))
+        .expect("spec/blocks.toml is embedded at compile time and must parse as valid TOML — covered by spec_compliance tests")
+});
+
 static KNOWN_BLOCK_NAMES: LazyLock<BTreeSet<String>> = LazyLock::new(|| {
-    let spec: BlocksSpecFile = toml::from_str(include_str!("../spec/blocks.toml"))
-        .expect("spec/blocks.toml is embedded at compile time and must parse as valid TOML — covered by spec_compliance tests");
-    spec.blocks.into_keys().collect()
+    BLOCKS_SPEC.blocks.keys().cloned().collect()
+});
+
+/// Directives whose `attributes` list in `spec/blocks.toml` includes `label` —
+/// i.e. the ones that spend `label=` on their own semantics. The generic
+/// `label=` → `aria-label` capture (`crate::block_meta`) skips them.
+static LABEL_TYPED_BLOCK_NAMES: LazyLock<BTreeSet<String>> = LazyLock::new(|| {
+    BLOCKS_SPEC
+        .blocks
+        .iter()
+        .filter(|(_, row)| row.attributes.iter().any(|a| a == "label"))
+        .map(|(name, _)| name.clone())
+        .collect()
 });
 
 /// All block names registered in `spec/blocks.toml` (any status).
@@ -141,18 +165,30 @@ pub fn known_block_names() -> &'static BTreeSet<String> {
     &KNOWN_BLOCK_NAMES
 }
 
+/// Registered directives that carry a typed `label=` attribute.
+pub fn blocks_with_typed_label() -> &'static BTreeSet<String> {
+    &LABEL_TYPED_BLOCK_NAMES
+}
+
 /// Parser-accepted names that are deliberately NOT in `spec/blocks.toml`:
 /// sub-directives (`column`) and aliases/renderer families the parser resolves
-/// (`action-items` → tasks, `deck`/`slide`, `deploy_urls`, `info-card`).
+/// (`action-items` → tasks, `deck`/`slide`, `deploy_urls`, `info-card`,
+/// `reference-def` → cite, `references` → bibliography,
+/// `speaker-notes`/`presenter-notes` → notes).
 /// L020 must not flag these. The spec_compliance test asserts none of them is
 /// in blocks.toml — once the spec registers one, remove it from this list.
+/// The registry holds ONE canonical name per directive; its aliases live here.
 pub const EXTRA_KNOWN_BLOCK_NAMES: &[&str] = &[
     "action-items",
     "column",
     "deck",
     "deploy_urls",
     "info-card",
+    "presenter-notes",
+    "reference-def",
+    "references",
     "slide",
+    "speaker-notes",
 ];
 
 // ------------------------------------------------------------------
@@ -186,7 +222,83 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(MermaidConstructSkipped),
         Box::new(UnknownLayoutValue),
         Box::new(DeprecatedDesktopOnly),
+        Box::new(DuplicateBlockId),
     ]
+}
+
+// ------------------------------------------------------------------
+// L043 — duplicate block id within one page (0.18.1)
+// ------------------------------------------------------------------
+
+/// `id=` is the addressing handle a block editor uses to target one block
+/// (0.18.1). Two blocks sharing an id inside the same page make that address
+/// ambiguous: the first match wins and the second block is unreachable.
+///
+/// **Scope is the page, not the document.** A site doc is a stack of `::page`
+/// blocks, each of which is served as its own HTML document, so `id=hero` on
+/// the home page and `id=hero` on the pricing page is correct authoring and
+/// must not be flagged. Every `::page` opener therefore starts a fresh scope;
+/// ids before the first page belong to the document scope.
+///
+/// **Not fixable.** A safe machine rewrite would have to invent a new id, and
+/// every reference to it — in a template manifest, an edit request, a
+/// stylesheet — would still point at the old spelling. `fix_source` leaves
+/// duplicates exactly as authored; the author renames one.
+///
+/// Source-scanning like L041/L042: the typed blocks no longer carry their
+/// attribute map, so the authored spelling only survives in the source text.
+struct DuplicateBlockId;
+
+impl LintRule for DuplicateBlockId {
+    fn id(&self) -> &'static str {
+        "L043"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        // id -> 1-based line of its first use in the current page scope.
+        let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+        for line in scan_lines(source) {
+            if line.literal {
+                continue;
+            }
+            let Some((_, name, attrs_str)) = opening_directive(line.trimmed) else {
+                continue;
+            };
+            if name == "page" {
+                seen.clear();
+            }
+            if attrs_str.is_empty() {
+                continue;
+            }
+            let Ok(attrs) = parse_attrs(&attrs_str) else {
+                continue;
+            };
+            let id = match attrs.get("id") {
+                Some(AttrValue::String(v)) => v.trim().to_string(),
+                Some(AttrValue::Number(n)) => n.to_string(),
+                _ => continue,
+            };
+            if id.is_empty() {
+                continue;
+            }
+            let span = line.span();
+            match seen.get(&id) {
+                Some(first) => out.push(diag(
+                    "L043",
+                    format!(
+                        "Duplicate block id '{id}' on '::{name}' — first used on line {first}; \
+                         ids must be unique within a page"
+                    ),
+                    Some(span),
+                )),
+                None => {
+                    seen.insert(id, span.start_line);
+                }
+            }
+        }
+        out
+    }
 }
 
 // ------------------------------------------------------------------
@@ -3098,6 +3210,51 @@ mod tests {
         assert_eq!(diags[0].severity, Severity::Info);
         assert!(diags[0].message.contains("subgraph"));
         assert!(diags[0].fix.is_none());
+    }
+
+    // --- L043 duplicate block id ---
+
+    #[test]
+    fn l043_flags_the_second_use_of_an_id() {
+        let src = "---\ntitle: T\ntype: doc\n---\n\n::callout[type=info id=intro]\na\n::\n\n::callout[type=note id=intro]\nb\n::\n";
+        let diags = run_rule(&DuplicateBlockId, src);
+        assert_eq!(codes(&diags), vec!["L043"]);
+        assert_eq!(diags[0].severity, Severity::Warning);
+        assert!(diags[0].message.contains("'intro'"), "{}", diags[0].message);
+        assert!(diags[0].message.contains("line 6"), "{}", diags[0].message);
+        assert!(diags[0].fix.is_none(), "L043 is deliberately not fixable");
+        // The report points at the SECOND use, not the first.
+        assert_eq!(diags[0].span.expect("span").start_line, 10);
+    }
+
+    #[test]
+    fn l043_scope_is_the_page_not_the_document() {
+        // Two pages of one site doc may each own an `id=hero`.
+        let src = "---\ntitle: T\ntype: site\n---\n\n::site[domain=example.test]\n::\n\n::page[route=/]\n::callout[type=info id=hero]\na\n::\n::\n\n::page[route=/pricing]\n::callout[type=info id=hero]\nb\n::\n::\n";
+        assert!(run_rule(&DuplicateBlockId, src).is_empty());
+    }
+
+    #[test]
+    fn l043_silent_for_unique_ids_and_id_less_blocks() {
+        let src = "---\ntitle: T\ntype: doc\n---\n\n::callout[type=info id=a]\nx\n::\n\n::callout[type=info id=b]\nx\n::\n\n::callout[type=info]\nx\n::\n";
+        assert!(run_rule(&DuplicateBlockId, src).is_empty());
+    }
+
+    #[test]
+    fn l043_ignores_ids_inside_literal_bodies() {
+        let src = "---\ntitle: T\ntype: doc\n---\n\n::callout[type=info id=intro]\nx\n::\n\n::code[lang=surf]\n::callout[type=info id=intro]\n::\n::\n";
+        assert!(run_rule(&DuplicateBlockId, src).is_empty());
+    }
+
+    #[test]
+    fn l043_duplicates_survive_fix_source_untouched() {
+        let src = "---\ntitle: T\ntype: doc\nstatus: active\ncreated: \"2026-08-26\"\n---\n\n::summary\ns\n::\n\n::callout[type=info id=intro]\na\n::\n\n::callout[type=note id=intro]\nb\n::\n";
+        let fixed = apply_fixes(src, FixSafety::Suggested).source;
+        assert_eq!(
+            fixed.matches("id=intro").count(),
+            2,
+            "fix_source must leave both ids exactly as authored"
+        );
     }
 
     #[test]

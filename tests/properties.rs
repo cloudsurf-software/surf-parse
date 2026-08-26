@@ -164,6 +164,11 @@ fn arb_form_field_type() -> impl Strategy<Value = FormFieldType> {
         Just(FormFieldType::Number),
         Just(FormFieldType::Select),
         Just(FormFieldType::Textarea),
+        Just(FormFieldType::Checkbox),
+        Just(FormFieldType::Radio),
+        Just(FormFieldType::Toggle),
+        Just(FormFieldType::File),
+        Just(FormFieldType::Hidden),
     ]
 }
 
@@ -176,15 +181,19 @@ fn arb_form_field() -> impl Strategy<Value = FormField> {
         any::<bool>(),           // required
         proptest::option::of("[a-zA-Z0-9 ]{0,20}"),  // placeholder
         proptest::collection::vec("[a-zA-Z]{1,10}", 0..4), // options
+        proptest::option::of("[a-zA-Z ]{1,15}"), // group
     )
-        .prop_map(|(label, name, field_type, required, placeholder, options)| FormField {
-            label,
-            name,
-            field_type,
-            required,
-            placeholder,
-            options,
-        })
+        .prop_map(
+            |(label, name, field_type, required, placeholder, options, group)| FormField {
+                label,
+                name,
+                field_type,
+                required,
+                placeholder,
+                options,
+                group,
+            },
+        )
 }
 
 /// Proptest strategy for a GalleryItem.

@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 18
-registry_updated = "2026-08-24"
+total_rules = 19
+registry_updated = "2026-08-26"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -183,3 +183,10 @@ fixable = true
 fix_safety = "safe"
 message = "'desktop-only=true' is deprecated — use 'classes=desktop'"
 description = "0.18: ::panel desktop-only= is a deprecated alias for the general class-conditional attribute classes=. Both parse and normalize to the same class set; the fix rewrites the alias to the ratified spelling"
+
+[rules.L043]
+layer = "style"
+severity = "warning"
+fixable = false
+message = "Duplicate block id '{id}' on '::{block}' — first used on line {line}; ids must be unique within a page"
+description = "0.18.1: id= is the addressing handle for a single block, so two blocks sharing one inside the same page make that address ambiguous — the first match wins and the second is unreachable. Scope is the page: a site doc's ::page blocks each serve as their own document, so the same id on two different pages is correct authoring. Not fixable — a machine rewrite would have to invent a new id and every reference to the old spelling would still point at it; fix_source leaves duplicates untouched"

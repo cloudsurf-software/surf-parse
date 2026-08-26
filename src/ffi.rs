@@ -95,6 +95,7 @@ pub fn parse_to_native_styled(
         schema_version: NATIVE_DOC_SCHEMA_VERSION,
         theme: NativeTheme::from(&theme),
         blocks: render_native::to_native_blocks(&doc),
+        block_meta: render_native::to_native_block_meta(&doc),
     })
 }
 
@@ -179,12 +180,31 @@ mod tests {
         assert_eq!(resolve_size_class(1024), "desktop");
     }
 
-    /// Schema v5 is what tells a client the new fields are present.
+    /// Schema v6 is what tells a client the new fields are present.
     #[test]
-    fn native_doc_schema_version_is_five() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 5);
+    fn native_doc_schema_version_is_six() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 6);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 5);
+        assert_eq!(doc.schema_version, 6);
+    }
+
+    /// v6 addressing: `id=`/`label=` reach the FFI as a span-indexed list.
+    #[test]
+    fn block_addressing_crosses_the_ffi() {
+        let doc = parse_to_native(
+            "::callout[type=info id=intro label=\"Read me\"]\nHi.\n::\n".into(),
+        )
+        .expect("parse");
+        assert_eq!(doc.block_meta.len(), 1);
+        let meta = &doc.block_meta[0];
+        assert_eq!(meta.block_id.as_deref(), Some("intro"));
+        assert_eq!(meta.label.as_deref(), Some("Read me"));
+        assert_eq!(meta.start_line, 1);
+        assert!(meta.end_offset > meta.start_offset);
+
+        // A document that authors neither carries an empty list.
+        let plain = parse_to_native("# Hi\n".into()).expect("parse");
+        assert!(plain.block_meta.is_empty());
     }
 
     #[test]

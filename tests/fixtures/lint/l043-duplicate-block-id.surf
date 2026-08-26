@@ -1,0 +1,18 @@
+---
+title: "Duplicate Block Id"
+type: doc
+status: active
+created: "2026-08-26"
+---
+
+::summary
+Two blocks in one page cannot share an addressing id.
+::
+
+::callout[type=info id=intro]
+First claim on the id.
+::
+
+::callout[type=note id=intro]
+Second claim — unreachable by address.
+::

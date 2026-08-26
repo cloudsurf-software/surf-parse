@@ -615,6 +615,8 @@ mod tests {
                 ..FrontMatter::default()
             }),
             blocks: vec![Block::Metric {
+                min: None,
+                max: None,
                 label: String::new(),
                 value: "$2K".into(),
                 trend: None,

@@ -32,6 +32,11 @@ pub fn resolve_block(block: Block) -> Block {
         return block;
     };
 
+    // Capture the generic addressing attributes (`id=` / `label=`) before the
+    // typed parsers drop the attribute map. This is the single funnel every
+    // top-level and nested directive passes through — see `crate::block_meta`.
+    crate::block_meta::record(*span, name, attrs);
+
     match name.as_str() {
         "callout" => parse_callout(attrs, content, *span),
         "data" => parse_data(attrs, content, *span),
@@ -52,7 +57,7 @@ pub fn resolve_block(block: Block) -> Block {
         "testimonial" => parse_testimonial(attrs, content, *span),
         "style" => parse_style(content, *span),
         "faq" => parse_faq(content, *span),
-        "pricing-table" => parse_pricing_table(content, *span),
+        "pricing-table" => parse_pricing_table(attrs, content, *span),
         "site" => parse_site(attrs, content, *span),
         "page" => parse_page(attrs, content, *span),
         "deck" => parse_deck(attrs, content, *span),
@@ -282,9 +287,15 @@ fn parse_data(attrs: &Attrs, content: &str, span: Span) -> Block {
         })
         .unwrap_or(DataFormat::Table);
 
+    let caption = attr_string(attrs, "caption");
+
+    // A trailing `total: a | b | c` line is a summary row, not data: it is
+    // lifted out before the table is parsed and rendered as `<tfoot>`.
+    let (body, total) = split_total_row(content);
+
     let (headers, rows) = match format {
-        DataFormat::Table => parse_table_content(content),
-        DataFormat::Csv => parse_csv_content(content),
+        DataFormat::Table => parse_table_content(&body),
+        DataFormat::Csv => parse_csv_content(&body),
         DataFormat::Json => (Vec::new(), Vec::new()),
     };
 
@@ -294,9 +305,43 @@ fn parse_data(attrs: &Attrs, content: &str, span: Span) -> Block {
         sortable,
         headers,
         rows,
+        caption,
+        total,
         raw_content: content.to_string(),
         span,
     }
+}
+
+/// Split a trailing `total:` line off a `::data` body.
+///
+/// Returns the remaining content and the summary cells. Only a line whose
+/// first non-blank token is `total:` (case-insensitive) counts, and only the
+/// last such line wins; everything else is left untouched, so a data cell
+/// containing the word "total" is never eaten.
+fn split_total_row(content: &str) -> (String, Vec<String>) {
+    let mut kept: Vec<&str> = Vec::new();
+    let mut total: Vec<String> = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let candidate = trimmed.trim_start_matches('|').trim();
+        if let Some(rest) = candidate
+            .strip_prefix("total:")
+            .or_else(|| candidate.strip_prefix("Total:"))
+            .or_else(|| candidate.strip_prefix("TOTAL:"))
+        {
+            let cells: Vec<String> = rest
+                .trim_end_matches('|')
+                .split('|')
+                .map(|c| c.trim().to_string())
+                .collect();
+            if !cells.iter().all(|c| c.is_empty()) {
+                total = cells;
+                continue;
+            }
+        }
+        kept.push(line);
+    }
+    (kept.join("\n"), total)
 }
 
 /// Parse pipe-delimited table content.
@@ -562,12 +607,16 @@ fn parse_metric(attrs: &Attrs, span: Span) -> Block {
     });
 
     let unit = attr_string(attrs, "unit");
+    let min = attr_string(attrs, "min");
+    let max = attr_string(attrs, "max");
 
     Block::Metric {
         label,
         value,
         trend,
         unit,
+        min,
+        max,
         span,
     }
 }
@@ -906,12 +955,14 @@ fn parse_faq(content: &str, span: Span) -> Block {
     Block::Faq { items, span }
 }
 
-fn parse_pricing_table(content: &str, span: Span) -> Block {
+fn parse_pricing_table(attrs: &Attrs, content: &str, span: Span) -> Block {
     let (headers, rows) = parse_table_content(content);
 
     Block::PricingTable {
         headers,
         rows,
+        highlight: attr_string(attrs, "highlight"),
+        current: attr_string(attrs, "current"),
         span,
     }
 }
@@ -957,7 +1008,7 @@ fn parse_page(attrs: &Attrs, content: &str, span: Span) -> Block {
     let sidebar = attr_bool(attrs, "sidebar");
 
     // Scan content for leaf directives, interleaving with markdown.
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
 
     Block::Page {
         route,
@@ -1017,7 +1068,7 @@ fn parse_slide(attrs: &Attrs, content: &str, span: Span) -> Block {
     let kicker = attr_string(attrs, "kicker");
     let mut notes = attr_string(attrs, "notes");
 
-    let mut children = parse_page_children(content);
+    let mut children = parse_page_children_in(content, span);
 
     // Extract a `::notes` / `::speaker-notes` child block into the slide's
     // `notes` field (presenter notes), removing it from the rendered children.
@@ -1071,8 +1122,44 @@ fn attr_value_string(value: &AttrValue) -> Option<String> {
 /// `resolve_block()`. Leaf directives (`::name[attrs]` with no matching closer)
 /// are handled as before. Consecutive non-directive lines are collected as
 /// `Block::Markdown`.
-fn parse_page_children(content: &str) -> Vec<Block> {
+/// [`parse_page_children`] for a container whose own span is known: the
+/// children get real spans anchored at the container's content start (see
+/// `block_meta::content_start`), so each nested block keeps a distinct span
+/// identity for the addressing side table and the native `span` field.
+/// Falls back to placeholder spans when the parent is not a real span into
+/// the document being parsed.
+fn parse_page_children_in(content: &str, parent: Span) -> Vec<Block> {
+    parse_page_children_at(content, crate::block_meta::content_start(parent))
+}
+
+/// Shared body: `base` = `(byte offset, 1-based line)` of `content`'s first
+/// line inside the document, or `None` for placeholder (zero) spans.
+fn parse_page_children_at(content: &str, base: Option<(usize, usize)>) -> Vec<Block> {
     let lines: Vec<&str> = content.lines().collect();
+    // Byte offset of each line's start within `content` (lines are `\n`-joined
+    // slices of the normalised source, so `len + 1` per line is exact).
+    let mut line_starts: Vec<usize> = Vec::with_capacity(lines.len() + 1);
+    let mut acc = 0usize;
+    for l in &lines {
+        line_starts.push(acc);
+        acc += l.len() + 1;
+    }
+    let child_span = |start_idx: usize, end_idx: usize| -> Span {
+        match base {
+            Some((off, line)) => Span {
+                start_line: line + start_idx,
+                end_line: line + end_idx,
+                start_offset: off + line_starts[start_idx],
+                end_offset: off + line_starts[end_idx] + lines[end_idx].len(),
+            },
+            None => Span {
+                start_line: 0,
+                end_line: 0,
+                start_offset: 0,
+                end_offset: 0,
+            },
+        }
+    };
     let mut children = Vec::new();
     let mut md_lines: Vec<&str> = Vec::new();
     let mut i = 0;
@@ -1106,18 +1193,11 @@ fn parse_page_children(content: &str) -> Vec<Block> {
                 flush_md_lines(&mut md_lines, &mut children);
 
                 let attrs = crate::attrs::parse_attrs(&attrs_str).unwrap_or_default();
-                let dummy_span = Span {
-                    start_line: 0,
-                    end_line: 0,
-                    start_offset: 0,
-                    end_offset: 0,
-                };
-
                 let block = Block::Unknown {
                     name,
                     attrs,
                     content: content_str,
-                    span: dummy_span,
+                    span: child_span(i, end_idx),
                 };
                 children.push(resolve_block(block));
 
@@ -1125,7 +1205,7 @@ fn parse_page_children(content: &str) -> Vec<Block> {
                 continue;
             } else {
                 // No matching closer — treat as leaf directive
-                if let Some(block) = try_parse_leaf_directive(lines[i]) {
+                if let Some(block) = try_parse_leaf_directive_at(lines[i], child_span(i, i)) {
                     flush_md_lines(&mut md_lines, &mut children);
                     children.push(block);
                     i += 1;
@@ -1283,16 +1363,108 @@ fn parse_embed(attrs: &Attrs, span: Span) -> Block {
     }
 }
 
+/// Field-type keywords the `- type: Label` colon shorthand accepts inside
+/// `::form`. A word outside this set is treated as part of the label, so the
+/// shorthand can never swallow a plain `Note: something` line.
+fn is_form_type_keyword(word: &str) -> bool {
+    matches!(
+        word,
+        "email"
+            | "tel"
+            | "phone"
+            | "date"
+            | "number"
+            | "password"
+            | "select"
+            | "textarea"
+            | "multiline"
+            | "text"
+            | "checkbox"
+            | "radio"
+            | "toggle"
+            | "switch"
+            | "file"
+            | "hidden"
+    )
+}
+
+/// Map a bare field-type keyword to its `FormFieldType`. Unknown keywords
+/// degrade to `Text` — an author typo never drops the field.
+fn form_field_type_from_name(name: &str) -> FormFieldType {
+    match name {
+        "email" => FormFieldType::Email,
+        "tel" | "phone" => FormFieldType::Tel,
+        "date" => FormFieldType::Date,
+        "number" => FormFieldType::Number,
+        "password" => FormFieldType::Password,
+        "select" => FormFieldType::Select,
+        "textarea" | "multiline" => FormFieldType::Textarea,
+        "checkbox" => FormFieldType::Checkbox,
+        "radio" => FormFieldType::Radio,
+        "toggle" | "switch" => FormFieldType::Toggle,
+        "file" => FormFieldType::File,
+        "hidden" => FormFieldType::Hidden,
+        _ => FormFieldType::Text,
+    }
+}
+
+/// Parse the parenthesised field spec shared by `::form` and `::action`:
+/// `select: A | B | C`, `radio: A | B`, `text, "placeholder"`, or a bare
+/// type keyword. Returns the type, the optional placeholder, and the options.
+fn parse_form_field_spec(type_str: &str) -> (FormFieldType, Option<String>, Vec<String>) {
+    let type_str = type_str.trim();
+    // Option-carrying specs: `select:` and `radio:` read their choices the
+    // same way.
+    for (prefix, ft) in [
+        ("select:", FormFieldType::Select),
+        ("radio:", FormFieldType::Radio),
+    ] {
+        if let Some(opts_part) = type_str.strip_prefix(prefix) {
+            let opts: Vec<String> = opts_part
+                .split('|')
+                .map(|o| o.trim().to_string())
+                .filter(|o| !o.is_empty())
+                .collect();
+            return (ft, None, opts);
+        }
+    }
+    // Placeholder after a comma: `text, Enter your name`.
+    let (type_name, placeholder) = if let Some((t, p)) = type_str.split_once(',') {
+        (t.trim(), Some(p.trim().trim_matches('"').to_string()))
+    } else {
+        (type_str, None)
+    };
+    (form_field_type_from_name(type_name), placeholder, Vec::new())
+}
+
 fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
     let submit_label = attr_string(attrs, "submit");
     let action = attr_string(attrs, "action");
     let method = attr_string(attrs, "method");
     let honeypot = attr_bool(attrs, "honeypot");
     let mut fields = Vec::new();
+    let mut current_group: Option<String> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
+            continue;
+        }
+
+        // `group: Label` opens a fieldset that runs until the next `group:`
+        // line or the end of the block; a bare `group:` closes it. Accepted
+        // with or without the list marker.
+        if let Some(rest) = trimmed
+            .strip_prefix("- ")
+            .unwrap_or(trimmed)
+            .strip_prefix("group:")
+        {
+            let name = rest.trim();
+            current_group = if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            };
             continue;
         }
 
@@ -1307,11 +1479,7 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
                 if let Some(colon_pos) = rest.find(':') {
                     let maybe_type = rest[..colon_pos].trim().to_lowercase();
                     let label_after = rest[colon_pos + 1..].trim();
-                    let known = matches!(
-                        maybe_type.as_str(),
-                        "email" | "tel" | "phone" | "date" | "number" | "password"
-                            | "select" | "textarea" | "multiline" | "text"
-                    );
+                    let known = is_form_type_keyword(maybe_type.as_str());
                     if known && !label_after.is_empty() {
                         (label_after, Some((maybe_type, String::new())))
                     } else {
@@ -1333,36 +1501,7 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
             let required = rest.ends_with('*') || rest.ends_with("* ");
 
             let (field_type, placeholder, options) = match &type_part {
-                Some((type_str, _)) => {
-                    let type_str = type_str.trim();
-                    // Check for select with options: "select: A | B | C"
-                    if let Some(opts_part) = type_str.strip_prefix("select:") {
-                        let opts: Vec<String> = opts_part
-                            .split('|')
-                            .map(|o| o.trim().to_string())
-                            .filter(|o| !o.is_empty())
-                            .collect();
-                        (FormFieldType::Select, None, opts)
-                    } else {
-                        // Check for placeholder after comma: "text, Enter your name"
-                        let (type_name, placeholder) = if let Some((t, p)) = type_str.split_once(',') {
-                            (t.trim(), Some(p.trim().trim_matches('"').to_string()))
-                        } else {
-                            (type_str, None)
-                        };
-                        let ft = match type_name {
-                            "email" => FormFieldType::Email,
-                            "tel" | "phone" => FormFieldType::Tel,
-                            "date" => FormFieldType::Date,
-                            "number" => FormFieldType::Number,
-                            "password" => FormFieldType::Password,
-                            "select" => FormFieldType::Select,
-                            "textarea" | "multiline" => FormFieldType::Textarea,
-                            _ => FormFieldType::Text,
-                        };
-                        (ft, placeholder, Vec::new())
-                    }
-                }
+                Some((type_str, _)) => parse_form_field_spec(type_str),
                 None => (FormFieldType::Text, None, Vec::new()),
             };
 
@@ -1380,6 +1519,7 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
                 required,
                 placeholder,
                 options,
+                group: current_group.clone(),
             });
         }
     }
@@ -1656,7 +1796,8 @@ fn scan_container_close(lines: &[&str], start: usize, open_depth: usize) -> Opti
 /// Try to parse a single line as a leaf directive (`::name[attrs]`).
 ///
 /// Returns `Some(resolved_block)` if the line matches, `None` otherwise.
-fn try_parse_leaf_directive(line: &str) -> Option<Block> {
+/// Parse a closer-less single-line directive into a block carrying `span`.
+fn try_parse_leaf_directive_at(line: &str, span: Span) -> Option<Block> {
     let trimmed = line.trim();
     if !trimmed.starts_with("::") {
         return None;
@@ -1700,18 +1841,11 @@ fn try_parse_leaf_directive(line: &str) -> Option<Block> {
     };
 
     let attrs = crate::attrs::parse_attrs(attrs_str).unwrap_or_default();
-    let dummy_span = Span {
-        start_line: 0,
-        end_line: 0,
-        start_offset: 0,
-        end_offset: 0,
-    };
-
     let block = Block::Unknown {
         name: name.to_string(),
         attrs,
         content: String::new(),
-        span: dummy_span,
+        span,
     };
 
     Some(resolve_block(block))
@@ -2611,9 +2745,16 @@ fn parse_section(attrs: &Attrs, content: &str, span: Span) -> Block {
         .skip(body_start)
         .collect::<Vec<_>>()
         .join("\n");
+    // Anchor the children at the trimmed body's real position: the skipped
+    // headline/subtitle lines plus whatever leading whitespace `trim` drops.
+    let skipped: usize = content.lines().take(body_start).map(|l| l.len() + 1).sum();
+    let lead = remaining.len() - remaining.trim_start().len();
+    let lead_lines = remaining[..lead].matches('\n').count();
+    let base = crate::block_meta::content_start(span)
+        .map(|(off, line)| (off + skipped + lead, line + body_start + lead_lines));
     let remaining = remaining.trim().to_string();
 
-    let children = parse_page_children(&remaining);
+    let children = parse_page_children_at(&remaining, base);
 
     Block::Section {
         bg,
@@ -2714,6 +2855,8 @@ fn parse_product_card(attrs: &Attrs, content: &str, span: Span) -> Block {
         features,
         cta_label,
         cta_href,
+        price: attr_string(attrs, "price"),
+        currency: attr_string(attrs, "currency"),
         span,
     }
 }
@@ -3002,34 +3145,7 @@ fn parse_action(attrs: &Attrs, content: &str, span: Span) -> Block {
             let item_has_parens = type_part.is_some();
 
             let (field_type, placeholder, options) = match &type_part {
-                Some((type_str, _)) => {
-                    let type_str = type_str.trim();
-                    if let Some(opts_part) = type_str.strip_prefix("select:") {
-                        let opts: Vec<String> = opts_part
-                            .split('|')
-                            .map(|o| o.trim().to_string())
-                            .filter(|o| !o.is_empty())
-                            .collect();
-                        (FormFieldType::Select, None, opts)
-                    } else {
-                        let (type_name, placeholder) = if let Some((t, p)) = type_str.split_once(',') {
-                            (t.trim(), Some(p.trim().trim_matches('"').to_string()))
-                        } else {
-                            (type_str, None)
-                        };
-                        let ft = match type_name {
-                            "email" => FormFieldType::Email,
-                            "tel" | "phone" => FormFieldType::Tel,
-                            "date" => FormFieldType::Date,
-                            "number" => FormFieldType::Number,
-                            "password" => FormFieldType::Password,
-                            "select" => FormFieldType::Select,
-                            "textarea" | "multiline" => FormFieldType::Textarea,
-                            _ => FormFieldType::Text,
-                        };
-                        (ft, placeholder, Vec::new())
-                    }
-                }
+                Some((type_str, _)) => parse_form_field_spec(type_str),
                 None => (FormFieldType::Text, None, Vec::new()),
             };
 
@@ -3046,6 +3162,9 @@ fn parse_action(attrs: &Attrs, content: &str, span: Span) -> Block {
                 required,
                 placeholder,
                 options,
+                // Fieldsets are a `::form` feature; `::action` is a single
+                // inline control strip.
+                group: None,
             });
             has_parens.push(item_has_parens);
         }
@@ -3289,9 +3408,9 @@ fn parse_split_pane(attrs: &Attrs, content: &str, span: Span) -> Block {
     let mut right: Vec<Block> = Vec::new();
     if !content.trim().is_empty() {
         let mut pane_index = 0usize;
-        for child in parse_page_children(content) {
+        for child in parse_page_children_in(content, span) {
             match child {
-                Block::Unknown { ref name, ref attrs, content: ref body, .. }
+                Block::Unknown { ref name, ref attrs, content: ref body, span: pane_span }
                     if name == "pane" =>
                 {
                     let side = attr_string(attrs, "side");
@@ -3301,7 +3420,7 @@ fn parse_split_pane(attrs: &Attrs, content: &str, span: Span) -> Block {
                         _ if pane_index == 0 => &mut left,
                         _ => &mut right,
                     };
-                    target.extend(parse_page_children(body));
+                    target.extend(parse_page_children_in(body, pane_span));
                     pane_index += 1;
                 }
                 other => left.push(other),
@@ -3325,7 +3444,7 @@ fn parse_app(attrs: &Attrs, content: &str, span: Span) -> Block {
     let platform = attr_string(attrs, "platform");
     let auth = attr_string(attrs, "auth");
 
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
 
     Block::App {
         name,
@@ -4426,7 +4545,7 @@ fn parse_app_shell(attrs: &Attrs, content: &str, span: Span) -> Block {
         None
     };
     let height = attr_u32(attrs, "height");
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
     Block::AppShell {
         layout,
         adaptive,
@@ -4468,7 +4587,7 @@ fn parse_sidebar(attrs: &Attrs, content: &str, span: Span) -> Block {
     let collapsible = attr_bool(attrs, "collapsible");
     let width = attr_per_class_u32(attrs, "width");
     let (classes, min_class) = parse_class_conditional(attrs, None);
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
     Block::Sidebar {
         position,
         collapsible,
@@ -4494,7 +4613,7 @@ fn parse_panel(attrs: &Attrs, content: &str, span: Span) -> Block {
         None
     };
     let (classes, min_class) = parse_class_conditional(attrs, alias);
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
     Block::Panel {
         position,
         resizable,
@@ -4604,7 +4723,7 @@ fn parse_tab_content(attrs: &Attrs, content: &str, span: Span) -> Block {
     let width = attr_per_class_u32(attrs, "width");
     let align = attr_string(attrs, "align");
     let (classes, min_class) = parse_class_conditional(attrs, None);
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
     Block::TabContent {
         tab,
         width,
@@ -4698,7 +4817,7 @@ fn parse_drawer(attrs: &Attrs, content: &str, span: Span) -> Block {
     let width = attr_per_class_u32(attrs, "width");
     let trigger = attr_string(attrs, "trigger");
     let (classes, min_class) = parse_class_conditional(attrs, None);
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
     Block::Drawer {
         name,
         position,
@@ -4720,7 +4839,7 @@ fn parse_modal(attrs: &Attrs, content: &str, span: Span) -> Block {
         .get("dismissible")
         .map(|v| matches!(v, AttrValue::Bool(true)))
         .unwrap_or(true);
-    let children = parse_page_children(content);
+    let children = parse_page_children_in(content, span);
     Block::Modal {
         name,
         title,
@@ -5030,6 +5149,8 @@ fn parse_progress(attrs: &Attrs, content: &str, span: Span) -> Block {
     Block::Progress {
         source,
         steps,
+        value: attr_string(attrs, "value"),
+        max: attr_string(attrs, "max"),
         span,
     }
 }
@@ -6615,6 +6736,230 @@ Saturday 7am-4pm, Sunday 8am-2pm.
     }
 
     #[test]
+    fn resolve_form_boolean_and_upload_field_types() {
+        let content = "- Subscribe (checkbox)\n- Dark mode (toggle)\n- Resume (file) *\n                       - Source (hidden, \"pricing-page\")\n- Notify (switch)";
+        let block = unknown("form", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Form { fields, .. } => {
+                let kinds: Vec<crate::types::FormFieldType> =
+                    fields.iter().map(|f| f.field_type).collect();
+                assert_eq!(
+                    kinds,
+                    vec![
+                        crate::types::FormFieldType::Checkbox,
+                        crate::types::FormFieldType::Toggle,
+                        crate::types::FormFieldType::File,
+                        crate::types::FormFieldType::Hidden,
+                        // `switch` is an alias of `toggle`.
+                        crate::types::FormFieldType::Toggle,
+                    ]
+                );
+                assert!(fields[2].required);
+                assert_eq!(fields[3].placeholder.as_deref(), Some("pricing-page"));
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_form_radio_reads_options_like_select() {
+        let content = "- Plan (radio: Free | Pro | Team) *";
+        let block = unknown("form", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Form { fields, .. } => {
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].field_type, crate::types::FormFieldType::Radio);
+                assert_eq!(fields[0].options, vec!["Free", "Pro", "Team"]);
+                assert!(fields[0].required);
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_form_colon_shorthand_knows_the_new_keywords() {
+        // `- <type>: Label` must not degrade the new keywords to Text.
+        let content = "- checkbox: Subscribe\n- file: Resume\n- hidden: Source";
+        let block = unknown("form", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Form { fields, .. } => {
+                assert_eq!(fields[0].label, "Subscribe");
+                assert_eq!(fields[0].field_type, crate::types::FormFieldType::Checkbox);
+                assert_eq!(fields[1].field_type, crate::types::FormFieldType::File);
+                assert_eq!(fields[2].field_type, crate::types::FormFieldType::Hidden);
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_form_group_lines_tag_the_following_fields() {
+        let content = "group: Contact\n- Name (text)\n- Email (email)\n                       group: Shipping\n- Address (text)\ngroup:\n- Notes (textarea)";
+        let block = unknown("form", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Form { fields, .. } => {
+                let groups: Vec<Option<&str>> =
+                    fields.iter().map(|f| f.group.as_deref()).collect();
+                assert_eq!(
+                    groups,
+                    vec![
+                        Some("Contact"),
+                        Some("Contact"),
+                        Some("Shipping"),
+                        // A bare `group:` closes the run.
+                        None,
+                    ]
+                );
+                assert_eq!(fields.len(), 4);
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn grouped_form_round_trips_through_builder() {
+        let src = "::form[submit=\"Send\"]\ngroup: Contact\n- Name (text)\ngroup: Plan\n- Tier (radio: Free | Pro)\n- Trial (checkbox)\n::";
+        let doc = crate::parse(src).doc;
+        let rebuilt = crate::builder::to_surf_source(&doc);
+        let reparsed = crate::parse(&rebuilt).doc;
+        match (&doc.blocks[0], &reparsed.blocks[0]) {
+            (Block::Form { fields: a, .. }, Block::Form { fields: b, .. }) => {
+                assert_eq!(a.len(), b.len(), "rebuilt:\n{rebuilt}");
+                for (x, y) in a.iter().zip(b) {
+                    assert_eq!(x.label, y.label, "rebuilt:\n{rebuilt}");
+                    assert_eq!(x.field_type, y.field_type, "rebuilt:\n{rebuilt}");
+                    assert_eq!(x.options, y.options, "rebuilt:\n{rebuilt}");
+                    assert_eq!(x.group, y.group, "rebuilt:\n{rebuilt}");
+                }
+            }
+            other => panic!("Expected two Forms, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_data_caption_and_total_row() {
+        let a = attrs(&[("caption", AttrValue::String("Q3 revenue".into()))]);
+        let content = "| Line | Amount |\n|---|---|\n| Coffee | 800 |\ntotal: All | 800";
+        match resolve_block(unknown("data", a, content)) {
+            Block::Data {
+                caption,
+                total,
+                headers,
+                rows,
+                ..
+            } => {
+                assert_eq!(caption.as_deref(), Some("Q3 revenue"));
+                assert_eq!(total, vec!["All".to_string(), "800".to_string()]);
+                assert_eq!(headers, vec!["Line".to_string(), "Amount".to_string()]);
+                // The total line never becomes a data row.
+                assert_eq!(rows.len(), 1);
+            }
+            other => panic!("Expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_data_leaves_a_cell_that_merely_says_total_alone() {
+        let content = "| Line | Amount |\n|---|---|\n| Total revenue | 800 |";
+        match resolve_block(unknown("data", Attrs::new(), content)) {
+            Block::Data { total, rows, .. } => {
+                assert!(total.is_empty());
+                assert_eq!(rows.len(), 1);
+            }
+            other => panic!("Expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_0_18_1_gauge_and_price_attrs() {
+        match resolve_block(unknown(
+            "metric",
+            attrs(&[
+                ("label", AttrValue::String("Seats".into())),
+                ("value", AttrValue::String("42".into())),
+                ("min", AttrValue::String("0".into())),
+                ("max", AttrValue::String("100".into())),
+            ]),
+            "",
+        )) {
+            Block::Metric { min, max, .. } => {
+                assert_eq!(min.as_deref(), Some("0"));
+                assert_eq!(max.as_deref(), Some("100"));
+            }
+            other => panic!("Expected Metric, got {other:?}"),
+        }
+        match resolve_block(unknown(
+            "progress",
+            attrs(&[
+                ("value", AttrValue::String("30".into())),
+                ("max", AttrValue::String("120".into())),
+            ]),
+            "",
+        )) {
+            Block::Progress {
+                value, max, steps, ..
+            } => {
+                assert_eq!(value.as_deref(), Some("30"));
+                assert_eq!(max.as_deref(), Some("120"));
+                assert!(steps.is_empty());
+            }
+            other => panic!("Expected Progress, got {other:?}"),
+        }
+        match resolve_block(unknown(
+            "product-card",
+            attrs(&[
+                ("price", AttrValue::String("49".into())),
+                ("currency", AttrValue::String("USD".into())),
+            ]),
+            "## Corpus Co Pro\nBody.",
+        )) {
+            Block::ProductCard { price, currency, .. } => {
+                assert_eq!(price.as_deref(), Some("49"));
+                assert_eq!(currency.as_deref(), Some("USD"));
+            }
+            other => panic!("Expected ProductCard, got {other:?}"),
+        }
+        match resolve_block(unknown(
+            "pricing-table",
+            attrs(&[
+                ("highlight", AttrValue::String("Pro".into())),
+                ("current", AttrValue::String("Free".into())),
+            ]),
+            "| Tier | Price |\n|---|---|\n| Free | $0 |",
+        )) {
+            Block::PricingTable {
+                highlight, current, ..
+            } => {
+                assert_eq!(highlight.as_deref(), Some("Pro"));
+                assert_eq!(current.as_deref(), Some("Free"));
+            }
+            other => panic!("Expected PricingTable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_0_18_1_attributes_are_builder_fixed_points() {
+        let src = "::data[caption=\"Q3\" format=table]\n| Line | Amount |\n| --- | --- |\n| Coffee | 800 |\ntotal: All | 800\n::\n\n\
+                   ::metric[label=\"Seats\" value=\"42\" min=\"0\" max=\"100\"]\n::\n\n\
+                   ::progress[value=\"30\" max=\"120\"]\n::\n\n\
+                   ::pricing-table[highlight=\"Pro\" current=\"Free\"]\n| Tier | Price |\n| --- | --- |\n| Free | $0 |\n::\n";
+        let doc = crate::parse(src).doc;
+        let rebuilt = crate::builder::to_surf_source(&doc);
+        let reparsed = crate::parse(&rebuilt).doc;
+        assert_eq!(
+            doc.blocks.len(),
+            reparsed.blocks.len(),
+            "rebuilt:\n{rebuilt}"
+        );
+        // Serializing the reparse must land on the same source — a fixed point.
+        assert_eq!(
+            rebuilt,
+            crate::builder::to_surf_source(&reparsed),
+            "rebuilt:\n{rebuilt}"
+        );
+    }
+
+    #[test]
     fn resolve_form_with_submit_label() {
         let block = unknown(
             "form",
@@ -7708,6 +8053,26 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(fields[1].label, "Priority");
                 assert_eq!(fields[1].field_type, FormFieldType::Select);
                 assert_eq!(fields[1].options, vec!["Low", "Medium", "High"]);
+            }
+            other => panic!("Expected Action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_radio_and_checkbox_fields() {
+        let a = attrs(&[
+            ("method", AttrValue::String("post".into())),
+            ("target", AttrValue::String("/api/orders".into())),
+            ("label", AttrValue::String("Place order".into())),
+        ]);
+        let content = "- Shipping (radio: Standard | Express)\n- Gift wrap (checkbox)";
+        let block = unknown("action", a, content);
+        match resolve_block(block) {
+            Block::Action { fields, .. } => {
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].field_type, FormFieldType::Radio);
+                assert_eq!(fields[0].options, vec!["Standard", "Express"]);
+                assert_eq!(fields[1].field_type, FormFieldType::Checkbox);
             }
             other => panic!("Expected Action, got {other:?}"),
         }

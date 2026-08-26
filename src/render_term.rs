@@ -1049,6 +1049,8 @@ mod tests {
     fn term_metric_trend() {
         let doc = doc_with(vec![
             Block::Metric {
+                min: None,
+                max: None,
                 label: "MRR".into(),
                 value: "$2K".into(),
                 trend: Some(Trend::Up),
@@ -1056,6 +1058,8 @@ mod tests {
                 span: span(),
             },
             Block::Metric {
+                min: None,
+                max: None,
                 label: "Churn".into(),
                 value: "5%".into(),
                 trend: Some(Trend::Down),

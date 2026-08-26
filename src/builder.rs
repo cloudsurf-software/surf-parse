@@ -190,6 +190,8 @@ impl SurfDocBuilder {
             sortable: false,
             headers,
             rows,
+            caption: None,
+            total: Vec::new(),
             raw_content,
             span: Span::SYNTHETIC,
         });
@@ -246,6 +248,8 @@ impl SurfDocBuilder {
             value: value.to_string(),
             trend: None,
             unit: None,
+            min: None,
+            max: None,
             span: Span::SYNTHETIC,
         });
         self
@@ -264,6 +268,8 @@ impl SurfDocBuilder {
             value: value.to_string(),
             trend: Some(trend),
             unit: unit.map(|s| s.to_string()),
+            min: None,
+            max: None,
             span: Span::SYNTHETIC,
         });
         self
@@ -387,6 +393,8 @@ impl SurfDocBuilder {
         self.blocks.push(Block::PricingTable {
             headers,
             rows,
+            highlight: None,
+            current: None,
             span: Span::SYNTHETIC,
         });
         self
@@ -674,6 +682,8 @@ impl SurfDocBuilder {
             features,
             cta_label: cta_label.map(|s| s.to_string()),
             cta_href: cta_href.map(|s| s.to_string()),
+            price: None,
+            currency: None,
             span: Span::SYNTHETIC,
         });
         self
@@ -996,11 +1006,16 @@ fn serialize_block(block: &Block) -> String {
             sortable,
             headers,
             rows,
+            caption,
+            total,
             ..
         } => {
             let mut attr_parts = Vec::new();
             if let Some(id) = id {
                 attr_parts.push(format!("id=\"{}\"", escape_attr(id)));
+            }
+            if let Some(c) = caption {
+                attr_parts.push(format!("caption=\"{}\"", escape_attr(c)));
             }
             let fmt = match format {
                 DataFormat::Table => "table",
@@ -1021,6 +1036,9 @@ fn serialize_block(block: &Block) -> String {
             }
             for row in rows {
                 content_lines.push(format!("| {} |", row.join(" | ")));
+            }
+            if !total.is_empty() {
+                content_lines.push(format!("total: {}", total.join(" | ")));
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
@@ -1100,6 +1118,8 @@ fn serialize_block(block: &Block) -> String {
             value,
             trend,
             unit,
+            min,
+            max,
             ..
         } => {
             let mut attr_parts = Vec::new();
@@ -1110,6 +1130,12 @@ fn serialize_block(block: &Block) -> String {
             }
             if let Some(u) = unit {
                 attr_parts.push(format!("unit=\"{}\"", escape_attr(u)));
+            }
+            if let Some(m) = min {
+                attr_parts.push(format!("min=\"{}\"", escape_attr(m)));
+            }
+            if let Some(m) = max {
+                attr_parts.push(format!("max=\"{}\"", escape_attr(m)));
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
             format!("::metric{attrs}\n::")
@@ -1327,7 +1353,25 @@ fn serialize_block(block: &Block) -> String {
             format!("::faq\n{content}\n::")
         }
 
-        Block::PricingTable { headers, rows, .. } => {
+        Block::PricingTable {
+            headers,
+            rows,
+            highlight,
+            current,
+            ..
+        } => {
+            let mut attr_parts = Vec::new();
+            if let Some(h) = highlight {
+                attr_parts.push(format!("highlight=\"{}\"", escape_attr(h)));
+            }
+            if let Some(c) = current {
+                attr_parts.push(format!("current=\"{}\"", escape_attr(c)));
+            }
+            let attrs = if attr_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attr_parts.join(" "))
+            };
             let mut content_lines = Vec::new();
             if !headers.is_empty() {
                 content_lines.push(format!("| {} |", headers.join(" | ")));
@@ -1339,9 +1383,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::pricing-table\n::".to_string()
+                format!("::pricing-table{attrs}\n::")
             } else {
-                format!("::pricing-table\n{content}\n::")
+                format!("::pricing-table{attrs}\n{content}\n::")
             }
         }
 
@@ -1493,13 +1537,24 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attr_parts.join(" "))
             };
             let mut content_lines = Vec::new();
+            let mut open_group: Option<&str> = None;
             for field in fields {
+                // Re-emit the `group:` line whenever the run changes, so a
+                // grouped form is a builder fixed point.
+                let group = field.group.as_deref();
+                if group != open_group {
+                    content_lines.push(match group {
+                        Some(name) => format!("group: {name}"),
+                        None => "group:".to_string(),
+                    });
+                    open_group = group;
+                }
                 let req = if field.required { " *" } else { "" };
                 let type_str = form_field_type_str(field.field_type);
                 match field.field_type {
-                    FormFieldType::Select if !field.options.is_empty() => {
+                    ft if field_type_takes_options(ft) && !field.options.is_empty() => {
                         content_lines.push(format!(
-                            "- {} (select: {}){req}",
+                            "- {} ({type_str}: {}){req}",
                             field.label,
                             field.options.join(" | ")
                         ));
@@ -1990,6 +2045,8 @@ fn serialize_block(block: &Block) -> String {
             features,
             cta_label,
             cta_href,
+            price,
+            currency,
             ..
         } => {
             let mut attrs_parts = Vec::new();
@@ -1998,6 +2055,12 @@ fn serialize_block(block: &Block) -> String {
             }
             if let Some(bc) = badge_color {
                 attrs_parts.push(format!("badge-color=\"{}\"", escape_attr(bc)));
+            }
+            if let Some(p) = price {
+                attrs_parts.push(format!("price=\"{}\"", escape_attr(p)));
+            }
+            if let Some(c) = currency {
+                attrs_parts.push(format!("currency=\"{}\"", escape_attr(c)));
             }
             let attrs_str = if attrs_parts.is_empty() {
                 String::new()
@@ -2095,20 +2158,12 @@ fn serialize_block(block: &Block) -> String {
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut content_lines = Vec::new();
             for field in fields {
-                let type_str = match field.field_type {
-                    FormFieldType::Text => "text",
-                    FormFieldType::Email => "email",
-                    FormFieldType::Tel => "tel",
-                    FormFieldType::Date => "date",
-                    FormFieldType::Number => "number",
-                    FormFieldType::Password => "password",
-                    FormFieldType::Select => "select",
-                    FormFieldType::Textarea => "textarea",
-                };
+                let type_str = form_field_type_str(field.field_type);
                 let req = if field.required { " *" } else { "" };
-                if field.field_type == FormFieldType::Select && !field.options.is_empty() {
+                // `select:` / `radio:` carry their choices inline.
+                if field_type_takes_options(field.field_type) && !field.options.is_empty() {
                     content_lines.push(format!(
-                        "- {} (select: {}){req}",
+                        "- {} ({type_str}: {}){req}",
                         field.label,
                         field.options.join(" | "),
                     ));
@@ -3214,10 +3269,27 @@ fn serialize_block(block: &Block) -> String {
             format!("::chat-input-simple{attrs_str}\n::")
         }
 
-        Block::Progress { source, steps, .. } => {
-            let attrs_str = match source {
-                Some(s) => format!("[source={s}]"),
-                None => String::new(),
+        Block::Progress {
+            source,
+            steps,
+            value,
+            max,
+            ..
+        } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(s) = source {
+                attrs_parts.push(format!("source={s}"));
+            }
+            if let Some(v) = value {
+                attrs_parts.push(format!("value=\"{}\"", escape_attr(v)));
+            }
+            if let Some(m) = max {
+                attrs_parts.push(format!("max=\"{}\"", escape_attr(m)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
             };
             let mut lines = Vec::new();
             for step in steps {
@@ -3421,7 +3493,17 @@ fn form_field_type_str(ft: FormFieldType) -> &'static str {
         FormFieldType::Password => "password",
         FormFieldType::Select => "select",
         FormFieldType::Textarea => "textarea",
+        FormFieldType::Checkbox => "checkbox",
+        FormFieldType::Radio => "radio",
+        FormFieldType::Toggle => "toggle",
+        FormFieldType::File => "file",
+        FormFieldType::Hidden => "hidden",
     }
+}
+
+/// Field types whose choices are re-serialized inline as `(<type>: A | B)`.
+fn field_type_takes_options(ft: FormFieldType) -> bool {
+    matches!(ft, FormFieldType::Select | FormFieldType::Radio)
 }
 
 /// Escape a string value for use inside `[key="value"]` attribute brackets.

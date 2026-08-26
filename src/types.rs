@@ -561,6 +561,13 @@ pub enum Block {
         sortable: bool,
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
+        /// Table caption (`caption=`) — rendered as `<caption>`. New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        caption: Option<String>,
+        /// Summary row from a trailing `total: a | b | c` line — rendered as
+        /// `<tfoot>` and excluded from `rows`. New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        total: Vec<String>,
         raw_content: String,
         span: Span,
     },
@@ -591,6 +598,14 @@ pub enum Block {
         value: String,
         trend: Option<Trend>,
         unit: Option<String>,
+        /// Gauge floor (`min=`, defaults to 0 when only `max=` is given).
+        /// New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<String>,
+        /// Gauge ceiling (`max=`). When set and the value is numeric the
+        /// metric also renders a `<meter>`. New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<String>,
         span: Span,
     },
     /// Executive summary block.
@@ -715,6 +730,12 @@ pub enum Block {
     PricingTable {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
+        /// Tier name to feature (`highlight=`). New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        highlight: Option<String>,
+        /// Tier the viewer is already on (`current=`). New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        current: Option<String>,
         span: Span,
     },
     /// Site-level configuration (one per document).
@@ -951,6 +972,13 @@ pub enum Block {
         features: Vec<String>,
         cta_label: Option<String>,
         cta_href: Option<String>,
+        /// Price as authored (`price=`) — kept verbatim, never reformatted.
+        /// New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        price: Option<String>,
+        /// Currency code for `price` (`currency=`). New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        currency: Option<String>,
         span: Span,
     },
 
@@ -1526,6 +1554,14 @@ pub enum Block {
     Progress {
         source: Option<String>,
         steps: Vec<ProgressStep>,
+        /// Numeric mode: completed amount (`value=`). When set the block
+        /// renders a `<progress>` bar instead of the step list.
+        /// New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+        /// Numeric mode ceiling (`max=`, defaults to 100). New in 0.18.1.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<String>,
         span: Span,
     },
     /// Live log output stream.
@@ -1564,6 +1600,130 @@ pub enum Block {
         on_resolve: Option<String>,
         span: Span,
     },
+}
+
+impl Block {
+    /// Source span of this block.
+    ///
+    /// Every variant carries a `span`, so this is one or-pattern rather than
+    /// 109 arms — and a newly added variant that forgets its `span` field
+    /// fails to compile here, which is the point. Used by the block-metadata
+    /// side table (`crate::block_meta`) to reach a block's authored `id=` /
+    /// `label=` without widening the enum.
+    pub fn span(&self) -> Span {
+        match self {
+            Block::Unknown { span, .. }
+            | Block::Markdown { span, .. }
+            | Block::Callout { span, .. }
+            | Block::Data { span, .. }
+            | Block::Code { span, .. }
+            | Block::Tasks { span, .. }
+            | Block::Decision { span, .. }
+            | Block::Metric { span, .. }
+            | Block::Summary { span, .. }
+            | Block::Cite { span, .. }
+            | Block::Bibliography { span, .. }
+            | Block::Figure { span, .. }
+            | Block::Diagram { span, .. }
+            | Block::Tabs { span, .. }
+            | Block::Columns { span, .. }
+            | Block::Quote { span, .. }
+            | Block::Cta { span, .. }
+            | Block::Nav { span, .. }
+            | Block::HeroImage { span, .. }
+            | Block::Testimonial { span, .. }
+            | Block::Style { span, .. }
+            | Block::Faq { span, .. }
+            | Block::PricingTable { span, .. }
+            | Block::Site { span, .. }
+            | Block::Page { span, .. }
+            | Block::Deck { span, .. }
+            | Block::Slide { span, .. }
+            | Block::Embed { span, .. }
+            | Block::Form { span, .. }
+            | Block::Banner { span, .. }
+            | Block::ProductGrid { span, .. }
+            | Block::PostGrid { span, .. }
+            | Block::Gate { span, .. }
+            | Block::Gallery { span, .. }
+            | Block::Footer { span, .. }
+            | Block::Details { span, .. }
+            | Block::Divider { span, .. }
+            | Block::Hero { span, .. }
+            | Block::Features { span, .. }
+            | Block::Steps { span, .. }
+            | Block::Stats { span, .. }
+            | Block::Comparison { span, .. }
+            | Block::Logo { span, .. }
+            | Block::Toc { span, .. }
+            | Block::BeforeAfter { span, .. }
+            | Block::Pipeline { span, .. }
+            | Block::Section { span, .. }
+            | Block::ProductCard { span, .. }
+            | Block::List { span, .. }
+            | Block::Board { span, .. }
+            | Block::Action { span, .. }
+            | Block::FilterBar { span, .. }
+            | Block::Search { span, .. }
+            | Block::Dashboard { span, .. }
+            | Block::ChatInput { span, .. }
+            | Block::Feed { span, .. }
+            | Block::Store { span, .. }
+            | Block::Booking { span, .. }
+            | Block::Editor { span, .. }
+            | Block::Chart { span, .. }
+            | Block::SplitPane { span, .. }
+            | Block::App { span, .. }
+            | Block::Build { span, .. }
+            | Block::InfraDatabase { span, .. }
+            | Block::Deploy { span, .. }
+            | Block::InfraEnv { span, .. }
+            | Block::Health { span, .. }
+            | Block::Concurrency { span, .. }
+            | Block::Cicd { span, .. }
+            | Block::Smoke { span, .. }
+            | Block::Domains { span, .. }
+            | Block::Crates { span, .. }
+            | Block::DeployUrls { span, .. }
+            | Block::Volumes { span, .. }
+            | Block::Model { span, .. }
+            | Block::Route { span, .. }
+            | Block::Auth { span, .. }
+            | Block::Binding { span, .. }
+            | Block::Schema { span, .. }
+            | Block::Use { span, .. }
+            | Block::AppEnv { span, .. }
+            | Block::AppDeploy { span, .. }
+            | Block::Row { span, .. }
+            | Block::InfoCard { span, .. }
+            | Block::AppShell { span, .. }
+            | Block::Sidebar { span, .. }
+            | Block::Panel { span, .. }
+            | Block::TabBar { span, .. }
+            | Block::TabContent { span, .. }
+            | Block::Toolbar { span, .. }
+            | Block::Drawer { span, .. }
+            | Block::Modal { span, .. }
+            | Block::CommandPalette { span, .. }
+            | Block::SegmentedControl { span, .. }
+            | Block::DropdownSelect { span, .. }
+            | Block::CodeEditor { span, .. }
+            | Block::BlockEditor { span, .. }
+            | Block::Terminal { span, .. }
+            | Block::NavTree { span, .. }
+            | Block::Badge { span, .. }
+            | Block::SuggestionChips { span, .. }
+            | Block::ChatThread { span, .. }
+            | Block::ChipInput { span, .. }
+            | Block::ChatInputSimple { span, .. }
+            | Block::Progress { span, .. }
+            | Block::LogStream { span, .. }
+            | Block::ProblemList { span, .. }
+            | Block::RecipientPicker { span, .. }
+            | Block::Qr { span, .. }
+            => *span,
+        }
+    }
 }
 
 /// State for Row and InfoCard blocks.
@@ -1908,6 +2068,16 @@ pub struct FormField {
     pub required: bool,
     pub placeholder: Option<String>,
     pub options: Vec<String>,
+    /// Fieldset this field belongs to. A `group: Label` line inside `::form`
+    /// opens a group that runs until the next `group:` line or the end of the
+    /// block; consecutive fields sharing a value render inside one
+    /// `<fieldset>` with that `<legend>`.
+    ///
+    /// Carried on the field rather than as a `groups` vector on `Block::Form`
+    /// so `Form`'s public field set is unchanged and every existing
+    /// construction site keeps working with `group: None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// Form field input types.
@@ -1922,6 +2092,19 @@ pub enum FormFieldType {
     Password,
     Select,
     Textarea,
+    /// Single boolean box (`- Subscribe (checkbox)`).
+    Checkbox,
+    /// One-of-many radio group; `options` carries the choices
+    /// (`- Plan (radio: Free | Pro)`).
+    Radio,
+    /// Boolean rendered as a switch — an `<input type="checkbox">` carrying
+    /// `role="switch"` on the web, a `Toggle`/`Switch` control natively.
+    Toggle,
+    /// File upload control.
+    File,
+    /// Non-visual field carried with the submission; `placeholder` supplies
+    /// the value (`- Source (hidden, "pricing-page")`).
+    Hidden,
 }
 
 /// A single item in a `Gallery` block.

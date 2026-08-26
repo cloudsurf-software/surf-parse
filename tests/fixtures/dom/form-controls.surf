@@ -1,0 +1,25 @@
+---
+title: "Form Controls & Groups"
+type: doc
+status: active
+created: "2026-08-26"
+---
+
+# Corpus Co order form
+
+::form[submit="Place order" action=/orders method=post honeypot]
+group: Contact
+- Name (text, "Your name") *
+- Email (email) *
+group: Plan
+- Tier (radio: Free | Pro | Team) *
+- Newsletter (checkbox)
+- Dark mode (toggle)
+group: Attachments
+- Purchase order (file)
+- Source (hidden, "pricing-page")
+::
+
+::form[submit=Send]
+- Message (textarea)
+::

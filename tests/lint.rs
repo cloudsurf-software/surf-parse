@@ -61,6 +61,8 @@ const LINT_CORPUS: &[(&str, &[&str])] = &[
     ("l031-enum-case.surf", &["L031"]),
     ("l041-unknown-layout.surf", &["L041", "L041"]),
     ("l042-desktop-only.surf", &["L042"]),
+    ("l043-duplicate-block-id.surf", &["L043"]),
+    ("registered-blocks.surf", &[]),
     ("p001-unclosed.surf", &[]),
     ("p002-unclosed-frontmatter.surf", &[]),
 ];
@@ -127,6 +129,33 @@ fn l020_suggestion_comes_from_blocks_toml() {
         "did-you-mean should suggest the spec block name: {}",
         l020.message
     );
+}
+
+#[test]
+fn registered_0_18_1_directives_never_fire_l020() {
+    // 0.18.1 closed the registry drift: these five directives were
+    // parser-implemented long before `spec/blocks.toml` listed them, so L020
+    // reported every one of them as an unknown block.
+    let source = read_fixture(LINT_FIXTURE_DIR, "registered-blocks.surf");
+    for name in ["banner", "booking", "store", "cite", "bibliography"] {
+        assert!(
+            surf_parse::lint::known_block_names().contains(name),
+            "::{name} must be a registered block name"
+        );
+    }
+    // The parser-only aliases resolve to the same renderers and must also
+    // stay quiet, without earning a second registry row.
+    let aliases = "::reference-def[key=k]\ntitle: T\n::\n\n::references\n::\n";
+    for src in [source.as_str(), aliases] {
+        let report = surf_parse::check(src);
+        let l020: Vec<&str> = report
+            .diagnostics
+            .iter()
+            .filter_map(|d| d.code.as_deref())
+            .filter(|c| *c == "L020")
+            .collect();
+        assert!(l020.is_empty(), "unexpected L020: {l020:?}");
+    }
 }
 
 // ------------------------------------------------------------------

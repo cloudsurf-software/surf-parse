@@ -1,0 +1,38 @@
+---
+title: "Registry Drift Fixture"
+type: doc
+status: active
+created: "2026-08-26"
+---
+
+::summary
+Directives registered in 0.18.1 — banner, booking, store, cite, bibliography —
+must lint clean: no L020 unknown-block diagnostic for any of them.
+::
+
+# Corpus Co storefront
+
+::banner[id=contact]
+# Talk to us
+We reply within one business day.
+[Book a call](/book)
+::
+
+::booking[title="Book a session" service-label=Service]
+- service: Strategy Call | 60 min | $200
+- day: 2026-09-01 | 09:00, 10:00
+::
+
+::store[title="Sweet Delights Bakery" currency=USD]
+- category: Pastries
+- item: Almond Croissant | 4.50 | Flaky and filled | New
+::
+
+::cite[key=bourne2026 type=article]
+title: Tidal Records
+author: R. Bourne
+year: 2026
+::
+
+::bibliography[style=apa]
+::

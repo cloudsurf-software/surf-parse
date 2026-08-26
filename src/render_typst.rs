@@ -2093,6 +2093,8 @@ mod tests {
         let doc = SurfDoc {
             front_matter: None,
             blocks: vec![Block::Data {
+                caption: None,
+                total: Vec::new(),
                 id: None,
                 format: DataFormat::Table,
                 sortable: false,
@@ -2172,6 +2174,8 @@ mod tests {
         let doc = SurfDoc {
             front_matter: None,
             blocks: vec![Block::Metric {
+                min: None,
+                max: None,
                 label: "Revenue".to_string(),
                 value: "$12K".to_string(),
                 trend: Some(Trend::Up),
@@ -2382,6 +2386,8 @@ mod tests {
         let doc = SurfDoc {
             front_matter: None,
             blocks: vec![Block::ProductCard {
+                price: None,
+                currency: None,
                 title: "WaveSite".to_string(),
                 subtitle: Some("Build your site".into()),
                 badge: Some("NEW".into()),

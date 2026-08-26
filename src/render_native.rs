@@ -61,6 +61,12 @@ pub enum NativeBlock {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
         sortable: bool,
+        /// Table caption (schema v6).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        caption: Option<String>,
+        /// Summary row rendered under the body (schema v6).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        total: Vec<String>,
     },
 
     /// Task checklist with checkbox items.
@@ -82,6 +88,12 @@ pub enum NativeBlock {
         value: String,
         trend: Option<String>,
         unit: Option<String>,
+        /// Gauge floor / ceiling (schema v6). With `max` set the metric draws
+        /// as a gauge natively.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<String>,
     },
 
     /// Executive summary box.
@@ -360,6 +372,12 @@ pub enum NativeBlock {
     Progress {
         source: Option<String>,
         steps: Vec<NativeProgressStep>,
+        /// Numeric mode (schema v6): with `value` set the block is a
+        /// determinate bar and `steps` is empty.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<String>,
     },
     /// Live log output stream.
     LogStream {
@@ -485,6 +503,11 @@ pub enum NativeBlock {
     PricingTable {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
+        /// Tier names to feature / mark as the viewer's own (schema v6).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        highlight: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        current: Option<String>,
     },
 
     /// Product/pricing card (::product-card) — title, optional subtitle and
@@ -498,6 +521,11 @@ pub enum NativeBlock {
         features: Vec<String>,
         cta_label: Option<String>,
         cta_href: Option<String>,
+        /// Price as authored, plus its currency code (schema v6).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        price: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        currency: Option<String>,
     },
 
     /// Chart (::chart). `chart_type` is the chart kind (line/bar/pie/…),
@@ -776,6 +804,10 @@ pub struct NativeFormField {
     pub required: bool,
     pub placeholder: Option<String>,
     pub options: Vec<String>,
+    /// Fieldset label this field belongs to (schema v6). Consecutive fields
+    /// sharing a value belong to one group; `None` is an ungrouped field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// A single image item in a native gallery.
@@ -1251,7 +1283,43 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 ///    three values that reached HTML but died at the FFI before v5.
 /// 5. `size_class_tablet_min()` / `size_class_desktop_min()` /
 ///    `resolve_size_class()` exported so clients share one breakpoint table.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 5;
+/// v6 (0.18.1) — form vocabulary:
+/// 1. `NativeFormField.group` — the fieldset a field belongs to
+///    (`group: Label` inside `::form`); `None` on every ungrouped field.
+/// 2. `NativeFormField.field_type` gains `checkbox`, `radio`, `toggle`,
+///    `file` and `hidden`; clients that match the string exhaustively must
+///    add the five cases (Toggle/Switch for `toggle`).
+/// 3. `NativeDoc.block_meta` — span-indexed `id=`/`label=` for any block
+///    ([`NativeBlockMeta`]); empty on documents that author neither.
+/// 4. `NativeBlock::Metric` gains `min`/`max`, `Progress` gains
+///    `value`/`max`, `ProductCard` gains `price`/`currency`,
+///    `PricingTable` gains `highlight`/`current`, `Data` gains `caption`
+///    and `total`.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 6;
+
+/// One block's authored addressing attributes, keyed by source span.
+///
+/// `NativeBlock` is a 75-variant enum, so `block_id`/`label` cannot be flat
+/// fields on it; the metadata rides beside the tree instead, indexed by the
+/// same `Span` byte extent the HTML renderer uses. Empty for a document that
+/// authored no `id=`/`label=`. New in schema v6.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeBlockMeta {
+    /// 1-based first line of the block directive.
+    pub start_line: u32,
+    /// 1-based last line of the block directive (inclusive).
+    pub end_line: u32,
+    /// 0-based byte offset of the directive's first character.
+    pub start_offset: u32,
+    /// 0-based byte offset past the directive's last character.
+    pub end_offset: u32,
+    /// Authored `id=` (`data-block-id` in HTML).
+    pub block_id: Option<String>,
+    /// Authored `label=` (`aria-label` in HTML); `None` on the directives that
+    /// spend `label=` on their own semantics.
+    pub label: Option<String>,
+}
 
 /// A parsed document plus its resolved theme — the unit that crosses the
 /// FFI for themed native rendering.
@@ -1264,11 +1332,29 @@ pub struct NativeDoc {
     pub theme: NativeTheme,
     /// The block tree.
     pub blocks: Vec<NativeBlock>,
+    /// Span-indexed `id=`/`label=` metadata (schema v6).
+    pub block_meta: Vec<NativeBlockMeta>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // Conversion functions
 // ═══════════════════════════════════════════════════════════════════════
+
+/// The span-indexed `id=`/`label=` metadata of `doc`, in span order.
+pub fn to_native_block_meta(doc: &SurfDoc) -> Vec<NativeBlockMeta> {
+    let _meta_scope = crate::block_meta::activate_for(&doc.source);
+    crate::block_meta::snapshot()
+        .into_iter()
+        .map(|(span, meta)| NativeBlockMeta {
+            start_line: span.start_line as u32,
+            end_line: span.end_line as u32,
+            start_offset: span.start_offset as u32,
+            end_offset: span.end_offset as u32,
+            block_id: meta.id,
+            label: meta.label,
+        })
+        .collect()
+}
 
 /// Convert a parsed SurfDoc into a Vec<NativeBlock> for native rendering.
 pub fn to_native_blocks(doc: &SurfDoc) -> Vec<NativeBlock> {
@@ -1364,6 +1450,9 @@ pub(crate) fn expand_markdown_tables(content: &str) -> Vec<NativeBlock> {
                 headers,
                 rows,
                 sortable: false,
+                // Markdown tables in prose carry no caption or summary row.
+                caption: None,
+                total: Vec::new(),
             });
             i = j;
             continue;
@@ -1510,11 +1599,15 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             headers,
             rows,
             sortable,
+            caption,
+            total,
             ..
         } => NativeBlock::DataTable {
             headers: headers.clone(),
             rows: rows.clone(),
             sortable: *sortable,
+            caption: caption.clone(),
+            total: total.clone(),
         },
 
         Block::Tasks { items, .. } => NativeBlock::Tasks {
@@ -1546,12 +1639,16 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             value,
             trend,
             unit,
+            min,
+            max,
             ..
         } => NativeBlock::Metric {
             label: label.clone(),
             value: value.clone(),
             trend: trend.map(trend_str),
             unit: unit.clone(),
+            min: min.clone(),
+            max: max.clone(),
         },
 
         Block::Summary { content, .. } => NativeBlock::Summary {
@@ -1593,6 +1690,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             features,
             cta_label,
             cta_href,
+            price,
+            currency,
             ..
         } => NativeBlock::ProductCard {
             title: title.clone(),
@@ -1603,6 +1702,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             features: features.clone(),
             cta_label: cta_label.clone(),
             cta_href: cta_href.clone(),
+            price: price.clone(),
+            currency: currency.clone(),
         },
 
         Block::Chart {
@@ -1891,6 +1992,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                     required: f.required,
                     placeholder: f.placeholder.clone(),
                     options: f.options.clone(),
+                    group: f.group.clone(),
                 })
                 .collect(),
             submit_label: submit_label
@@ -2218,9 +2320,15 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         },
 
         Block::Progress {
-            source, steps, ..
+            source,
+            steps,
+            value,
+            max,
+            ..
         } => NativeBlock::Progress {
             source: source.clone(),
+            value: value.clone(),
+            max: max.clone(),
             steps: steps
                 .iter()
                 .map(|s| NativeProgressStep {
@@ -2475,9 +2583,17 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             embed_type: embed_type.map(embed_type_str).unwrap_or_else(|| "generic".to_string()),
         },
 
-        Block::PricingTable { headers, rows, .. } => NativeBlock::PricingTable {
+        Block::PricingTable {
+            headers,
+            rows,
+            highlight,
+            current,
+            ..
+        } => NativeBlock::PricingTable {
             headers: headers.clone(),
             rows: rows.clone(),
+            highlight: highlight.clone(),
+            current: current.clone(),
         },
 
         // ── FFI-hole closure (0.11) ─────────────────────────────────
@@ -2803,6 +2919,11 @@ fn form_field_type_str(ft: FormFieldType) -> String {
         FormFieldType::Password => "password",
         FormFieldType::Select => "select",
         FormFieldType::Textarea => "textarea",
+        FormFieldType::Checkbox => "checkbox",
+        FormFieldType::Radio => "radio",
+        FormFieldType::Toggle => "toggle",
+        FormFieldType::File => "file",
+        FormFieldType::Hidden => "hidden",
     }
     .to_string()
 }
@@ -3504,6 +3625,8 @@ mod tests {
     #[test]
     fn native_data_table() {
         let block = Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: true,
@@ -3515,6 +3638,8 @@ mod tests {
         assert_eq!(
             convert_block(&block, 0),
             NativeBlock::DataTable {
+                caption: None,
+                total: Vec::new(),
                 headers: vec!["Name".to_string(), "Age".to_string()],
                 rows: vec![vec!["Alice".to_string(), "30".to_string()]],
                 sortable: true,
@@ -3525,6 +3650,8 @@ mod tests {
     #[test]
     fn native_data_table_empty() {
         let block = Block::Data {
+            caption: None,
+            total: Vec::new(),
             id: None,
             format: DataFormat::Table,
             sortable: false,
@@ -3536,6 +3663,8 @@ mod tests {
         assert_eq!(
             convert_block(&block, 0),
             NativeBlock::DataTable {
+                caption: None,
+                total: Vec::new(),
                 headers: vec![],
                 rows: vec![],
                 sortable: false,
@@ -3602,6 +3731,8 @@ mod tests {
     #[test]
     fn native_metric_with_trend() {
         let block = Block::Metric {
+            min: None,
+            max: None,
             label: "MRR".to_string(),
             value: "$2K".to_string(),
             trend: Some(Trend::Up),
@@ -3611,6 +3742,8 @@ mod tests {
         assert_eq!(
             convert_block(&block, 0),
             NativeBlock::Metric {
+                min: None,
+                max: None,
                 label: "MRR".to_string(),
                 value: "$2K".to_string(),
                 trend: Some("up".to_string()),
@@ -3622,6 +3755,8 @@ mod tests {
     #[test]
     fn native_metric_no_trend() {
         let block = Block::Metric {
+            min: None,
+            max: None,
             label: "Users".to_string(),
             value: "100".to_string(),
             trend: None,
@@ -3631,6 +3766,8 @@ mod tests {
         assert_eq!(
             convert_block(&block, 0),
             NativeBlock::Metric {
+                min: None,
+                max: None,
                 label: "Users".to_string(),
                 value: "100".to_string(),
                 trend: None,
@@ -4257,6 +4394,7 @@ mod tests {
                     required: true,
                     placeholder: Some("Enter your name".to_string()),
                     options: vec![],
+                    group: None,
                 },
                 FormField {
                     label: "Email".to_string(),
@@ -4265,6 +4403,7 @@ mod tests {
                     required: true,
                     placeholder: None,
                     options: vec![],
+                    group: None,
                 },
             ],
             submit_label: Some("Send".to_string()),
@@ -4282,6 +4421,7 @@ mod tests {
                         required: true,
                         placeholder: Some("Enter your name".to_string()),
                         options: vec![],
+                        group: None,
                     },
                     NativeFormField {
                         label: "Email".to_string(),
@@ -4290,6 +4430,7 @@ mod tests {
                         required: true,
                         placeholder: None,
                         options: vec![],
+                        group: None,
                     },
                 ],
                 submit_label: "Send".to_string(),
@@ -4327,6 +4468,11 @@ mod tests {
             (FormFieldType::Number, "number"),
             (FormFieldType::Select, "select"),
             (FormFieldType::Textarea, "textarea"),
+            (FormFieldType::Checkbox, "checkbox"),
+            (FormFieldType::Radio, "radio"),
+            (FormFieldType::Toggle, "toggle"),
+            (FormFieldType::File, "file"),
+            (FormFieldType::Hidden, "hidden"),
         ];
         for (ft, expected) in types {
             let block = Block::Form {
@@ -4337,6 +4483,7 @@ mod tests {
                     required: false,
                     placeholder: None,
                     options: vec![],
+                    group: None,
                 }],
                 submit_label: None,
                 action: None, method: None, honeypot: false,
@@ -4361,6 +4508,7 @@ mod tests {
                 required: false,
                 placeholder: None,
                 options: vec!["US".to_string(), "CA".to_string(), "UK".to_string()],
+                group: None,
             }],
             submit_label: Some("Go".to_string()),
             action: None, method: None, honeypot: false,
@@ -4579,6 +4727,71 @@ mod tests {
         }
     }
 
+    /// 0.18.1 (schema v6): the new block attributes must cross the FFI, not
+    /// die at the boundary the way `NativeFormField.group` nearly did.
+    #[test]
+    fn native_0_18_1_attributes_cross_the_ffi() {
+        let src = "::data[caption=\"Q3\"]\n| Line | Amount |\n|---|---|\n| Coffee | 800 |\ntotal: All | 800\n::\n\n\
+                   ::metric[label=Seats value=42 min=0 max=100]\n::\n\n\
+                   ::progress[value=30 max=120]\n::\n\n\
+                   ::product-card[price=49 currency=USD]\n## Corpus Co Pro\nBody.\n::\n\n\
+                   ::pricing-table[highlight=Pro current=Free]\n| Tier | Price |\n|---|---|\n| Free | $0 |\n| Pro | $20 |\n::\n";
+        let blocks = to_native_blocks(&crate::parse(src).doc);
+        let mut seen = 0;
+        for b in &blocks {
+            match b {
+                NativeBlock::DataTable { caption, total, .. } => {
+                    assert_eq!(caption.as_deref(), Some("Q3"));
+                    assert_eq!(total, &vec!["All".to_string(), "800".to_string()]);
+                    seen += 1;
+                }
+                NativeBlock::Metric { min, max, .. } => {
+                    assert_eq!(min.as_deref(), Some("0"));
+                    assert_eq!(max.as_deref(), Some("100"));
+                    seen += 1;
+                }
+                NativeBlock::Progress {
+                    value, max, steps, ..
+                } => {
+                    assert_eq!(value.as_deref(), Some("30"));
+                    assert_eq!(max.as_deref(), Some("120"));
+                    assert!(steps.is_empty());
+                    seen += 1;
+                }
+                NativeBlock::ProductCard { price, currency, .. } => {
+                    assert_eq!(price.as_deref(), Some("49"));
+                    assert_eq!(currency.as_deref(), Some("USD"));
+                    seen += 1;
+                }
+                NativeBlock::PricingTable {
+                    highlight, current, ..
+                } => {
+                    assert_eq!(highlight.as_deref(), Some("Pro"));
+                    assert_eq!(current.as_deref(), Some("Free"));
+                    seen += 1;
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(seen, 5, "all five carriers must be present: {blocks:?}");
+    }
+
+    /// The `group` label a `::form` fieldset carries must survive conversion.
+    #[test]
+    fn native_form_field_group_crosses_the_ffi() {
+        let src = "::form\ngroup: Contact\n- Name (text)\n- Email (email)\n::";
+        let blocks = to_native_blocks(&crate::parse(src).doc);
+        match &blocks[0] {
+            NativeBlock::Form { fields, .. } => {
+                assert_eq!(fields.len(), 2);
+                for f in fields {
+                    assert_eq!(f.group.as_deref(), Some("Contact"));
+                }
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
     #[test]
     fn to_native_blocks_with_new_variants() {
         let doc = SurfDoc {
@@ -4592,6 +4805,7 @@ mod tests {
                         required: true,
                         placeholder: None,
                         options: vec![],
+                        group: None,
                     }],
                     submit_label: Some("Subscribe".to_string()),
                     action: None, method: None, honeypot: false,
@@ -4762,7 +4976,7 @@ mod tests {
         // round (chat-thread message children, chipInput kind, row
         // avatar/rtime/unread-count) — schema v4.
         // 0.18: the size-class axis + the FFI holes it closed — schema v5.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 5);
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 6);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

@@ -1,0 +1,21 @@
+---
+title: Block addressing
+---
+
+::callout[type=info id=intro label="Read me \"first\" & fast <ok>"]
+Every block can carry an addressing id.
+::
+
+::figure[id=shot-1 src=/assets/shot.png alt="Editor" caption="The editor"]
+
+::hero[id=hero-1 label="Page hero" headline="One file" subhead="Two clients"]
+::
+
+::features[id=feat-1 label=Highlights]
+- **Typed** — every block has a shape
+- **Portable** — one file
+::
+
+::section[id=sec-1 label="Details"]
+Plain prose inside an addressed section.
+::
