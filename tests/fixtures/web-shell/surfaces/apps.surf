@@ -1,0 +1,218 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/apps.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Apps"
+type: doc
+version: 4
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, apps]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/04-apps.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Apps
+
+::summary
+The Apps surface in the shell wrapper: ruled 880px centered column, title row with the app count and icon-only ＋ / Sort actions (G3), rows ⇄ grid segmented-control, iOS AppRow rows (name, description, neutral provider + status chips). The inline sort row is gone (WP-N3, docs G4 precedent): sort lives in `modals/filter.surf` (Apps vocabulary), opened from the Sort button. The New App sheet is `modals/create.surf` (App kind) — no inline copy. The apps glyph is the canonical crossed hammer + wrench everywhere.
+::
+
+::app-shell[name=apps layout=sidebar-main-panel height=900]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps state=active]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=apps width=880 align=center]
+
+::::toolbar
+- text[value="Apps"]
+- spacer
+- text[value="7 apps"]
+- button[icon=plus action=openCreateApp aria-label="New App"]
+- button[icon=sort action=toggleSortRow aria-label="Sort"]
+::::
+
+::::segmented-control[name=apps-view action=setAppsView active=rows size=compact]
+- rows "Rows"
+- grid "Grid"
+::::
+
+::::row[action=openApp href=#]
+dawn-s-nail-salon-advice
+surf · Created
+::::
+
+::::row[action=openApp href=#]
+tidepool
+Tidepool photo gallery — static site + Android TWA dogfood · surf · Ready
+::::
+
+::::row[action=openApp href=#]
+angry-libs
+surf · Created
+::::
+
+::::row[action=openApp href=#]
+artvault-preview
+surf · Created
+::::
+
+::::row[action=openApp href=#]
+first-friday-gallery
+surf · Ready
+::::
+
+::::row[action=openApp href=#]
+art-show-portal
+surf · Ready
+::::
+
+::::row[action=openApp href=#]
+lift-log-live
+surf · Building
+::::
+
+:::
+
+::
+
+The list uses the ruled 880px centered column (`width=880 align=center` on the tab-content). Rows follow the iOS AppRow anatomy — name headline, 2-line description, then NEUTRAL provider + status chips (server status string, capitalized; no invented Deployed/Building/Draft vocabulary), no leading icon, trailing chevron. The inline sort row and its accent-ring toggle are REMOVED (WP-N3, docs G4 precedent) — the sort dropdown lives in the anchored filter sheet (`modals/filter.surf`, Apps vocabulary: sort only), opened from the Sort button; the app count sits in the title row before the actions. The rows ⇄ grid switch is the `segmented-control` block — it NAVIGATES between the views (`?view=grid`, the c5 tasks mechanism reused); selection is server-stamped on the landing render, never faked. Sort is the only filter — Latest first / Name.
+
+## Grid view
+
+The grid view is the D-2 web addition: tinted apps-glyph tile (crossed hammer + wrench), single-line ellipsized name, 2-line clamped description, chips pinned to the card bottom, static uniform card heights, cards in a responsive multi-column grid inside the same ruled 880px column.
+
+### Static grid markup (WP-C6 — the shape the live `?view=grid` route serves)
+
+Grid mode is REAL block markup, not prose: each app authors as a row carrying the
+leading tinted apps-glyph tile (`icon=apps`) — the anatomy difference from the
+rows view, whose AppRow rows are icon-less. The multi-column card layout, the
+2-line description clamp, and the bottom-pinned chips are chrome the renderer
+does not emit for authored blocks yet (renderer-level gap, LOGGED for the 0.14.1
+round); until then the cards stack as full-width tiled rows. Never the
+source-driven site-page card blocks (`::features` / product grids are a
+different lane). The rows ⇄ grid segmented-control NAVIGATES between the views
+(`?view=grid`); selection is server-stamped, never faked.
+
+::row[icon=apps action=openApp href=#]
+dawn-s-nail-salon-advice
+surf · Created
+::
+
+::row[icon=apps action=openApp href=#]
+tidepool
+Tidepool photo gallery — static site + Android TWA dogfood · surf · Ready
+::
+
+::row[icon=apps action=openApp href=#]
+angry-libs
+surf · Created
+::
+
+::row[icon=apps action=openApp href=#]
+artvault-preview
+surf · Created
+::
+
+::row[icon=apps action=openApp href=#]
+first-friday-gallery
+surf · Ready
+::
+
+::row[icon=apps action=openApp href=#]
+art-show-portal
+surf · Ready
+::
+
+::row[icon=apps action=openApp href=#]
+lift-log-live
+surf · Building
+::
+
+## Sort sheet
+
+Defined ONCE in `modals/filter.surf` (`name=filter`, anchored to the title-row Sort button): one sheet, per-surface vocabulary — here the single Apps sort dropdown (Latest first / Name, `applySort` unchanged). The Sort button opens it via `toggleSortRow`; this file carries no inline copy.
+
+## New App sheet
+
+Defined ONCE in `modals/create.surf` (`name=create`, App kind: describe → Generate prefills the Surfy panel, opens it if closed, never auto-sends; no manual path — apps are built by Surfy). The title-row ＋ opens it via `openCreateApp`; this file carries no inline copy.

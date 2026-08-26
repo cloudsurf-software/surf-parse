@@ -1,0 +1,79 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# FIRST-PARTY SOURCE — not a vendored copy.
+# Every other file in this directory is a vendored copy of the strategy tree's
+# plans/design/2026-08-03-web-surfspace/src/ surfaces; this one is NOT. The
+# first-run tutorial has no design-tree twin: it was authored here, for the
+# web lane of the first-run gate, and it is edited here. It is deliberately
+# left out of next_shell_drift.rs's SURFACES roster for that reason — that
+# roster asserts vendored provenance, the ten-row sidebar and the href=#
+# mock rows, and none of those apply to a gate screen.
+title: "Surfspace Web Source — First-run Tutorial"
+type: doc
+version: 1
+created: 2026-08-22
+updated: 2026-08-22
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, tutorial, onboarding]
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# First-run Tutorial
+
+::summary
+The gate screen. One screen, four choices, no way around it: until a user
+finishes the tutorial every `/next` surface answers 303 back here (the
+server-side gate in `next_surface` / `next_page_ctx`). There is deliberately NO
+sidebar and NO topbar on this page — a gate that renders ten nav rows which all
+bounce straight back to it is a lie about what the user can do. The only chrome
+is the Surfy drawer the shell composes into every surface, which is where the
+run itself happens once a lane is chosen.
+
+Each choice is a real zero-JS `<form method="post">` (the email-triage MPA
+idiom: no fields, the lane rides the action URL) posting to
+`/tutorial/start`, which answers 303 back here with the drawer forced open
+and the server-owned starter prompt + conversation id stamped on the shell root
+as data attributes. No inline script, so no new CSP hash.
+::
+
+::app-shell[name=tutorial layout=sidebar-main-panel height=900]
+
+:::tab-content[tab=main width=640 align=center]
+
+# Welcome to Surfspace!
+
+Ask Surfy to create:
+
+::::form[submit="App" action="/tutorial/start?choice=app" method=post]
+::::
+
+::::form[submit="Doc" action="/tutorial/start?choice=doc" method=post]
+::::
+
+::::form[submit="Presentation" action="/tutorial/start?choice=presentation" method=post]
+::::
+
+::::form[submit="Tasks" action="/tutorial/start?choice=tasks" method=post]
+::::
+
+:::
+
+::
+
+Pick one and Surfy builds it with you. The artifact is created BEFORE the first
+token streams (`tutorial::precreate_artifact`), so the run always ends with
+something real to open even if the model says nothing useful. The turn is comped
+server-side — derived from the conversation id the server minted, never from a
+client flag.

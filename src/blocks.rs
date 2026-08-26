@@ -4067,6 +4067,9 @@ fn parse_row(attrs: &Attrs, content: &str, span: Span) -> Block {
     let state = match attr_string(attrs, "state").as_deref() {
         Some("loading") => RowState::Loading,
         Some("empty") => RowState::Empty,
+        // 0.19.0: authored active state is stored, not dropped — the web
+        // backends render it and the serializer round-trips it.
+        Some("active") => RowState::Active,
         _ => RowState::Default,
     };
 
@@ -4157,6 +4160,9 @@ fn parse_infocard(attrs: &Attrs, content: &str, span: Span) -> Block {
     let state = match attr_string(attrs, "state").as_deref() {
         Some("loading") => RowState::Loading,
         Some("empty") => RowState::Empty,
+        // 0.19.0: authored active state is stored, not dropped — the web
+        // backends render it and the serializer round-trips it.
+        Some("active") => RowState::Active,
         _ => RowState::Default,
     };
 

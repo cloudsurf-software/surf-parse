@@ -1,0 +1,76 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/modals/doc-menu.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: none — this file carries no nav hrefs and no hub chip, so no
+# /next rewrites or interpolation tokens apply.
+title: "Surfspace Web Source — Doc Menu"
+type: doc
+version: 2
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, menu, docs]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/02-docs.surf
+    relationship: consumes
+  - path: plans/design/2026-08-03-web-surfspace/src/surfaces/doc-detail.surf
+    relationship: references
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Doc ⋯ Menu
+
+::summary
+The unified doc overflow menu at FULL production-web parity (ruled 08-03 from the shipping surf.space menu) — an anchored rich menu, NOT a modal: `dropdown-select` is its vocabulary. Three sections: Actions (12 items, Move to trash = danger, always last), the General access selector (three options with descriptions, active option accent-filled with a checkmark), and AI (Generate with Surfy).
+::
+
+## Actions
+
+::dropdown-select[name=doc-menu placement=anchored anchor=doc-menu-button action=runDocMenuAction]
+- "Edit" value=edit icon=edit action=editDoc
+- "Export as PDF" value=export-pdf icon=download action=exportDocPdf
+- "Copy link" value=copy-link icon=copy action=copyDocLink
+- "Share link" value=share-link icon=share action=openShare
+- "Send in message" value=send-message icon=knowledge action=sendDocInMessage
+- "Move to Workspace" value=move icon=move action=openMoveToWorkspace
+- "Copy to Workspace" value=copy icon=copy action=openCopyToWorkspace
+- "Rename" value=rename icon=edit action=openRename
+- "Version history" value=versions icon=clock action=openVersionHistory
+- "Download (.surf)" value=download icon=download action=downloadDocSurf
+- "Archive" value=archive icon=archive action=archiveDoc
+- "Move to trash" value=trash icon=trash style=danger action=trashDoc
+::
+
+## General access
+
+Single-select group inside the same anchored menu, below the separator; the active option is accent-filled with a checkmark.
+
+::dropdown-select[name=general-access label="General access" selected="Workspace" action=setDocAccess]
+- "Restricted" value=restricted icon=lock description="Only you" action=setDocAccessRestricted
+- "Workspace" value=workspace icon=members description="Anyone in your workspace" action=setDocAccessWorkspace
+- "Anyone with link" value=link icon=share description="Signed-in users with the link + public web page" action=setDocAccessLink
+::
+
+## AI
+
+::dropdown-select[name=doc-menu-ai label="AI" action=runDocMenuAction]
+- "Generate with Surfy" value=generate icon=surfy-fin action=generateWithSurfy
+::
+
+Anchored to the detail bar's ⋯ button; scrim-click and Esc dismiss (an anchored menu carries no ✕ — it is not a sheet). Share link opens `modals/share.surf`; Move/Copy open `modals/move-copy.surf` with the matching title; Rename and Version history open their sheets; Move to trash is the danger item, always last in Actions.
+
+At small width (≤ 767px, R-C ruling 08-10) the anchored menu goes edge-to-edge with 10px side insets and auto width; the wide anchoring is unchanged.

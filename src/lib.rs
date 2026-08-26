@@ -25,6 +25,7 @@ pub mod error;
 pub mod icons;
 mod icons_vendored;
 pub mod inline;
+pub mod limits;
 pub mod lint;
 pub(crate) mod mermaid_compat;
 pub mod parse;
@@ -74,6 +75,7 @@ pub use citation::{
     CiteItem, CiteRef, Reference, RefType,
 };
 pub use error::*;
+pub use limits::{LimitExceeded, ParseLimits};
 pub use lint::{
     AppliedFix, CheckReport, FixOutcome, LintConfig, LintRule, SkippedFix, apply_fixes,
     apply_fixes_once, check, check_with,

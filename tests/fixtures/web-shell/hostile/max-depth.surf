@@ -1,0 +1,39 @@
+::app-shell[name=deep title="Max depth"]
+
+:::tab-content[tab=main]
+
+::::split-pane
+
+:::::pane[side=left ratio=360]
+
+::::::toolbar
+- text[value="Depth 6"]
+::::::
+
+::::::chat-thread
+- them[sender="A" time="1:00 PM"] Depth 6 message
+::::::
+
+::::::embed[src=/x/body type=generic height=120px title="Depth 6 embed"]
+::::::
+
+::::::chat-input-simple[placeholder="Depth 6 input" action=send]
+::::::
+
+:::::
+
+:::::pane[side=right]
+
+::::::toolbar
+- text[value="Right"]
+- spacer
+- button[label="Deep" action=deep style=primary]
+::::::
+
+:::::
+
+::::
+
+:::
+
+::

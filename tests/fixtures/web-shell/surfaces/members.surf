@@ -1,0 +1,156 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/members.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Members"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, members, settings]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/06-hub.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Members
+
+::summary
+The Members + invites surface (Settings → Members) in the shell wrapper: invite-by-email form (Action form block), member rows with initials chips and role pills (role change via dropdown-select, Remove danger), Surfy as an Agent member, and pending invites with Resend.
+::
+
+::app-shell[name=members layout=sidebar-main-panel height=1050]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings state=active]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=main width=880 align=center]
+
+::::toolbar
+- button[icon=chevron-left style=circled action=backToSettings tooltip="Back to Settings"]
+- text[value="Members"]
+- spacer
+- button[label="Invite" style=primary action=sendInvite]
+::::
+
+::::form[name=invite submit="Invite" action=sendInvite]
+- Email (email, "Invite by email…")
+::::
+
+::::toolbar
+- text[value="Members (3)"]
+::::
+
+::::row[icon=login href=#]
+K. Brady Davis
+KD · owner@example.com · joined Feb 2026 · Owner
+::::
+
+::::row[icon=sparkle href=#]
+Surfy
+Workspace assistant · runs with member permissions · Agent
+::::
+
+::::row[icon=login href=# trailing-label="Member" trailing-action=openRoleMenu]
+Danny Pappageorge
+DP · joined Jul 29, 2026
+::::
+
+::::dropdown-select[name=member-role label="Member" selected="Member" action=openRoleMenu]
+- "Member" value=member action=setRoleMember
+- "Admin" value=admin action=setRoleAdmin
+- "Remove" value=remove style=danger action=removeMember
+::::
+
+::::toolbar
+- text[value="Pending invites (1)"]
+::::
+
+::::row[icon=knowledge href=# trailing-label="Resend" trailing-action=resendInvite]
+teammate@example.com
+Invited Aug 04 · expires in 6 days
+::::
+
+:::
+
+::
+
+Owners and admins manage members; roles are Owner · Admin · Member · Agent. Owner and Agent render as inert pills; the Member trailing role menu is the dropdown-select above, anchored to the row's trailing action. The invite form is the Action `form` block — Invite sends and appends to Pending invites. G3 pass (WP-N3 08-11): Invite KEEPS its label — it is this surface's only primary affordance. Member rows carry the 22px initials avatar chip (KD / DP) leading each row; the initials ride in the row meta here because `avatar=` parses only on toolbar buttons, not rows — the chip treatment is renderer work. At small width (≤ 767px, R-C ruling 08-10) the shell contract applies unchanged: sidebar behind the generated tab-bar + FAB, the 880px column full-width with edge padding, and the invite form, member rows, and trailing role/Resend actions flow full-width and stay visible at touch widths.

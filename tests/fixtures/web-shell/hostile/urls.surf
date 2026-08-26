@@ -1,0 +1,49 @@
+::app-shell[name=urls title="URL hostile"]
+
+:::sidebar[width=240]
+
+::::row[icon=doc href="javascript:alert('row')"]
+Row with a js href
+Meta
+::::
+
+::::row[icon=doc href="data:text/html,%3Cscript%3Ex%3C/script%3E"]
+Row with a data href
+Meta
+::::
+
+:::
+
+:::tab-content[tab=main]
+
+::::toolbar
+- button[label="JS button" avatar="javascript:alert('avatar')" action="javascript:alert('action')"]
+- button[label="Data button" avatar="data:image/svg+xml,%3Csvg%20onload=alert(1)%3E" action=ok]
+::::
+
+[js link](javascript:alert(1)) and [data link](data:text/html,payload) stay defused.
+
+![img with js src](javascript:evil())
+
+::::figure[src="javascript:alert('figure')" alt="js figure"]
+::::
+
+::::figure[src="data:text/html,payload" alt="data figure"]
+::::
+
+::::embed[src="javascript:alert('embed')" type=generic height=480px title="JS embed"]
+::::
+
+::::embed[src="data:text/html,%3Cscript%3E1%3C/script%3E" type=generic height=200px title="Data embed"]
+::::
+
+::::form[name=urlform submit="Send" action="javascript:alert('form')"]
+- Field (text, "p")
+::::
+
+::::search[name=urlsearch placeholder="q" action="javascript:alert('search')"]
+::::
+
+:::
+
+::

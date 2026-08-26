@@ -1,0 +1,25 @@
+::app-shell[name=half-open title="Half open"]
+
+:::sidebar[width=240]
+
+::::toolbar
+- text[value="Rail"]
+
+::::row[icon=doc href=#]
+Unterminated row title
+Meta line
+
+:::tab-content[tab=main]
+
+::::callout[type=note title="Never closed"]
+Body of a callout that is never closed.
+
+::::form[name=halfform submit="Save" action=save]
+- Field (text, "p") *
+
+::::split-pane
+
+:::::pane[side=left ratio=360]
+
+::::::toolbar
+- text[value="Left"]

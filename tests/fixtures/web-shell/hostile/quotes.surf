@@ -1,0 +1,112 @@
+::style
+accent: #2E8AD8"; }</style><script>x()</script>
+heading-font: surf-display"quoted"
+body-font: inter
+::
+
+# Hostile "quotes" over the web-shell kinds
+
+::summary
+Summary body with "quotes" & <angles> and 'apostrophes' plus onmouseover="alert(1)" and </textarea> breakage.
+::
+
+::app-shell[name="shell "breaker"" title="App "shell""]
+
+:::sidebar[width=240]
+
+::::toolbar
+- text[value="Rail "head" & <angles>"]
+::::
+
+::::row[icon=doc href="#a"b" label="Row "label""]
+Title with "quotes" & <b>tags</b>
+Meta with 'apostrophes' & </style> payload
+::::
+
+::::divider
+::::
+
+:::
+
+:::tab-content[tab=main]
+
+::::toolbar
+- button[label="Go "now"" action=doThing style=primary]
+- text[value="Trailing "text""]
+- spacer
+::::
+
+::::callout[type=note title=""><script>alert(1)</script>"]
+Callout body with "quotes" and [a link]("></a><script>x</script>).
+::::
+
+::::segmented-control[name="mode "q"" action=setMode active=find size=compact]
+- find "Find "it""
+- ask "Ask "Surfy""
+::::
+
+::::dropdown-select[name="tier "q"" label="Tier "label"" selected="Standard" action=switchTier]
+- "Std "quoted"" value=std description="Desc with "quotes" & <angles>"
+- "Max" value=max description='single "quoted"'
+::::
+
+::::form[name="f "q"" submit="Save "it"" action=saveThing]
+- Field "one" (text, "Placeholder "quoted"") *
+- Field two (textarea, "Say </textarea> here")
+::::
+
+::::search[name="s "q"" placeholder="Search "this"…" action=runSearch]
+::::
+
+::::chip-input[label="To: "q"" placeholder="Type a "name"…" source=members]
+- Name "quoted"
+::::
+
+::::chat-input-simple[placeholder="Message "them"..." action=sendMsg]
+::::
+
+::::figure[src="/img/a".png" alt=""><img src=x onerror=alert(1)>" caption="Cap "quoted""]
+::::
+
+::::code[lang=text]
+line with "quotes" & <angles> & </script> payload
+::::
+
+::::pricing-table[name="p "q"" current=ultra action=choosePlan]
+Tier | Price
+**Ultra "q"** | $99/mo | 20M credits — Current
+::::
+
+::::split-pane
+
+:::::pane[side=left ratio=360]
+
+::::::toolbar
+- text[value="Left "pane""]
+::::::
+
+:::::
+
+:::::pane[side=right]
+
+::::::chat-thread
+- them[sender="Sender "q"" time="1:42 "PM""] Message with "quotes" & <angles>
+- own[time="1:44 PM"] Reply with </textarea> payload
+::::::
+
+:::::
+
+::::
+
+:::
+
+::
+
+::modal[name="m "q"" title="Modal "title"" width=340 placement=centered dismissible=true]
+
+:::row[icon=file href=#]
+Row in a "modal"
+Meta with "quotes"
+:::
+
+::

@@ -1,0 +1,52 @@
+::style
+accent: #2E8AD8
+heading-font: surf-display</style><script>alert(1)</script>
+body-font: inter</textarea>
+::
+
+# Closing-rawtext payloads
+
+::summary
+Summary with </textarea> and </style> and </script> and <!-- comment --> payloads.
+::
+
+::app-shell[name=rawtext title="Rawtext </textarea> shell"]
+
+:::tab-content[tab=main]
+
+::::form[name=raw submit="Save </textarea>" action=saveRaw]
+- Name (text, "</textarea><script>alert(1)</script>") *
+- Notes (textarea, "</textarea></style></script>")
+- Hidden (hidden, "</textarea>")
+::::
+
+::::code[lang=text]
+</script><script>alert(1)</script>
+</style></textarea>
+::::
+
+::::chat-input-simple[placeholder="</textarea>" action=send]
+::::
+
+::::chip-input[label="</style>" placeholder="</textarea>" source=members]
+- </script>
+::::
+
+::::callout[type=warn title="</style>"]
+Body with </textarea> and </script> and </style>.
+::::
+
+::::diagram[type=timeline title="</script> timeline"]
+Aug 03 — </textarea> attempt
+Aug 05 — </style> attempt
+::::
+
+::::chart[type=donut title="</script> chart"]
+Segment | Credits (M)
+</textarea> | 8.4
+Remaining | 11.6
+::::
+
+:::
+
+::

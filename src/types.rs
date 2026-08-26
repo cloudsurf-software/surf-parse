@@ -1733,6 +1733,13 @@ pub enum RowState {
     Default,
     Loading,
     Empty,
+    /// 0.19.0 (TASK-267): the row IS the current navigation location —
+    /// authored `state=active`. Web backends render `is-active` +
+    /// `aria-current="page"`, so active chrome state is SOURCE truth
+    /// rather than a client-side stamp (the constructive-nav attest
+    /// requires the SSR mount and a re-render of the source to be
+    /// byte-identical; a client-only stamp can never attest).
+    Active,
 }
 
 /// A labelled action on a `Row` block (`action: Label | action_string`).

@@ -1,0 +1,195 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/notifications.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Notifications"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, notifications, hub]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/06-hub.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Notifications
+
+::summary
+The Notifications hub destination in the shell wrapper: mark-all-read control, deep-linking rows with the unread attr (right-side blue dot; accent left border BANNED), the F-15 notification-preferences pane with toggle switches as form checkbox items, and the quiet-hours modal — referenced by name, no inline copy.
+::
+
+::app-shell[name=notifications layout=sidebar-main-panel height=1280]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications state=active unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=main width=880 align=center]
+
+::::toolbar
+- text[value="Notifications"]
+- spacer
+- button[icon=double-check action=markAllRead aria-label="Mark all read"]
+::::
+
+::::row[icon=knowledge action=openSource href=# unread=true]
+Danny Pappageorge sent 2 messages
+Messages · 1:52 PM
+::::
+
+::::row[icon=apps action=openSource href=# unread=true]
+lift-log-live build started on mini
+Apps · 12:40 PM
+::::
+
+::::row[icon=task action=openSource href=#]
+Surfy commented on TASK-031
+Tasks · 9:12 AM
+::::
+
+::::row[icon=doc action=openSource href=#]
+Danny shared "Roadie sprint notes" with the workspace
+Docs · Aug 02
+::::
+
+## Notification preferences
+
+::::toolbar
+- text[value="Delivery"]
+::::
+
+::::row[icon=notifications action=togglePushDelivery href=# trailing-label="On" trailing-action=togglePushDelivery]
+Push — ON
+Delivery toggle
+::::
+
+::::row[icon=knowledge action=toggleEmailDelivery href=# trailing-label="On" trailing-action=toggleEmailDelivery]
+Email — ON
+Delivery toggle
+::::
+
+::::row[icon=doc action=openQuietHours href=#]
+Quiet hours
+22:00 – 07:00 · weekdays
+::::
+
+::::toolbar
+- text[value="By type"]
+::::
+
+::::row[icon=knowledge action=toggleTypeMessages href=# trailing-label="On" trailing-action=toggleTypeMessages]
+Messages — ON
+Type toggle
+::::
+
+::::row[icon=apps action=toggleTypeBuilds href=# trailing-label="On" trailing-action=toggleTypeBuilds]
+Builds & deploys — ON
+Type toggle
+::::
+
+::::row[icon=task action=toggleTypeTasks href=# trailing-label="On" trailing-action=toggleTypeTasks]
+Tasks — ON
+Type toggle
+::::
+
+::::row[icon=doc action=toggleTypeDocs href=# trailing-label="On" trailing-action=toggleTypeDocs]
+Docs — ON
+Type toggle
+::::
+
+::::row[icon=posts action=toggleTypePosts href=# trailing-label="Off" trailing-action=toggleTypePosts]
+Posts — OFF
+Type toggle
+::::
+
+:::
+
+::
+
+Mark all read is the icon-only title-row double-check (G3 pass, WP-N3 08-11) — old label as `aria-label`, verb unchanged. Every notification row deep-links to its source surface (a message notification opens Messages, a build notification opens the app, a task notification opens the task). Unread rows carry the RIGHT-SIDE blue accent dot — accent left border is BANNED as an unread treatment. The hub sheet's Notifications row shows the unread count. Preference toggles render as rows carrying the ON/OFF state in the title with a `toggled` hook and a stable toggle verb — the form grammar has no checkbox item today.
+
+::callout[type=note title="Renderer note — deferred"]
+The shipped preference control is a toggle SWITCH per row (coverage matrix, Toggle switches row). Rows with the ON/OFF state in the title stand in; the live switch is the state layer + planned toggle treatment.
+::
+
+## Quiet hours sheet
+
+Defined ONCE in `modals/quiet-hours.surf` (`name=quiet-hours`), via the Quiet hours row (`openQuietHours`): start/end times, day toggles, urgent-mention breakthrough. This file carries no inline copy.

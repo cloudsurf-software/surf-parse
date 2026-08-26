@@ -253,6 +253,8 @@ All styles are scoped under `.surfdoc` — never pollutes the host page. CSS var
 
 A fifth backend (2026-08): constructive DOM emission for the browser — `createElement` / `textContent` / allowlisted `setAttribute` only, via a `DomSink` abstraction (native arena sink for byte-identity tests; wasm32/web-sys sink for the live runtime). It walks the same block tree as `render_html` and must serialize byte-identical to it (hostile corpus included, never-weaken). Unimplemented or TT-incompatible block kinds get a typed decline and fall back to full navigation. This backend is the navigation mechanism for the zero-sink web runtime — no HTML string is ever inserted into a live document.
 
+As of 0.19.0 the coverage set spans every block kind the Surfspace `/next` web shell uses — including `::row`, `::split-pane`, `::diagram` and `::chart` — plus markdown tables, code blocks and code spans. `::diagram` / `::chart` bodies are pre-serialized SVG strings rather than compile-time constants, so they go through a verified-markup path: the markup is tokenized into a scratch arena, serialized back and compared byte-for-byte against the source, and only an exact match is replayed into the caller's sink. The three shell sources that emit a `<script>` (the shell root's drawer toggle and two `::gallery` lightboxes) keep a typed `script-emitting:*` decline — creating script text is itself a Trusted Types sink.
+
 Normative details, the constructive-navigation contract, and the security profile (Trusted Types with no policy, CSP, SRI, attestation, parse bounds): **`spec/web-runtime-v1.surf`**.
 
 ### Degradation Renderers
@@ -312,6 +314,18 @@ let markdown = doc.to_markdown();
 // Round-trip: AST back to .surf source
 let source = doc.to_surf_source();
 ::
+
+`to_surf_source` is a FIXED POINT, not a best-effort dump: for every source in
+the vendored web-shell corpus, re-parsing what it emits yields a document that
+renders byte-identically to the first parse, and serializing that document
+reproduces the same source. The surf lane depends on this — it composes the
+`/next` docs and tasks pages by parsing a shell source, editing the block tree
+and serializing it back. Nesting is carried in the fence: a block serializes
+with `::` at top level, `:::` one level in, `::::` two levels in, and a
+closer-less leaf (`::divider`, `::toc`, `::logo`) picks up an explicit closer
+once nested, because an unmatched nested opener makes the parser read the
+enclosing container as a leaf. Pinned by `tests/serialize_fixed_point.rs`
+(0.19.0), which is add-only over the fixture list.
 
 ---
 

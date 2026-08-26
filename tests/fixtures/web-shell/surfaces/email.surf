@@ -1,0 +1,286 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/email.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Email"
+type: doc
+version: 1
+created: 2026-08-15
+updated: 2026-08-15
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, email]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/09-email.surf
+    relationship: consumes
+  - path: plans/design/2026-08-03-web-surfspace/src/surfaces/messages.surf
+    relationship: references
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Emails
+
+::summary
+The Email two-plane surface in the shell wrapper (08-15): the hub-group row IMMEDIATELY after Posts (`icon=mail action=openEmail`), tab=main. Title row = "Email" · thread count · the ACCOUNT CHIP (All accounts ⇄ one connected address, `switchEmailAccount`) · the UNREAD toggle · Compose. A folder segmented-control (Inbox / Priority / Leads / Starred / Sent / Drafts / Archive / All mail / Spam / Trash — a real `?folder=` route each; All = the producer's own Inbox+Archived slice), then the zero-JS SEARCH `::form` (`method=get`, field `q` — WP5; the live builder SPLICES the current account/folder/label/unread narrowing in as hidden inputs so a submit keeps the slice), lead the `split-pane`: LEFT = the thread list (paged `?page=`, Newer / Older rows at the foot), merged across EVERY connected account by date and grouped into four TIER heads in producer order — **Priority** (goldlist gold senders), **Leads** (round-3 classifier), **Everything else**, **Low priority** (round-3 bulk demotion; spam + blocklisted senders never appear) — rows carrying `action=openEmailThread`, `unread=true` = right-side dot, the paperclip = the `clipboard` leading glyph + "n attachments" meta (surf-icons has no paperclip); RIGHT = the reading pane: subject header + Archive/Trash, the triage / goldlist / image-toggle forms and the Refresh row (see "Reading pane writes" below), per-message SSR'd header rows (From `Name <address>` · ABSOLUTE time, the shared `absolute_date` spelling / To · via account), attachment chips linking the download proxy, and the sanitized body as a generic `::embed` iframe (`/email/{thread}/body`, its own sandboxed policy, `cid:` inline images resolved to the attachment proxy — WP6b). Designed empty states: no account → "No email connected — Connect an account" (links `/settings/plugins/mailhost/connect`), no threads, no thread selected. Round 4 + WP6b: compose / reply / drafts ride `/email/compose`, `/send`, `/draft`, `/surfy`, `/drafts/{thread}`, `/discard` behind the send gate. Parity round (08-18): the list foot carries the user-LABEL rail (the classic catalog's names as `?label=` links) and the Email settings link (`/email/settings` — accounts + Make-active switch, remote-images pref, goldlist and blocked-senders panels with zero-field Remove/Unblock forms); row meta carries the classic `(n)` message-count badge and the producer-counted `n attachments`; opening a thread re-runs the classic Stage-A lead re-check; with OAuth unconfigured the no-account state is the classic MAILHOST_NOT_CONFIGURED notice. The product label is Email; only provider strings say Mailhost.
+::
+
+::app-shell[name=email layout=sidebar-main-panel height=760]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=main]
+
+::::toolbar
+- text[value="Emails"]
+- spacer
+- text[value="6 threads"]
+- button[label="All accounts" icon=mail action=switchEmailAccount]
+- button[label="Unread" icon=filter action=toggleUnreadOnly aria-label="Unread only"]
+- button[icon=plus action=composeEmail aria-label="Compose"]
+::::
+
+::::segmented-control[name=email-folder action=setEmailFolder active=inbox size=compact]
+- inbox "Inbox"
+- priority "Priority"
+- leads "Leads"
+- starred "Starred"
+- sent "Sent"
+- drafts "Drafts"
+- archive "Archive"
+- all "All mail"
+- spam "Spam"
+- trash "Trash"
+::::
+
+::::form[submit="Search" action=/email method=get]
+- Search (text, "Search mail")
+::::
+
+::::split-pane[ratio="360:1fr" back-label="Email" back-action=backToThreads]
+
+:::::pane[side=left]
+
+::::::toolbar
+- text[value="Priority"]
+::::::
+
+::::::row[icon=mail action=openEmailThread href=# unread=true]
+Partner Program — Capital Connect: next steps · 9:42 AM
+Thanks for the update — the intro batch goes out Thursday. · brady@cloudsurfsoftware.com
+::::::
+
+::::::row[icon=clipboard action=openEmailThread href=#]
+the payment processor — Your July invoice is ready · Tue
+Invoice attached; auto-pay ran on the 3rd. · 1 attachment · brady@cloudsurfsoftware.com
+::::::
+
+::::::toolbar
+- text[value="Everything else"]
+::::::
+
+::::::row[icon=mail action=openEmailThread href=# unread=true]
+Platform Developer — Beta Track build 113 processed · Tue
+Surfspace 1.6.2 (113) has completed processing. · brady@cloudsurfsoftware.com
+::::::
+
+::::::row[icon=clipboard action=openEmailThread href=#]
+Danny Pappageorge — Loaner MacBook enrollment log · Mon
+Attached the DEP log from the loaner. · (2) · 2 attachments · danny-loop@cloudsurfsoftware.com
+::::::
+
+::::::row[icon=mail action=openEmailThread href=#]
+Fly.io — Weekly usage summary · Sun
+surf-next: 1 machine · surf-web: 2 machines. · brady@cloudsurfsoftware.com
+::::::
+
+::::::row[icon=mail action=openEmailThread href=#]
+Mobile Store Console — Policy update reminder · Aug 08
+Review the updated data-safety guidance by Sep 1. · brady@cloudsurfsoftware.com
+::::::
+
+::::::row[icon=arrow-right href=#]
+Older
+Next page of threads
+::::::
+
+::::::toolbar
+- text[value="Labels"]
+::::::
+
+::::::row[icon=folder href=#]
+Receipts
+Threads under this label
+::::::
+
+::::::row[icon=settings href=#]
+Email settings
+Accounts, remote images, goldlist and blocked senders
+::::::
+
+:::::
+
+:::::pane[side=right]
+
+::::::toolbar
+- text[value="Capital Connect: next steps"]
+- spacer
+- button[icon=archive action=archiveEmailThread aria-label="Archive"]
+- button[icon=trash action=trashEmailThread aria-label="Trash"]
+- button[label="Open in Email" action=openInEmail]
+::::::
+
+::::::row[icon=refresh-cw href=#]
+Refresh
+Fetch the latest messages for this thread
+::::::
+
+::::::row[icon=user href=#]
+Partner Program <programs@partner.example> · Aug 15, 2026, 9:42 AM
+To: brady@cloudsurfsoftware.com · via brady@cloudsurfsoftware.com
+::::::
+
+::::::row[icon=clipboard action=downloadEmailAttachment href=#]
+capital-connect-brief.pdf
+PDF · 184 KB
+::::::
+
+::::::embed[src=/email/thread-id/body type=generic height=480px title="Message body"]
+::::::
+
+:::::
+
+::::
+
+:::
+
+::
+
+The surface RELEASES the 880px column (no width attrs on the tab-content) — the messages two-plane idiom verbatim (WP-N2 / G2 / G3): the folder segmented-control leads, then the `split-pane` holds both planes. LEFT (`pane[side=left]`, 360px rail by `ratio`) is the merged thread list: rows are `action=openEmailThread` with a REAL `?thread=` href on the live page (server-side re-render with the reading plane filled — the openConversation contract), title = sender — subject · relative time, meta = snippet · attachment count · the owning account address (the account column IS the merge evidence: threads from every connected account interleave by date). Four TIER heads (`toolbar` text rows, the tasks stage-head idiom) in the producer's order: **Priority** — goldlist gold senders (query-time, retroactive) — then **Leads** (round-3 classifier, badge on the row), **Everything else**, **Low priority** (round-3 query-time demotion: unknown sender + bulk marker); spam-labelled and blocklisted senders are excluded from every folder but Spam; a tier with no rows drops its head. The list SQL is the mailhost module's `list_threads_filtered` — one query, never a second projection. `unread=true` renders the RIGHT-SIDE blue dot (accent-left-border BANNED); the paperclip is the `clipboard` leading glyph plus "n attachments" in meta because surf-icons ships no paperclip (recorded gap below). RIGHT (`pane[side=right]`) is the reading pane: subject header toolbar with Archive / Trash / Open in Email, then per message a header row (From · time / To · via account), its attachment chips (rows carrying `action=downloadEmailAttachment` with the REAL `/email/attachments/{message}/{attachment}` proxy href), then the body as a GENERIC `::embed` with an explicit height — surf-parse v0.15.0 renders that as a first-class iframe whose `src` is the per-thread body route `/email/{thread}/body` (the sanitized cached HTML in a bare document under `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'`, `X-Frame-Options: SAMEORIGIN`, no-store — scoped to the signed-in user's own accounts, unknown / foreign 404; remote images BLOCKED by default per the round-3 ruling — a note in the body links `?images=1`, and the user's always-load preference routes them through the signed image proxy). The shell stamps `data-thread="closed"`; ≤ 767px the list is alone until a thread is selected (`data-thread=open`, stamped SERVER-SIDE on the landing render) and `backToThreads` closes it.
+
+## Title row and folders
+
+- **Account chip** — `All accounts` (the merged read) or one connected address; `switchEmailAccount` narrows the list to `?account=` (a real route). No connected account → the chip reads `No account`.
+- **Unread toggle** — `?unread=1`, list-only; the count text follows the filter.
+- **Compose** — links the existing `/email` compose (compose / reply / send are OUT of `/next` this round).
+- **Folders** — Inbox / Priority (gold-only) / Leads / Starred / Sent / Drafts / Archive / **All mail** (parity round 08-18: the producer's `ThreadFolder::All` slice — Inbox + Archived, never Spam / Trash / draft-only) / Spam / Trash: `?folder=` on the same route; label filtering is `?label=` (a Mailhost system label id such as SPAM, or a user label NAME resolved through the per-account catalog), honored on the Inbox / Priority reads exactly where the producer's one-slice filter can carry it.
+- **Search (WP5)** — the `method=get ::form` above the split-pane: a text field `q` submitting to the SAME route, zero-JS (surf-parse renders `method` verbatim). Non-empty `q` routes through the classic LIVE Mailhost search (`search_live`, first page, account chip narrowing honored) with the cache-side substring filter as the degraded fallback — mirroring the classic search-never-pages-the-cache contract, so the pager rows drop while searching. `q` rides `filter_params`, so folder switches and triage 303s keep the search. Parity round (08-18): an HTML GET submit REPLACES the action URL's query and the crate has no hidden-field syntax (recorded gap), so the live builder splices the current `account` / `folder` / `label` / `unread` narrowing into the rendered form as hidden inputs — a search never drops the slice.
+- **Pagination (WP5)** — `?page=` offsets the list read (one page = the list limit, fetched limit+1 and truncated); plain **Newer / Older** rows at the list foot carry the full filter set through `filter_params`; tier heads recompute per page; the Older row drops on the last page and Newer on the first.
+- **Count cap (WP6c)** — a fetch that fills the page reads **`200+ threads`** in the title row (the truncation signal); an unfilled page keeps the exact count.
+- **Unread dot (WP6c)** — the Email row's unread dot follows the merged **INBOX slice** (its own unread-only existence probe), never the filtered page — a Sent / Archive / unread-only view neither clears nor fakes it. Nav round (08-24): the sidebar Email row is RETIRED, so the dot rides the HUB SHEET's Email row (the one surviving nav affordance for the route), stamped once per page rather than into this surface's own wrapper. And `/email?*thread=*` is excluded from the shell's speculation-rules prefetch (a reused prefetched document would skip the open's live fetch); the `Sec-Purpose` server guard stays defence in depth.
+- **Drafts rows (WP6b)** — with the send gate ON a Drafts-folder row opens the COMPOSER prefilled from the draft behind the thread (`GET /email/drafts/{thread}`, the classic resolve-or-adopt seam); gate OFF keeps the reading-pane link.
+- **Label rail + settings link (parity round 08-18)** — the list foot carries a **Labels** head with one plain GET link per user label (the classic catalog, merged across accounts by NAME; the active one marked), then the **Email settings** link row (`/email/settings`).
+- **Row meta (parity round 08-18)** — snippet · the classic `(n)` message-count badge (the shared `message_count_label` producer; hidden on single-message threads) · `n attachments` (the producer's cached-attachment count; the bare `Attachment` label stays the honest fallback while nothing is cached) · Lead badge · owning account.
+- **Account-switch persistence (parity round 08-18)** — `POST /email/account/switch?to=…`: a zero-field form per inactive account on the settings page, delegating to the classic `set_active_account` seam (foreign / unknown target = 400 no-op) and 303ing to the list narrowed to the new account — the persistence rides WITH the `?account=` lane, never instead of it.
+
+## Reading pane writes (round 4 + WP6a/b)
+
+- **Triage forms** — Archive / Trash / Star⇄Unstar / Mark read⇄unread / **Spam⇄Not spam** (WP6a: a row carrying the SPAM label, or any row under the Spam folder view, offers the honest inverse — `not-spam` restores it to the Inbox) / Block sender / Not a lead (lead rows only): zero-field `::form` posts to `/email/{thread}/{action}`, 303 back to the list.
+- **Goldlist one-clicks (WP6a)** — a non-gold row offers **Goldlist sender** and **Goldlist domain** (the classic one-click seams — same normalization, idempotent upsert); a gold row offers the remove twin **Remove from goldlist** (`ungoldlist` — drops the sender's address AND domain entries, idempotently). The row stays selected through the 303 (priority is query-time).
+- **Remote-images toggle (WP6a)** — the classic `/email/settings/images` preference as a zero-field POST (`/email/images?load=…`), label honest to the CURRENT pref (Always load ⇄ Block); the per-load `?images=1` link inside the iframe stays the one-shot lane.
+- **Refresh (WP2)** — a plain GET row (`refresh=1`) forcing the live thread fetch; one-shot by construction.
+- **Stage-A lead re-check on open (parity round 08-18)** — opening a thread runs the classic `recheck_stage_a_lead` seam BEFORE the pane renders, so a stale Stage-A lead flag clears on /next exactly as on `/email` (user taps and Stage-B verdicts stay out of reach).
+- **Absolute header dates (parity round 08-18)** — each message header stamps the shared `absolute_date` spelling ("May 26, 2026, 9:05 AM" — the classic `message_view` producer, extracted to `mailhost::service`); list rows keep `relative_date`.
+- **Discard draft (WP6b)** — a carried draft renders its zero-field Discard twin under the composer (`POST /email/discard?draft=…`, the classic discard body — local row + Mailhost twin, user-scoped, idempotent), 303 back to the list.
+- **Inline images (WP6b)** — `cid:` sources that match one of the message's cached attachment rows (full cid or the filename-shaped local part) render through the EXISTING `/email/attachments/{message}/{attachment}` proxy in BOTH surfaces (the shared `prepare_body_html_with_cids` seam); unmatched cids keep the pass-through.
+
+## Pane height (WP1 08-18)
+
+The two planes hold a STATIC viewport-derived height ≥768px (calc over named chrome constants in the override layer — the crate has no pane-height consumer, recorded gap) and scroll INDEPENDENTLY; the body iframe keeps its authored explicit height so it never double-scrolls inside the scrolling plane. Static design renders let the split-pane grow with content — the contract is the live layer's until the crate consumes `data-ratio`/height natively.
+
+## Designed empty states (never invented rows)
+
+- **No email connected** — the whole tab-content body: `state=empty` row "No email connected — Connect an account" linking `/settings/plugins/mailhost/connect`; no split-pane, no folders.
+- **Not configured (parity round 08-18)** — with the OAuth env absent AND no account connected, the same no-account body renders the classic MAILHOST_NOT_CONFIGURED notice ("Email is not available yet") instead of a connect link that could only dead-end.
+- **No threads** — the left plane: "No email here yet — Threads sync as they arrive"; the tier heads drop.
+- **No thread selected** — the right plane: "No thread selected — Choose a thread from the list" (the messages contract).
+- **Body not cached** — the reading pane in place of the embed: "Message body not cached yet — Refresh to fetch it" (the body route answers the same designed page inside the iframe; WP2 opens fetch live, so this state means the fetch failed and Refresh retries it).
+- **Empty search** — the left plane with a non-empty `q` and no hits: "No results — Nothing in your email matches this search"; the tier heads drop.
+
+## Email settings page (parity round 08-18)
+
+`GET /email/settings` — the classic `/email/settings` parity surface in the same shell, four designed sections, all reads best-effort (a failed panel renders its designed empty state, never an error page):
+
+- **Accounts** — one row per connected account (address · sync status; the active one marked) with a zero-field **Make active** form per inactive account (`POST /email/account/switch`); the connect row stays a hand-off href to the classic connect flow.
+- **Remote images** — the pref's read state and the already-built zero-field toggle (`POST /email/images?load=…&back=settings` — the settings return lane).
+- **Goldlist** — the user's entries (pattern · kind) with zero-field **Remove** forms (`POST /email/goldlist/remove?entry=…`, the classic user-scoped seam: foreign / unknown id = 404).
+- **Blocked senders** — the blocklist entries with zero-field **Unblock** forms (`POST /email/blocklist/remove?entry=…`, the classic `blocklist/remove` body) — the blocked-senders management view; adding stays the reading pane's Block sender.
+
+::callout[type=note title="Renderer note — recorded gaps"]
+No paperclip glyph in surf-icons (`clipboard` stands in on attachment rows — a `paperclip` icon is a crate ask, not a surface hack). The generic `::embed` iframe carries no `sandbox` attribute from the renderer — the body ROUTE's CSP `sandbox` directive is the containment, and `X-Frame-Options: SAMEORIGIN` keeps the frame same-origin only. `data-ratio` still has no CSS consumer (the messages gap) — the 360px rail is prose contract. `openEmailThread` needs NO dispatcher branch: rows carry real hrefs and navigate natively; `setEmailFolder` navigates like `setTasksView`; `openEmail` navigates when its row has no real href (the hub sheet). `::form` field syntax has NO `name=` attr — the crate derives the input name from the label ("Search" → `search`), so the live builder stamps the search field's name to `q` at splice time (recorded crate ask: an explicit field-name attr). The crate's column form idiom stacks label/input/submit as a band on static renders; the live layer lays the search form out as one compact row (label dropped, placeholder carries the hint). `::form` also has NO hidden-field syntax — the live builder splices the search form's narrowing inputs post-render (recorded crate ask: authored hidden fields).
+::

@@ -3,6 +3,112 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.19.0 — 2026-08-26 (web-shell DOM coverage + serializer fixed point)
+
+### Added — `render_dom` coverage of the whole web-shell census
+
+- **`::row`** (517 uses in the shell — the highest-census block), **`::split-pane`**,
+  **`::diagram`** and **`::chart`** now build constructively, alongside markdown
+  **tables**, **fenced/indented code blocks** and **code spans**. `check_coverage`
+  is now Ok for every vendored web-shell source except the three that emit a
+  `<script>`; entry points and signatures are unchanged (additive only).
+- **Verified-markup path for generated SVG.** `::diagram` / `::chart` hand back a
+  pre-serialized SVG *string*, which cannot carry the `&'static str` bound that
+  makes `build_static` safe. `build_verified_markup` supplies the proof instead of
+  assuming it: the markup is tokenized into a scratch `NativeDom`, serialized back
+  and compared byte-for-byte with the source, and only an exact match is replayed
+  into the caller's sink. In this mode the tokenizer also refuses `<script>` /
+  `<style>` elements and any attribute outside `attr_allowed`. Anything it cannot
+  reproduce declines as `static-svg:diagram` / `static-svg:chart` rather than
+  building a tree that disagrees with `render_html`.
+- **Attribute allowlist widened by six SVG marker names** (`marker-end`,
+  `markerWidth`, `markerHeight`, `orient`, `refX`, `refY`) — all geometry/paint,
+  each with an emission proof in
+  `render_dom::tests::allowlist_widened_only_for_emitted_leaf_attributes`.
+
+### Changed — the drawer toggle is runtime-owned (verified on the main thread, 2026-08-26)
+
+- **`APP_SHELL_PANEL_JS` is GONE from both backends.** A shell with a direct
+  right `::panel` no longer emits the self-contained drawer-toggle `<script>`
+  (spec web-runtime-v1 §2: script-emitting behavior moves to the versioned
+  runtime at P3/P4). The markup keeps the entire state contract the runtime
+  drives — `data-panel-open` on the root, `aria-hidden` on the panel,
+  `aria-expanded` on the FAB and every `[data-action=toggleSurfy]` control —
+  and `script_emitting_kind` no longer declines the shell, so the composed
+  /next chrome (which ALWAYS carries the Surfy right panel) is constructively
+  coverable. Measured live pre-fix: `coverage_check_doc` was false for every
+  authenticated /next source, so takeover could never arm. JS-off degradation:
+  the drawer stays closed. Hosts owning the toggle: /next's dispatcher
+  (guarded fallback when `__surfyWired` is absent); published-site runtimes
+  pick it up at P4. Regression: `render_dom::tests::right_panel_shell_covers_without_script`.
+- **`RowState::Active` exists, round-trips and renders.** Authored
+  `state=active` on `::row` used to parse to `Default` (silently dropped), so
+  the active sidebar rail was a CLIENT-side stamp — a mount mutation that can
+  never attest. `active` now parses, serializes (`state=active`), and renders
+  `is-active` + `aria-current="page"` in both web backends (aria-current
+  emitted last, so an idempotent client re-stamp is a byte no-op); native
+  reports `"active"` (additive value). Regression:
+  `serialize_fixed_point::active_row_state_round_trips_and_renders`.
+
+### Fixed
+
+- **`::summary` emitted `<p>` inside `<p>`.** The arm wrapped
+  `render_inline_markdown(content)` — which already returns a paragraph — in a
+  second `<p>`. An HTML parser auto-closes the outer `<p>` at the inner one, so
+  the SSR-parsed DOM diverged from the literal tree `render_dom` builds: identical
+  bytes, different DOM, which only attestation would have caught. The body now
+  goes through `render_wrapped_phrasing_or_blocks` (and
+  `build_wrapped_phrasing_or_blocks` on the DOM side), so phrasing-only summaries
+  keep the historical single `<p>` and block-level bodies get a `<div>`. Pinned by
+  the parser-stability gate over the web-shell corpus.
+- **The script-emitting gate missed nested containers.** `find_script_emitter`
+  recursed through `page` / `section` / `app-shell` / `sidebar` / `panel` / `modal`
+  but not `tab-content`, `drawer` or `split-pane` panes, so a `::gallery` inside a
+  `::tab-content` reported the document constructible while `render_html` emitted
+  its lightbox `<script>`. All covered container kinds are now walked.
+
+### Fixed — serializer
+
+- **Nested blocks serialize at the right fence depth.** `to_surf_source`
+  emitted every block with a two-colon fence regardless of nesting, so the
+  source it produced re-parsed as a FLAT sibling list: a `::app-shell`
+  holding a sidebar, toolbars, rows and a panel came back as an empty
+  `::app-shell` followed by ~17 top-level blocks. `serialize_block` now
+  carries a depth and emits `::` / `:::` / `::::` to match, including the
+  child fences the `::columns` (`:::column`) and `::split-pane` (`:::pane`)
+  arms inline.
+- **Closer-less leaves nested in a container now carry a closer.**
+  `::divider`, `::toc` and `::logo` serialize as a single line, which is
+  canonical at top level. Nested, the unmatched opener left the parser's
+  leaf-vs-container look-ahead (`parse::is_leaf_before_sibling`) with a
+  non-zero pending count, so the ENCLOSING container was classified as a leaf
+  as soon as a same-depth directive appeared later in the document — one
+  `::::divider` in a sidebar flattened the whole shell. Nested emission is now
+  `::::divider` + `::::`; the top-level form is unchanged.
+- **`::gallery[columns=N]` survives serialization.** The column count was
+  dropped, so a re-parsed gallery fell back to the 3-column default and
+  rendered different HTML.
+- **`- id "Label"` item labels no longer grow escapes.** `::tab-bar` and
+  `::segmented-control` labels are read back with `trim_matches('"')`, which
+  does not honour backslash escapes, but were written out through
+  `escape_attr` — a label carrying a quote gained one `\` per round trip.
+  They are now quoted verbatim (`builder::quote_list_label`). `::dropdown-select`
+  options are unaffected: their parse side stops at the second quote.
+
+### Added
+
+- **`tests/serialize_fixed_point.rs`** — `parse(to_surf_source(parse(src)))`
+  is now pinned as a fixed point over the whole vendored web-shell corpus
+  (`tests/fixtures/web-shell/`, 56 shell/surface/modal sources plus the 5
+  hostile sources): the re-parsed document must render byte-identically to
+  the first parse AND re-serialize to the same source, the chrome tree must
+  keep its shape (no container may come back with its children flattened),
+  and the fixture count has an add-only floor so a shrunken corpus fails
+  instead of passing quietly. Four regression tests pin the defects above.
+
+No public API changed: `builder::to_surf_source` and `SurfDoc::to_surf_source`
+keep their signatures.
+
 ## 0.18.1 — 2026-08-26 (registry drift closed, form vocabulary, block attributes, schema v6)
 
 An attributes-and-registry release: no new `Block` variant, no grammar change.

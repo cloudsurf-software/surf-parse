@@ -1,0 +1,77 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/modals/filter.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: none — this file carries no href attributes and no hub chip,
+# so no /next rewrites or interpolation tokens apply.
+title: "Surfspace Web Source — Filter Sheet"
+type: doc
+version: 3
+created: 2026-08-10
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, modal, filter]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/02-docs.surf
+    relationship: consumes
+  - path: plans/design/2026-08-03-web-surfspace/src/surfaces/docs.surf
+    relationship: references
+  - path: plans/design/2026-08-03-web-surfspace/src/surfaces/tasks.surf
+    relationship: references
+  - path: plans/design/2026-08-03-web-surfspace/src/surfaces/apps.surf
+    relationship: references
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Filter Sheet
+
+::summary
+The filter sheet (`name=filter`) — ONE sheet, per-surface vocabulary (create.surf kinds precedent; WP-N3 08-11 extended it beyond Docs): every inline filter/sort chip row died here (Docs G4 ruling 08-10; Tasks five-facet row and Apps sort row, WP-N3). A real `::modal`, anchored to the raising title-row button on wide screens; at small width (≤ 767px, R-C ruling 08-10) it goes edge-to-edge with 10px side insets and auto width. The rendered block below carries the Docs vocabulary (`applySort` / `scopeStatus`, moved verbatim out of `surfaces/docs.surf`); Tasks raises the sheet with its five facets (Sort: Priority/Newest/Oldest, type, stage, priority, assignee — `applySort` / `scopeType` / `scopeStage` / `scopePriority` / `scopeAssignee`), Apps with its single sort dropdown (Latest first / Name — `applySort`); verbs unchanged everywhere. Opened via `toggleFilter` (Docs, Tasks; spec WP-E names `openFilter` as the eventual verb) and `toggleSortRow` (Apps). This file is the ONLY definition of the sheet — no surface carries an inline copy. Stable name `filter` (matches this file's stem).
+::
+
+::modal[name=filter title="Filter" width=320 placement=anchored anchor=filter-button dismissible=true]
+
+:::toolbar
+- dropdown[label="Sort: Newest first" options=newest-first|oldest-first|name-az|name-za action=applySort]
+- dropdown[label="Any status" options=any|active|approved|draft|archived action=scopeStatus]
+:::
+
+::
+
+## Tasks mode
+
+Same sheet — ONE `::modal[name=filter]` definition (above), per the `doc-task-picker` two-mode precedent; Tasks raises it via `toggleFilter` and the dropdown set swaps to the five facets moved verbatim out of the deleted `surfaces/tasks.surf` inline row (verbs unchanged). Facet treatment:
+
+::toolbar
+- dropdown[label="Sort: Priority" options=priority|newest-first|oldest-first action=applySort]
+- dropdown[label="Any type" options=any|task|bug|feature|request action=scopeType]
+- dropdown[label="Any stage" options=any|to-do|research|plan|design|breakdown|build|verify|done action=scopeStage]
+::
+
+::toolbar
+- dropdown[label="Any priority" options=any|urgent|high|medium|low action=scopePriority]
+- dropdown[label="Any assignee" options=any|kd|danny|surfy|unassigned action=scopeAssignee]
+::
+
+## Apps mode
+
+Same sheet; Apps raises it via `toggleSortRow` and only the sort dropdown renders — the single facet moved out of the deleted `surfaces/apps.surf` inline row:
+
+::toolbar
+- dropdown[label="Sort: Latest first" options=latest-first|name action=applySort]
+::
+
+Top-right ✕ per dismiss canon; Esc and scrim-click also dismiss, never as the only exit. All dropdowns apply immediately on select — no Apply footer. The count ("31 docs" / "16 tasks" / "7 apps") stays on each surface's title row, not here; the sheet holds controls only. The raising button shows no persistent toggled ring — sheet-open state is the modal's, not the button's. The Tasks and Apps blocks above document modes of the SAME sheet — this file defines exactly one modal; which vocabulary renders is state layer, keyed by the raising surface.

@@ -1,0 +1,61 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/modals/react-report.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: none — this file carries no nav hrefs and no hub chip, so no
+# /next rewrites or interpolation tokens apply.
+title: "Surfspace Web Source — Reaction & Report Sheet"
+type: doc
+version: 2
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, modal, messages, reactions]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/05-messages.surf
+    relationship: consumes
+  - path: plans/design/2026-08-03-web-surfspace/src/surfaces/thread.surf
+    relationship: references
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Reaction Palette + Report
+
+::summary
+The message hover palette (F-10): the 6-emoji iOS reaction set anchored to the hovered bubble, with Report Message as the danger row beneath — the App Marketplace 1.2 UGC reason flow.
+::
+
+::modal[name=react-report title="React" width=260 placement=anchored anchor=message-bubble dismissible=true]
+
+:::toolbar
+- button[label="❤️" action=reactToMessage]
+- button[label="👍" action=reactToMessage]
+- button[label="👎" action=reactToMessage]
+- button[label="😂" action=reactToMessage]
+- button[label="‼️" action=reactToMessage]
+- button[label="❓" action=reactToMessage]
+:::
+
+:::row[icon=knowledge style=danger action=reportMessage href=#]
+Report Message
+Danger row under the emoji palette — reason flow (App Marketplace 1.2 UGC)
+:::
+
+::
+
+Anchored to the hovered bubble; scrim-click and Esc dismiss. Picks render as count pills under the bubble, "mine" accent-tinted (state layer). Report opens the reason flow; the palette closes on pick or report.
+
+At small width (≤ 767px, R-C ruling 08-10) the sheet goes edge-to-edge with 10px side insets and auto width; the wide placement declared on the block is unchanged.

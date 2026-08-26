@@ -1562,6 +1562,9 @@ fn row_state_str(state: &RowState) -> &'static str {
         RowState::Default => "default",
         RowState::Loading => "loading",
         RowState::Empty => "empty",
+        // 0.19.0: additive value — native consumers treat unknown states
+        // as default chrome.
+        RowState::Active => "active",
     }
 }
 

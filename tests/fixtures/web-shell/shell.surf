@@ -1,0 +1,204 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/shell.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: none — no href rewrites and no hub-chip interpolation tokens
+# apply here (the surface wrappers carry those).
+# NOTE: this file is the SOURCE OF THE SURFY PANEL for /next (FE-2, 08-10):
+# src/mod.rs extracts the ::app-shell's :::panel[position=right] and
+# composes it into each surface wrapper at parse time — the wrappers omit
+# :::panel by the composition ruling, and the open-panel truth lives ONLY here.
+title: "Surfspace Web Source — Shell"
+type: doc
+version: 5
+created: 2026-08-06
+updated: 2026-08-15
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, shell]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/01-shell-frame.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Shell
+
+::summary
+ONE source of shell truth for the web mockup: a SINGLE responsive sidebar-main-panel shell (240px sidebar with wordmark, five surface rows (Search, Docs, Tasks, Apps, Messages), divider, hub group — collapsing to a 68px icon rail at medium and a renderer-generated bottom tab-bar at small, with Surfy staying top-right in the top bar rather than becoming a FAB), top bar, right-docked Surfy panel with the dropdown-select tier switcher. Shell-owned sheets live in `modals/` (hub, workspace-switcher, surfy-chats) — this file defines no modals. Surface files under `surfaces/` compose per the wrapper ruling below.
+::
+
+## Composition ruling — how surfaces compose with this shell
+
+The `shell=` attribute has NO engine support — it was a fiction and is retired. RULED here (R-A, 08-10): there is **ONE responsive shell** — no separate narrow source. **Each surface file inlines its own `::app-shell` wrapper**, copied VERBATIM from the shell in this file — sidebar (wordmark + five surface rows + divider + hub group), top bar, then a single `tab-content` pane holding the surface body one nesting level deeper. The pane is NAMED for the owning surface row — `tab=docs` / `tab=tasks` / `tab=apps` / `tab=messages` (detail surfaces name their parent list's tab; hub-owned surfaces, whose rows sit below the divider, keep `tab=main`). At small widths the renderer GENERATES the bottom tab-bar from the sidebar's surface nav rows (the live /next renderer then reorders Search LAST, matching the iOS compact tab-bar roster Docs · Tasks · Apps · Messages · Search) — label and the unread dot derive from each row and its `unread` attr; the ACTIVE item is the row whose title slug matches the shell's initially active tab pane (else the first item — the renderer cannot express "none active", so hub-owned surfaces show Docs highlighted; known 0.14.0 gap). The retired hand-authored tabs shell is gone. Rules of the idiom:
+
+- This file is the SINGLE POINT OF EDIT for chrome. When the shell changes, every surface wrapper is regenerated from here; surface files never fork chrome content.
+- The wrapper's sidebar marks the owning surface's row `state=active` (detail surfaces mark their parent list's row).
+- The ruled 880px centered column (Docs and Apps lists, and detail surfaces) is expressed as `width=880 align=center` on the surface's `tab-content`. Surfaces that RELEASE the column (Messages split view, Tasks board scrollport) omit those attrs.
+- Surface wrappers render with the Surfy panel CLOSED — they omit `:::panel`. The open-panel truth (tier switcher, chats button, composer) lives ONLY in the shell source below; a surface reviewed with the panel open is a shell state, not a surface state.
+- `app-shell` takes `height=` per surface to avoid the clamp clipping long pages (app detail, task detail).
+- Shell-owned sheets are referenced by stable name, never redefined: `modals/hub.surf` (name=hub), `modals/workspace-switcher.surf` (name=workspace-switcher), `modals/surfy-chats.surf` (name=surfy-chats).
+
+## The shell — single responsive shell, all widths
+
+::app-shell[name=shell-wide layout=sidebar-main-panel height=720]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=#]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=#]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=#]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=#]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=# unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=#]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=#]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=#]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=#]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=# unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=#]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="cloudsurf" avatar=C style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=docs]
+
+::::toolbar
+- text[value="Active surface mounts here — surfaces/*.surf carry this wrapper with their body in this pane"]
+::::
+
+:::
+
+:::panel[name=surfy position=right width=360]
+
+::::dropdown-select[name=surfy-tier icon=surfy-fin label="Surfy Standard" selected="Standard" action=switchTier]
+- "Edge" value=edge description="Gated — runs on-device in the mobile and desktop apps (iOS, Android & desktop)" state=gated reason="Runs on-device in the mobile and desktop apps"
+- "Standard" value=standard description="Balanced quality and speed" action=switchTierStandard
+- "Max" value=max description="Highest quality — more credits per turn" action=switchTierMax
+::::
+
+::::toolbar
+- spacer
+- button[label="Chats" action=openSurfyChats]
+- button[label="✕" action=dismissSurfy]
+::::
+
+::::row[icon=surfy-fin href=#]
+Surfy
+Hi Brady — I can search docs, file tasks, or build an app from this conversation. What are we working on?
+::::
+
+::::row[icon=apps href=#]
+Continue: lift-log-live v7
+Build running on mini — check it and pick up where you left off
+action: Open | openApps
+::::
+
+::::row[icon=task href=#]
+Review the board
+2 tasks sitting in Verify
+action: Open | openTasks
+::::
+
+::::row[icon=sparkle href=#]
+Start something
+Quick starts for the empty thread
+action: Draft a doc | openCreateDoc
+action: Plan tasks | openCreateTasks
+action: Build an app | openCreateApp
+::::
+
+::::chat-input-simple[placeholder="Message Surfy..." action=sendToSurfy]
+::::
+
+:::
+
+::
+
+The Surfy panel is collapsible and resizable; the main pane reflows when it opens. The header is the bare accent fin glyph (26px, no chip or circle) plus the tier switcher dropdown in place of a "Surfy" title; the dropdown chevron flips while open. Voice input is RULED mobile-only (08-04, `01-shell-frame.surf`) — the web panel carries NO mic affordance; this is a spec note, never panel content. The panel inherits the active surface's context as a grounding chip in the head (✕ clears it; seeded by the `askSurfyDoc`/`askSurfyTask` verbs) — chip emission is renderer work (WP-N1), declared here as spec.
+
+The panel body between the head and the composer is the THREAD REGION, authored above per the mockup's empty-thread anatomy: the Surfy greeting bubble, then the "Continue your work" quick-start cards (title + subtitle, routed to the real navigation verbs `openApps` / `openTasks` — `seedSurfy` composer seeding is deferred to the frontend verb round), then the suggestion chips routed to the existing create verbs (`openCreateDoc` / `openCreateTasks` / `openCreateApp`). The rows stand in for `::chat-thread` (planned-20) exactly as `surfaces/thread.surf` rules; their `action:` lines render as `surfdoc-row-action` buttons — the same idiom assistant replies use for **Save to Docs / Generate Tasks** and the chat-to-app **Confirm → Ready** proposal cards (reply-level actions are state layer, not authored in the empty-thread default).
+
+::callout[type=note title="Renderer note — panel composition (B1/B2/B5)"]
+The single-row panel head (fin + tier-as-title with the selected value only, no label duplication + spacer + Chats + ✕ composed from the dropdown-select and toolbar blocks above) and the composer pinned to the panel bottom with the thread region taking the remaining height regardless of source child count are RENDERER-SIDE (WP-N0) — the source keeps dropdown-select, head toolbar, thread rows, and chat-input-simple as sibling blocks in that order.
+::
+
+The workspace chip carries `avatar=C` (G6 ruling 08-10) — the workspace-initial avatar tile before the bare workspace-name label; under 0.13.2 the avatar attr is dropped at parse, so static renders show the label alone until the icon-aware CLI lands. Sidebar hub group rows render at ≥ 1024px only; below that the hub sheet behind the workspace chip is canonical. Unread renders as the right-side blue dot (accent left border BANNED). The panel-header Chats button opens `modals/surfy-chats.surf`.
+
+## Responsive behavior — measured breakpoints (mockup.html ground truth)
+
+Two breakpoints, one shell — the renderer derives every narrow-width affordance from the wrapper above; nothing narrow is hand-authored:
+
+- **Medium (768–1023px)**: the sidebar collapses to a **68px icon rail** — the wordmark, the nav-row labels, the separator, and the hub group rows (Posts, Uploads, Devices, Settings, Notifications) all hide; the five surface rows render icon-only, centered. The hub sheet re-anchors beside the rail.
+- **Small (≤ 767px)**: the sidebar hides entirely. The renderer generates a **floating pill tab-bar** docked to the bottom edge (fixed; 12px from the left and bottom edges, 76px from the right to clear the FAB; 999px pill radius; blurred glass surface; active item accent-tinted; 7px unread dot at each item's top-right from the row's `unread` attr) from the sidebar's surface rows (Search reordered LAST by the live renderer). The crate's small-screen default also paints a **52px circular accent Surfy FAB** (14px from the right and bottom edges) and hides the top bar's Surfy button; on LIVE pages the override sheet REVERSES that pair (08-24, visual round): the **Surfy button stays pinned top-right in the top bar at every width** and the FAB is never painted, because the shipped iOS chrome (TASK-223) puts Surfy in the nav bar top-right with no FAB and phone-width web is the parity target. Exactly one Surfy affordance at small width, in the same corner as iOS. The separator before the button stays hidden (at this width it would divide nothing). The mobile top bar therefore carries the workspace chip, Search, and Surfy; New/Filter sit inline with the surface title.
+
+## Surfy drawer — ruled behavior (08-10)
+
+The Surfy panel is a **right-docked drawer**. Wide: it opens by width transition from 0 to the docked **360px** column and the main pane reflows beside it. Medium (≤ 1023px): it leaves the flow and overlays as a **fixed right sheet** at `min(400px, 100vw)` with a shadow. Small (≤ 767px): it is **full-screen** (100vw), layered above the tab bar — the tab-bar is hidden while it is open (the FAB is not painted at this width at all, so there is nothing there to hide). **Esc closes it** at every width. Open-state persistence: ruling R-D ("the drawer renders CLOSED on every load") is SUPERSEDED 08-24 — `/next` is an MPA, so the drawer's open state and the conversation it is showing ride ONE request-visible cookie (`next_surfy`) written by the dispatcher's existing open/close handlers, and the server composes the panel OPEN with that conversation's turns re-rendered before the page is sent. A cookie naming a conversation that no longer exists renders the default panel honestly. Panel state stays RENDERER-owned: the client reads the state it stamped, never drives it.
+
+## Shell-owned sheets
+
+Each sheet has exactly ONE definition, in `modals/` — extracted from this file so shell.surf holds chrome only:
+
+- **Hub sheet** — `modals/hub.surf`, `name=hub`, anchored to the workspace chip (`action=openHub`). Below 1024px it is the canonical route to the hub destinations.
+- **Workspace switcher** — `modals/workspace-switcher.surf`, `name=workspace-switcher`, centered (`action=openWorkspaceSwitcher` from the hub sheet's Switch workspace row).
+- **Surfy chats** — `modals/surfy-chats.surf`, `name=surfy-chats`, anchored to the Surfy panel header (`action=openSurfyChats`).
+
+Sign out lives in Settings (Account group, danger row) — not in the hub sheet. The Grow surface's UI label is **Posts** everywhere (product/brand name stays Surf Grow). The mail surface's UI label is **Emails** everywhere — its sidebar row is RETIRED from the hub group (08-24 nav round); `/email` stays a live route reached from the hub sheet, and provider strings alone may say Mailhost. The files surface's UI label is **Uploads** (`icon=upload`, route `/uploads`).

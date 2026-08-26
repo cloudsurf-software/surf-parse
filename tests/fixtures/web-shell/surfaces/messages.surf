@@ -1,0 +1,167 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/messages.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Messages"
+type: doc
+version: 4
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, messages]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/05-messages.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Messages
+
+::summary
+The Messages two-plane surface in the shell wrapper, AUTHORED as real markup (G2/G3): a `split-pane` with the roster RAIL as the left pane (workspace-scoped conversation rows carrying `action=openConversation`, unread attr = right-side blue dot + accent count pill in meta) and the THREAD as the right pane (header, bubbles, attach ＋, composer per `thread.surf`), plus the icon-only New Conversation title-row action (G3). Side by side at wide and medium; at ≤ 767px the rail is alone until `data-thread=open` swaps in the thread, led by the renderer-emitted back control (`backToRoster`). Contacts are dead; conversation membership is the only access boundary.
+::
+
+::app-shell[name=messages layout=sidebar-main-panel height=720]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages state=active unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=messages]
+
+::::toolbar
+- text[value="Messages"]
+- spacer
+- button[icon=plus action=newConversation aria-label="New Conversation"]
+::::
+
+::::split-pane[ratio="280:1fr" back-label="Messages" back-action=backToRoster]
+
+:::::pane[side=left]
+
+::::::row[icon=knowledge action=openConversation href=# unread=true avatar="DP" rtime="1:52 PM" unread-count=2]
+Danny Pappageorge
+It worked. FileVault prompt next?
+::::::
+
+::::::row[icon=knowledge action=openConversation href=# avatar=group rtime="11:05 AM"]
+Launch crew
+Surfy: AAB v2 uploaded to internal testing.
+::::::
+
+::::::row[icon=knowledge action=openConversation href=# avatar="A" rtime="Sat"]
+Ashley
+Done on the next deploy — round 7 is queued.
+::::::
+
+:::::
+
+:::::pane[side=right]
+
+::::::toolbar
+- text[value="Danny Pappageorge — Direct message · cloudsurf workspace"]
+- spacer
+- button[icon=people action=openParticipants aria-label="Participants"]
+::::::
+
+::::::chat-thread
+- them[sender="Danny" time="1:42 PM"] Tahoe update finished — should I retry the enrollment now?
+- own[time="1:44 PM"] Yes — Settings, then General, then Device Management. It should pull the profile this time.
+- them[sender="Danny" time="1:52 PM"] It worked. FileVault prompt next?
+::::::
+
+::::::toolbar
+- button[label="＋" style=circle-muted action=openAttachMenu]
+::::::
+
+::::::chat-input-simple[placeholder="Message Danny..." action=sendMessage]
+::::::
+
+:::::
+
+::::
+
+:::
+
+::
+
+The surface RELEASES the 880px column (no width attrs on the tab-content). TWO-PLANE MARKUP (WP-N2 stacking on R-C 08-10, AUTHORED this round via G2): the `split-pane` above holds both planes — the roster RAIL as `pane[side=left]` (rows carrying `action=openConversation`, stamped verbatim as `data-action` per G3) and the THREAD as `pane[side=right]` mirroring `thread.surf`: header toolbar, the `::chat-thread` (v0.17 dash-item messages, real bubbles), the gray attach ＋, the composer. The right pane does NOT author a back button — `back-label`/`back-action` on the split-pane make the renderer emit `button.surfdoc-split-back[data-action=backToRoster]` first in the right plane, hidden except the ≤ 767px thread-open state. The shell stamps `data-thread="closed"`; wide AND medium render the planes side by side (rail 280px hugging the nav, thread stretching to the edge with a 10px gutter each side per the mockup), and at ≤ 767px the rail is alone until `openConversation` flips `data-thread=open` (a live-layer duty) and the thread swaps in full-width; the back control closes it. Unread rows render the title bold (`unread=true` attr) with the accent count pill via the `unread-count` attr (v0.17 — the pill replaces the old right-side dot; the count no longer rides meta text) — the accent-left-border unread idiom is BANNED and appears nowhere. Selecting a conversation clears its badge and the nav/tab dot re-derives from the remaining unread rows (it does NOT clear on merely visiting the surface). The Messages sidebar row's unread dot lives in the shell chrome. Roster avatars ride the v0.17 `avatar` attr: circular initials for DMs (`avatar="DP"`), the group glyph for groups (`avatar=group`); the right-side timestamp is the `rtime` meta attr. New Conversation flips the thread pane to compose mode (`thread.surf`) — no sheet. Every roster fetch is workspace-scoped (`?workspace=` required).
+
+::callout[type=note title="Renderer note — recorded gaps"]
+Split-pane children, the row `action` verb, and the emitted back control are LIVE in the crate (G2/G3) — this file now authors them, and the v0.17 train adds `::chat-thread` bubbles plus the row `avatar`/`rtime`/`unread-count` attrs, all authored above (the bubble-row and meta-text stand-ins are gone). Recorded gaps: `data-ratio` is emitted but has no CSS consumer and `.surfdoc-split-left`/`.surfdoc-split-right` are flex:1, so the 280px rail width stays prose contract, not rendered truth; and `surfdoc-split-back` paints as a text button carrying `back-label`, not the circled chevron of `thread.surf`'s standalone header. `openConversation` still falls to the honest log until the frontend verb round wires the `data-thread` flip.
+::

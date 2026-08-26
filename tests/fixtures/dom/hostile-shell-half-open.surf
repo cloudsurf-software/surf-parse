@@ -1,0 +1,21 @@
+::app-shell[name=shell-half-open layout=sidebar-main-panel height=720]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=doc action=openDocs href=#]
+Docs row inside the unterminated sidebar
+Description that never sees a closer
+
+::::modal[name=orphan title="Modal opened inside the half-open shell" width=320]
+
+:::row[icon=task href=#]
+Row after the unterminated modal
+
+::::toolbar
+- text[value="Toolbar with no closer"]
+- spacer
+- button[label="Save" action=save]

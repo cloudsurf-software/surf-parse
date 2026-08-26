@@ -1,0 +1,263 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/search.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Search"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, search]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/07-search.surf
+    relationship: consumes
+  - path: plans/design/2026-08-03-web-surfspace/src/modals/search.surf
+    relationship: references
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Search
+
+::summary
+The universal search CONTENT — everything that renders inside the search modal (`modals/search.surf` owns the frame; this file owns the states): the shell-context wrapper carrying the default open state (raised from Docs), the Find ⇄ Ask segmented-control, the seven-scope single-select segmented-control with per-surface pre-selection (WP-N3 08-11 — the toggled-button chip row died with the inline filter rows), and the six reviewed states — open-from-Docs recents, Everything recents, Find results, Find no-match, Ask idle, Ask answered. Recents and hits route exactly alike: click routes to the item's surface and closes the sheet.
+::
+
+Search is NOT a routed surface — shipped, it mounts inside `::modal[name=search]`, a centered sheet floated over the raising surface (top 64px, `min(640px, 100vw − 20px)` wide). The wrapper below is the shell-composition stand-in the static engine can express: the sheet body centered in the main pane over the Docs context that raised it.
+
+## State 1 in shell context — open from Docs (scope-aware recents, RULED 08-05)
+
+Input autofocused and empty, Docs chip pre-selected, Recents already populated and filtered to the Docs scope.
+
+::app-shell[name=search layout=sidebar-main-panel height=900]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search state=active]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=search width=640 align=center]
+
+::::search[name=universal-search placeholder="Search this workspace…" action=runSearch]
+::::
+
+::::segmented-control[name=search-mode action=setSearchMode active=find size=compact]
+- find "Find"
+- ask "Ask Surfy"
+::::
+
+::::segmented-control[name=search-scope action=setSearchScope active=docs size=compact]
+- everything "Everything"
+- docs "Docs"
+- tasks "Tasks"
+- apps "Apps"
+- messages "Messages"
+- files "Files"
+- devices "Devices"
+::::
+
+Find matches across the workspace, or Ask Surfy for a grounded answer.
+
+::::toolbar
+- text[value="RECENT"]
+::::
+
+::::row[icon=doc action=openRecent href=#]
+Talent
+Opened 1h ago
+::::
+
+:::
+
+::
+
+Find is the default mode; Enter in Ask mode runs the question, Enter in Find just keeps filtering (debounced, cancel-and-replace). The seven scopes are the single-select `segmented-control` above (WP-N3 08-11 — the Tasks/Apps list-view idiom, no new block kind): one group, exactly one selected item, active item accent-filled. The per-chip verbs (`scopeEverything` … `scopeDevices`) consolidate into `setSearchScope`, which emits the selected scope key.
+
+### Scope pre-selection map
+
+The raising surface pre-selects its own chip:
+
+| Raised from | Pre-selected chip |
+|-------------|-------------------|
+| Docs / doc detail | Docs |
+| Tasks / task detail | Tasks |
+| Apps / app detail / code | Apps |
+| Messages | Messages |
+| Files | Files |
+| Devices | Devices |
+| Anywhere else (hub, Posts, settings, Surfy panel) | Everything |
+
+## State 2 — Everything recents
+
+Switching the chip re-filters the Recents live. Under Everything, ALL recent kinds show — including Posts-kind recents, which have no chip of their own among the seven and surface only here.
+
+::toolbar
+- text[value="RECENT"]
+::
+
+::row[icon=doc action=openRecent href=#]
+Talent
+Opened 1h ago
+::
+
+::row[icon=task action=openRecent href=#]
+Gather Donovan's account details and failure mode
+Viewed 2h ago
+::
+
+::row[icon=knowledge action=openRecent href=#]
+Danny Pappageorge
+It worked. FileVault prompt next?
+::
+
+::row[icon=sparkle action=openRecent href=#]
+tidepool
+Deployed · tidepool.surf.space
+::
+
+::row[icon=sparkle action=openRecent href=#]
+Surfspace 1.6.1 ships today
+Posts · Pending review
+::
+
+## State 3 — Find results
+
+One federated query; hits filter to the active scope, group under uppercase kind labels in a fixed kind order, cap at ~14 rows, ellipsized single-line titles. A hit routes and the sheet closes. Query "tidepool" under Everything:
+
+::toolbar
+- text[value="DOCS"]
+::
+
+::row[icon=doc action=openSearchHit href=#]
+tidepool — Spec
+Routes to the doc detail
+::
+
+::toolbar
+- text[value="APPS"]
+::
+
+::row[icon=sparkle action=openSearchHit href=#]
+tidepool
+Routes to the app detail
+::
+
+## State 4 — Find no-match
+
+No matches for "laguna".
+
+## State 5 — Ask idle
+
+Segmented-control on Ask, no query; the scope strip stays put (Ask is workspace-grounded regardless of chip).
+
+::segmented-control[name=search-mode-ask action=setSearchMode active=ask size=compact]
+- find "Find"
+- ask "Ask Surfy"
+::
+
+Ask a question — Surfy answers from your workspace with sources.
+
+## State 6 — Ask answered
+
+Enter runs the question: Working… interim, then the streamed grounded answer rendered STATIC here (streaming is state layer), a Sources group, then Continue in Surfy (seeds the panel composer with the question, never auto-sends).
+
+Based on the workspace: the Android lane's next gate is the v3 AAB upload and the passkey smoke — Batch 4 billing is built and waiting on it. The deploy worker (mini) is idle with 0 jobs queued.
+
+::toolbar
+- text[value="SOURCES"]
+::
+
+::row[icon=task action=openSearchSource href=#]
+Android audit remediation — Batch 3
+Routes to the task detail
+::
+
+::row[icon=file action=openSearchSource href=#]
+mini — deploy worker
+Routes to Devices
+::
+
+::toolbar
+- button[label="Continue in Surfy" action=seedSurfy]
+::
+
+## Renderer notes (consciously deferred)
+
+- The wrapper renders the sheet body as a 640px centered column in the main pane; shipped is the centered modal floated OVER the raising surface (`modals/search.surf` owns the frame, Esc dismisses, top-right ✕ per dismiss canon) — overlay composition is not expressible in the static engine.
+- The seven scopes render as the single-row `segmented-control` block (WP-N3 08-11 — the `toggled=` toolbar-button stand-in is gone); shipped is a WRAPPING single-select pill strip, active chip accent-filled. The wrap behaviour — and any `::suggestion-chips` single-select treatment — stays deferred to the block round; at narrow widths the segmented group overflow-scrolls rather than wraps.
+- Autofocus on open, the debounce + cancel-and-replace, live re-filtering of Recents, and the Ask streaming/Working… interim are state layer, not vocabulary.
+- The uppercase kind labels (RECENT, DOCS, APPS, SOURCES) render as toolbar text rows — the group-head stand-in, deferred with the stage-group-head treatment.

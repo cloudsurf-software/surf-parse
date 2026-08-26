@@ -1,0 +1,146 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/doc-editor.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Doc Editor"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, docs, editor]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/02-docs.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Doc Editor
+
+::summary
+The doc editor surface (a full surface, not a sheet) in the shell wrapper: circled back, Cancel/Save bar, formatting bar, and the SurfDoc source area. Every save is a version; autosave every 30s.
+::
+
+::app-shell[name=doc-editor layout=sidebar-main-panel height=900]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs state=active]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=docs width=880 align=center]
+
+::::toolbar
+- button[icon=chevron-left style=circled action=backToDoc tooltip="Back to the doc"]
+- text[value="Editing — tidepool — Spec"]
+- spacer
+- button[label="Cancel" action=cancelEdit]
+- button[label="Save" style=primary action=saveEditor]
+::::
+
+::::toolbar
+- button[label="B" action=formatBold]
+- button[label="I" action=formatItalic]
+- button[label="H2" action=formatHeading]
+- button[label="• List" action=formatList]
+- button[label="</>" action=formatCode]
+- button[label="+ Block" action=insertBlock]
+::::
+
+```markdown
+## Overview
+
+Tidepool photo gallery — static site (index.html + app.js + zip.js), Android TWA dogfood app for the builds and deployments product plan.
+
+## Goals
+
+- Serve the gallery as a fast static site with client-side zip download.
+- Ship the same experience as an Android TWA through the Play internal-testing lane.
+- Dogfood the Surfspace builds and deployments pipeline end to end.
+```
+
++ Block inserts typed SurfDoc blocks (callout, table, model, action-items). SurfDoc source — blocks render live on save. Cancel discards; Save commits (every save is a version); autosave every 30s.
+
+:::
+
+::
+
+Title-row treatment (G3 pass, WP-N3 08-11): Cancel and Save KEEP their labels — Save is the meaning-carrying primary and an icon-only ✕ beside it would read as a pane dismiss, so the pair stays textual by the G3 judgment rule (destructive-or-primary text actions keep labels). The formatting bar is a formatting bar, not a title row — its textual B / I / H2 / • List / </> / + Block buttons are unchanged by design.
+
+::callout[type=note title="Renderer note — deferred"]
+The live editing surface is `::code-editor` (planned-20), not in this train — the fenced code block stands in for the source area until it lands.
+::

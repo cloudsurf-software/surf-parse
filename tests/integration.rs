@@ -754,11 +754,18 @@ fn marketplace_index_constraint_rendering() {
 #[test]
 fn render_editor_surf_to_html() {
     // Use the editor.surf from surf-api pages (same pipeline as production).
-    // Path is home-relative so the test works on both Linux and macOS checkouts.
+    // Portable-dev-drive standard (2026-08-25): the canonical checkout lives
+    // at /Volumes/Dev; the home-relative path is kept as a fallback for
+    // machines that still carry ~/Projects.
     let home = std::env::var("HOME").expect("HOME should be set");
-    let source = std::fs::read_to_string(
-        format!("{home}/Projects/cloudsurf/repos/surf/pages/editor.surf")
-    ).expect("editor.surf should exist");
+    let candidates = [
+        "/Volumes/Dev/cloudsurf/repos/surf/pages/editor.surf".to_string(),
+        format!("{home}/Projects/cloudsurf/repos/surf/pages/editor.surf"),
+    ];
+    let source = candidates
+        .iter()
+        .find_map(|p| std::fs::read_to_string(p).ok())
+        .expect("editor.surf should exist at a known checkout path");
     let result = surf_parse::parse(&source);
     assert!(!result.doc.blocks.is_empty(), "Should parse blocks");
 
@@ -1775,11 +1782,11 @@ fn responsive_shell_renders_drawer_tabbar_fab_and_state() {
     assert!(!html.contains("data-tab=\"posts\""));
     assert!(!html.contains("data-tab=\"settings\""));
 
-    // FAB + toggle script, wired to the topbar Surfy button too.
+    // FAB markup; the toggle script is GONE at 0.19.0 (runtime-owned —
+    // spec web-runtime-v1 §2), so the shell is constructively coverable.
     assert!(html.contains("surfdoc-panel-fab"));
     assert!(html.contains("aria-controls=\"surfdoc-panel-right\""));
-    assert!(html.contains("__surfyWired"));
-    assert!(html.contains("[data-action=\"toggleSurfy\"]"));
+    assert!(!html.contains("__surfyWired"));
     assert!(!html.contains("localStorage"));
 }
 
@@ -1870,4 +1877,56 @@ Context inherits here.\n\
     assert!(!bottom.contains("surfdoc-chat-attach"));
     assert!(!bottom.contains("surfdoc-panel-head"));
     assert!(!bottom.contains("surfdoc-panel-grounding"));
+}
+
+/// Regression: `::summary` must never emit a `<p>` nested inside a `<p>`.
+///
+/// The pre-0.19.0 arm wrapped the body in a bare `<p>{render_inline_markdown(..)}</p>`,
+/// which produced `<p><p>text</p>\n</p>` for the ordinary phrasing-only summary.
+/// That is not merely ugly: an HTML parser auto-closes the outer `<p>` at the
+/// inner one, so the SSR-parsed DOM disagreed with the literal element tree
+/// `render_dom` constructs — the byte-identity backends could not both be right.
+/// The golden corpus pinned the malformed bytes, but `tests/corpus.rs` is
+/// `#![cfg(feature = "native")]`, so neither the default nor the dom-only run
+/// could see it. This test is feature-free on purpose.
+#[test]
+fn summary_never_nests_paragraphs() {
+    // Phrasing-only body: exactly one <p>, collapsed — not <p><p>.
+    let html = surf_parse::parse("::summary\nOne source, every target.\n::\n")
+        .doc
+        .to_html();
+    assert!(
+        !html.contains("<p><p>"),
+        "summary emitted a nested paragraph: {html}"
+    );
+    assert_eq!(
+        html.matches("<p>").count(),
+        1,
+        "phrasing-only summary must collapse to a single <p>: {html}"
+    );
+    assert!(
+        html.contains(
+            "<div class=\"surfdoc-summary\" role=\"doc-abstract\">\
+             <div class=\"surfdoc-summary-label\">Summary</div>\
+             <p>One source, every target.</p></div>"
+        ),
+        "{html}"
+    );
+
+    // Block-level body (two paragraphs) must not be forced into a <p> at all;
+    // it gets the <div> wrapper, still with no nesting.
+    let multi =
+        surf_parse::parse("::summary\nFirst paragraph.\n\nSecond paragraph.\n::\n")
+            .doc
+            .to_html();
+    assert!(
+        !multi.contains("<p><p>"),
+        "multi-paragraph summary nested a paragraph: {multi}"
+    );
+    assert!(
+        multi.contains("<div class=\"surfdoc-summary-label\">Summary</div><div>"),
+        "block-level summary body must use the <div> wrapper: {multi}"
+    );
+    assert!(multi.contains("<p>First paragraph.</p>"), "{multi}");
+    assert!(multi.contains("<p>Second paragraph.</p>"), "{multi}");
 }

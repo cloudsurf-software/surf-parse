@@ -1,0 +1,278 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/app-detail.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — App Detail"
+type: doc
+version: 4
+created: 2026-08-06
+updated: 2026-08-19
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, apps, detail]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/04-apps.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# App Detail
+
+::summary
+The app detail surface in the shell wrapper — the iOS 8-section idiom (Header, Web, Demo, Code, Deployments, Docs, Tasks, Recent PRs) plus the Android build/deploy section (round 6, 08-19 — target-gated, see the section note) and the F-8 code browser. No action bar; sections carry their own affordances. The Connect-domain and Link-Task sheets live in `modals/` — no inline copies. `height=1800` on the wrapper avoids the clamp clipping the long page.
+::
+
+::app-shell[name=app-detail layout=sidebar-main-panel height=2840]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps state=active]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=apps width=880 align=center]
+
+::::toolbar
+- button[icon=chevron-left style=circled action=backToApps tooltip="Back to Apps"]
+- text[value="tidepool"]
+::::
+
+## Header
+
+::::row[icon=apps href=#]
+tidepool — `tidepool`
+Ready · Tidepool photo gallery — static site + Android TWA dogfood
+::::
+
+::::row[icon=package href=#]
+cloudsurf-software/tidepool
+Repository
+::::
+
+## Web
+
+::::row[icon=doc href=#]
+https://tidepool.surf.space
+Absolute public URL — monospaced, selectable, verbatim (never constructed client-side)
+::::
+
+::::toolbar
+- button[icon=external-link action=viewOnWeb aria-label="View on web"]
+- button[icon=globe action=openConnectDomain aria-label="Connect domain"]
+::::
+
+## Demo
+
+::::figure[src=# alt="tidepool demo frame" caption="Inline demo — frame chrome: three dots + host line, page body below. Gated on the renderable site doc."]
+::::
+
+## Code
+
+::::toolbar
+- text[value="Code — tidepool"]
+- spacer
+- text[value="main"]
+- button[icon=edit action=editCode aria-label="Edit"]
+::::
+
+::::row[icon=folder action=openPath href=#]
+src/
+dir
+::::
+
+::::row[icon=file action=openFile href=#]
+index.html
+file
+::::
+
+::::row[icon=file action=openFile href=#]
+app.js
+file
+::::
+
+::::row[icon=file action=openFile href=#]
+styles.css
+file
+::::
+
+::::row[icon=file action=openFile href=#]
+README.md
+file
+::::
+
+```html
+<!doctype html>
+<title>tidepool</title>
+<div id="gallery"></div>
+<script src="app.js"></script>
+```
+
+::::toolbar
+- text[value="main"]
+::::
+
+::::form[name=commit submit="Save" action=saveCode]
+- Commit message (text, "Commit message") *
+::::
+
+main is protected — this change commits to a fresh `surfy/edit-*` branch and opens a PR (stated up front in the commit bar, not on failure).
+
+## Deployments
+
+::::row[icon=task href=#]
+v12 · web
+success · Aug 05 14:05 UTC
+::::
+
+::::row[icon=task href=#]
+v11 · web
+failed · Aug 03 09:41 UTC · health check timed out
+::::
+
+## Android
+
+::::toolbar
+- text[value="Android — tidepool"]
+- spacer
+- button[icon=play action=buildAndroid aria-label="Build AAB"]
+::::
+
+::::row[icon=device href=#]
+com.cloudsurf.tidepool
+Target · next versionCode 12
+::::
+
+::::row[icon=package action=downloadAab href=#]
+v11 · 1.0.11
+Aug 05 14:22 UTC · internal
+::::
+
+::::row[icon=package action=downloadAab href=#]
+v10 · 1.0.10
+Aug 03 09:12 UTC · not uploaded
+::::
+
+## Docs
+
+::::row[icon=doc action=openDoc href=#]
+tidepool — Spec
+Doc
+::::
+
+## Tasks
+
+::::toolbar
+- text[value="Tasks"]
+- spacer
+- button[icon=plus action=openLinkTask aria-label="Link a task"]
+::::
+
+::::row[icon=task action=openTask href=# trailing-label="Unlink" trailing-action=unlinkTask]
+Play Store Surfspace setup — TWA lane
+Build
+::::
+
+This section renders even when empty — the ＋ is how the first link happens. Unlink is the row-hover ✕, always visible at touch widths.
+
+## Recent pull requests
+
+::::row[icon=doc action=openPr href=#]
+#14 zip download worker
+merged · Surfy · surfy/edit-zip → main
+::::
+
+::::row[icon=doc action=openPr href=#]
+#13 gallery lazy-load
+open · surfy/edit-lazy → main
+::::
+
+:::
+
+::
+
+Section action buttons are icon-only (G3 pass, WP-N3 08-11): View on web (external-link), Connect domain (globe), Edit (edit glyph), Link Task (＋) — old labels carry as `aria-label`, verbs unchanged; every glyph resolves in the registry, no fallback circles.
+
+Section notes: Web is absent without a `public_url`; Demo absent shows "No in-app demo yet — ask Surfy to build this app's site."; Code is gated on `repoProvisioned` — the rows-as-tree + fenced code block stand in for the deferred `nav-tree` and `code-editor` (this is the mockup's surface-code section, folded in); Deployments status colors by contains-match (succe→green, fail/error→red, run/progress→orange, else muted); PR rows carry the accent "Surfy" badge when agent-opened.
+
+Android section (round 6, 08-19): the WHOLE section is gated on an Android target existing for the app (the Ultra/Studio capability gate rides server-side — no target, no section, exactly the Web-absent idiom). Target row = package name over `Target · next versionCode {n}`. Release rows, newest first, cap 20: `v{versionCode} · {versionName}` over `{created} · {track}` — track absent renders "not uploaded" (the WP-1 built-not-uploaded state). `downloadAab` rows carry the REAL AAB href only when the bundle bytes exist; a release without its AAB renders the row without the action. Build AAB (`buildAndroid`) enqueues the pipeline build — the toolbar is the section's only action; keystore export and target creation stay classic-web/settings surfaces this round. An **iOS** build/deploy section is deliberately ABSENT: no iOS build lane exists server-side yet (the shipping iOS app's own "iOS" section is the demo link, which the Demo section already carries) — authoring it here without a backend would violate the no-fake-affordances law; it lands with the mobile-deploy round.
+
+::callout[type=note title="Renderer note — deferred"]
+`web-preview` (inline sandboxed demo frame) is consciously deferred this round — the `::figure` fallback above stands in per the gaps plan. Do not add `web-preview` here.
+::
+
+## Sheets — defined once, opened from here
+
+- **Connect domain** — `modals/connect-domain.surf` (`name=connect-domain`), via the Web section's button (`openConnectDomain`). Connect runs the in-sheet progression: Verifying DNS → DNS verified — binding → connected; certificate issues after bind.
+- **Link Task** — `modals/link-task.surf` (`name=link-task`), via the Tasks section's ＋ (`openLinkTask`). Already-linked rows render checked + disabled; the sheet stays up for multi-link.

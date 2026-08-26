@@ -1,0 +1,63 @@
+::style
+accent: #2E8AD8
+heading-font: "Quoted" & <Angled> face
+body-font: inter" onload="x()
+::
+
+::app-shell[name="shell "breaker"" layout=sidebar-main-panel height=720]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" & <b>bold</b> with "quotes"" size=22]
+::::
+
+::::row[icon=doc action="openDocs" onmouseover="alert(1)" href="#"quote"]
+Docs with "quotes" & <angles> and 'apostrophes'
+Description with </div> breakage and attr-shaped text="x"
+::::
+
+::::row[icon=task action=openTasks href=# unread=true trailing-label="3 "due"" trailing-action="openDue" aria-label="Tasks "all""]
+Tasks "quoted" & <b>bold</b>
+Meta with trailing backslash \
+::::
+
+::::divider
+::::
+
+:::
+
+:::toolbar
+- button[label="cloudsurf" & "quoted"" avatar="C"q" style=primary action=openHub]
+- spacer
+- button[label="Search"><script>alert(1)</script>" icon=search action="openSearch" aria-label="Search "all""]
+- separator
+- button[label="✕" action="dismiss" onclick="alert(2)"]
+:::
+
+:::tab-content[tab="docs "q"" width=880 align=center]
+
+::::row[icon=task href=#]
+Row title with "quotes" and <b>tags</b>
+action: Open "it" | openTasks
+action: Delete "now" | "deleteTask"x
+::::
+
+:::
+
+::
+
+::modal[name="hub "q"" title="Hub "breaker" & <angles>" width=320 placement=anchored anchor="workspace-chip"x" dismissible=true]
+
+:::row[icon=sparkle action=openBilling href=#]
+Ultra · 8.4M "of" 20M used
+Plan & credits · auto top-up "on"
+:::
+
+:::toolbar
+- text[value="Switch "workspace""]
+- spacer
+- button[label="Close "sheet"" action=dismissHub]
+:::
+
+::

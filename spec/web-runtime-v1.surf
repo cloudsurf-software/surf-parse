@@ -25,7 +25,7 @@ Consequences:
 - `require-trusted-types-for 'script'` is served with **no policy defined** — every injection sink throws at the platform level. The absence of a policy is the proof the architecture held; adding a policy anywhere is a spec violation, not a workaround.
 - Enforced two ways, both never-weaken: (a) the TT header with no policy; (b) a CI sink lint over the shell, wasm glue, and codegen output.
 
-## 2. `render_dom` backend [SHIPPED — pilot census; PLANNED — full 71-kind coverage at P3]
+## 2. `render_dom` backend [SHIPPED — every block kind the /next web shell uses; PLANNED — the remaining `Block` variants]
 
 - Lives **inside surf-parse** behind the `dom` feature (never a JS fork). One parser, one typed block tree, per-platform backends; no block rendering outside the crate.
 - `DomSink` abstraction: a native arena sink (byte-exact serializer, used by the identity corpus) and a wasm32/web-sys sink. Both walk the same block tree as `render_html`.
@@ -71,7 +71,7 @@ Published sites (`*.doc.surf`) are origin-isolated from authenticated Surfspace 
 - The hostile corpus is part of the identity corpus and never-weaken: quote-breaking text, `javascript:`/`data:` URLs in link fields, closing-rawtext payloads (`</textarea>`, `</style>`), half-open containers, max-depth nesting.
 - URL-typed fields are scheme-allowlisted at the encoder layer. Field **security typing** in `spec/blocks.toml` (`text`, `url`, `enum`, `style-token`, `int-bounded`) with fully generated encoders is the cross-platform policy [PLANNED — P3]; the encoder layer is where divergence is a vulnerability.
 
-### 4.4 Client DoS bounds [PLANNED — P3]
+### 4.4 Client DoS bounds [SHIPPED 0.19.0]
 
 Max nesting depth, max block count, max source size — enforced identically at publish (server-side reject, not sanitize) and at parse (client fuel limits).
 
@@ -83,16 +83,21 @@ Blocks materialize to DOM only at committed grammar boundaries; half-open contai
 
 Wasm bundle = parser + dom backend only (no pdf/native/uniffi). Working target ≤ 1.5 MB gz; **CI gate pinned at 1.2 MB gz** (ruled 2026-08-13; first build measured 964,370 B gz with pilot census coverage).
 
-## 5. Status ledger (2026-08-13)
+## 5. Status ledger (2026-08-13; P3 row split, serializer, web-shell census and parse-bounds rows measured 2026-08-26)
 
 | Piece | Status |
 |-------|--------|
 | Zero-sink law + TT-no-policy + CSP profile | LIVE on the pilot host (full TT) |
 | `render_dom` pilot census (site/page/hero/section/figure/callout/features/form/banner/store/infocard/gallery/booking + md subset) | SHIPPED |
+| `render_dom` web-shell census (row/toolbar/summary/style/modal/tab-content/app-shell/sidebar/divider/form/callout/segmented-control/dropdown-select/pane/split-pane/chat-input-simple/search/figure/pricing-table/gallery/diagram/chart/chat-thread/panel/embed/code/chip-input + md tables, code blocks and code spans) | SHIPPED 0.19.0 |
 | Byte-identity + hostile + parser-stability corpus | SHIPPED, never-weaken |
 | Constructive nav shell (pilot) + attestation + nav-chrome sync | LIVE |
 | `onerror` → `data-img-fallback`, widget JS sink-free, parser-stable emission in `render_html` | TRAIN-BOUND (next surf-parse tag) |
-| blocks.toml security typing, generated encoders, parse bounds, full 71-kind coverage | PLANNED — P3 |
+| `blocks.toml` security typing | PLANNED — P3 (explicitly out of scope for the 0.19.0 round) |
+| Generated attribute encoders | PLANNED — P3 (out of scope for the 0.19.0 round) |
+| Parse bounds (`max_depth` / `max_blocks` / `max_source_bytes`) with a typed decline | SHIPPED 0.19.0 — `src/limits.rs` (`ParseLimits` / `LimitExceeded`, both public), `tests/parse_limits.rs` 14/0 |
+| `render_dom` coverage of every web-shell block kind | SHIPPED 0.19.0 — `tests/render_dom_identity.rs` 29/0: byte identity + `check_coverage` Ok over the vendored sources; only `files.surf` (gallery lightbox `<script>`) keeps a typed `script-emitting` decline. The app-shell drawer script is GONE (toggle is runtime-owned per §2), so the composed /next chrome — Surfy right panel included — COVERS |
+| Serializer fixed point (`parse(to_surf_source(parse(src)))`) over the web-shell corpus | SHIPPED 0.19.0 — `tests/serialize_fixed_point.rs`, 61 fixtures |
 | Versioned `surfdoc-shell.js` runtime + source endpoints + capability manifests | PLANNED — P4 |
 | Streaming commit points + patched-tree ≡ reparse | PLANNED — P5 |
 

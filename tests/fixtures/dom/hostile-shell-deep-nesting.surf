@@ -1,0 +1,86 @@
+::app-shell[name=deep-0 layout=sidebar-main-panel height=720]
+
+:::tab-content[tab=main]
+
+::::split-pane[ratio="280:1fr"]
+
+:::::pane[side=left]
+
+::::::app-shell[name=deep-1 layout=sidebar-main]
+
+:::::::tab-content[tab=docs]
+
+::::::::split-pane[ratio="1fr:1fr"]
+
+:::::::::pane[side=right]
+
+::::::::::app-shell[name=deep-2 layout=sidebar-main]
+
+:::::::::::tab-content[tab=tasks]
+
+::::::::::::split-pane[ratio="1fr:2fr"]
+
+:::::::::::::pane[side=left]
+
+::::::::::::::row[icon=doc href=# action=openDeep unread=true]
+Deepest row title with "quotes" & <angles>
+Deepest row description
+::::::::::::::
+
+::::::::::::::toolbar
+- text[value="Deepest toolbar"]
+- spacer
+- button[label="Deep" action=deepAction]
+::::::::::::::
+
+::::::::::::::modal[name=deep-modal title="Modal at max depth" width=320]
+
+:::::::::::::::row[icon=task href=#]
+Row inside the deepest modal
+:::::::::::::::
+
+::::::::::::::
+
+:::::::::::::
+
+::::::::::::
+
+:::::::::::
+
+::::::::::
+
+:::::::::
+
+::::::::
+
+:::::::
+
+::::::
+
+:::::
+
+::::
+
+:::
+
+::
+
+::app-shell[name=deep-degrade layout=sidebar-main]
+
+:::section
+
+::::split-pane[ratio="1fr:1fr"]
+
+:::::pane[side=left]
+
+::::::row[icon=doc href=#]
+Row under a container that does not nest directives
+::::::
+
+:::::
+
+::::
+
+:::
+
+::

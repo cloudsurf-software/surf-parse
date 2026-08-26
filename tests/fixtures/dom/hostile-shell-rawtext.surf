@@ -1,0 +1,41 @@
+::style
+accent: "</style><script>alert(1)</script>"
+heading-font: </style>
+body-font: x</script>y
+surface: value; with; semicolons
+::
+
+::app-shell[name=shell-rawtext layout=sidebar-main height=600]
+
+:::tab-content[tab=main]
+
+::::code[lang="</script>text"]
+</style><script>alert('code')</script>
+</textarea></code></pre><script>x()</script>
+line with "quotes" & <angles> and a trailing backslash \
+::::
+
+::::code[lang=text file="</style>notes.txt" highlight="1,2"]
+plain </script> body
+second </style> line
+::::
+
+::::row[icon=doc href=#]
+Row with </style> and </script> payloads
+Description with </textarea> and <img src=x onerror=alert(1)>
+::::
+
+::::toolbar
+- text[value="</style><script>toolbar</script>"]
+- button[label="</textarea>" action="</script>act"]
+::::
+
+::::form[submit="</textarea><script>alert(1)</script>" action=/x method=post]
+- Name (text, "</textarea><script>x</script>") *
+- Message (textarea, "closing </textarea> payload")
+- Style (select: </style> | </script> | "quoted")
+::::
+
+:::
+
+::

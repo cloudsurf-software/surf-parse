@@ -122,3 +122,42 @@ fn union_of_all_kinds_renders_without_panic() {
     let doc = surf_parse::parse(&src).doc;
     render_all_twice(&doc, "union");
 }
+
+/// Fixture-driven arm of the sweep: the hostile web-shell chrome corpus
+/// (`tests/fixtures/dom/hostile-shell-*.surf` — quote-breaking chrome text,
+/// `javascript:`/`data:` URLs in row/form/embed/avatar slots, closing-rawtext
+/// through `::style` and `::code`, half-open `app-shell`/`sidebar`, max-depth
+/// nesting) must parse and render through every default format without a
+/// panic, deterministically. Byte identity against the constructive DOM sink
+/// is `tests/render_dom_shell_hostile.rs`; this is the no-panic floor, and it
+/// runs without the `dom` feature. The corpus is add-only.
+#[test]
+fn hostile_web_shell_fixtures_survive_every_format() {
+    let dir = format!("{}/tests/fixtures/dom", env!("CARGO_MANIFEST_DIR"));
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("read_dir {dir}: {e}"))
+        .filter_map(|entry| {
+            let name = entry.ok()?.file_name().to_string_lossy().into_owned();
+            (name.starts_with("hostile-shell-") && name.ends_with(".surf")).then_some(name)
+        })
+        .collect();
+    names.sort();
+    assert!(
+        names.len() >= 5,
+        "the hostile web-shell corpus may only grow — found {} fixtures",
+        names.len()
+    );
+
+    for name in &names {
+        let src = std::fs::read_to_string(format!("{dir}/{name}"))
+            .unwrap_or_else(|e| panic!("read {name}: {e}"));
+        let first = surf_parse::parse(&src);
+        let second = surf_parse::parse(&src);
+        assert_eq!(
+            serde_json::to_string(&first.doc).unwrap(),
+            serde_json::to_string(&second.doc).unwrap(),
+            "{name}: parse must be deterministic"
+        );
+        render_all_twice(&first.doc, name);
+    }
+}

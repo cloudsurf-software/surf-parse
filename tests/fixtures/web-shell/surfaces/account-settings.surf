@@ -1,0 +1,192 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/account-settings.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip tokens plus the
+# c7 live-value tokens ({= account.email =} / {= account.theme =})
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Account Settings"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, settings, account]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/06-hub.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Account Settings
+
+::summary
+The Account settings surface in the shell wrapper: the Settings-root Account group (Appearance, Notifications, Passkeys, Sign out) and About group (version/legal, Delete account), the Profile and Sign-in panes, and the delete-account typed-confirm modal — referenced by name, no inline copy.
+::
+
+::app-shell[name=account-settings layout=sidebar-main-panel height=1650]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings state=active]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=main width=880 align=center]
+
+::::toolbar
+- button[icon=chevron-left style=circled action=backToSettings tooltip="Back to Settings"]
+- text[value="Account"]
+::::
+
+## Account group (Settings root)
+
+::::row[icon=task action=cycleAppearance href=#]
+Appearance
+{= account.theme =} — cycles System → Light → Dark
+::::
+
+::::row[icon=login action=openAccountProfile href=#]
+Account
+{= account.email =}
+::::
+
+::::row[icon=doc action=openNotificationPrefs href=#]
+Notifications
+Push + email · quiet 10 PM – 7 AM
+::::
+
+::::row[icon=login action=managePasskeys href=#]
+Passkeys
+2 passkeys · rpId surf.space
+::::
+
+::::row[icon=login style=danger action=signOut href=#]
+Sign out
+{= account.email =}
+::::
+
+## Profile
+
+::::row[icon=login href=# trailing-label="Change" trailing-action=changeAvatar]
+Avatar
+KD initials chip · Change opens the media picker
+::::
+
+::::form[name=profile submit="Save" action=saveProfile]
+- Display name (text, "K. Brady Davis")
+::::
+
+::::row[icon=doc href=# trailing-label="Change" trailing-action=changeEmail]
+Email
+{= account.email =} · verified · Change sends verification to the new address
+::::
+
+## Sign-in
+
+::::row[icon=login href=# trailing-label="Manage" trailing-action=managePasskeys]
+Passkeys
+2 enrolled · primary sign-in
+::::
+
+::::row[icon=doc action=toggleEmailCodes href=# trailing-label="On" trailing-action=toggleEmailCodes]
+Email codes — ON
+Fallback sign-in toggle
+::::
+
+Email codes stay ON as the fallback when no passkey is available. The toggle renders as a row with the ON state in the title (toggle-switch treatment deferred with the notifications preferences); the current field value rides in the profile form's placeholder — prefill is state layer.
+
+## About
+
+::::row[icon=doc href=#]
+Surfspace
+Web · surf.space · Privacy Policy · Terms of Use
+::::
+
+::::row[icon=file style=danger action=openDeleteAccount href=#]
+Delete account
+Permanent — requires password + typed confirmation
+::::
+
+:::
+
+::
+
+Sign out lives here (Account group, danger row with the signed-in email) — moved OUT of the hub sheet per the 08-03 ruling. The title row is circled back + title only — no actions to convert (G3 pass, WP-N3 08-11). At small width (≤ 767px, R-C ruling 08-10) the shell contract applies unchanged: the sidebar hides behind the generated tab-bar + FAB, the 880px column goes full-width with edge padding, and the rows, forms, and trailing Change/Manage actions flow full-width and stay visible at touch widths.
+
+## Sheets — defined once, opened from here
+
+- **Delete account** — `modals/delete-account.surf` (`name=delete-account`), via the danger row (`openDeleteAccount`): consequence statement, password + typed-phrase confirmation gating the danger button.
+- **Passkeys** — `modals/passkeys.surf` (`name=passkeys`), via Manage (`managePasskeys`): credential rows with trailing actions.
+- **Notification preferences** — the Notifications row (`openNotificationPrefs`) routes to the preferences pane in `surfaces/notifications.surf`.

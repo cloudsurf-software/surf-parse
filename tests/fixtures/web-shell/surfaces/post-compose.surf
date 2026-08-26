@@ -1,0 +1,214 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/post-compose.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+# Live deviations (TASK-238): the demo Admin/Member toggle is DROPPED on every shipped render (one action row per the viewer's real role), and each target row's toggle verb carries the server-stamped `{account_id}:{provider}` payload.
+title: "Surfspace Web Source — Post Compose"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, posts, grow, compose]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/08-grow.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Post Compose
+
+::summary
+The Posts composer in the shell wrapper: one body for every selected platform, live per-platform char counters, toggleable target chips with honest platform gates (gated targets SHOWN inert with reason, never hidden), the media well with transcode state + the platform-requirement hint, the schedule row with a real datetime-local picker and the X cost estimate, and ROLE-AWARE action sets — admin (Save draft / Post now / Schedule) vs member (Save draft / Submit for review). Reached from the queue's New post, the global create fast path, or the hub.
+::
+
+::app-shell[name=post-compose layout=sidebar-main-panel height=1800]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts state=active]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=main width=880 align=center]
+
+::::toolbar
+- button[icon=chevron-left style=circled action=backToPosts tooltip="Back to Posts"]
+- text[value="New post"]
+- spacer
+- button[label="Admin" action=demoRoleAdmin toggled=true]
+- button[label="Member" action=demoRoleMember toggled=false]
+::::
+
+::::form[name=post-compose submit="Submit for review" action=submitPostForReview]
+- Post (textarea, "Write once — every selected platform gets it; override per platform below.")
+::::
+
+::::toolbar
+- text[value="X 0/280 · Bluesky 0/300"]
+::::
+
+## Targets
+
+::::row[icon=sparkle action=togglePostTarget href=# trailing-label="On" trailing-action=togglePostTarget]
+X · @cloudsurf
+Selected · 280-char limit · pay-per-use
+::::
+
+::::row[icon=sparkle action=togglePostTarget href=# trailing-label="On" trailing-action=togglePostTarget]
+Bluesky
+Selected · 300-char limit
+::::
+
+::::row[icon=sparkle action=togglePostTarget href=# trailing-label="Off" trailing-action=togglePostTarget]
+Fediverse
+Off · 500-char limit
+::::
+
+::::row[icon=sparkle action=togglePostTarget href=# trailing-label="Off" trailing-action=togglePostTarget]
+Forum Network
+Off · 40,000-char limit
+::::
+
+::::row[icon=sparkle action=togglePostTarget href=# trailing-label="Off" trailing-action=togglePostTarget]
+Dev Community
+Off · article — no hard limit
+::::
+
+::::row[icon=login state=gated href=#]
+Photo Network — awaiting network-group review
+Gated · inert chip with reason · connects on approval
+::::
+
+::::row[icon=login state=gated href=#]
+Video Network — draft-only until audit
+Gated · inert chip with reason · posts land as private drafts
+::::
+
+## Media well
+
+::::row[icon=file state=transcoding href=#]
+launch-clip.mp4
+TRANSCODING… · per-platform renditions
+::::
+
+::::row[icon=file action=openMediaPicker href=#]
+Add media
+Opens the shared media-picker sheet (modals/media-picker.surf)
+::::
+
+Media is transcoded per platform. Photo Network and Video Network require at least one image or video; text-only posts can't target them.
+
+## Schedule + cost
+
+::::toolbar
+- text[value="Schedule"]
+- dropdown[label="Thu Aug 06, 9:00 AM" options=next-slot|now|pick-date-time action=setPostSchedule]
+- text[value="X cost estimate: $0.02 / post"]
+::::
+
+"Pick date and time…" reveals a REAL datetime-local input (min = today) and calls showPicker() wrapped in try/catch (unsupported browsers fall back to focus). The picked value rewrites the select's label.
+
+## Actions — role-aware
+
+::::toolbar
+- text[value="Admin"]
+- spacer
+- button[label="Save draft" action=savePostDraft]
+- button[label="Post now" action=postNow]
+- button[label="Schedule" style=primary action=schedulePost]
+::::
+
+::::toolbar
+- text[value="Member"]
+- spacer
+- button[label="Save draft" action=savePostDraft]
+- button[label="Submit for review" style=primary action=submitPostForReview]
+::::
+
+:::
+
+::
+
+Submit for review notifies admins with a deep link to the post detail. The Admin ⇄ Member toggle in the title row is a design communication device demoing both role states — not shipped chrome (it keeps its labels; role names are the content); shipped, exactly one action row renders per the viewer's workspace role. G3 pass (WP-N3 08-11): the role-aware footer rows keep ALL labels — Schedule and Submit for review are the meaning-carrying primaries, and Save draft / Post now have no unambiguous registry glyph (send reads as message-send), so no label is dropped here.
+
+## Renderer notes (consciously deferred)
+
+- Target chips render as toggled rows; the shipped control is a wrapping pill-chip strip (selected = accent fill, gated = dimmed inert) — `::suggestion-chips` single-select/multi-select gap, deferred to the block round.
+- Live per-platform char counters (over-limit turns red) are state layer.
+- The datetime-local picker item has no typed vocabulary expression yet (toolbar dropdown emits option lists only) — the dropdown + prose stands in; typed date-time input kind deferred.
+- Per-platform body overrides are collapsed behind the counters (out of mockup v1; the port ships them).
+- The body form's built-in submit button duplicates the member primary in the role-aware action rows — the form grammar always emits a submit; the shipped composer keeps ONLY the role action row.

@@ -1,0 +1,262 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/surfaces/tasks.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local deltas: sidebar nav href=# rewrites to the live / routes (docs tasks apps messages posts email files devices settings notifications)
+# and the {= workspace.name =} / {= workspace.initial =} hub-chip
+# interpolation tokens (G6: label + avatar initial ride the active workspace).
+title: "Surfspace Web Source — Tasks"
+type: doc
+version: 5
+created: 2026-08-06
+updated: 2026-08-11
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, tasks]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/03-tasks.surf
+    relationship: consumes
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Tasks
+
+::summary
+The Tasks surface in the shell wrapper: title row with the task count and icon-only New Task + Filter actions (G3), list ⇄ board segmented-control (the NEW block kind — not a tab-bar style), SDLC stage-grouped list (all 8 stages, board order, empty groups collapse), and the kanban board view. The inline five-facet filter row is gone (WP-N3, docs G4 precedent): the facets live in `modals/filter.surf` (Tasks vocabulary), opened from the Filter button. The New Tasks sheet is `modals/create.surf` (Tasks kind) — no inline copy.
+::
+
+::app-shell[name=tasks layout=sidebar-main-panel height=900]
+
+:::sidebar[position=left width=240]
+
+::::toolbar
+- text[value="Surfspace" size=22]
+::::
+
+::::row[icon=search action=openSearch href=/search]
+Search
+::::
+
+::::row[icon=doc action=openDocs href=/docs]
+Docs
+::::
+
+::::row[icon=task action=openTasks href=/tasks state=active]
+Tasks
+::::
+
+::::row[icon=apps action=openApps href=/apps]
+Apps
+::::
+
+::::row[icon=knowledge action=openMessages href=/messages unread=true]
+Messages
+::::
+
+::::divider
+::::
+
+::::row[icon=posts action=openPosts href=/posts]
+Posts
+::::
+
+::::row[icon=upload action=openFiles href=/uploads]
+Uploads
+::::
+
+::::row[icon=device action=openDevices href=/devices]
+Devices
+::::
+
+::::row[icon=settings action=openSettings href=/settings]
+Settings
+::::
+
+::::row[icon=notifications action=openNotifications href=/notifications unread=true]
+Notifications
+::::
+
+::::row[icon=doc action=openReportBug href=/report-bug]
+Report a bug
+::::
+
+:::
+
+:::toolbar
+- button[label="{= workspace.name =}" avatar="{= workspace.initial =}" style=primary action=openHub]
+- spacer
+- button[label="Search" icon=search action=openSearch]
+- separator
+- button[label="Surfy" icon=surfy-fin action=toggleSurfy]
+:::
+
+:::tab-content[tab=tasks width=880 align=center]
+
+::::toolbar
+- text[value="Tasks"]
+- spacer
+- text[value="16 tasks"]
+- button[icon=plus action=openCreateTasks aria-label="New Task"]
+- button[icon=filter action=toggleFilter aria-label="Filter"]
+::::
+
+::::segmented-control[name=tasks-view action=setTasksView active=list size=compact]
+- list "List"
+- board "Board"
+::::
+
+::::toolbar
+- text[value="To Do (4)"]
+::::
+
+::::row[icon=task action=openTask href=#]
+Gather Donovan's account details and failure mode
+Urgent · Task · KD
+::::
+
+::::row[icon=task action=openTask href=#]
+Verify DMARC policy
+Urgent · Task · Surfy
+::::
+
+::::toolbar
+- text[value="Research (2)"]
+::::
+
+::::row[icon=bug action=openTask href=#]
+Real-time message display while in conversation
+Urgent · Bug · KD
+::::
+
+::::toolbar
+- text[value="Build (2)"]
+::::
+
+::::row[icon=task action=openTask href=#]
+Android audit remediation — Batch 3
+High · Task · Surfy
+::::
+
+::::toolbar
+- text[value="Done (2)"]
+::::
+
+::::row[icon=feature action=openTask href=#]
+Android new-tabs alignment — 5-tab bar both shells
+Done · Feature · KD
+::::
+
+:::
+
+::
+
+All 8 stage groups render in board order (To Do, Research, Plan, Design, Breakdown, Build, Verify, Done); empty groups collapse rather than render an empty shelf — the list above is the design-page sample. Done rows swap the priority pill for a green Done pill; the Done group head ring renders green filled. Rows carry the trailing 22px assignee avatar chip (initials in meta here). The inline five-facet filter row and its accent-ring toggle are REMOVED (WP-N3, docs G4 precedent) — the five facets (sort, type, stage, priority, assignee) live in the anchored filter sheet (`modals/filter.surf`, Tasks vocabulary), opened from the Filter button; the task count sits in the title row before the actions. The list ⇄ board switch is the `segmented-control` block (compact pill single-select) — it replaces the tab-bar stand-in the coverage matrix flagged.
+
+## Board view
+
+Board mode releases the surface's 880px column: the scrollport is true full-bleed — cards clip at the nav edge (left) and screen edge (right) — with an always-visible styled horizontal scrollbar. Transparent lanes, uppercase muted column heads with counts, 12px cards with colored type tiles + @assignee + priority pill, native drag-drop moves the task's stage (`action=moveTaskStage`). At small width (≤ 767px, R-C ruling 08-10) the board STACKS VERTICALLY: columns render full-width in board order, the horizontal scrollport is gone (height auto, no lane scrolling), and cards flow down the page.
+
+::diagram[type=kanban title="Board view — all 8 SDLC stages in board order"]
+column To Do
+  Gather Donovan's account details
+  Verify DMARC policy
+column Research
+  Real-time message display
+column Plan
+column Design
+column Breakdown
+column Build
+  Android audit remediation — Batch 3
+column Verify
+column Done
+  Android new-tabs alignment
+::
+
+### Static board markup (WP-C5 — the shape the live `?view=board` route serves)
+
+Board mode is REAL block markup, not prose: stage columns author as a column-head
+toolbar (uppercase head text with the count) followed by that stage's card rows,
+all 8 stages in board order — empty stages keep their head so the column skeleton
+reads. Never the source-driven kanban block (`source=` boards are a different
+lane). The horizontal lane scrollport + colored type tiles from the diagram above
+are chrome the renderer does not emit for authored blocks yet (renderer-level gap,
+LOGGED for the 0.14.1 round); until then the columns stack vertically — the R-C
+small-width treatment at every width. The list ⇄ board segmented-control NAVIGATES
+between the views (`?view=board`); selection is server-stamped, never faked.
+
+::toolbar
+- text[value="TO DO (2)"]
+::
+
+::row[icon=task action=openTask href=#]
+Gather Donovan's account details and failure mode
+Urgent · Task · KD
+::
+
+::row[icon=task action=openTask href=#]
+Verify DMARC policy
+Urgent · Task · Surfy
+::
+
+::toolbar
+- text[value="RESEARCH (1)"]
+::
+
+::row[icon=bug action=openTask href=#]
+Real-time message display while in conversation
+Urgent · Bug · KD
+::
+
+::toolbar
+- text[value="PLAN (0)"]
+::
+
+::toolbar
+- text[value="DESIGN (0)"]
+::
+
+::toolbar
+- text[value="BREAKDOWN (0)"]
+::
+
+::toolbar
+- text[value="BUILD (1)"]
+::
+
+::row[icon=task action=openTask href=#]
+Android audit remediation — Batch 3
+High · Task · Surfy
+::
+
+::toolbar
+- text[value="VERIFY (0)"]
+::
+
+::toolbar
+- text[value="DONE (1)"]
+::
+
+::row[icon=feature action=openTask href=#]
+Android new-tabs alignment — 5-tab bar both shells
+Done · Feature · KD
+::
+
+## Filter sheet
+
+Defined ONCE in `modals/filter.surf` (`name=filter`, anchored to the title-row Filter button): one sheet, per-surface vocabulary — here the Tasks facets (Sort: Priority/Newest/Oldest, type, stage, priority, assignee), verbs unchanged (`applySort` / `scopeType` / `scopeStage` / `scopePriority` / `scopeAssignee`). The Filter button opens it via `toggleFilter`; this file carries no inline copy.
+
+## New Tasks sheet
+
+Defined ONCE in `modals/create.surf` (`name=create`, Tasks kind: "Describe your goals" → Break into tasks → Review Tasks cards with Regenerate + "Add N"; "Create task manually instead" escape). The title-row New Task button opens it via `openCreateTasks`; this file carries no inline copy.

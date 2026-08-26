@@ -2,8 +2,7 @@
 <h1 id="content-tier">Content tier</h1>
 <p>Plain paragraph with <strong>bold</strong>, <em>italic</em>, and a <a href="https://surfcontext.org" rel="noopener noreferrer">link</a>.</p>
 
-<div class="surfdoc-summary" role="doc-abstract"><div class="surfdoc-summary-label">Summary</div><p><p>One source, every target — this fixture pins the content tier.</p>
-</p></div>
+<div class="surfdoc-summary" role="doc-abstract"><div class="surfdoc-summary-label">Summary</div><p>One source, every target — this fixture pins the content tier.</p></div>
 <div class="surfdoc-callout surfdoc-callout-warning" role="note"><svg class="surfdoc-callout-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div class="surfdoc-callout-body"><div class="surfdoc-callout-title">Heads up</div><p>Callouts carry their type and title natively.</p>
 </div></div>
 <figure class="surfdoc-code"><figcaption class="surfdoc-code-head"><span class="surfdoc-code-file">src/main.rs</span><span class="surfdoc-code-lang">RUST</span></figcaption><pre aria-label="rust code" data-lang="rust"><code class="language-rust">fn main() {

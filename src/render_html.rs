@@ -2916,9 +2916,15 @@ fn render_block_inner(block: &Block) -> String {
         Block::Bibliography { style, .. } => render_bibliography_html(*style),
 
         Block::Summary { content, .. } => {
+            // The body goes through the parser-stable wrapper: a bare
+            // `<p>{render_inline_markdown(..)}</p>` emitted `<p><p>…</p></p>`,
+            // and an HTML parser auto-closes the outer `<p>` at the inner
+            // one — the SSR-parsed DOM then diverged from the literal tree
+            // `render_dom` builds. Phrasing-only summaries keep the historical
+            // single `<p>`; block-level bodies get a `<div>`.
             format!(
-                "<div class=\"surfdoc-summary\" role=\"doc-abstract\"><div class=\"surfdoc-summary-label\">Summary</div><p>{}</p></div>",
-                render_inline_markdown(content),
+                "<div class=\"surfdoc-summary\" role=\"doc-abstract\"><div class=\"surfdoc-summary-label\">Summary</div>{}</div>",
+                render_wrapped_phrasing_or_blocks(None, content),
             )
         }
 
@@ -5269,6 +5275,10 @@ fn render_block_inner(block: &Block) -> String {
             let state_class = match state {
                 RowState::Loading => " surfdoc-row--loading",
                 RowState::Empty => " surfdoc-row--empty",
+                // 0.19.0: authored active state renders server-side (the
+                // chrome CSS keys off `.is-active` / aria-current) so a
+                // re-render of the source matches the live DOM byte-for-byte.
+                RowState::Active => " is-active",
                 _ => "",
             };
             let icon_svg = row_icon_svg(icon);
@@ -5396,8 +5406,16 @@ fn render_block_inner(block: &Block) -> String {
                     .collect();
                 format!("<span class=\"surfdoc-row-actions\">{buttons}</span>")
             };
+            // 0.19.0: an Active row also carries aria-current="page" — the
+            // same rung the chrome dispatcher used to stamp client-side,
+            // emitted LAST so a client re-stamp is a byte no-op.
+            let aria_current_attr = if matches!(state, RowState::Active) {
+                " aria-current=\"page\""
+            } else {
+                ""
+            };
             format!(
-                "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}{action_attr}>\
+                "<{tag} class=\"surfdoc-row{state_class}\"{href_attr}{action_attr}{aria_current_attr}>\
                  {lead_slot}\
                  <span class=\"surfdoc-row-body\">\
                    <span class=\"surfdoc-row-title\">{title}</span>\
@@ -5524,14 +5542,13 @@ fn render_block_inner(block: &Block) -> String {
                 ));
             }
             html.push_str("</div>");
-            if has_right_panel {
-                // Drawer toggle wiring — same self-contained placement idiom
-                // as the tab-bar script below; also honors any
-                // [data-action=toggleSurfy] topbar button. Escape closes and
-                // focus returns to the invoking control. Deliberately avoids
-                // the site-shell toggleDrawer()/closeDrawer() globals.
-                html.push_str(r#"<script>document.querySelectorAll('.surfdoc-app-shell[data-panel-open]').forEach(shell=>{if(shell.__surfyWired)return;shell.__surfyWired=1;const panel=shell.querySelector('.surfdoc-panel-right');if(!panel)return;const btns=Array.from(shell.querySelectorAll('.surfdoc-panel-fab,[data-action="toggleSurfy"]'));let opener=null;const set=open=>{shell.setAttribute('data-panel-open',String(open));panel.setAttribute('aria-hidden',String(!open));btns.forEach(b=>b.setAttribute('aria-expanded',String(open)));if(!open&&opener){opener.focus();opener=null}};btns.forEach(b=>{b.addEventListener('click',()=>{const open=shell.getAttribute('data-panel-open')!=='true';if(open)opener=b;set(open)})});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shell.getAttribute('data-panel-open')==='true')set(false)})})</script>"#);
-            }
+            // 0.19.0: the drawer-toggle script is GONE — behavior is
+            // runtime-owned (spec web-runtime-v1 §2: script-emitting
+            // behavior moves to the versioned runtime at P3/P4). The shell
+            // still carries the full state contract the runtime drives:
+            // data-panel-open on the root, aria-hidden on the panel,
+            // aria-expanded on the FAB and any [data-action=toggleSurfy]
+            // button. JS-off degradation: the drawer stays closed.
             html
         }
 
@@ -12312,11 +12329,10 @@ About
         assert!(html.contains("class=\"surfdoc-panel-fab\""));
         assert!(html.contains("aria-controls=\"surfdoc-panel-right\""));
         assert!(html.contains("aria-expanded=\"false\""));
-        // Toggle script: state flip + Escape close, honoring topbar
-        // toggleSurfy buttons. No localStorage (ruling R-D: no persistence).
-        assert!(html.contains("__surfyWired"));
-        assert!(html.contains("e.key==='Escape'"));
-        assert!(html.contains("[data-action=\"toggleSurfy\"]"));
+        // 0.19.0: no inline toggle script — behavior is runtime-owned; the
+        // markup carries the whole state contract instead.
+        assert!(!html.contains("__surfyWired"));
+        assert!(!html.contains("<script>"));
         assert!(!html.contains("localStorage"));
         // No collision with the site-shell drawer helpers.
         assert!(!html.contains("toggleDrawer()"));

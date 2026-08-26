@@ -778,7 +778,7 @@ fn to_surf_source_inner(front_matter: &Option<FrontMatter>, blocks: &[Block]) ->
         if i > 0 || front_matter.is_some() {
             out.push('\n');
         }
-        out.push_str(&serialize_block(block));
+        out.push_str(&serialize_block(block, 0));
         out.push('\n');
     }
 
@@ -947,7 +947,25 @@ fn serde_yaml_value_to_inline(value: &serde_yaml::Value) -> String {
 // Block serialization
 // -----------------------------------------------------------------------
 
-fn serialize_block(block: &Block) -> String {
+/// Serialize one block at `depth` (0 = top level).
+///
+/// SurfDoc expresses nesting with the colon run on the fence line: a
+/// top-level block opens with `::`, its children with `:::`, their children
+/// with `::::`. Emitting every level with `::` (as builds before 0.19.0 did)
+/// re-parsed as a flat sibling list, so `parse(serialize(parse(src)))` was
+/// not a fixed point for any container — the whole `::app-shell` family.
+fn serialize_block(block: &Block, depth: usize) -> String {
+    let fence = ":".repeat(depth + 2);
+    // One level in from this block's own fence, for the arms that inline a
+    // child fence directly (`::columns` → `:::column`, `::split-pane` → `:::pane`).
+    let fence_in = ":".repeat(depth + 3);
+    // Closer-less leaves (`::divider`, `::toc`, `::logo`) are canonical at top
+    // level, but nested they MUST carry an explicit closer: the parser's
+    // leaf-vs-container look-ahead (parse.rs::is_leaf_before_sibling) counts
+    // unmatched openers, so one unclosed nested leaf makes the enclosing
+    // container read as a leaf and the whole subtree re-parses as flat
+    // siblings. The web-shell corpus writes the closed form for the same reason.
+    let leaf_close = if depth > 0 { format!("\n{fence}") } else { String::new() };
     match block {
         Block::Markdown { content, .. } => {
             // Trim leading/trailing blank lines to prevent blank-line
@@ -969,9 +987,9 @@ fn serialize_block(block: &Block) -> String {
                 None => format!("[type={type_str}]"),
             };
             if content.is_empty() {
-                format!("::callout{attrs}\n::")
+                format!("{fence}callout{attrs}\n{fence}")
             } else {
-                format!("::callout{attrs}\n{content}\n::")
+                format!("{fence}callout{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -994,9 +1012,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attr_parts.join(" "))
             };
             if content.is_empty() {
-                format!("::diagram{attrs}\n::")
+                format!("{fence}diagram{attrs}\n{fence}")
             } else {
-                format!("::diagram{attrs}\n{content}\n::")
+                format!("{fence}diagram{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1042,9 +1060,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::data{attrs}\n::")
+                format!("{fence}data{attrs}\n{fence}")
             } else {
-                format!("::data{attrs}\n{content}\n::")
+                format!("{fence}data{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1071,9 +1089,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attr_parts.join(" "))
             };
             if content.is_empty() {
-                format!("::code{attrs}\n::")
+                format!("{fence}code{attrs}\n{fence}")
             } else {
-                format!("::code{attrs}\n{content}\n::")
+                format!("{fence}code{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1087,7 +1105,7 @@ fn serialize_block(block: &Block) -> String {
                 }
             }
             let content = lines.join("\n");
-            format!("::tasks\n{content}\n::")
+            format!("{fence}tasks\n{content}\n{fence}")
         }
 
         Block::Decision {
@@ -1107,9 +1125,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
             if content.is_empty() {
-                format!("::decision{attrs}\n::")
+                format!("{fence}decision{attrs}\n{fence}")
             } else {
-                format!("::decision{attrs}\n{content}\n::")
+                format!("{fence}decision{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1138,22 +1156,22 @@ fn serialize_block(block: &Block) -> String {
                 attr_parts.push(format!("max=\"{}\"", escape_attr(m)));
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
-            format!("::metric{attrs}\n::")
+            format!("{fence}metric{attrs}\n{fence}")
         }
 
         Block::Summary { content, .. } => {
             if content.is_empty() {
-                "::summary\n::".to_string()
+                format!("{fence}summary\n{fence}")
             } else {
-                format!("::summary\n{content}\n::")
+                format!("{fence}summary\n{content}\n{fence}")
             }
         }
 
-        Block::Cite { reference, .. } => cite_to_surf(reference),
+        Block::Cite { reference, .. } => cite_to_surf(reference, depth),
 
         Block::Bibliography { style, .. } => match style {
-            Some(s) => format!("::bibliography[style={}]\n::", citation_format_slug(*s)),
-            None => "::bibliography\n::".to_string(),
+            Some(s) => format!("{fence}bibliography[style={}]\n{fence}", citation_format_slug(*s)),
+            None => format!("{fence}bibliography\n{fence}"),
         },
 
         Block::Figure {
@@ -1175,7 +1193,7 @@ fn serialize_block(block: &Block) -> String {
                 attr_parts.push(format!("width=\"{}\"", escape_attr(w)));
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
-            format!("::figure{attrs}\n::")
+            format!("{fence}figure{attrs}\n{fence}")
         }
 
         Block::Tabs { tabs, .. } => {
@@ -1187,18 +1205,18 @@ fn serialize_block(block: &Block) -> String {
                 }
             }
             let content = content_parts.join("\n");
-            format!("::tabs\n{content}\n::")
+            format!("{fence}tabs\n{content}\n{fence}")
         }
 
         Block::Columns { columns, .. } => {
             let mut content_parts = Vec::new();
             for col in columns {
-                content_parts.push(":::column".to_string());
+                content_parts.push(format!("{fence_in}column"));
                 content_parts.push(col.content.clone());
-                content_parts.push(":::".to_string());
+                content_parts.push(fence_in.clone());
             }
             let content = content_parts.join("\n");
-            format!("::columns\n{content}\n::")
+            format!("{fence}columns\n{content}\n{fence}")
         }
 
         Block::Quote {
@@ -1220,9 +1238,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attr_parts.join(" "))
             };
             if content.is_empty() {
-                format!("::quote{attrs}\n::")
+                format!("{fence}quote{attrs}\n{fence}")
             } else {
-                format!("::quote{attrs}\n{content}\n::")
+                format!("{fence}quote{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1243,7 +1261,7 @@ fn serialize_block(block: &Block) -> String {
                 attr_parts.push(format!("icon=\"{}\"", escape_attr(i)));
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
-            format!("::cta{attrs}\n::")
+            format!("{fence}cta{attrs}\n{fence}")
         }
 
         Block::Nav { items, logo, groups, brand, brand_reg, cta, drawer, .. } => {
@@ -1283,9 +1301,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::nav{attrs}\n::")
+                format!("{fence}nav{attrs}\n{fence}")
             } else {
-                format!("::nav{attrs}\n{content}\n::")
+                format!("{fence}nav{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1296,7 +1314,7 @@ fn serialize_block(block: &Block) -> String {
                 attr_parts.push(format!("alt=\"{}\"", escape_attr(a)));
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
-            format!("::hero-image{attrs}\n::")
+            format!("{fence}hero-image{attrs}\n{fence}")
         }
 
         Block::Testimonial {
@@ -1322,9 +1340,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attr_parts.join(" "))
             };
             if content.is_empty() {
-                format!("::testimonial{attrs}\n::")
+                format!("{fence}testimonial{attrs}\n{fence}")
             } else {
-                format!("::testimonial{attrs}\n{content}\n::")
+                format!("{fence}testimonial{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1335,9 +1353,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = lines.join("\n");
             if content.is_empty() {
-                "::style\n::".to_string()
+                format!("{fence}style\n{fence}")
             } else {
-                format!("::style\n{content}\n::")
+                format!("{fence}style\n{content}\n{fence}")
             }
         }
 
@@ -1350,7 +1368,7 @@ fn serialize_block(block: &Block) -> String {
                 }
             }
             let content = content_parts.join("\n");
-            format!("::faq\n{content}\n::")
+            format!("{fence}faq\n{content}\n{fence}")
         }
 
         Block::PricingTable {
@@ -1383,9 +1401,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::pricing-table{attrs}\n::")
+                format!("{fence}pricing-table{attrs}\n{fence}")
             } else {
-                format!("::pricing-table{attrs}\n{content}\n::")
+                format!("{fence}pricing-table{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1409,9 +1427,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::site{attrs}\n::")
+                format!("{fence}site{attrs}\n{fence}")
             } else {
-                format!("::site{attrs}\n{content}\n::")
+                format!("{fence}site{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1436,9 +1454,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
             if content.is_empty() {
-                format!("::page{attrs}\n::")
+                format!("{fence}page{attrs}\n{fence}")
             } else {
-                format!("::page{attrs}\n{content}\n::")
+                format!("{fence}page{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1449,9 +1467,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::deck\n::".to_string()
+                format!("{fence}deck\n{fence}")
             } else {
-                format!("::deck\n{content}\n::")
+                format!("{fence}deck\n{content}\n{fence}")
             }
         }
 
@@ -1478,9 +1496,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attr_parts.join(" "))
             };
             if content.is_empty() {
-                format!("::slide{attrs}\n::")
+                format!("{fence}slide{attrs}\n{fence}")
             } else {
-                format!("::slide{attrs}\n{content}\n::")
+                format!("{fence}slide{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1507,7 +1525,7 @@ fn serialize_block(block: &Block) -> String {
                 attr_parts.push(format!("title=\"{}\"", escape_attr(t)));
             }
             let attrs = format!("[{}]", attr_parts.join(" "));
-            format!("::embed{attrs}\n::")
+            format!("{fence}embed{attrs}\n{fence}")
         }
 
         Block::Form {
@@ -1573,13 +1591,20 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::form{attrs}\n::")
+                format!("{fence}form{attrs}\n{fence}")
             } else {
-                format!("::form{attrs}\n{content}\n::")
+                format!("{fence}form{attrs}\n{content}\n{fence}")
             }
         }
 
-        Block::Gallery { items, .. } => {
+        Block::Gallery { items, columns, .. } => {
+            // `columns=` was dropped on serialize before 0.19.0, so a
+            // re-parsed gallery fell back to the 3-column default and the
+            // round-trip stopped being a fixed point (web-shell files surface).
+            let attrs_str = match columns {
+                Some(c) => format!("[columns={}]", c.to_attr_source()),
+                None => String::new(),
+            };
             let mut content_lines = Vec::new();
             for item in items {
                 let alt = item.alt.as_deref().unwrap_or("");
@@ -1593,9 +1618,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::gallery\n::".to_string()
+                format!("{fence}gallery{attrs_str}\n{fence}")
             } else {
-                format!("::gallery\n{content}\n::")
+                format!("{fence}gallery{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -1646,9 +1671,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::footer{attrs}\n::")
+                format!("{fence}footer{attrs}\n{fence}")
             } else {
-                format!("::footer{attrs}\n{content}\n::")
+                format!("{fence}footer{attrs}\n{content}\n{fence}")
             }
         }
 
@@ -1664,9 +1689,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", serialize_attrs(attrs))
             };
             if content.is_empty() {
-                format!("::{name}{attrs_str}\n::")
+                format!("{fence}{name}{attrs_str}\n{fence}")
             } else {
-                format!("::{name}{attrs_str}\n{content}\n::")
+                format!("{fence}{name}{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -1683,12 +1708,12 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::details{attrs_str}\n{content}\n::")
+            format!("{fence}details{attrs_str}\n{content}\n{fence}")
         }
 
         Block::Divider { label, .. } => match label {
-            Some(l) => format!("::divider[label=\"{}\"]", escape_attr(l)),
-            None => "::divider".to_string(),
+            Some(l) => format!("{fence}divider[label=\"{}\"]{leaf_close}", escape_attr(l)),
+            None => format!("{fence}divider{leaf_close}"),
         },
 
         Block::Hero {
@@ -1743,7 +1768,7 @@ fn serialize_block(block: &Block) -> String {
                 let suffix = if flags.is_empty() { String::new() } else { format!("{{{}}}", flags.join(" ")) };
                 content_lines.push(format!("[{}]({}){}", btn.label, btn.href, suffix));
             }
-            format!("::hero{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}hero{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Banner {
@@ -1773,7 +1798,7 @@ fn serialize_block(block: &Block) -> String {
                 let suffix = if flags.is_empty() { String::new() } else { format!("{{{}}}", flags.join(" ")) };
                 content_lines.push(format!("[{}]({}){}", btn.label, btn.href, suffix));
             }
-            format!("::banner{attrs_str}\n{}\n::", content_lines.join("\n").trim_end())
+            format!("{fence}banner{attrs_str}\n{}\n{fence}", content_lines.join("\n").trim_end())
         }
 
         Block::ProductGrid { groups, tiles, .. } => {
@@ -1815,7 +1840,7 @@ fn serialize_block(block: &Block) -> String {
                 }
             }
             let attrs_str = if *tiles { "[tiles]" } else { "" };
-            format!("::product-grid{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}product-grid{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::PostGrid { title, subtitle, items, .. } => {
@@ -1842,7 +1867,7 @@ fn serialize_block(block: &Block) -> String {
                     item.title, item.href, ext, meta, excerpt, image
                 ));
             }
-            format!("::post-grid{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}post-grid{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Gate { title, subtitle, action, field_label, submit_label, error, .. } => {
@@ -1870,7 +1895,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attr_parts.join(" "))
             };
-            format!("::gate{attrs_str}\n::")
+            format!("{fence}gate{attrs_str}\n{fence}")
         }
 
         Block::Features { cards, cols, .. } => {
@@ -1895,7 +1920,7 @@ fn serialize_block(block: &Block) -> String {
                     content_lines.push(String::new());
                 }
             }
-            format!("::features{attrs_str}\n{}\n::", content_lines.join("\n").trim())
+            format!("{fence}features{attrs_str}\n{}\n{fence}", content_lines.join("\n").trim())
         }
 
         Block::Steps { steps, .. } => {
@@ -1913,7 +1938,7 @@ fn serialize_block(block: &Block) -> String {
                     content_lines.push(String::new());
                 }
             }
-            format!("::steps\n{}\n::", content_lines.join("\n").trim())
+            format!("{fence}steps\n{}\n{fence}", content_lines.join("\n").trim())
         }
 
         Block::Stats { items, .. } => {
@@ -1929,7 +1954,7 @@ fn serialize_block(block: &Block) -> String {
                     item.value, escape_attr(&item.label), color_str
                 ));
             }
-            format!("::stats\n{}\n::", content_lines.join("\n"))
+            format!("{fence}stats\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Comparison {
@@ -1951,7 +1976,7 @@ fn serialize_block(block: &Block) -> String {
             for row in rows {
                 content_lines.push(format!("| {} |", row.join(" | ")));
             }
-            format!("::comparison{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}comparison{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Logo { src, alt, size, .. } => {
@@ -1962,14 +1987,14 @@ fn serialize_block(block: &Block) -> String {
             if let Some(s) = size {
                 attrs_parts.push(format!("size={}", s));
             }
-            format!("::logo[{}]", attrs_parts.join(" "))
+            format!("{fence}logo[{}]{leaf_close}", attrs_parts.join(" "))
         }
 
         Block::Toc { depth, .. } => {
             if *depth == 3 {
-                "::toc".to_string()
+                format!("{fence}toc{leaf_close}")
             } else {
-                format!("::toc[depth={}]", depth)
+                format!("{fence}toc[depth={}]{leaf_close}", depth)
             }
         }
 
@@ -1993,7 +2018,7 @@ fn serialize_block(block: &Block) -> String {
             for item in after_items {
                 content_lines.push(format!("- {} | {}", item.label, item.detail));
             }
-            format!("::before-after{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}before-after{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Pipeline { steps, .. } => {
@@ -2004,7 +2029,7 @@ fn serialize_block(block: &Block) -> String {
                     None => s.label.clone(),
                 })
                 .collect();
-            format!("::pipeline\n{}\n::", content_lines.join("\n"))
+            format!("{fence}pipeline\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Section {
@@ -2027,12 +2052,12 @@ fn serialize_block(block: &Block) -> String {
                     inner.push(s.clone());
                 }
                 if inner.is_empty() {
-                    format!("::section{attrs_str}\n::")
+                    format!("{fence}section{attrs_str}\n{fence}")
                 } else {
-                    format!("::section{attrs_str}\n{}\n::", inner.join("\n"))
+                    format!("{fence}section{attrs_str}\n{}\n{fence}", inner.join("\n"))
                 }
             } else {
-                format!("::section{attrs_str}\n{content}\n::")
+                format!("{fence}section{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2084,7 +2109,7 @@ fn serialize_block(block: &Block) -> String {
                 content_lines.push(String::new());
                 content_lines.push(format!("[{label}]({href})"));
             }
-            format!("::product-card{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}product-card{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         // ----- App description blocks -----
@@ -2120,7 +2145,7 @@ fn serialize_block(block: &Block) -> String {
                 let dir = if s.descending { " desc" } else { " asc" };
                 content_lines.push(format!("sort: {}{dir}", s.field));
             }
-            format!("::list{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}list{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Board { source, columns, card_template, preload, .. } => {
@@ -2136,7 +2161,7 @@ fn serialize_block(block: &Block) -> String {
             if let Some(tmpl) = card_template {
                 content_lines.push(format!("card-template: {tmpl}"));
             }
-            format!("::board{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}board{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Action { method, target, label, fields, confirm, .. } => {
@@ -2171,7 +2196,7 @@ fn serialize_block(block: &Block) -> String {
                     content_lines.push(format!("- {} ({type_str}){req}", field.label));
                 }
             }
-            format!("::action{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}action{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::FilterBar { target_selector, fields, .. } => {
@@ -2184,7 +2209,7 @@ fn serialize_block(block: &Block) -> String {
                     field.options.join(" | "),
                 ));
             }
-            format!("::filter-bar{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}filter-bar{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Search { source, placeholder, .. } => {
@@ -2192,7 +2217,7 @@ fn serialize_block(block: &Block) -> String {
             if let Some(ph) = placeholder {
                 attrs_parts.push(format!("placeholder=\"{}\"", escape_attr(ph)));
             }
-            format!("::search[{}]\n::", attrs_parts.join(" "))
+            format!("{fence}search[{}]\n{fence}", attrs_parts.join(" "))
         }
 
         Block::Dashboard { source, refresh, .. } => {
@@ -2200,7 +2225,7 @@ fn serialize_block(block: &Block) -> String {
             if let Some(r) = refresh {
                 attrs_parts.push(format!("refresh={r}"));
             }
-            format!("::dashboard[{}]\n::", attrs_parts.join(" "))
+            format!("{fence}dashboard[{}]\n{fence}", attrs_parts.join(" "))
         }
 
         Block::ChatInput { action, placeholder, modes, .. } => {
@@ -2213,7 +2238,7 @@ fn serialize_block(block: &Block) -> String {
             if !modes.is_empty() {
                 content_lines.push(format!("modes: {}", modes.join(" | ")));
             }
-            format!("::chat-input{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}chat-input{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Feed { source, stream, .. } => {
@@ -2221,7 +2246,7 @@ fn serialize_block(block: &Block) -> String {
             if *stream {
                 attrs_parts.push("stream".to_string());
             }
-            format!("::feed[{}]\n::", attrs_parts.join(" "))
+            format!("{fence}feed[{}]\n{fence}", attrs_parts.join(" "))
         }
 
         Block::Store {
@@ -2264,7 +2289,7 @@ fn serialize_block(block: &Block) -> String {
                 }
                 content_lines.push(format!("item: {}", parts.join(" | ")));
             }
-            format!("::store{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}store{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Booking {
@@ -2305,7 +2330,7 @@ fn serialize_block(block: &Block) -> String {
                 };
                 content_lines.push(format!("day: {} | {}", d.date, slots));
             }
-            format!("::booking{attrs_str}\n{}\n::", content_lines.join("\n"))
+            format!("{fence}booking{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
         Block::Editor { source, lang, preview, .. } => {
@@ -2324,7 +2349,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::editor{attrs_str}\n::")
+            format!("{fence}editor{attrs_str}\n{fence}")
         }
 
         Block::Chart { chart_type, source, period, title, data, .. } => {
@@ -2363,9 +2388,9 @@ fn serialize_block(block: &Block) -> String {
                         .collect();
                     body.push_str(&cells.join(" | "));
                 }
-                return format!("::chart[{}]\n{body}\n::", attrs_parts.join(" "));
+                return format!("{fence}chart[{}]\n{body}\n{fence}", attrs_parts.join(" "));
             }
-            format!("::chart[{}]\n::", attrs_parts.join(" "))
+            format!("{fence}chart[{}]\n{fence}", attrs_parts.join(" "))
         }
 
         Block::SplitPane { ratio, back_label, back_action, left, right, .. } => {
@@ -2380,14 +2405,14 @@ fn serialize_block(block: &Block) -> String {
             let mut panes: Vec<String> = Vec::new();
             for (side, blocks) in [("left", left), ("right", right)] {
                 if !blocks.is_empty() {
-                    let inner = serialize_children(blocks);
-                    panes.push(format!("::pane[side={side}]\n{inner}\n::"));
+                    let inner = serialize_children(blocks, depth + 2);
+                    panes.push(format!("{fence_in}pane[side={side}]\n{inner}\n{fence_in}"));
                 }
             }
             if panes.is_empty() {
-                format!("::split-pane{attrs_str}\n::")
+                format!("{fence}split-pane{attrs_str}\n{fence}")
             } else {
-                format!("::split-pane{attrs_str}\n{}\n::", panes.join("\n\n"))
+                format!("{fence}split-pane{attrs_str}\n{}\n{fence}", panes.join("\n\n"))
             }
         }
 
@@ -2412,9 +2437,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             if content.is_empty() {
-                format!("::app{attrs_str}\n::")
+                format!("{fence}app{attrs_str}\n{fence}")
             } else {
-                format!("::app{attrs_str}\n{content}\n::")
+                format!("{fence}app{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2440,9 +2465,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::build{attrs_str}\n::")
+                format!("{fence}build{attrs_str}\n{fence}")
             } else {
-                format!("::build{attrs_str}\n{content}\n::")
+                format!("{fence}build{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2468,9 +2493,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::database{attrs_str}\n::")
+                format!("{fence}database{attrs_str}\n{fence}")
             } else {
-                format!("::database{attrs_str}\n{content}\n::")
+                format!("{fence}database{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2508,9 +2533,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::deploy{attrs_str}\n::")
+                format!("{fence}deploy{attrs_str}\n{fence}")
             } else {
-                format!("::deploy{attrs_str}\n{content}\n::")
+                format!("{fence}deploy{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2528,9 +2553,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::env{attrs_str}\n::")
+                format!("{fence}env{attrs_str}\n{fence}")
             } else {
-                format!("::env{attrs_str}\n{content}\n::")
+                format!("{fence}env{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2556,7 +2581,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::health{attrs_str}\n::")
+            format!("{fence}health{attrs_str}\n{fence}")
         }
 
         Block::Concurrency { concurrency_type, hard_limit, soft_limit, force_https, .. } => {
@@ -2578,7 +2603,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::concurrency{attrs_str}\n::")
+            format!("{fence}concurrency{attrs_str}\n{fence}")
         }
 
         Block::Cicd { provider, properties, .. } => {
@@ -2592,9 +2617,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::cicd{attrs_str}\n::")
+                format!("{fence}cicd{attrs_str}\n{fence}")
             } else {
-                format!("::cicd{attrs_str}\n{content}\n::")
+                format!("{fence}cicd{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2609,9 +2634,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::smoke{attrs_str}\n::")
+                format!("{fence}smoke{attrs_str}\n{fence}")
             } else {
-                format!("::smoke{attrs_str}\n{content}\n::")
+                format!("{fence}smoke{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2622,9 +2647,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::domains\n::".to_string()
+                format!("{fence}domains\n{fence}")
             } else {
-                format!("::domains\n{content}\n::")
+                format!("{fence}domains\n{content}\n{fence}")
             }
         }
 
@@ -2636,9 +2661,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::crates\n::".to_string()
+                format!("{fence}crates\n{fence}")
             } else {
-                format!("::crates\n{content}\n::")
+                format!("{fence}crates\n{content}\n{fence}")
             }
         }
 
@@ -2649,9 +2674,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::deploy-urls\n::".to_string()
+                format!("{fence}deploy-urls\n{fence}")
             } else {
-                format!("::deploy-urls\n{content}\n::")
+                format!("{fence}deploy-urls\n{content}\n{fence}")
             }
         }
 
@@ -2662,9 +2687,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                "::volumes\n::".to_string()
+                format!("{fence}volumes\n{fence}")
             } else {
-                format!("::volumes\n{content}\n::")
+                format!("{fence}volumes\n{content}\n{fence}")
             }
         }
 
@@ -2686,9 +2711,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::model{attrs_str}\n::")
+                format!("{fence}model{attrs_str}\n{fence}")
             } else {
-                format!("::model{attrs_str}\n{content}\n::")
+                format!("{fence}model{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2717,9 +2742,9 @@ fn serialize_block(block: &Block) -> String {
             if !content.is_empty() { content_lines.push(content.clone()); }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::route{attrs_str}\n::")
+                format!("{fence}route{attrs_str}\n{fence}")
             } else {
-                format!("::route{attrs_str}\n{content}\n::")
+                format!("{fence}route{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2737,9 +2762,9 @@ fn serialize_block(block: &Block) -> String {
             if let Some(dr) = default_role { content_lines.push(format!("default_role: {dr}")); }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::auth{attrs_str}\n::")
+                format!("{fence}auth{attrs_str}\n{fence}")
             } else {
-                format!("::auth{attrs_str}\n{content}\n::")
+                format!("{fence}auth{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2758,9 +2783,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::binding{attrs_str}\n::")
+                format!("{fence}binding{attrs_str}\n{fence}")
             } else {
-                format!("::binding{attrs_str}\n{content}\n::")
+                format!("{fence}binding{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2780,16 +2805,16 @@ fn serialize_block(block: &Block) -> String {
             }).collect();
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::schema{attrs_str}\n::")
+                format!("{fence}schema{attrs_str}\n{fence}")
             } else {
-                format!("::schema{attrs_str}\n{content}\n::")
+                format!("{fence}schema{attrs_str}\n{content}\n{fence}")
             }
         }
 
         Block::Use { crates, .. } => {
             if crates.iter().all(|c| c.version.is_none() && c.features.is_empty()) {
                 let names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-                format!("::use[{}]\n::", names.join(", "))
+                format!("{fence}use[{}]\n{fence}", names.join(", "))
             } else {
                 let content_lines: Vec<String> = crates.iter().map(|c| {
                     let mut parts = vec![c.name.clone()];
@@ -2799,14 +2824,14 @@ fn serialize_block(block: &Block) -> String {
                     }
                     format!("- {}", parts.join(" "))
                 }).collect();
-                format!("::use\n{}\n::", content_lines.join("\n"))
+                format!("{fence}use\n{}\n{fence}", content_lines.join("\n"))
             }
         }
 
         Block::AppEnv { vars, .. } => {
             if vars.iter().all(|v| !v.required && v.description.is_none()) {
                 let names: Vec<String> = vars.iter().map(|v| v.name.clone()).collect();
-                format!("::app-env[{}]\n::", names.join(", "))
+                format!("{fence}app-env[{}]\n{fence}", names.join(", "))
             } else {
                 let content_lines: Vec<String> = vars.iter().map(|v| {
                     let mut parts = vec![v.name.clone()];
@@ -2814,7 +2839,7 @@ fn serialize_block(block: &Block) -> String {
                     if let Some(d) = &v.description { parts.push(format!("\"{}\"", d)); }
                     format!("- {}", parts.join(" "))
                 }).collect();
-                format!("::app-env\n{}\n::", content_lines.join("\n"))
+                format!("{fence}app-env\n{}\n{fence}", content_lines.join("\n"))
             }
         }
 
@@ -2832,16 +2857,16 @@ fn serialize_block(block: &Block) -> String {
             let content_lines: Vec<String> = properties.iter().map(|(k, v)| format!("{k}: {v}")).collect();
             let content = content_lines.join("\n");
             if content.is_empty() {
-                format!("::app-deploy{attrs_str}\n::")
+                format!("{fence}app-deploy{attrs_str}\n{fence}")
             } else {
-                format!("::app-deploy{attrs_str}\n{content}\n::")
+                format!("{fence}app-deploy{attrs_str}\n{content}\n{fence}")
             }
         }
 
         Block::Row { icon, title, description, href, state, unread, avatar, rtime, unread_count, trailing_label, trailing_action, action, actions, .. } => {
             let mut attrs_parts = vec![format!("icon={icon}")];
             if let Some(h) = href { attrs_parts.push(format!("href=\"{}\"", escape_attr(h))); }
-            match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
+            match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), RowState::Active => attrs_parts.push("state=active".to_string()), _ => {} }
             if *unread { attrs_parts.push("unread=true".to_string()); }
             // 0.17: avatar serializes the resolved value (auto is already
             // derived to initials at parse, so round-trips are stable).
@@ -2863,13 +2888,13 @@ fn serialize_block(block: &Block) -> String {
                     content.push_str(&format!("\naction: {} | {}", a.label, a.action));
                 }
             }
-            format!("::row{attrs_str}\n{content}\n::")
+            format!("{fence}row{attrs_str}\n{content}\n{fence}")
         }
 
         Block::InfoCard { intent, title, subtitle, summary, image, facts, steps, state, .. } => {
             let mut attrs_parts = vec![format!("intent={intent}")];
             if let Some(img) = image { attrs_parts.push(format!("image=\"{}\"", escape_attr(img))); }
-            match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), _ => {} }
+            match state { RowState::Loading => attrs_parts.push("state=loading".to_string()), RowState::Empty => attrs_parts.push("state=empty".to_string()), RowState::Active => attrs_parts.push("state=active".to_string()), _ => {} }
             // Space-separated for the same comma-rejection reason as ::row.
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut lines = vec![format!("# {title}")];
@@ -2877,7 +2902,7 @@ fn serialize_block(block: &Block) -> String {
             if !summary.is_empty() { lines.push(String::new()); lines.push(summary.clone()); }
             for fact in facts { lines.push(format!("{}: {}", fact[0], fact[1])); }
             for (i, step) in steps.iter().enumerate() { lines.push(format!("{}. {}", i + 1, step)); }
-            format!("::infocard{attrs_str}\n{}\n::", lines.join("\n"))
+            format!("{fence}infocard{attrs_str}\n{}\n{fence}", lines.join("\n"))
         }
 
         // ── Interactive / application blocks ──────────────────────
@@ -2892,11 +2917,11 @@ fn serialize_block(block: &Block) -> String {
             }
             if let Some(h) = height { attrs_parts.push(format!("height={h}")); }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            let inner = serialize_children(children);
+            let inner = serialize_children(children, depth + 1);
             if inner.is_empty() {
-                format!("::app-shell{attrs_str}\n::")
+                format!("{fence}app-shell{attrs_str}\n{fence}")
             } else {
-                format!("::app-shell{attrs_str}\n{inner}\n::")
+                format!("{fence}app-shell{attrs_str}\n{inner}\n{fence}")
             }
         }
 
@@ -2906,11 +2931,11 @@ fn serialize_block(block: &Block) -> String {
             if let Some(w) = width { attrs_parts.push(format!("width={}", w.to_attr_source())); }
             attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            let inner = serialize_children(children);
+            let inner = serialize_children(children, depth + 1);
             if inner.is_empty() {
-                format!("::sidebar{attrs_str}\n::")
+                format!("{fence}sidebar{attrs_str}\n{fence}")
             } else {
-                format!("::sidebar{attrs_str}\n{inner}\n::")
+                format!("{fence}sidebar{attrs_str}\n{inner}\n{fence}")
             }
         }
 
@@ -2925,11 +2950,11 @@ fn serialize_block(block: &Block) -> String {
                 *desktop_only && classes.as_deref() == Some(&[SizeClass::Desktop][..]);
             attrs_parts.extend(class_conditional_attrs(classes, min_class, alias_covered));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            let inner = serialize_children(children);
+            let inner = serialize_children(children, depth + 1);
             if inner.is_empty() {
-                format!("::panel{attrs_str}\n::")
+                format!("{fence}panel{attrs_str}\n{fence}")
             } else {
-                format!("::panel{attrs_str}\n{inner}\n::")
+                format!("{fence}panel{attrs_str}\n{inner}\n{fence}")
             }
         }
 
@@ -2945,21 +2970,21 @@ fn serialize_block(block: &Block) -> String {
                 if let Some(role) = &item.role { brace_parts.push(format!("role={role}")); }
                 if item.unread { brace_parts.push("unread".to_string()); }
                 if brace_parts.is_empty() {
-                    lines.push(format!("- {} \"{}\"", item.id, escape_attr(&item.label)));
+                    lines.push(format!("- {} {}", item.id, quote_list_label(&item.label)));
                 } else {
                     lines.push(format!(
-                        "- {} \"{}\" {{{}}}",
+                        "- {} {} {{{}}}",
                         item.id,
-                        escape_attr(&item.label),
+                        quote_list_label(&item.label),
                         brace_parts.join(" ")
                     ));
                 }
             }
             let content = lines.join("\n");
             if content.is_empty() {
-                format!("::tab-bar{attrs_str}\n::")
+                format!("{fence}tab-bar{attrs_str}\n{fence}")
             } else {
-                format!("::tab-bar{attrs_str}\n{content}\n::")
+                format!("{fence}tab-bar{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -2969,11 +2994,11 @@ fn serialize_block(block: &Block) -> String {
             if let Some(a) = align { attrs_parts.push(format!("align={a}")); }
             attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            let inner = serialize_children(children);
+            let inner = serialize_children(children, depth + 1);
             if inner.is_empty() {
-                format!("::tab-content{attrs_str}\n::")
+                format!("{fence}tab-content{attrs_str}\n{fence}")
             } else {
-                format!("::tab-content{attrs_str}\n{inner}\n::")
+                format!("{fence}tab-content{attrs_str}\n{inner}\n{fence}")
             }
         }
 
@@ -3025,9 +3050,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = lines.join("\n");
             if content.is_empty() {
-                format!("::toolbar{attrs_str}\n::")
+                format!("{fence}toolbar{attrs_str}\n{fence}")
             } else {
-                format!("::toolbar{attrs_str}\n{content}\n::")
+                format!("{fence}toolbar{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -3037,11 +3062,11 @@ fn serialize_block(block: &Block) -> String {
             if let Some(t) = trigger { attrs_parts.push(format!("trigger={t}")); }
             attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            let inner = serialize_children(children);
+            let inner = serialize_children(children, depth + 1);
             if inner.is_empty() {
-                format!("::drawer{attrs_str}\n::")
+                format!("{fence}drawer{attrs_str}\n{fence}")
             } else {
-                format!("::drawer{attrs_str}\n{inner}\n::")
+                format!("{fence}drawer{attrs_str}\n{inner}\n{fence}")
             }
         }
 
@@ -3052,11 +3077,11 @@ fn serialize_block(block: &Block) -> String {
             if placement != "centered" { attrs_parts.push(format!("placement={placement}")); }
             if !dismissible { attrs_parts.push("dismissible=false".to_string()); }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            let inner = serialize_children(children);
+            let inner = serialize_children(children, depth + 1);
             if inner.is_empty() {
-                format!("::modal{attrs_str}\n::")
+                format!("{fence}modal{attrs_str}\n{fence}")
             } else {
-                format!("::modal{attrs_str}\n{inner}\n::")
+                format!("{fence}modal{attrs_str}\n{inner}\n{fence}")
             }
         }
 
@@ -3068,12 +3093,12 @@ fn serialize_block(block: &Block) -> String {
             let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
             let lines: Vec<String> = segments
                 .iter()
-                .map(|s| format!("- {} \"{}\"", s.id, escape_attr(&s.label)))
+                .map(|s| format!("- {} {}", s.id, quote_list_label(&s.label)))
                 .collect();
             if lines.is_empty() {
-                format!("::segmented-control{attrs_str}\n::")
+                format!("{fence}segmented-control{attrs_str}\n{fence}")
             } else {
-                format!("::segmented-control{attrs_str}\n{}\n::", lines.join("\n"))
+                format!("{fence}segmented-control{attrs_str}\n{}\n{fence}", lines.join("\n"))
             }
         }
 
@@ -3094,9 +3119,9 @@ fn serialize_block(block: &Block) -> String {
                 lines.push(format!("- \"{}\"{extra}", escape_attr(&opt.label)));
             }
             if lines.is_empty() {
-                format!("::dropdown-select{attrs_str}\n::")
+                format!("{fence}dropdown-select{attrs_str}\n{fence}")
             } else {
-                format!("::dropdown-select{attrs_str}\n{}\n::", lines.join("\n"))
+                format!("{fence}dropdown-select{attrs_str}\n{}\n{fence}", lines.join("\n"))
             }
         }
 
@@ -3117,9 +3142,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = lines.join("\n");
             if content.is_empty() {
-                format!("::command-palette{attrs_str}\n::")
+                format!("{fence}command-palette{attrs_str}\n{fence}")
             } else {
-                format!("::command-palette{attrs_str}\n{content}\n::")
+                format!("{fence}command-palette{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -3134,9 +3159,9 @@ fn serialize_block(block: &Block) -> String {
                 format!("[{}]", attrs_parts.join(" "))
             };
             if content.is_empty() {
-                format!("::code-editor{attrs_str}\n::")
+                format!("{fence}code-editor{attrs_str}\n{fence}")
             } else {
-                format!("::code-editor{attrs_str}\n{content}\n::")
+                format!("{fence}code-editor{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -3145,7 +3170,7 @@ fn serialize_block(block: &Block) -> String {
                 Some(s) => format!("[source={s}]"),
                 None => String::new(),
             };
-            format!("::block-editor{attrs_str}\n::")
+            format!("{fence}block-editor{attrs_str}\n{fence}")
         }
 
         Block::Terminal { shell, cwd, .. } => {
@@ -3157,7 +3182,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::terminal{attrs_str}\n::")
+            format!("{fence}terminal{attrs_str}\n{fence}")
         }
 
         Block::NavTree { source, on_select, on_rename, on_delete, .. } => {
@@ -3171,14 +3196,14 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::nav-tree{attrs_str}\n::")
+            format!("{fence}nav-tree{attrs_str}\n{fence}")
         }
 
         Block::Badge { value, color, .. } => {
             let mut attrs_parts = vec![format!("value=\"{}\"", escape_attr(value))];
             if let Some(c) = color { attrs_parts.push(format!("color={c}")); }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
-            format!("::badge{attrs_str}\n::")
+            format!("{fence}badge{attrs_str}\n{fence}")
         }
 
         Block::SuggestionChips { source, max, dismissible, .. } => {
@@ -3191,7 +3216,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::suggestion-chips{attrs_str}\n::")
+            format!("{fence}suggestion-chips{attrs_str}\n{fence}")
         }
 
         Block::ChatThread { source, on_action, on_react, on_doc_open, messages, .. } => {
@@ -3232,9 +3257,9 @@ fn serialize_block(block: &Block) -> String {
                 lines.push(format!("- {}{mattrs} {}", m.side, m.text));
             }
             if lines.is_empty() {
-                format!("::chat-thread{attrs_str}\n::")
+                format!("{fence}chat-thread{attrs_str}\n{fence}")
             } else {
-                format!("::chat-thread{attrs_str}\n{}\n::", lines.join("\n"))
+                format!("{fence}chat-thread{attrs_str}\n{}\n{fence}", lines.join("\n"))
             }
         }
 
@@ -3251,9 +3276,9 @@ fn serialize_block(block: &Block) -> String {
             };
             let lines: Vec<String> = chips.iter().map(|c| format!("- {c}")).collect();
             if lines.is_empty() {
-                format!("::chip-input{attrs_str}\n::")
+                format!("{fence}chip-input{attrs_str}\n{fence}")
             } else {
-                format!("::chip-input{attrs_str}\n{}\n::", lines.join("\n"))
+                format!("{fence}chip-input{attrs_str}\n{}\n{fence}", lines.join("\n"))
             }
         }
 
@@ -3266,7 +3291,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::chat-input-simple{attrs_str}\n::")
+            format!("{fence}chat-input-simple{attrs_str}\n{fence}")
         }
 
         Block::Progress {
@@ -3302,9 +3327,9 @@ fn serialize_block(block: &Block) -> String {
             }
             let content = lines.join("\n");
             if content.is_empty() {
-                format!("::progress{attrs_str}\n::")
+                format!("{fence}progress{attrs_str}\n{fence}")
             } else {
-                format!("::progress{attrs_str}\n{content}\n::")
+                format!("{fence}progress{attrs_str}\n{content}\n{fence}")
             }
         }
 
@@ -3317,7 +3342,7 @@ fn serialize_block(block: &Block) -> String {
             } else {
                 format!("[{}]", attrs_parts.join(" "))
             };
-            format!("::log-stream{attrs_str}\n::")
+            format!("{fence}log-stream{attrs_str}\n{fence}")
         }
 
         Block::ProblemList { source, .. } => {
@@ -3325,20 +3350,20 @@ fn serialize_block(block: &Block) -> String {
                 Some(s) => format!("[source={s}]"),
                 None => String::new(),
             };
-            format!("::problem-list{attrs_str}\n::")
+            format!("{fence}problem-list{attrs_str}\n{fence}")
         }
 
         // ── Messages/Contacts vocabulary (0.12) ───────────────────
         Block::RecipientPicker { source, mode, on_submit, .. } => {
             let mut attrs_parts = vec![format!("source=\"{}\"", escape_attr(source)), format!("mode={mode}")];
             if let Some(a) = on_submit { attrs_parts.push(format!("on-submit=\"{}\"", escape_attr(a))); }
-            format!("::recipient-picker[{}]\n::", attrs_parts.join(" "))
+            format!("{fence}recipient-picker[{}]\n{fence}", attrs_parts.join(" "))
         }
 
         Block::Qr { mode, on_resolve, .. } => {
             let mut attrs_parts = vec![format!("mode={mode}")];
             if let Some(a) = on_resolve { attrs_parts.push(format!("on-resolve=\"{}\"", escape_attr(a))); }
-            format!("::qr[{}]\n::", attrs_parts.join(" "))
+            format!("{fence}qr[{}]\n{fence}", attrs_parts.join(" "))
         }
     }
 }
@@ -3370,8 +3395,8 @@ fn class_conditional_attrs(
     out
 }
 
-fn serialize_children(children: &[Block]) -> String {
-    let parts: Vec<String> = children.iter().map(|b| serialize_block(b)).collect();
+fn serialize_children(children: &[Block], depth: usize) -> String {
+    let parts: Vec<String> = children.iter().map(|b| serialize_block(b, depth)).collect();
     parts.join("\n\n")
 }
 
@@ -3439,7 +3464,8 @@ fn authors_to_string(authors: &[Author]) -> String {
 }
 
 /// Serialize a [`Reference`] back to a `::cite` block.
-fn cite_to_surf(r: &Reference) -> String {
+fn cite_to_surf(r: &Reference, depth: usize) -> String {
+    let fence = ":".repeat(depth + 2);
     let mut lines: Vec<String> = Vec::new();
     let attrs = format!("[key={} type={}]", r.key, ref_type_str(r.ref_type));
     if !r.authors.is_empty() {
@@ -3468,9 +3494,9 @@ fn cite_to_surf(r: &Reference) -> String {
         lines.push(l);
     }
     if lines.is_empty() {
-        format!("::cite{attrs}\n::")
+        format!("{fence}cite{attrs}\n{fence}")
     } else {
-        format!("::cite{attrs}\n{}\n::", lines.join("\n"))
+        format!("{fence}cite{attrs}\n{}\n{fence}", lines.join("\n"))
     }
 }
 
@@ -3509,6 +3535,19 @@ fn field_type_takes_options(ft: FormFieldType) -> bool {
 /// Escape a string value for use inside `[key="value"]` attribute brackets.
 fn escape_attr(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Quote a label for the `- id "Label"` list-item forms (`::tab-bar`,
+/// `::segmented-control`).
+///
+/// Those labels are read back with `trim_matches('"')`
+/// (blocks.rs::parse_tab_bar, ::parse_segmented_control), which does NOT
+/// honour backslash escapes — running the label through [`escape_attr`] added
+/// one `\` per round trip, so a label carrying a quote never reached a fixed
+/// point. The parse side strips exactly the quotes added here, and it can
+/// never hand back a label with a leading or trailing quote of its own.
+fn quote_list_label(s: &str) -> String {
+    format!("\"{s}\"")
 }
 
 /// Serialize one nav row back to `.surf` source, emitting the optional

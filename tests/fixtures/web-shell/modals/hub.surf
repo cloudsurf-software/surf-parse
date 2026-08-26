@@ -1,0 +1,91 @@
+---
+# NEUTRALIZED VENDOR COPY — surf-parse byte-identity corpus (2026-08-26).
+# Copied from <surf repo>/frontend/content/web-shell/, then a mechanical
+# third-party-name / real-address substitution was applied to prose and text
+# runs only (no directive, attribute or nesting change). Table + resync:
+# scripts/vendor-web-shell-fixtures.sh in the private application repo
+# (the substitution table lives with the source). Do not hand-edit.
+# VENDORED COPY — do not hand-edit content here.
+# Canonical source: cloudsurf-strategy-staging plans/design/2026-08-03-web-surfspace/src/modals/hub.surf
+# Resync rule: re-copy from the canonical strategy tree, then re-apply ONLY the
+# local delta: the modal title rides the {= workspace.name =} interpolation
+# token (G6 hub-chip parity — the sheet heads with the active workspace name,
+# resolved per request like the topbar chip label).
+title: "Surfspace Web Source — Hub Sheet"
+type: doc
+version: 3
+created: 2026-08-06
+updated: 2026-08-15
+author: "K. Brady Davis"
+status: active
+scope: workspace
+tags: [surfspace, web, source, modal, hub]
+related:
+  - path: plans/design/2026-08-03-web-surfspace/01-shell-frame.surf
+    relationship: consumes
+  - path: plans/design/2026-08-03-web-surfspace/src/shell.surf
+    relationship: references
+---
+
+::style
+accent: #2E8AD8
+heading-font: surf-display
+body-font: inter
+::
+
+# Hub Sheet
+
+::summary
+The workspace-chip hub sheet — the drawer workaround dies here: a real `::modal`, anchored to the chip on wide screens; at small width (≤ 767px, R-C ruling 08-10) it goes edge-to-edge with 10px side insets (auto width), drops to 58px under the top bar, and caps at calc(100vh − 140px). Identity head with the plan/credits meter, then the hub destinations (Files, Devices, Posts, Email), workspace switching, Settings, Notifications. Below 1024px this sheet is the CANONICAL route to the hub destinations; at ≥ 1024px the sidebar hub group carries the same rows and the sheet remains for switching and identity. Shell truth lives in `shell.surf`; this file is the standalone sheet source it anchors.
+::
+
+::modal[name=hub title="{= workspace.name =}" width=320 placement=anchored anchor=workspace-chip dismissible=true]
+
+:::row[icon=sparkle action=openBilling href=#]
+Ultra · 8.4M of 20M used this cycle
+Plan and credits meter · auto top-up on
+:::
+
+:::row[icon=upload action=openFiles href=#]
+Uploads
+Workspace uploads
+:::
+
+:::row[icon=device action=openDevices href=#]
+Devices
+gx10, mini, mbp — 3 online
+:::
+
+:::row[icon=posts action=openPosts href=# unread=true]
+Posts
+Social posts and scheduling · 1 pending review
+:::
+
+:::row[icon=mail action=openEmail href=#]
+Email
+Inbox across your connected accounts
+:::
+
+:::row[icon=knowledge action=openWorkspaceSwitcher href=#]
+Switch workspace
+Personal · cloudsurf · ashley-brady
+:::
+
+:::row[icon=settings action=openSettings href=#]
+Settings
+Workspace and account
+:::
+
+:::row[icon=notifications action=openNotifications href=# unread=true]
+Notifications
+2 unread
+:::
+
+:::row[icon=doc action=openReportBug href=#]
+Report a bug
+Something broken? Tell us what happened
+:::
+
+::
+
+Top-right ✕ per dismiss canon; Esc and scrim-click also dismiss, never as the only exit. Sign out is NOT here — it lives in Settings (Account group, danger row with the signed-in email, RULED 08-03). The Grow surface's UI label is **Posts** (RULED 08-05); a pending review item marks the row `unread=true`, rendering the right-side blue dot (accent left border BANNED).
