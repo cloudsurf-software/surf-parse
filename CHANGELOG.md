@@ -3,6 +3,22 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.19.1 — 2026-08-26 (front matter `type: specification`)
+
+### Added
+
+- **`type: specification`** joins the front matter type vocabulary as an
+  additive entry (`DocType::Specification`). It names a normative standard
+  document — the standard itself — as distinct from `type: contract`, which
+  names ratified law a build validates against. It resolves to the ordinary
+  `RenderProfile::Document`, so rendering is unchanged, and it is accepted by
+  the parser, the serializer and the lint enum vocabulary alike: a document
+  headed `type: specification` now parses with its front matter intact and
+  lints clean instead of falling out of schema and cascading front-matter
+  diagnostics from that one cause.
+- Every existing type value, render profile and diagnostic code is unchanged;
+  this release adds a vocabulary entry and nothing else.
+
 ## 0.19.0 — 2026-08-26 (web-shell DOM coverage + serializer fixed point)
 
 ### Added — `render_dom` coverage of the whole web-shell census

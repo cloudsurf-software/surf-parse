@@ -1100,6 +1100,7 @@ fn doc_type_name(doc_type: DocType) -> &'static str {
         DocType::Presentation => "presentation",
         DocType::Paper => "paper",
         DocType::Contract => "contract",
+        DocType::Specification => "specification",
     }
 }
 
@@ -1461,6 +1462,7 @@ const FM_ENUM_FIELDS: &[(&str, &[&str])] = &[
             "presentation",
             "paper",
             "contract",
+            "specification",
         ],
     ),
     (

@@ -889,6 +889,7 @@ fn doc_type_str(dt: crate::types::DocType) -> &'static str {
         DocType::Presentation => "presentation",
         DocType::Paper => "paper",
         DocType::Contract => "contract",
+        DocType::Specification => "specification",
     }
 }
 
@@ -4528,6 +4529,33 @@ mod tests {
             }
             other => panic!("Expected SegmentedControl, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_roundtrip_specification_doc_type() {
+        // 0.19.1: `type: specification` survives builder -> source -> parse.
+        let original = SurfDocBuilder::new()
+            .title("SurfContext specification")
+            .doc_type(DocType::Specification)
+            .status(DocStatus::Ratified)
+            .markdown("Body text.")
+            .build();
+
+        let source = to_surf_source(&original);
+        assert!(
+            source.contains("type: specification"),
+            "serialized front matter: {source}"
+        );
+
+        let parsed = parse::parse(&source);
+        assert!(
+            parsed.diagnostics.is_empty(),
+            "Parse diagnostics: {:?}",
+            parsed.diagnostics
+        );
+        let fm = parsed.doc.front_matter.as_ref().unwrap();
+        assert_eq!(fm.doc_type, Some(DocType::Specification));
+        assert_eq!(fm.status, Some(DocStatus::Ratified));
     }
 
     #[test]

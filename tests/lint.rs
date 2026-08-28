@@ -449,3 +449,36 @@ fn contract_type_and_ratified_status_parse_with_front_matter_intact() {
         "contract/ratified must be in-schema, got {codes:?}"
     );
 }
+
+#[test]
+fn specification_type_lints_clean_with_front_matter_intact() {
+    // 0.19.1: `type: specification` is the header the SurfContext standard
+    // documents carry (SPEC.surf). Additive vocabulary entry — front matter
+    // must survive intact and no schema diagnostic may fire.
+    let source = "---\ntitle: \"SurfContext specification\"\ntype: specification\nversion: 1\ncreated: 2026-08-26\nstatus: ratified\n---\n\n::summary\nThe normative standard.\n::\n\nBody.\n";
+    let doc = surf_parse::parse(source);
+    assert_eq!(
+        doc.doc.front_matter.as_ref().and_then(|f| f.title.as_deref()),
+        Some("SurfContext specification"),
+        "front matter must survive a specification header"
+    );
+    assert_eq!(
+        doc.doc.front_matter.as_ref().and_then(|f| f.doc_type),
+        Some(surf_parse::DocType::Specification)
+    );
+    let parse_codes: Vec<_> = doc
+        .diagnostics
+        .iter()
+        .filter_map(|d| d.code.as_deref())
+        .collect();
+    assert!(
+        !parse_codes.contains(&"P005") && !parse_codes.contains(&"P002"),
+        "specification must be in-schema, got {parse_codes:?}"
+    );
+    // And the lint engine agrees: no enum-vocabulary L-code on the header.
+    let lint_codes = l_codes(source);
+    assert!(
+        !lint_codes.iter().any(|c| c == "L031"),
+        "specification must not read as a mis-cased enum value, got {lint_codes:?}"
+    );
+}

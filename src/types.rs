@@ -130,6 +130,10 @@ pub enum DocType {
     /// Governing contract document: ratified law a build validates
     /// against, not a plan.
     Contract,
+    /// Normative specification document: the standard itself (SPEC.surf and
+    /// friends), distinct from a [`DocType::Contract`] the build validates
+    /// against. Renders on the ordinary document profile.
+    Specification,
 }
 
 /// Publication / citation format for papers and reports (front matter
@@ -494,7 +498,8 @@ pub fn render_profile(doc_type: Option<DocType>, format: Option<Format>) -> Rend
             | DocType::Review
             | DocType::App
             | DocType::Manifest
-            | DocType::Contract => RenderProfile::Document,
+            | DocType::Contract
+            | DocType::Specification => RenderProfile::Document,
         },
     }
 }
@@ -2581,6 +2586,23 @@ mod doc_type_format_tests {
         assert_eq!(parse_fm("type: deck").doc_type, Some(DocType::Deck));
         assert_eq!(parse_fm("type: slides").doc_type, Some(DocType::Slides));
         assert_eq!(parse_fm("type: doc").doc_type, Some(DocType::Doc));
+        assert_eq!(parse_fm("type: contract").doc_type, Some(DocType::Contract));
+    }
+
+    // ----- 0.19.1: `type: specification` is in-vocabulary -----
+
+    #[test]
+    fn specification_doc_type_deserializes() {
+        assert_eq!(
+            parse_fm("type: specification").doc_type,
+            Some(DocType::Specification)
+        );
+    }
+
+    #[test]
+    fn specification_doc_type_serializes_back_to_lowercase() {
+        let yaml = serde_yaml::to_string(&DocType::Specification).expect("serialize");
+        assert_eq!(yaml.trim(), "specification");
     }
 
     // ----- L1/L2: Format values + aliases + missing -----
@@ -2670,7 +2692,14 @@ mod doc_type_format_tests {
             RenderProfile::Report(Format::Mla)
         );
         // Ordinary docs → Document.
-        for dt in [DocType::Doc, DocType::Guide, DocType::Plan, DocType::App] {
+        for dt in [
+            DocType::Doc,
+            DocType::Guide,
+            DocType::Plan,
+            DocType::App,
+            DocType::Contract,
+            DocType::Specification,
+        ] {
             assert_eq!(render_profile(Some(dt), None), RenderProfile::Document);
         }
     }
