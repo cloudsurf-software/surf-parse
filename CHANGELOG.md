@@ -3,6 +3,43 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.19.2 — 2026-08-27 (`::data` preview contract)
+
+### Added
+
+- **`DATA_PREVIEW_ROWS`** (`= 20`) — one public constant naming how many body
+  rows of a `::data` block the web renderers paint inline. Both web backends
+  read it, so the string renderer and the constructive DOM renderer cap at the
+  same row and stay byte-identical.
+- **`.surfdoc-table-preview`** on the table wrap, with **`data-rows`** (the
+  TOTAL body-row count) and **`data-cols`** (the header width or the widest
+  row, whichever is larger), whenever a block carries more rows than the cap.
+  The capped table keeps its `<tfoot>` summary row and gains a trailing
+  **`.surfdoc-table-more`** paragraph reading `N rows · open as spreadsheet`.
+- **`.surfdoc-table-wide`** on the wrap of any `::data` table with eight or
+  more columns, independent of its row count.
+- Stylesheet rules for the contract: the wrap scrolls on both axes with a
+  capped height so `thead th` can freeze against it (`position: sticky`, an
+  opaque `--surface-alt` background, and an inset hairline shadow because a
+  collapsed border does not travel with a sticky cell); a caption-weight, cell-padded
+  `.surfdoc-table-more` rule; and a print block where the wrap loses its
+  scroll cap, `thead`/`tfoot` repeat as header and footer groups, rows and
+  cells never break inside, and `.surfdoc-table-wide` takes the named
+  `@page surfdoc-wide` in landscape and is locked to that page box
+  (`table-layout: fixed`, wrapping headers, tighter cells) so its last
+  columns print instead of overflowing the sheet.
+
+### Changed
+
+- A `::data` block with more than 20 body rows renders a preview in HTML.
+  At or under the cap the markup is byte-identical to 0.19.1 — no extra class,
+  no `data-` attributes, no count line — so existing snapshots do not churn.
+- The native, markdown, LaTeX, Typst, PDF and slides backends and the
+  serializer are untouched and never truncated; the Apple kit applies its own
+  cap.
+- No new block kind, attribute or front-matter value: the block registry,
+  the SurfDoc grammar and the spec are unchanged.
+
 ## 0.19.1 — 2026-08-26 (front matter `type: specification`)
 
 ### Added

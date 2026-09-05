@@ -6,7 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, StyleProperty, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -2712,7 +2712,36 @@ fn render_block_inner(block: &Block) -> String {
             total,
             ..
         } => {
-            let mut html = String::from("<div class=\"surfdoc-table-wrap\"><table class=\"surfdoc-data\">");
+            // 0.19.2 preview contract. A block with more than
+            // `DATA_PREVIEW_ROWS` body rows paints only its first rows, keeps
+            // the `total:` summary, and carries an honest count line; at or
+            // under the cap the markup is byte-identical to 0.19.1 (no extra
+            // class, no `data-` attributes, no line). `render_dom.rs:2540`
+            // mirrors every byte of this.
+            let row_count = rows.len();
+            let col_count = rows
+                .iter()
+                .map(|r| r.len())
+                .max()
+                .unwrap_or(0)
+                .max(headers.len());
+            let preview = row_count > DATA_PREVIEW_ROWS;
+            let mut wrap_class = String::from("surfdoc-table-wrap");
+            if preview {
+                wrap_class.push_str(" surfdoc-table-preview");
+            }
+            if col_count >= DATA_WIDE_COLS {
+                wrap_class.push_str(" surfdoc-table-wide");
+            }
+            let preview_attrs = if preview {
+                format!(" data-rows=\"{row_count}\" data-cols=\"{col_count}\"")
+            } else {
+                String::new()
+            };
+            let shown = if preview { DATA_PREVIEW_ROWS } else { row_count };
+            let mut html = format!(
+                "<div class=\"{wrap_class}\"{preview_attrs}><table class=\"surfdoc-data\">"
+            );
             if let Some(c) = caption {
                 html.push_str(&format!(
                     "<caption>{}</caption>",
@@ -2730,7 +2759,7 @@ fn render_block_inner(block: &Block) -> String {
                 html.push_str("</tr></thead>");
             }
             html.push_str("<tbody>");
-            for row in rows {
+            for row in rows.iter().take(shown) {
                 html.push_str("<tr>");
                 for cell in row {
                     let num_class = if is_numeric_cell(cell) { " class=\"num\"" } else { "" };
@@ -2753,7 +2782,13 @@ fn render_block_inner(block: &Block) -> String {
                 }
                 html.push_str("</tr></tfoot>");
             }
-            html.push_str("</table></div>");
+            html.push_str("</table>");
+            if preview {
+                html.push_str(&format!(
+                    "<p class=\"surfdoc-table-more\">{row_count} rows \u{b7} open as spreadsheet</p>"
+                ));
+            }
+            html.push_str("</div>");
             html
         }
 

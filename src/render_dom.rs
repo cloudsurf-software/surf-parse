@@ -54,7 +54,7 @@ use crate::render_html::{
 };
 use crate::limits::ParseLimits;
 use crate::render_html::chart_type_str;
-use crate::types::{Block, FormFieldType, PerClass, RowState, SizeClass, SurfDoc};
+use crate::types::{Block, FormFieldType, PerClass, RowState, SizeClass, SurfDoc, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Typed failure of the constructive DOM path.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -2538,8 +2538,31 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
 
         // render_html.rs:2708
         Block::Data { headers, rows, caption, total, .. } => {
+            // 0.19.2 preview contract — mirrors render_html.rs:2708 byte for
+            // byte: class order (wrap, preview, wide), then `data-rows`,
+            // then `data-cols`; the count line is the LAST child of the wrap.
+            let row_count = rows.len();
+            let col_count = rows
+                .iter()
+                .map(|r| r.len())
+                .max()
+                .unwrap_or(0)
+                .max(headers.len());
+            let preview = row_count > DATA_PREVIEW_ROWS;
+            let mut wrap_class = String::from("surfdoc-table-wrap");
+            if preview {
+                wrap_class.push_str(" surfdoc-table-preview");
+            }
+            if col_count >= DATA_WIDE_COLS {
+                wrap_class.push_str(" surfdoc-table-wide");
+            }
+            let shown = if preview { DATA_PREVIEW_ROWS } else { row_count };
             dom.open("div", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup("surfdoc-table-wrap"));
+            dom.attr("class", AttrVal::Markup(&wrap_class));
+            if preview {
+                dom.attr("data-rows", AttrVal::Markup(&row_count.to_string()));
+                dom.attr("data-cols", AttrVal::Markup(&col_count.to_string()));
+            }
             dom.open("table", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-data"));
             if let Some(c) = caption {
@@ -2561,7 +2584,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.close();
             }
             dom.open("tbody", CloseStyle::Normal);
-            for row in rows {
+            for row in rows.iter().take(shown) {
                 dom.open("tr", CloseStyle::Normal);
                 for cell in row {
                     build_data_cell(dom, cell)?;
@@ -2579,6 +2602,12 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.close();
             }
             dom.close();
+            if preview {
+                dom.open("p", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
+                dom.text_markup(&format!("{row_count} rows \u{b7} open as spreadsheet"));
+                dom.close();
+            }
             dom.close();
         }
 
@@ -4776,6 +4805,10 @@ mod tests {
         // cell-level inline markdown (bold, wiki link).
         ("::data\nName | Count\nAda | 3\nGrace | 12\n::\n", "surfdoc-data"),
         ("::data[caption=\"Q3 & Q4\"]\nName | Amount\n**Ada** | $1,204.50\n[Doc](guide) | -12%\ntotal: All | $1,204.50\n::\n", "surfdoc-table-wrap"),
+        // ::data 0.19.2 preview contract — 21 rows (capped tbody + count
+        // line + data-rows/data-cols) and an eight-column wide wrap.
+        ("::data\nName | Count\nr1 | 1\nr2 | 2\nr3 | 3\nr4 | 4\nr5 | 5\nr6 | 6\nr7 | 7\nr8 | 8\nr9 | 9\nr10 | 10\nr11 | 11\nr12 | 12\nr13 | 13\nr14 | 14\nr15 | 15\nr16 | 16\nr17 | 17\nr18 | 18\nr19 | 19\nr20 | 20\nr21 | 21\ntotal: All | 231\n::\n", "surfdoc-table-preview"),
+        ("::data\nc1 | c2 | c3 | c4 | c5 | c6 | c7 | c8\n1 | 2 | 3 | 4 | 5 | 6 | 7 | 8\n::\n", "surfdoc-table-wide"),
         // ::metric — plain, trend arrows, unit span, and the gauge <meter>.
         ("::metric[label=\"Docs\" value=\"1,204\"]\n::\n", "surfdoc-metric"),
         ("::metric[label=\"Uptime\" value=\"98\" unit=\"%\" trend=\"up\" max=\"100\"]\n::\n", "surfdoc-metric-meter"),

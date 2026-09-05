@@ -1,0 +1,47 @@
+---
+title: "Data Preview Contract"
+type: doc
+status: active
+---
+
+# Thirty rows
+
+A `::data` block past the preview cap: twenty body rows paint, the `total:`
+summary stays, and the wrap carries the honest count line.
+
+::data[caption="Thirty rows"]
+Label | Amount
+Row 01 | 7
+Row 02 | 14
+Row 03 | 21
+Row 04 | 28
+Row 05 | 35
+Row 06 | 42
+Row 07 | 49
+Row 08 | 56
+Row 09 | 63
+Row 10 | 70
+Row 11 | 77
+Row 12 | 84
+Row 13 | 91
+Row 14 | 98
+Row 15 | 105
+Row 16 | 112
+Row 17 | 119
+Row 18 | 126
+Row 19 | 133
+Row 20 | 140
+Row 21 | 147
+Row 22 | 154
+Row 23 | 161
+Row 24 | 168
+Row 25 | 175
+Row 26 | 182
+Row 27 | 189
+Row 28 | 196
+Row 29 | 203
+Row 30 | 210
+total: All | 3255
+::
+
+Prose after the table.

@@ -1468,7 +1468,7 @@ dialog.modal h2 {
 
 /* Responsive table scroll wrapper — looks like Reference .sd-data container.
    Keeps overflow-x:auto so wide tables scroll inside their own box. */
-.surfdoc-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 1.5rem 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.surfdoc-table-wrap { overflow: auto; max-height: 70vh; -webkit-overflow-scrolling: touch; margin: 1.5rem 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 
 /* Inline icons */
 .surfdoc-icon { display: inline-flex; align-items: center; vertical-align: middle; line-height: 0; }
@@ -1612,6 +1612,35 @@ dialog.modal h2 {
 .surfdoc-data tbody td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
 .surfdoc-data tbody tr:last-child td { border-bottom: none; }
 .surfdoc-data tbody td.num { font-family: var(--font-mono); text-align: right; }
+
+/* 0.19.2 preview contract. The wrap scrolls on BOTH axes with a capped height
+   (§22), which makes it the scroll container the header row can freeze against.
+   The header keeps an opaque background or body rows show through it, and draws
+   its own hairline as an inset shadow: the table is border-collapse, and a
+   collapsed border does not travel with a sticky cell — the header's real
+   border-bottom stays where the header was laid out and scrolls away. */
+.surfdoc-table-wrap .surfdoc-data thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-alt); box-shadow: inset 0 -1px 0 var(--border); }
+
+/* Honest row count under a capped table: caption type, muted, cell padding,
+   separated from the last body row by the same hairline the rows use. */
+.surfdoc-table-more { margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); font-size: var(--font-size-caption); color: var(--text-muted); }
+
+/* Print: a table never scrolls and never breaks inside a row; the header
+   repeats on every page and a wide table takes its own landscape page. */
+@media print {
+  .surfdoc-table-wrap { max-height: none; overflow: visible; }
+  .surfdoc-data thead { display: table-header-group; }
+  .surfdoc-data tfoot { display: table-footer-group; }
+  .surfdoc-data tr, .surfdoc-data td, .surfdoc-data th { break-inside: avoid; page-break-inside: avoid; }
+  .surfdoc-table-wide { page: surfdoc-wide; }
+  /* A landscape page is only worth taking if the table actually fits it:
+     lock the wide table to the page box and let its headers wrap, or the
+     last columns overflow the sheet and print clipped. */
+  .surfdoc-table-wide .surfdoc-data { table-layout: fixed; width: 100%; }
+  .surfdoc-table-wide .surfdoc-data thead th { white-space: normal; }
+  .surfdoc-table-wide .surfdoc-data th, .surfdoc-table-wide .surfdoc-data td { padding: 6px 6px; }
+}
+@page surfdoc-wide { size: landscape; }
 
 /* ============================================================
    27. SURFDOC CODE

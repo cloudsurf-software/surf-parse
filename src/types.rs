@@ -175,6 +175,22 @@ pub const SIZE_CLASS_TABLET_MIN: u32 = 768;
 /// [`SizeClass::Desktop`] class.
 pub const SIZE_CLASS_DESKTOP_MIN: u32 = 1024;
 
+/// How many body rows of a `::data` block the web renderers paint inline
+/// before the table becomes a preview (0.19.2).
+///
+/// A block with more rows than this renders its first `DATA_PREVIEW_ROWS`
+/// rows, keeps its `total:` summary row, and carries an honest
+/// `N rows · open as spreadsheet` line plus `data-rows`/`data-cols` on the
+/// wrap. Blocks at or under the cap render exactly as they always have.
+/// The native/markdown/latex/typst/pdf/slides backends and the serializer
+/// are NEVER truncated — the Apple kit applies its own cap.
+pub const DATA_PREVIEW_ROWS: usize = 20;
+
+/// Column count at which a `::data` table is wide enough that the web wrap
+/// takes `surfdoc-table-wide` and prints on its own landscape page (0.19.2).
+/// Independent of the row count.
+pub(crate) const DATA_WIDE_COLS: usize = 8;
+
 /// The resolved viewport size class — the single axis every chrome block
 /// selects on (0.18).
 ///
@@ -2702,5 +2718,17 @@ mod doc_type_format_tests {
         ] {
             assert_eq!(render_profile(Some(dt), None), RenderProfile::Document);
         }
+    }
+}
+
+#[cfg(test)]
+mod data_preview_rows_tests {
+    use super::*;
+
+    /// The preview cap is a published contract number: both web backends and
+    /// the CSS/print rules are written against 20.
+    #[test]
+    fn preview_cap_is_twenty() {
+        assert_eq!(DATA_PREVIEW_ROWS, 20);
     }
 }

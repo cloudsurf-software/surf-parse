@@ -171,6 +171,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
         "basic.surf",
         &[Severity::Warning, Severity::Warning, Severity::Warning],
     ),
+    // 0.19.2: the `::data` preview-contract fixture (30 body rows + a
+    // `total:` summary) — a well-formed document, so it parses clean.
+    ("data-preview.surf", &[]),
     ("fragment-site.surf", &[]),
     // 0.11 nesting fix: `::section` containing a balanced `::callout` is a
     // real container (surplus-closer rule), so the file parses clean — the

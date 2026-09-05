@@ -76,6 +76,14 @@ fn identity_existing_fixture_gallery_form() {
     assert_identity_with_script_decline("gallery-form.surf", "script-emitting:gallery");
 }
 
+/// 0.19.2 `::data` preview contract: a 30-row block (capped tbody, kept
+/// tfoot, `surfdoc-table-preview` + `data-rows`/`data-cols`, trailing
+/// count line) must serialize identically through both web backends.
+#[test]
+fn identity_data_preview_thirty_rows() {
+    assert_identity("data-preview.surf");
+}
+
 // -- the six thelove222 routes (census source) --------------------------------
 
 #[test]
