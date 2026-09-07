@@ -134,6 +134,9 @@ pub enum DocType {
     /// friends), distinct from a [`DocType::Contract`] the build validates
     /// against. Renders on the ordinary document profile.
     Specification,
+    /// Spreadsheet workbook: each top-level `::data` block is one sheet.
+    /// Resolves to [`RenderProfile::Spreadsheet`].
+    Spreadsheet,
 }
 
 /// Publication / citation format for papers and reports (front matter
@@ -485,6 +488,9 @@ pub enum RenderProfile {
     Paper(Format),
     /// Academic report with the carried citation/template [`Format`].
     Report(Format),
+    /// Spreadsheet workbook rendering: a sheet strip over one section per
+    /// top-level `::data` block; from `spreadsheet`.
+    Spreadsheet,
 }
 
 /// Resolve a `(DocType, Option<Format>)` pair to a [`RenderProfile`].
@@ -501,6 +507,7 @@ pub fn render_profile(doc_type: Option<DocType>, format: Option<Format>) -> Rend
             DocType::Deck | DocType::Slides | DocType::Presentation => {
                 RenderProfile::Presentation
             }
+            DocType::Spreadsheet => RenderProfile::Spreadsheet,
             DocType::Paper => RenderProfile::Paper(format.unwrap_or(Format::Article)),
             DocType::Report => RenderProfile::Report(format.unwrap_or(Format::Mla)),
             DocType::Doc
@@ -589,6 +596,23 @@ pub enum Block {
         /// `<tfoot>` and excluded from `rows`. New in 0.18.1.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         total: Vec<String>,
+        /// Sheet name (`name=`) — the tab label in a `type: spreadsheet`
+        /// workbook. New in 0.20.0.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        /// Out-of-line row source (`source=`), either `file:<id>` or
+        /// `doc:<id>#<sheet>`. When present the inline body is only a
+        /// preview. New in 0.20.0.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+        /// Total row count at `source=` (the authored `rows=` attribute).
+        /// New in 0.20.0.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source_rows: Option<usize>,
+        /// Total column count at `source=` (the authored `cols=` attribute).
+        /// New in 0.20.0.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source_cols: Option<usize>,
         raw_content: String,
         span: Span,
     },
@@ -2619,6 +2643,35 @@ mod doc_type_format_tests {
     fn specification_doc_type_serializes_back_to_lowercase() {
         let yaml = serde_yaml::to_string(&DocType::Specification).expect("serialize");
         assert_eq!(yaml.trim(), "specification");
+    }
+
+    // ----- 0.20.0: `type: spreadsheet` is in-vocabulary -----
+
+    #[test]
+    fn spreadsheet_doc_type_deserializes() {
+        assert_eq!(
+            parse_fm("type: spreadsheet").doc_type,
+            Some(DocType::Spreadsheet)
+        );
+    }
+
+    #[test]
+    fn spreadsheet_doc_type_serializes_back_to_lowercase() {
+        let yaml = serde_yaml::to_string(&DocType::Spreadsheet).expect("serialize");
+        assert_eq!(yaml.trim(), "spreadsheet");
+    }
+
+    #[test]
+    fn spreadsheet_doc_type_resolves_to_the_spreadsheet_profile() {
+        assert_eq!(
+            render_profile(Some(DocType::Spreadsheet), None),
+            RenderProfile::Spreadsheet
+        );
+        // The carried format never changes the workbook profile.
+        assert_eq!(
+            render_profile(Some(DocType::Spreadsheet), Some(Format::Ieee)),
+            RenderProfile::Spreadsheet
+        );
     }
 
     // ----- L1/L2: Format values + aliases + missing -----

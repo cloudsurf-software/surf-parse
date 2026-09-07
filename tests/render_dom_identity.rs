@@ -572,3 +572,44 @@ fn hostile_web_shell_max_depth_nesting() {
     assert_identity_bytes(rel);
     assert_parser_stable(rel, &surf_parse::parse(&fixture(rel)).doc.to_html_fragment());
 }
+
+/// 0.20.0 `::data source=`: the linked count line (`<a class=
+/// "surfdoc-table-more" href=…>`) must serialize identically through the
+/// native sink — the anchor is the one place the twins diverged in 0.20.0.
+#[test]
+fn identity_data_sourced_linked_count_line() {
+    for src in [
+        "::data[source=\"file:abc123\" rows=4200 cols=2]\nH1 | H2\nr1c1 | r1c2\n::\n",
+        "::data[source=\"doc:d17#Q3\" rows=88 cols=2]\nH1 | H2\n::\n",
+        // Unresolvable scheme → the inert paragraph, still identical.
+        "::data[source=\"s3://bucket/key\" rows=9 cols=2]\nH1 | H2\n::\n",
+    ] {
+        let doc = surf_parse::parse(src).doc;
+        let dom_html = render_fragment_string(&doc).expect("native sink renders");
+        assert_eq!(
+            dom_html,
+            doc.to_html_fragment(),
+            "sourced ::data drifted between backends on:\n{src}"
+        );
+    }
+}
+
+/// 0.20.0 (D-SS-14): a markdown pipe table over the preview cap is truncated
+/// in BOTH web backends — the string renderer cuts the serialized body, the
+/// native sink skips the events; the bytes must still match.
+#[test]
+fn identity_markdown_pipe_table_over_the_preview_cap() {
+    for rows in [20usize, 21, 25] {
+        let mut src = String::from("| A | B |\n|---|---|\n");
+        for r in 1..=rows {
+            src.push_str(&format!("| r{r}a | r{r}b |\n"));
+        }
+        let doc = surf_parse::parse(&src).doc;
+        let dom_html = render_fragment_string(&doc).expect("native sink renders");
+        assert_eq!(
+            dom_html,
+            doc.to_html_fragment(),
+            "pipe table with {rows} rows drifted between backends"
+        );
+    }
+}

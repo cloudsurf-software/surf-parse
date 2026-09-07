@@ -192,6 +192,10 @@ impl SurfDocBuilder {
             rows,
             caption: None,
             total: Vec::new(),
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content,
             span: Span::SYNTHETIC,
         });
@@ -890,6 +894,7 @@ fn doc_type_str(dt: crate::types::DocType) -> &'static str {
         DocType::Paper => "paper",
         DocType::Contract => "contract",
         DocType::Specification => "specification",
+        DocType::Spreadsheet => "spreadsheet",
     }
 }
 
@@ -1027,6 +1032,10 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             rows,
             caption,
             total,
+            name,
+            source,
+            source_rows,
+            source_cols,
             ..
         } => {
             let mut attr_parts = Vec::new();
@@ -1035,6 +1044,18 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
             if let Some(c) = caption {
                 attr_parts.push(format!("caption=\"{}\"", escape_attr(c)));
+            }
+            if let Some(n) = name {
+                attr_parts.push(format!("name=\"{}\"", escape_attr(n)));
+            }
+            if let Some(src) = source {
+                attr_parts.push(format!("source=\"{}\"", escape_attr(src)));
+            }
+            if let Some(r) = source_rows {
+                attr_parts.push(format!("rows={r}"));
+            }
+            if let Some(c) = source_cols {
+                attr_parts.push(format!("cols={c}"));
             }
             let fmt = match format {
                 DataFormat::Table => "table",

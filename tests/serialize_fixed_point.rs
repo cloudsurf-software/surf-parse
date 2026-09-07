@@ -282,3 +282,32 @@ fn active_row_state_round_trips_and_renders() {
     let html2 = surf_parse::render_html::to_html_fragment(&surf_parse::parse(&ser).doc.blocks);
     assert_eq!(html, html2, "round-tripped active row must render identically");
 }
+
+/// 0.20.0: the four spreadsheet attributes on `::data` (`name=`, `source=`,
+/// `rows=`, `cols=`) survive parse → serialize → parse, so a workbook edited
+/// through the block tree keeps its sheet label and its out-of-line pointer.
+#[test]
+fn data_sheet_attributes_are_a_fixed_point() {
+    use surf_parse::types::Block;
+
+    let src = "::data[id=q3 name=\"Q3 revenue\" source=\"file:abc123\" rows=4200 cols=7]\n| Line | Amount |\n|---|---|\n| Coffee | 800 |\n::\n";
+    let first = surf_parse::builder::to_surf_source(&surf_parse::parse(src).doc);
+    let second = surf_parse::builder::to_surf_source(&surf_parse::parse(&first).doc);
+    assert_eq!(first, second, "second pass drifted:\n{first}\n---\n{second}");
+    let doc = surf_parse::parse(&first).doc;
+    match &doc.blocks[0] {
+        Block::Data {
+            name,
+            source,
+            source_rows,
+            source_cols,
+            ..
+        } => {
+            assert_eq!(name.as_deref(), Some("Q3 revenue"));
+            assert_eq!(source.as_deref(), Some("file:abc123"));
+            assert_eq!(*source_rows, Some(4200));
+            assert_eq!(*source_cols, Some(7));
+        }
+        other => panic!("expected Data, got {other:?}"),
+    }
+}

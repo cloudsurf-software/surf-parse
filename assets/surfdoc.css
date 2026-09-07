@@ -1624,6 +1624,19 @@ dialog.modal h2 {
 /* Honest row count under a capped table: caption type, muted, cell padding,
    separated from the last body row by the same hairline the rows use. */
 .surfdoc-table-more { margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); font-size: var(--font-size-caption); color: var(--text-muted); }
+/* 0.20.0: with source= the same line is a link to the rows held out of line.
+   It keeps the caption look — the block-level display is what makes the
+   anchor fill the wrap the way the paragraph did. */
+a.surfdoc-table-more { display: block; text-decoration: none; }
+a.surfdoc-table-more:hover { color: var(--text); text-decoration: underline; }
+
+/* 0.20.0 workbook layout (type: spreadsheet). The strip is the sheet tab row
+   above the sheets; each sheet is a titled band carrying one ::data table. */
+.surfdoc-workbook { display: flex; flex-direction: column; gap: 16px; }
+.surfdoc-sheet-strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.surfdoc-sheet-strip a { padding: 6px 12px; border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0; background: var(--surface-alt); color: var(--text-muted); font-size: var(--font-size-caption); text-decoration: none; white-space: nowrap; }
+.surfdoc-sheet-strip a:hover { color: var(--text); }
+.surfdoc-sheet { scroll-margin-top: 12px; }
 
 /* Print: a table never scrolls and never breaks inside a row; the header
    repeats on every page and a wide table takes its own landscape page. */

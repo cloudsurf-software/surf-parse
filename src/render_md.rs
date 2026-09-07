@@ -4,7 +4,7 @@
 //! Each block type is degraded to the nearest Markdown equivalent.
 
 use crate::citation;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, HttpMethod, ListDisplay, SurfDoc, Trend};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, HttpMethod, ListDisplay, RenderProfile, SurfDoc, Trend};
 
 /// Render a `SurfDoc` as standard CommonMark markdown.
 ///
@@ -17,11 +17,34 @@ pub fn to_markdown(doc: &SurfDoc) -> String {
     ));
     let mut parts: Vec<String> = Vec::new();
 
+    // 0.20.0: in a `type: spreadsheet` workbook every top-level `::data`
+    // block is a sheet, so markdown names it with a level-two heading before
+    // the table. Every other document type is unchanged.
+    let workbook = crate::types::render_profile(
+        doc.front_matter.as_ref().and_then(|fm| fm.doc_type),
+        doc.front_matter.as_ref().and_then(|fm| fm.format),
+    ) == RenderProfile::Spreadsheet;
+    let mut sheets = 0usize;
+
     for block in &doc.blocks {
+        if workbook && let Block::Data { name, .. } = block {
+            sheets += 1;
+            parts.push(format!("## {}", sheet_label(name, sheets)));
+        }
         parts.push(render_block(block));
     }
 
     parts.join("\n\n")
+}
+
+/// The sheet label for the `index`-th (1-based) top-level `::data` block:
+/// its authored `name=`, or `Sheet<index>` by position. Mirrors the web
+/// backends (`render_html::sheet_label`).
+fn sheet_label(name: &Option<String>, index: usize) -> String {
+    match name {
+        Some(n) if !n.trim().is_empty() => n.trim().to_string(),
+        _ => format!("Sheet{index}"),
+    }
 }
 
 /// Render a `::bibliography` as a markdown reference list (heading + entries).
@@ -81,10 +104,23 @@ pub(crate) fn render_block(block: &Block) -> String {
         }
 
         Block::Data {
-            headers, rows, ..
+            headers,
+            rows,
+            source,
+            source_rows,
+            ..
         } => {
+            // 0.20.0: a `source=` block holds its rows out of line, so the
+            // inline body is a preview and markdown says so on a plain count
+            // line under the table. Without `source=` the output is unchanged:
+            // every row, no count line.
+            let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
+            let count_line = linked.map(|_| {
+                let total = source_rows.unwrap_or(rows.len());
+                format!("{total} rows \u{b7} open as spreadsheet")
+            });
             if headers.is_empty() {
-                return String::new();
+                return count_line.unwrap_or_default();
             }
             let mut lines = Vec::new();
             // Header row
@@ -95,6 +131,10 @@ pub(crate) fn render_block(block: &Block) -> String {
             // Data rows
             for row in rows {
                 lines.push(format!("| {} |", row.join(" | ")));
+            }
+            if let Some(line) = count_line {
+                lines.push(String::new());
+                lines.push(line);
             }
             lines.join("\n")
         }
@@ -1393,6 +1433,10 @@ mod tests {
             sortable: false,
             headers: vec!["Name".into(), "Age".into()],
             rows: vec![vec!["Alice".into(), "30".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -1748,5 +1792,44 @@ mod tests {
         assert!(md.contains("A great product."));
         assert!(md.contains("- Fast"));
         assert!(md.contains("[Get it](/download)"));
+    }
+
+    // ----- 0.20.0 spreadsheet degradation (amendment section D) -----
+
+    #[test]
+    fn spreadsheet_sourced_block_emits_preview_rows_then_the_count_line() {
+        let md = to_markdown(
+            &crate::parse(
+                "::data[source=\"file:abc123\" rows=4200 cols=2]\nH1 | H2\nr1c1 | r1c2\n::\n",
+            )
+            .doc,
+        );
+        assert!(md.contains("| r1c1 | r1c2 |"), "preview rows survive: {md}");
+        assert!(
+            md.contains("4200 rows \u{b7} open as spreadsheet"),
+            "the count line follows the table: {md}"
+        );
+        assert!(!md.contains("::data"), "no directive leaks into markdown: {md}");
+    }
+
+    #[test]
+    fn spreadsheet_ordinary_data_block_is_unchanged() {
+        let md = to_markdown(&crate::parse("::data\nH1 | H2\nr1c1 | r1c2\n::\n").doc);
+        assert_eq!(md, "| H1 | H2 |\n| --- | --- |\n| r1c1 | r1c2 |");
+    }
+
+    #[test]
+    fn spreadsheet_document_precedes_each_sheet_with_a_heading() {
+        let src = "---\ntitle: \"Books\"\ntype: spreadsheet\n---\n\n::data[name=\"Revenue\"]\nH1 | H2\nr1c1 | r1c2\n::\n\n::data\nH1 | H2\nr1c1 | r1c2\n::\n";
+        let md = to_markdown(&crate::parse(src).doc);
+        assert!(md.contains("## Revenue"), "authored sheet name: {md}");
+        assert!(md.contains("## Sheet2"), "positional sheet name: {md}");
+    }
+
+    #[test]
+    fn spreadsheet_headings_never_appear_on_another_doc_type() {
+        let src = "---\ntitle: \"Books\"\ntype: doc\n---\n\n::data[name=\"Revenue\"]\nH1 | H2\nr1c1 | r1c2\n::\n";
+        let md = to_markdown(&crate::parse(src).doc);
+        assert!(!md.contains("## Revenue"), "no sheet heading on a doc: {md}");
     }
 }

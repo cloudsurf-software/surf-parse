@@ -223,6 +223,22 @@ fn attr_string(attrs: &Attrs, key: &str) -> Option<String> {
     })
 }
 
+/// A non-negative integer attribute. A missing key, a null, or a value that
+/// is not a whole number reads as absent — never a panic.
+fn attr_usize(attrs: &Attrs, key: &str) -> Option<usize> {
+    match attrs.get(key)? {
+        AttrValue::Number(n) => {
+            if n.is_finite() && *n >= 0.0 && n.fract() == 0.0 {
+                Some(*n as usize)
+            } else {
+                None
+            }
+        }
+        AttrValue::String(s) => s.trim().parse::<usize>().ok(),
+        AttrValue::Bool(_) | AttrValue::Null => None,
+    }
+}
+
 fn attr_bool(attrs: &Attrs, key: &str) -> bool {
     attrs
         .get(key)
@@ -289,6 +305,14 @@ fn parse_data(attrs: &Attrs, content: &str, span: Span) -> Block {
 
     let caption = attr_string(attrs, "caption");
 
+    // 0.20.0 spreadsheet attributes. `name=` labels the sheet; `source=`
+    // points at out-of-line rows and `rows=`/`cols=` carry their counts. A
+    // non-numeric count is ignored rather than fatal — the block still parses.
+    let name = attr_string(attrs, "name");
+    let source = attr_string(attrs, "source");
+    let source_rows = attr_usize(attrs, "rows");
+    let source_cols = attr_usize(attrs, "cols");
+
     // A trailing `total: a | b | c` line is a summary row, not data: it is
     // lifted out before the table is parsed and rendered as `<tfoot>`.
     let (body, total) = split_total_row(content);
@@ -307,6 +331,10 @@ fn parse_data(attrs: &Attrs, content: &str, span: Span) -> Block {
         rows,
         caption,
         total,
+        name,
+        source,
+        source_rows,
+        source_cols,
         raw_content: content.to_string(),
         span,
     }
@@ -6859,6 +6887,76 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(headers, vec!["Line".to_string(), "Amount".to_string()]);
                 // The total line never becomes a data row.
                 assert_eq!(rows.len(), 1);
+            }
+            other => panic!("Expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_data_reads_the_spreadsheet_attributes() {
+        let a = attrs(&[
+            ("name", AttrValue::String("Q3".into())),
+            ("source", AttrValue::String("file:abc123".into())),
+            ("rows", AttrValue::Number(4200.0)),
+            ("cols", AttrValue::Number(7.0)),
+        ]);
+        let content = "| Line | Amount |\n|---|---|\n| Coffee | 800 |";
+        match resolve_block(unknown("data", a, content)) {
+            Block::Data {
+                name,
+                source,
+                source_rows,
+                source_cols,
+                rows,
+                ..
+            } => {
+                assert_eq!(name.as_deref(), Some("Q3"));
+                assert_eq!(source.as_deref(), Some("file:abc123"));
+                assert_eq!(source_rows, Some(4200));
+                assert_eq!(source_cols, Some(7));
+                // The inline body is still parsed as the preview.
+                assert_eq!(rows.len(), 1);
+            }
+            other => panic!("Expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_data_ignores_a_non_numeric_row_or_column_count() {
+        let a = attrs(&[
+            ("source", AttrValue::String("doc:d1#Sheet1".into())),
+            ("rows", AttrValue::String("many".into())),
+            ("cols", AttrValue::Bool(true)),
+        ]);
+        match resolve_block(unknown("data", a, "| A |\n|---|\n| 1 |")) {
+            Block::Data {
+                source,
+                source_rows,
+                source_cols,
+                ..
+            } => {
+                assert_eq!(source.as_deref(), Some("doc:d1#Sheet1"));
+                assert_eq!(source_rows, None, "a non-numeric rows= is ignored");
+                assert_eq!(source_cols, None, "a non-numeric cols= is ignored");
+            }
+            other => panic!("Expected Data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_data_without_the_spreadsheet_attributes_leaves_them_absent() {
+        match resolve_block(unknown("data", Attrs::new(), "| A |\n|---|\n| 1 |")) {
+            Block::Data {
+                name,
+                source,
+                source_rows,
+                source_cols,
+                ..
+            } => {
+                assert!(name.is_none());
+                assert!(source.is_none());
+                assert!(source_rows.is_none());
+                assert!(source_cols.is_none());
             }
             other => panic!("Expected Data, got {other:?}"),
         }

@@ -11,7 +11,7 @@
 [meta]
 spec_version = "0.1"
 total_blocks = 120
-registry_updated = "2026-08-26"
+registry_updated = "2026-09-04"
 
 [blocks.ai-context]
 status = "planned"
@@ -96,8 +96,9 @@ enum_variant = "Cta"
 [blocks.data]
 status = "implemented"
 category = "data"
-purpose = "Structured data table; a trailing `total: a | b | c` line becomes the summary row"
-attributes = ["id", "format", "sortable", "caption"]
+purpose = "Structured data table, or one sheet of a `type: spreadsheet` workbook; a trailing `total: a | b | c` line becomes the summary row; `source=` references out-of-line rows carrying `rows=`/`cols=` counts"
+attributes = ["id", "format", "sortable", "caption", "name", "source", "rows", "cols"]
+planned_attributes = ["filterable", "chart"]
 degradation = "markdown table"
 enum_variant = "Data"
 

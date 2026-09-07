@@ -223,7 +223,79 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(UnknownLayoutValue),
         Box::new(DeprecatedDesktopOnly),
         Box::new(DuplicateBlockId),
+        Box::new(DataSourceWithoutCounts),
     ]
+}
+
+// ------------------------------------------------------------------
+// L044 — ::data source= without both counts (0.20.0)
+// ------------------------------------------------------------------
+
+/// `source=` on a `::data` block declares that the authored body is only a
+/// preview and the real rows live out of line (`file:<id>` or
+/// `doc:<id>#<sheet>`). The renderer draws a linked count line from `rows=`,
+/// so both counts have to be authored beside the reference: without them the
+/// preview would have to claim a size nothing measured.
+///
+/// **Not fixable.** Only the referenced source knows its own dimensions, so
+/// the author — or the tool that wrote the reference — supplies them.
+///
+/// Source-scanning like L041/L043: the typed block keeps the parsed values
+/// but not which attributes were authored, and a `rows=` that failed to parse
+/// as a number must read as missing here too, which it does — a bad count
+/// lands as `None` and this rule reports it.
+struct DataSourceWithoutCounts;
+
+impl LintRule for DataSourceWithoutCounts {
+    fn id(&self) -> &'static str {
+        "L044"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        for line in scan_lines(source) {
+            if line.literal {
+                continue;
+            }
+            let Some((_, name, attrs_str)) = opening_directive(line.trimmed) else {
+                continue;
+            };
+            if name != "data" || attrs_str.is_empty() {
+                continue;
+            }
+            let Ok(attrs) = parse_attrs(&attrs_str) else {
+                continue;
+            };
+            let src = match attrs.get("source") {
+                Some(AttrValue::String(v)) if !v.trim().is_empty() => v.trim().to_string(),
+                _ => continue,
+            };
+            let has_count = |key: &str| {
+                matches!(
+                    attrs.get(key),
+                    Some(AttrValue::Number(n)) if n.is_finite() && *n >= 0.0 && n.fract() == 0.0
+                ) || matches!(
+                    attrs.get(key),
+                    Some(AttrValue::String(v)) if v.trim().parse::<usize>().is_ok()
+                )
+            };
+            let missing = match (has_count("rows"), has_count("cols")) {
+                (true, true) => continue,
+                (false, true) => "rows=",
+                (true, false) => "cols=",
+                (false, false) => "rows= or cols=",
+            };
+            out.push(diag(
+                "L044",
+                format!(
+                    "'::{name}' has source='{src}' but no {missing} — add rows= and cols= \
+                     so the count line can be rendered"
+                ),
+                Some(line.span()),
+            ));
+        }
+        out
+    }
 }
 
 // ------------------------------------------------------------------
@@ -1101,6 +1173,7 @@ fn doc_type_name(doc_type: DocType) -> &'static str {
         DocType::Paper => "paper",
         DocType::Contract => "contract",
         DocType::Specification => "specification",
+        DocType::Spreadsheet => "spreadsheet",
     }
 }
 
@@ -1463,6 +1536,7 @@ const FM_ENUM_FIELDS: &[(&str, &[&str])] = &[
             "paper",
             "contract",
             "specification",
+            "spreadsheet",
         ],
     ),
     (

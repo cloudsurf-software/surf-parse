@@ -6,7 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -23,11 +23,106 @@ fn render_markdown(content: &str) -> String {
     // object, embed, etc.) and event-handler attributes while preserving safe
     // formatting produced by pulldown-cmark.
     let html_output = ammonia::clean(&html_output);
-    // Wrap bare <table> tags in scroll containers for mobile responsiveness
-    let html_output = html_output.replace("<table>", "<div class=\"surfdoc-table-wrap\"><table>");
-    let html_output = html_output.replace("</table>", "</table></div>");
+    // Wrap bare <table> tags in scroll containers for mobile responsiveness,
+    // capping an over-long body at `DATA_PREVIEW_ROWS` (0.20.0, D-SS-14).
+    let html_output = wrap_markdown_tables(&html_output);
     // Resolve inline `[@key]` citations against the ambient citation context.
     substitute_cites_html(&html_output)
+}
+
+/// Wrap every sanitized markdown `<table>` in the responsive scroll container,
+/// capping its body at [`DATA_PREVIEW_ROWS`] rows (0.20.0, D-SS-14).
+///
+/// A pipe table at or under the cap keeps exactly the bytes the pre-0.20.0
+/// pair of string replaces produced. Above it the wrap takes the same shape
+/// the `::data` arm uses — `surfdoc-table-preview` plus `data-rows`/
+/// `data-cols`, and the inert count line as the last child of the wrap. The
+/// `surfdoc-table-wide` class is deliberately NOT applied here: it does not
+/// depend on the cap, so applying it would move bytes for tables under it.
+///
+/// `render_dom.rs` mirrors this byte for byte from the pulldown event walk.
+fn wrap_markdown_tables(html: &str) -> String {
+    const OPEN: &str = "<table>";
+    const CLOSE: &str = "</table>";
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find(OPEN) {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + OPEN.len()..];
+        let Some(end) = after.find(CLOSE) else {
+            // Unbalanced markup: leave the remainder exactly as it came in.
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let inner = &after[..end];
+        let (kept, body_rows, cols) = cap_table_body(inner);
+        let preview = body_rows > DATA_PREVIEW_ROWS;
+        if preview {
+            out.push_str(&format!(
+                "<div class=\"surfdoc-table-wrap surfdoc-table-preview\" data-rows=\"{body_rows}\" data-cols=\"{cols}\">"
+            ));
+        } else {
+            out.push_str("<div class=\"surfdoc-table-wrap\">");
+        }
+        out.push_str(OPEN);
+        out.push_str(&kept);
+        out.push_str(CLOSE);
+        if preview {
+            out.push_str(&format!(
+                "<p class=\"surfdoc-table-more\">{body_rows} rows \u{b7} open as spreadsheet</p>"
+            ));
+        }
+        out.push_str("</div>");
+        rest = &after[end + CLOSE.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `(inner markup capped at the preview cap, total body rows, column count)`
+/// for one sanitized `<table>` body. Under the cap the markup is returned
+/// unchanged.
+fn cap_table_body(inner: &str) -> (String, usize, usize) {
+    let cols = markdown_table_cols(inner);
+    let Some(body_start) = inner.find("<tbody>").map(|i| i + "<tbody>".len()) else {
+        return (inner.to_string(), 0, cols);
+    };
+    let Some(body_len) = inner[body_start..].find("</tbody>") else {
+        return (inner.to_string(), 0, cols);
+    };
+    let body = &inner[body_start..body_start + body_len];
+    let row_ends: Vec<usize> = body.match_indices("</tr>").map(|(i, _)| i).collect();
+    let body_rows = row_ends.len();
+    if body_rows <= DATA_PREVIEW_ROWS {
+        return (inner.to_string(), body_rows, cols);
+    }
+    // Keep everything through the cap-th row's closing tag and the newline
+    // pulldown writes after it; drop the rest of the body.
+    let mut cut = row_ends[DATA_PREVIEW_ROWS - 1] + "</tr>".len();
+    if body[cut..].starts_with('\n') {
+        cut += 1;
+    }
+    let mut kept = String::with_capacity(inner.len());
+    kept.push_str(&inner[..body_start]);
+    kept.push_str(&body[..cut]);
+    kept.push_str(&inner[body_start + body_len..]);
+    (kept, body_rows, cols)
+}
+
+/// Column count of a sanitized markdown table: its header cells, or the cells
+/// of the first body row when it somehow has no header.
+fn markdown_table_cols(inner: &str) -> usize {
+    if let Some(head_start) = inner.find("<thead>")
+        && let Some(head_len) = inner[head_start..].find("</thead>")
+    {
+        return inner[head_start..head_start + head_len]
+            .matches("<th>")
+            .count();
+    }
+    match (inner.find("<tr>"), inner.find("</tr>")) {
+        (Some(a), Some(b)) if b > a => inner[a..b].matches("<td>").count(),
+        _ => 0,
+    }
 }
 
 /// Replace inline `[@key]` citation tokens in rendered HTML with anchored
@@ -1081,6 +1176,18 @@ pub fn to_html(doc: &SurfDoc) -> String {
         }
     }
 
+    // 0.20.0: `type: spreadsheet` renders the workbook layout instead of the
+    // h1/h2 auto-sectioning — a sheet strip over one section per top-level
+    // `::data` block. Every other profile takes the path below unchanged.
+    let profile = crate::types::render_profile(
+        doc.front_matter.as_ref().and_then(|fm| fm.doc_type),
+        doc.front_matter.as_ref().and_then(|fm| fm.format),
+    );
+    if profile == RenderProfile::Spreadsheet {
+        parts.push(render_workbook_html(&doc.blocks));
+        return wire_headings_and_toc(&parts.join("\n"));
+    }
+
     let mut in_section = false;
     let mut cta_group: Vec<String> = Vec::new();
 
@@ -1125,6 +1232,48 @@ pub fn to_html(doc: &SurfDoc) -> String {
     }
 
     wire_headings_and_toc(&parts.join("\n"))
+}
+
+/// The sheet label for the `index`-th (1-based) top-level `::data` block:
+/// its authored `name=`, or `Sheet<index>` by position.
+fn sheet_label(name: &Option<String>, index: usize) -> String {
+    match name {
+        Some(n) if !n.trim().is_empty() => n.trim().to_string(),
+        _ => format!("Sheet{index}"),
+    }
+}
+
+/// The `type: spreadsheet` workbook body: a `surfdoc-sheet-strip` nav naming
+/// every top-level `::data` block, then one `surfdoc-sheet` section per sheet
+/// carrying its label in `data-sheet`. Non-data blocks render exactly as they
+/// do on the document profile, in source order.
+fn render_workbook_html(blocks: &[Block]) -> String {
+    let mut sheets = 0usize;
+    let mut strip = String::new();
+    let mut body = String::new();
+    for block in blocks {
+        if matches!(block, Block::Nav { .. }) {
+            continue;
+        }
+        if let Block::Data { name, .. } = block {
+            sheets += 1;
+            let label = sheet_label(name, sheets);
+            strip.push_str(&format!(
+                "<a href=\"#surfdoc-sheet-{sheets}\">{}</a>",
+                escape_html(&label)
+            ));
+            body.push_str(&format!(
+                "<section class=\"surfdoc-sheet\" id=\"surfdoc-sheet-{sheets}\" data-sheet=\"{}\">{}</section>",
+                escape_html(&label),
+                render_block(block)
+            ));
+        } else {
+            body.push_str(&render_block(block));
+        }
+    }
+    format!(
+        "<section class=\"surfdoc-workbook\"><nav class=\"surfdoc-sheet-strip\">{strip}</nav>{body}</section>"
+    )
 }
 
 /// Render a slice of blocks as bare HTML fragments.
@@ -1521,6 +1670,28 @@ use crate::SURFDOC_CSS;
 // The old inline CSS has been moved to assets/surfdoc.css and is loaded via include_str! in lib.rs.
 
 /// Escape HTML special characters to prevent XSS.
+/// Resolve a `::data source=` reference to the URL the count line links to.
+///
+/// Two schemes are addressable (0.20.0): `file:<id>` is an uploaded workbook
+/// under `/files/<id>`, and `doc:<id>#<sheet>` is a SurfDoc sheet under
+/// `/docs/<id>` (the fragment names the sheet inside that document and is not
+/// part of the path). Anything else returns `None` and the count line stays
+/// the inert paragraph — an unresolvable reference never fails a render and
+/// never emits an invented URL.
+///
+/// The path is returned UNESCAPED: each backend escapes it the way it escapes
+/// every other attribute, so the two stay byte-identical.
+pub(crate) fn data_source_href(source: &str) -> Option<String> {
+    let s = source.trim();
+    let (prefix, id) = if let Some(rest) = s.strip_prefix("file:") {
+        ("/files/", rest.trim())
+    } else {
+        let rest = s.strip_prefix("doc:")?;
+        ("/docs/", rest.split('#').next().unwrap_or("").trim())
+    };
+    (!id.is_empty()).then(|| format!("{prefix}{id}"))
+}
+
 pub(crate) fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -2710,6 +2881,9 @@ fn render_block_inner(block: &Block) -> String {
             rows,
             caption,
             total,
+            source,
+            source_rows,
+            source_cols,
             ..
         } => {
             // 0.19.2 preview contract. A block with more than
@@ -2718,6 +2892,10 @@ fn render_block_inner(block: &Block) -> String {
             // under the cap the markup is byte-identical to 0.19.1 (no extra
             // class, no `data-` attributes, no line). `render_dom.rs:2540`
             // mirrors every byte of this.
+            //
+            // 0.20.0: `source=` makes the inline body a preview of rows held
+            // out of line, whatever its size — the counts then come from
+            // `rows=`/`cols=` and the count line becomes a link to the source.
             let row_count = rows.len();
             let col_count = rows
                 .iter()
@@ -2725,7 +2903,16 @@ fn render_block_inner(block: &Block) -> String {
                 .max()
                 .unwrap_or(0)
                 .max(headers.len());
-            let preview = row_count > DATA_PREVIEW_ROWS;
+            let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
+            let preview = row_count > DATA_PREVIEW_ROWS || linked.is_some();
+            let total_rows = match linked {
+                Some(_) => source_rows.unwrap_or(row_count),
+                None => row_count,
+            };
+            let total_cols = match linked {
+                Some(_) => source_cols.unwrap_or(col_count),
+                None => col_count,
+            };
             let mut wrap_class = String::from("surfdoc-table-wrap");
             if preview {
                 wrap_class.push_str(" surfdoc-table-preview");
@@ -2734,11 +2921,15 @@ fn render_block_inner(block: &Block) -> String {
                 wrap_class.push_str(" surfdoc-table-wide");
             }
             let preview_attrs = if preview {
-                format!(" data-rows=\"{row_count}\" data-cols=\"{col_count}\"")
+                format!(" data-rows=\"{total_rows}\" data-cols=\"{total_cols}\"")
             } else {
                 String::new()
             };
-            let shown = if preview { DATA_PREVIEW_ROWS } else { row_count };
+            let shown = if row_count > DATA_PREVIEW_ROWS {
+                DATA_PREVIEW_ROWS
+            } else {
+                row_count
+            };
             let mut html = format!(
                 "<div class=\"{wrap_class}\"{preview_attrs}><table class=\"surfdoc-data\">"
             );
@@ -2784,9 +2975,16 @@ fn render_block_inner(block: &Block) -> String {
             }
             html.push_str("</table>");
             if preview {
-                html.push_str(&format!(
-                    "<p class=\"surfdoc-table-more\">{row_count} rows \u{b7} open as spreadsheet</p>"
-                ));
+                let text = format!("{total_rows} rows \u{b7} open as spreadsheet");
+                match linked.and_then(data_source_href) {
+                    Some(href) => html.push_str(&format!(
+                        "<a class=\"surfdoc-table-more\" href=\"{}\">{text}</a>",
+                        escape_html(&href)
+                    )),
+                    None => html.push_str(&format!(
+                        "<p class=\"surfdoc-table-more\">{text}</p>"
+                    )),
+                }
             }
             html.push_str("</div>");
             html
@@ -7301,6 +7499,10 @@ mod tests {
             sortable: false,
             headers: vec!["Name".into(), "Age".into()],
             rows: vec![vec!["Alice".into(), "30".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7324,6 +7526,10 @@ mod tests {
             sortable: false,
             headers: vec!["Company".into()],
             rows: vec![vec!["[ZAPiT Games](zapit-games)".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7345,6 +7551,10 @@ mod tests {
             sortable: false,
             headers: vec!["Link".into()],
             rows: vec![vec!["[Example](https://example.com)".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7366,6 +7576,10 @@ mod tests {
             sortable: false,
             headers: vec!["Status".into()],
             rows: vec![vec!["**Active**".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7387,6 +7601,10 @@ mod tests {
             sortable: false,
             headers: vec!["Note".into()],
             rows: vec![vec!["*pending*".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7412,6 +7630,10 @@ mod tests {
             sortable: false,
             headers: vec!["Item".into()],
             rows: vec![vec!["\u{ab}FILL: deck price | $120\u{bb}".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7433,6 +7655,10 @@ mod tests {
             sortable: false,
             headers: vec!["Info".into()],
             rows: vec![vec!["See **[Docs](https://docs.example.com)** for *details*".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7459,6 +7685,10 @@ mod tests {
             sortable: false,
             headers: vec!["Input".into()],
             rows: vec![vec!["<script>alert(1)</script> and [safe](link)".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7490,6 +7720,10 @@ mod tests {
             sortable: false,
             headers: vec!["**Bold Header**".into(), "*Italic Header*".into()],
             rows: vec![vec!["a".into(), "b".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -7539,6 +7773,10 @@ mod tests {
             sortable: false,
             headers: vec!["Name".into()],
             rows: vec![vec!["Plain text".into()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);
@@ -9081,6 +9319,10 @@ mod tests {
             sortable: false,
             headers: vec!["Col1".into()],
             rows: vec![],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: span(),
         }]);

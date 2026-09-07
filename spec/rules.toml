@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 19
-registry_updated = "2026-08-26"
+total_rules = 20
+registry_updated = "2026-09-04"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -190,3 +190,10 @@ severity = "warning"
 fixable = false
 message = "Duplicate block id '{id}' on '::{block}' — first used on line {line}; ids must be unique within a page"
 description = "0.18.1: id= is the addressing handle for a single block, so two blocks sharing one inside the same page make that address ambiguous — the first match wins and the second is unreachable. Scope is the page: a site doc's ::page blocks each serve as their own document, so the same id on two different pages is correct authoring. Not fixable — a machine rewrite would have to invent a new id and every reference to the old spelling would still point at it; fix_source leaves duplicates untouched"
+
+[rules.L044]
+layer = "style"
+severity = "warning"
+fixable = false
+message = "'::{block}' has source='{source}' but no {missing} — add rows= and cols= so the count line can be rendered"
+description = "0.20.0: source= on a ::data block declares that the authored body is only a preview and the full rows live out of line, so the renderer must know how many rows and columns are really there to draw the 'N rows · open as spreadsheet' line. Without both counts the preview claims a size it cannot know. Not fixable — only the source of the rows knows its own dimensions, so the author (or the tool that wrote the reference) supplies them"

@@ -62,6 +62,7 @@ const LINT_CORPUS: &[(&str, &[&str])] = &[
     ("l041-unknown-layout.surf", &["L041", "L041"]),
     ("l042-desktop-only.surf", &["L042"]),
     ("l043-duplicate-block-id.surf", &["L043"]),
+    ("l044-data-source-counts.surf", &["L044"]),
     ("registered-blocks.surf", &[]),
     ("p001-unclosed.surf", &[]),
     ("p002-unclosed-frontmatter.surf", &[]),
@@ -484,4 +485,44 @@ fn specification_type_lints_clean_with_front_matter_intact() {
         !lint_codes.iter().any(|c| c == "L031"),
         "specification must not read as a mis-cased enum value, got {lint_codes:?}"
     );
+}
+
+// ------------------------------------------------------------------
+// L044 — ::data source= without both out-of-line counts (0.20.0)
+// ------------------------------------------------------------------
+
+#[test]
+fn l044_clean_when_source_carries_both_counts() {
+    let source = "::data[source=\"file:abc123\" rows=4200 cols=7]\n| A |\n|---|\n| 1 |\n::\n";
+    assert_eq!(l_codes(source), Vec::<String>::new());
+}
+
+#[test]
+fn l044_fires_once_for_each_missing_count() {
+    for src in [
+        "::data[source=\"file:abc123\" cols=7]\n| A |\n|---|\n| 1 |\n::\n",
+        "::data[source=\"file:abc123\" rows=4200]\n| A |\n|---|\n| 1 |\n::\n",
+        "::data[source=\"doc:d1#Sheet1\"]\n| A |\n|---|\n| 1 |\n::\n",
+        // A count that is not a number reads as missing here too.
+        "::data[source=\"file:abc123\" rows=many cols=7]\n| A |\n|---|\n| 1 |\n::\n",
+    ] {
+        assert_eq!(l_codes(src), vec!["L044".to_string()], "on: {src}");
+    }
+}
+
+#[test]
+fn l044_never_fires_on_a_data_block_without_source() {
+    for src in [
+        "::data[id=q3]\n| A |\n|---|\n| 1 |\n::\n",
+        "::data[id=q3 name=\"Sheet1\" rows=4200]\n| A |\n|---|\n| 1 |\n::\n",
+    ] {
+        assert_eq!(l_codes(src), Vec::<String>::new(), "on: {src}");
+    }
+}
+
+#[test]
+fn l020_block_name_vocabulary_still_works_beside_l044() {
+    // The unknown-block rule is untouched by the new data attributes.
+    let source = "::datta[source=\"file:abc123\"]\nbody\n::\n";
+    assert_eq!(l_codes(source), vec!["L020".to_string()]);
 }

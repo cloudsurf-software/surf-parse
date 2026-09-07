@@ -3635,6 +3635,10 @@ mod tests {
             sortable: true,
             headers: vec!["Name".to_string(), "Age".to_string()],
             rows: vec![vec!["Alice".to_string(), "30".to_string()]],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: syn(),
         };
@@ -3660,6 +3664,10 @@ mod tests {
             sortable: false,
             headers: vec![],
             rows: vec![],
+            name: None,
+            source: None,
+            source_rows: None,
+            source_cols: None,
             raw_content: String::new(),
             span: syn(),
         };

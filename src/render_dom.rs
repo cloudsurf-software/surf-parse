@@ -1043,6 +1043,41 @@ fn build_wrapped_phrasing_or_blocks<S: DomSink>(
     Ok(())
 }
 
+/// `(body rows, columns)` of the GFM table whose `Start(Tag::Table)` sits at
+/// `start`. Columns come from the header cells, or from the first body row
+/// when a table somehow arrives without a head. Mirrors
+/// `render_html::cap_table_body` / `markdown_table_cols`, which measure the
+/// same two numbers off the serialized markup.
+fn markdown_table_shape(events: &[Event], start: usize) -> (usize, usize) {
+    let mut rows = 0usize;
+    let mut head_cols = 0usize;
+    let mut first_row_cols = 0usize;
+    let mut in_head = false;
+    let mut in_first_row = false;
+    for event in &events[start + 1..] {
+        match event {
+            Event::End(TagEnd::Table) => break,
+            Event::Start(Tag::TableHead) => in_head = true,
+            Event::End(TagEnd::TableHead) => in_head = false,
+            Event::Start(Tag::TableRow) => {
+                rows += 1;
+                in_first_row = rows == 1;
+            }
+            Event::End(TagEnd::TableRow) => in_first_row = false,
+            Event::Start(Tag::TableCell) => {
+                if in_head {
+                    head_cols += 1;
+                } else if in_first_row {
+                    first_row_cols += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    let cols = if head_cols > 0 { head_cols } else { first_row_cols };
+    (rows, cols)
+}
+
 /// Event walker. `at_newline` replicates pulldown's HTML writer `end_newline`
 /// tracking so structural newlines land as the exact same text runs.
 fn build_md_events<S: DomSink>(
@@ -1055,6 +1090,12 @@ fn build_md_events<S: DomSink>(
     // Markdown tables cannot nest, so one flag pair is enough.
     let mut in_table_head = false;
     let mut table_body_open = false;
+    // 0.20.0 (D-SS-14): a pipe table over the preview cap paints only its
+    // first rows, exactly like the `::data` arm. The counts are known only by
+    // looking ahead, so `Start(Tag::Table)` scans to its own `End`.
+    let mut table_preview = false;
+    let mut table_total_rows = 0usize;
+    let mut table_rows_seen = 0usize;
     let mut i = 0usize;
     while i < events.len() {
         match &events[i] {
@@ -1240,8 +1281,21 @@ fn build_md_events<S: DomSink>(
             // `<td>`, so no alignment survives into the string renderer's
             // bytes either.
             Event::Start(Tag::Table(_)) => {
+                let (rows, cols) = markdown_table_shape(&events, i);
+                table_total_rows = rows;
+                table_rows_seen = 0;
+                table_preview = rows > DATA_PREVIEW_ROWS;
                 dom.open("div", CloseStyle::Normal);
-                dom.attr("class", AttrVal::Markup("surfdoc-table-wrap"));
+                if table_preview {
+                    dom.attr(
+                        "class",
+                        AttrVal::Markup("surfdoc-table-wrap surfdoc-table-preview"),
+                    );
+                    dom.attr("data-rows", AttrVal::Markup(&rows.to_string()));
+                    dom.attr("data-cols", AttrVal::Markup(&cols.to_string()));
+                } else {
+                    dom.attr("class", AttrVal::Markup("surfdoc-table-wrap"));
+                }
                 dom.open("table", CloseStyle::Normal);
                 in_table_head = false;
                 table_body_open = false;
@@ -1257,6 +1311,15 @@ fn build_md_events<S: DomSink>(
                     table_body_open = false;
                 }
                 dom.close(); // </table>
+                if table_preview {
+                    dom.open("p", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
+                    dom.text_markup(&format!(
+                        "{table_total_rows} rows \u{b7} open as spreadsheet"
+                    ));
+                    dom.close();
+                    table_preview = false;
+                }
                 dom.close(); // </div>
                 dom.text_raw("\n");
                 at_newline = true;
@@ -1277,6 +1340,21 @@ fn build_md_events<S: DomSink>(
                 at_newline = true;
             }
             Event::Start(Tag::TableRow) => {
+                table_rows_seen += 1;
+                if table_preview && table_rows_seen > DATA_PREVIEW_ROWS {
+                    // Past the cap: skip the whole row, newline included, so
+                    // the bytes match the string renderer's truncated body.
+                    let mut j = i + 1;
+                    while j < events.len() && !matches!(events[j], Event::End(TagEnd::TableRow)) {
+                        j += 1;
+                    }
+                    if j >= events.len() {
+                        return unimpl("markdown:table-row");
+                    }
+                    i = j;
+                    i += 1;
+                    continue;
+                }
                 dom.open("tr", CloseStyle::Normal);
                 at_newline = false;
             }
@@ -2537,10 +2615,11 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         // Line references are into `src/render_html.rs`.
 
         // render_html.rs:2708
-        Block::Data { headers, rows, caption, total, .. } => {
+        Block::Data { headers, rows, caption, total, source, source_rows, source_cols, .. } => {
             // 0.19.2 preview contract — mirrors render_html.rs:2708 byte for
             // byte: class order (wrap, preview, wide), then `data-rows`,
             // then `data-cols`; the count line is the LAST child of the wrap.
+            // 0.20.0 adds the `source=` preview and its linked count line.
             let row_count = rows.len();
             let col_count = rows
                 .iter()
@@ -2548,7 +2627,16 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 .max()
                 .unwrap_or(0)
                 .max(headers.len());
-            let preview = row_count > DATA_PREVIEW_ROWS;
+            let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
+            let preview = row_count > DATA_PREVIEW_ROWS || linked.is_some();
+            let total_rows = match linked {
+                Some(_) => source_rows.unwrap_or(row_count),
+                None => row_count,
+            };
+            let total_cols = match linked {
+                Some(_) => source_cols.unwrap_or(col_count),
+                None => col_count,
+            };
             let mut wrap_class = String::from("surfdoc-table-wrap");
             if preview {
                 wrap_class.push_str(" surfdoc-table-preview");
@@ -2556,12 +2644,16 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             if col_count >= DATA_WIDE_COLS {
                 wrap_class.push_str(" surfdoc-table-wide");
             }
-            let shown = if preview { DATA_PREVIEW_ROWS } else { row_count };
+            let shown = if row_count > DATA_PREVIEW_ROWS {
+                DATA_PREVIEW_ROWS
+            } else {
+                row_count
+            };
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup(&wrap_class));
             if preview {
-                dom.attr("data-rows", AttrVal::Markup(&row_count.to_string()));
-                dom.attr("data-cols", AttrVal::Markup(&col_count.to_string()));
+                dom.attr("data-rows", AttrVal::Markup(&total_rows.to_string()));
+                dom.attr("data-cols", AttrVal::Markup(&total_cols.to_string()));
             }
             dom.open("table", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-data"));
@@ -2603,10 +2695,22 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             }
             dom.close();
             if preview {
-                dom.open("p", CloseStyle::Normal);
-                dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
-                dom.text_markup(&format!("{row_count} rows \u{b7} open as spreadsheet"));
-                dom.close();
+                let text = format!("{total_rows} rows \u{b7} open as spreadsheet");
+                match linked.and_then(crate::render_html::data_source_href) {
+                    Some(href) => {
+                        dom.open("a", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
+                        dom.attr("href", AttrVal::Markup(&href));
+                        dom.text_markup(&text);
+                        dom.close();
+                    }
+                    None => {
+                        dom.open("p", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
+                        dom.text_markup(&text);
+                        dom.close();
+                    }
+                }
             }
             dom.close();
         }

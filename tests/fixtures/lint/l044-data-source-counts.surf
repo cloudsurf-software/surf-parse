@@ -1,0 +1,16 @@
+---
+title: "Data Source Without Counts"
+type: doc
+status: active
+created: "2026-09-04"
+---
+
+::summary
+A source= reference must carry both out-of-line counts.
+::
+
+::data[id=q3 source="file:abc123" rows=4200]
+| Line | Amount |
+|---|---|
+| Coffee | 800 |
+::

@@ -3,6 +3,50 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.20.0 — 2026-09-04 (type: spreadsheet + `::data` name/source/rows/cols)
+
+### Added
+
+- **`type: spreadsheet`** — a new document type whose top-level `::data`
+  blocks are the sheets of one workbook, and the matching
+  **`RenderProfile::Spreadsheet`**. The front-matter vocabulary, the
+  serializer, the lint doc-type list and the render-profile map all carry it;
+  every other document type resolves exactly as before.
+- **Four `::data` attributes**: `name=` labels the sheet, `source=` points at
+  rows held out of line (`file:<id>` or `doc:<id>#<sheet>`), and `rows=`/`cols=`
+  carry the size of what is out there. A count that is not a whole number is
+  ignored rather than fatal, and all four survive the parse–serialize round
+  trip.
+- **Lint `L044`** — a `::data` block carrying `source=` without both `rows=`
+  and `cols=`. Warning, not fixable: only the referenced source knows its own
+  dimensions.
+- **The workbook layout** for a spreadsheet document: a `.surfdoc-workbook`
+  section wrapping a `.surfdoc-sheet-strip` nav that names every sheet, then
+  one `.surfdoc-sheet` section per sheet carrying its label in `data-sheet`.
+  A sheet with no `name=` is `Sheet1`, `Sheet2`, … by position. Stylesheet
+  rules for the strip, the sheets and the linked count line come with it.
+
+### Changed
+
+- The `.surfdoc-table-more` count line becomes an anchor when the block
+  carries `source=` — `/files/<id>` for a file reference, `/docs/<id>` for a
+  document reference (the sheet fragment names the sheet, not the path) — and
+  its count comes from `rows=`, because the inline body is then only a
+  preview. An unresolvable reference keeps the inert paragraph rather than
+  inventing a URL, and a sourced block with no inline rows still renders its
+  header row and the count line.
+- Markdown degradation follows: a `source=` block emits its preview rows and
+  then the plain count line, and a spreadsheet document precedes each sheet
+  with a level-two heading holding the sheet name. Blocks without `source=`
+  and documents of every other type keep their present bytes.
+- A markdown pipe table over twenty body rows is now capped in both web
+  backends in the same shape a `::data` block uses — the preview class, the
+  `data-rows`/`data-cols` pair and the inert count line. At or under twenty
+  rows the bytes are unchanged, so no snapshot churns.
+- The block registry records the eight authored `::data` attributes and keeps
+  `filterable` and `chart` as planned, not implemented: the parser does not
+  honour them yet.
+
 ## 0.19.2 — 2026-08-27 (`::data` preview contract)
 
 ### Added

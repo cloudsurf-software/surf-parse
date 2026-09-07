@@ -261,3 +261,216 @@ fn a_wide_table_is_locked_to_the_printed_page_box() {
 fn preview_cap_is_public_and_twenty() {
     assert_eq!(DATA_PREVIEW_ROWS, 20);
 }
+
+// -- 0.20.0: `source=` makes the body a preview and links the count line -----
+
+/// A `::data` block referencing out-of-line rows: `n` inline preview rows,
+/// two columns, and the authored counts.
+fn sourced_block(inline_rows: usize, source: &str, rows: usize, cols: usize) -> String {
+    let mut src = format!("::data[source=\"{source}\" rows={rows} cols={cols}]\n");
+    src.push_str("H1 | H2\n");
+    for r in 1..=inline_rows {
+        src.push_str(&format!("r{r}c1 | r{r}c2\n"));
+    }
+    src.push_str("::\n");
+    src
+}
+
+#[test]
+fn a_file_source_links_the_count_line_under_files() {
+    let html = render(&sourced_block(3, "file:abc123", 4200, 7));
+    assert!(
+        html.contains(&format!(
+            "<a class=\"surfdoc-table-more\" href=\"/files/abc123\">4200 rows {DOT} open as spreadsheet</a>"
+        )),
+        "file: source must link the count line under /files: {html}"
+    );
+    assert!(
+        !html.contains("<p class=\"surfdoc-table-more\">"),
+        "the paragraph form must not also be emitted: {html}"
+    );
+}
+
+#[test]
+fn a_doc_source_links_the_count_line_under_docs_and_drops_the_sheet_fragment() {
+    let html = render(&sourced_block(2, "doc:d17#Q3", 88, 4));
+    assert!(
+        html.contains("href=\"/docs/d17\""),
+        "doc: source maps to /docs/<id> without the sheet fragment: {html}"
+    );
+    assert!(
+        html.contains(&format!("88 rows {DOT} open as spreadsheet")),
+        "the count comes from rows=, not the inline preview: {html}"
+    );
+}
+
+#[test]
+fn a_sourced_block_counts_from_the_attributes_not_the_preview() {
+    let html = render(&sourced_block(3, "file:abc123", 4200, 7));
+    assert!(
+        html.contains("data-rows=\"4200\" data-cols=\"7\""),
+        "the wrap carries the source counts: {html}"
+    );
+    assert!(
+        html.contains("surfdoc-table-preview"),
+        "any sourced block is a preview, whatever its inline size: {html}"
+    );
+    // The three inline rows all render — the cap only bites above 20.
+    assert_eq!(count_occurrences(&html, "<tr>"), 4, "header + 3 body rows: {html}");
+}
+
+#[test]
+fn a_sourced_block_with_no_inline_rows_still_renders_header_and_count_line() {
+    let src = "::data[source=\"file:abc123\" rows=4200 cols=2]\nH1 | H2\n::\n";
+    let html = render(src);
+    assert!(html.contains("<thead><tr>"), "the header row survives: {html}");
+    assert!(html.contains("<tbody></tbody>"), "the body is empty: {html}");
+    assert!(
+        html.contains(&format!("4200 rows {DOT} open as spreadsheet")),
+        "the count line is still drawn: {html}"
+    );
+}
+
+#[test]
+fn an_unresolvable_source_degrades_to_the_inert_paragraph() {
+    let html = render("::data[source=\"s3://bucket/key\" rows=9 cols=2]\nH1 | H2\n::\n");
+    assert!(
+        html.contains(&format!(
+            "<p class=\"surfdoc-table-more\">9 rows {DOT} open as spreadsheet</p>"
+        )),
+        "an unknown scheme never invents a URL: {html}"
+    );
+    assert!(!html.contains("href=\"/files/"), "no invented href: {html}");
+}
+
+#[test]
+fn a_block_without_source_is_byte_identical_to_0_19_2() {
+    // The 0.20.0 fields are absent, so both the small and the capped shapes
+    // must render exactly as the preview contract above pins them.
+    let small = render(&data_block(20, 2, false));
+    assert!(!small.contains("surfdoc-table-preview"), "{small}");
+    assert!(!small.contains("surfdoc-table-more"), "{small}");
+    assert!(!small.contains("data-rows="), "{small}");
+    let capped = render(&data_block(25, 2, false));
+    assert!(
+        capped.contains(&format!(
+            "<p class=\"surfdoc-table-more\">25 rows {DOT} open as spreadsheet</p>"
+        )),
+        "{capped}"
+    );
+    assert!(!capped.contains("<a class=\"surfdoc-table-more\""), "{capped}");
+}
+
+// -- 0.20.0: the `type: spreadsheet` workbook layout -------------------------
+
+fn workbook_source() -> String {
+    String::from(
+        "---\ntitle: \"Books\"\ntype: spreadsheet\n---\n\n\
+         ::data[name=\"Revenue\"]\nH1 | H2\nr1c1 | r1c2\n::\n\n\
+         ::data\nH1 | H2\nr1c1 | r1c2\n::\n",
+    )
+}
+
+#[test]
+fn a_spreadsheet_document_renders_the_workbook_shell() {
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(&workbook_source()).doc);
+    assert!(
+        html.contains("<section class=\"surfdoc-workbook\">"),
+        "workbook wrapper missing: {html}"
+    );
+    assert!(
+        html.contains("<nav class=\"surfdoc-sheet-strip\">"),
+        "sheet strip missing: {html}"
+    );
+    assert_eq!(
+        count_occurrences(&html, "<section class=\"surfdoc-sheet\""),
+        2,
+        "one section per top-level ::data block: {html}"
+    );
+}
+
+#[test]
+fn sheet_names_come_from_the_name_attribute_then_position() {
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(&workbook_source()).doc);
+    assert!(html.contains("data-sheet=\"Revenue\""), "authored name: {html}");
+    assert!(
+        html.contains("data-sheet=\"Sheet2\""),
+        "the unnamed second sheet takes its position: {html}"
+    );
+    assert!(html.contains("href=\"#surfdoc-sheet-1\">Revenue</a>"), "{html}");
+    assert!(html.contains("href=\"#surfdoc-sheet-2\">Sheet2</a>"), "{html}");
+}
+
+#[test]
+fn an_ordinary_document_never_takes_the_workbook_layout() {
+    let src = "---\ntitle: \"Books\"\ntype: doc\n---\n\n::data\nH1 | H2\nr1c1 | r1c2\n::\n";
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(src).doc);
+    assert!(!html.contains("surfdoc-workbook"), "{html}");
+    assert!(!html.contains("surfdoc-sheet"), "{html}");
+}
+
+#[test]
+fn stylesheet_carries_the_workbook_selectors() {
+    for selector in [
+        ".surfdoc-workbook",
+        ".surfdoc-sheet-strip",
+        ".surfdoc-sheet ",
+        "a.surfdoc-table-more",
+    ] {
+        assert!(
+            SURFDOC_CSS.contains(selector),
+            "surfdoc.css must carry a rule for {selector}"
+        );
+    }
+}
+
+// -- 0.20.0 (D-SS-14): the markdown pipe-table cap ---------------------------
+
+/// A bare markdown pipe table with `rows` body rows and two columns.
+fn pipe_table(rows: usize) -> String {
+    let mut src = String::from("| A | B |\n|---|---|\n");
+    for r in 1..=rows {
+        src.push_str(&format!("| r{r}a | r{r}b |\n"));
+    }
+    src
+}
+
+#[test]
+fn a_twenty_five_row_pipe_table_is_capped_like_a_data_block() {
+    let html = render(&pipe_table(25));
+    // Header row + 20 body rows.
+    assert_eq!(count_occurrences(&html, "<tr>"), 21, "capped body: {html}");
+    assert!(html.contains("r20b"), "the last kept row is row 20: {html}");
+    assert!(!html.contains("r21a"), "row 21 is dropped: {html}");
+    assert!(
+        html.contains("<div class=\"surfdoc-table-wrap surfdoc-table-preview\" data-rows=\"25\" data-cols=\"2\">"),
+        "the wrap takes the data-block shape: {html}"
+    );
+    assert!(
+        html.contains(&format!(
+            "<p class=\"surfdoc-table-more\">25 rows {DOT} open as spreadsheet</p></div>"
+        )),
+        "the inert count line is the last child of the wrap: {html}"
+    );
+}
+
+#[test]
+fn a_twenty_row_pipe_table_is_byte_identical_to_0_19_2() {
+    let html = render(&pipe_table(20));
+    assert!(
+        html.starts_with("<div class=\"surfdoc-table-wrap\"><table>"),
+        "no preview class at or under the cap: {html}"
+    );
+    assert!(!html.contains("data-rows="), "no dimension attributes: {html}");
+    assert!(!html.contains("surfdoc-table-more"), "no count line: {html}");
+    assert!(html.contains("r20b"), "every row still renders: {html}");
+    assert!(html.ends_with("</tbody></table></div>\n"), "unchanged tail: {html}");
+}
+
+#[test]
+fn a_twenty_one_row_pipe_table_is_the_first_capped_size() {
+    let html = render(&pipe_table(21));
+    assert_eq!(count_occurrences(&html, "<tr>"), 21, "{html}");
+    assert!(html.contains("data-rows=\"21\""), "{html}");
+    assert!(!html.contains("r21a"), "{html}");
+}
