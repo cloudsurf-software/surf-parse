@@ -311,3 +311,22 @@ fn data_sheet_attributes_are_a_fixed_point() {
         other => panic!("expected Data, got {other:?}"),
     }
 }
+
+/// 0.21.0 site pair. `::hours` keeps each row's authored right-hand text, so
+/// `label: text` re-parses to the same row (including an overnight range and
+/// a closed day); `::marquee` normalises every item onto the dashed form.
+/// Both must reach a fixed point on the FIRST pass, HTML included.
+#[test]
+fn site_blocks_hours_and_marquee_round_trip() {
+    for src in [
+        "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\nMonday: 11am - 9pm\nFriday: 5pm - 2am\nSunday: Closed\n::\n",
+        "::marquee\n- Fresh daily\nOpen late\n::\n",
+    ] {
+        let first = surf_parse::builder::to_surf_source(&surf_parse::parse(src).doc);
+        let second = surf_parse::builder::to_surf_source(&surf_parse::parse(&first).doc);
+        assert_eq!(first, second, "not a fixed point for:\n{src}first pass:\n{first}");
+        let html1 = surf_parse::render_html::to_html(&surf_parse::parse(&first).doc);
+        let html2 = surf_parse::render_html::to_html(&surf_parse::parse(&second).doc);
+        assert_eq!(html1, html2, "render drifted across the round trip:\n{src}");
+    }
+}

@@ -60,8 +60,8 @@ const ALLOWLIST: &[&str] = &[
 ];
 
 /// One minimal source document per implemented registry kind
-/// (spec/blocks.toml, status = "implemented"; registry currently has 99
-/// implemented of 112 total). When a kind is added to the registry, the
+/// (spec/blocks.toml, status = "implemented"; registry currently has 108
+/// implemented of 122 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 const SNIPPETS: &[(&str, &str)] = &[
     ("banner", "::banner[id=contact]\n# Talk to us\nWe reply within one business day.\n[Book a call](/book)\n::"),
@@ -86,6 +86,8 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("form", "::form[submit=\"Send\"]\ngroup: Contact\n- Name (text, \"Your name\") *\n- Email (email)\ngroup: Preferences\n- Plan (radio: Free | Pro)\n- Subscribe (checkbox)\n- Dark mode (toggle)\n- Resume (file)\n- Source (hidden, \"pricing\")\n::"),
     ("gallery", "::gallery[columns=2]\n- src=/img/a.png alt=\"A\" caption=\"First\"\n::"),
     ("hero-image", "::hero-image[src=/img/hero.png alt=\"Hero\"]\n::"),
+    ("hours", "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\n- Monday: 11am - 9pm\n- Sunday: Closed\n::"),
+    ("marquee", "::marquee\n- Fresh daily\n- Open late\n::"),
     ("metric", "::metric[label=\"Tests\" value=42 trend=up unit=tests]\n::"),
     ("nav", "::nav[logo=\"Co\"]\n- Home /\n- Pricing /pricing\n::"),
     ("page", "::page[route=/ title=\"Home\"]\nBody\n::"),

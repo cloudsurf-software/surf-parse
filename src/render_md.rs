@@ -604,6 +604,22 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.join("\n").trim().to_string()
         }
 
+        // Degradation: a plain two-column table, no status line — markdown
+        // has no clock either.
+        Block::Hours { title, rows, .. } => {
+            let mut lines = vec![format!("**{}**", title.as_deref().unwrap_or("Hours"))];
+            lines.push(String::new());
+            lines.push("| Day | Hours |".to_string());
+            lines.push("| --- | --- |".to_string());
+            for row in rows {
+                lines.push(format!("| {} | {} |", row.label, row.text));
+            }
+            lines.join("\n")
+        }
+
+        // Degradation: one comma-joined line — the loop is decoration.
+        Block::Marquee { items, .. } => items.join(", "),
+
         Block::ProductGrid { groups, .. } => {
             let mut lines = Vec::new();
             for group in groups {

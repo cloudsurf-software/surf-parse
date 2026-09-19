@@ -6,7 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
+use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HoursRow, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -2850,6 +2850,230 @@ fn inject_root_attrs(html: String, attrs: &[(&'static str, String)]) -> String {
     spliced
 }
 
+// ---------------------------------------------------------------------------
+// ::hours — the block carries no clock
+// ---------------------------------------------------------------------------
+
+/// Schema.org day names, indexed by the weekday number `HoursRow::day` carries.
+const HOURS_SCHEMA_DAYS: [&str; 7] = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
+
+/// One `openingHoursSpecification` entry, for a caller assembling schema.org
+/// JSON-LD from an `::hours` block. Closed days carry no entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpeningHoursSpec {
+    /// Schema.org day name (`"Monday"`).
+    pub day_of_week: &'static str,
+    /// Opening time as 24-hour `HH:MM`.
+    pub opens: String,
+    /// Closing time as 24-hour `HH:MM`. At or below `opens` when the range
+    /// runs past midnight into the next day.
+    pub closes: String,
+}
+
+/// Project an `::hours` block's rows onto schema.org
+/// `openingHoursSpecification` entries. Any other block yields an empty list.
+pub fn hours_opening_specification(block: &Block) -> Vec<OpeningHoursSpec> {
+    let Block::Hours { rows, .. } = block else {
+        return Vec::new();
+    };
+    rows.iter()
+        .filter_map(|row| {
+            let (opens, closes) = (row.opens?, row.closes?);
+            Some(OpeningHoursSpec {
+                day_of_week: HOURS_SCHEMA_DAYS[(row.day % 7) as usize],
+                opens: format!("{:02}:{:02}", opens / 60, opens % 60),
+                closes: format!("{:02}:{:02}", closes / 60, closes % 60),
+            })
+        })
+        .collect()
+}
+
+/// `1080` → `6pm`, `1110` → `6:30pm`, `0` → `12am`, `720` → `12pm`.
+fn format_clock(minutes: u16) -> String {
+    let m = minutes % 1440;
+    let (h24, min) = (m / 60, m % 60);
+    let h12 = match h24 % 12 {
+        0 => 12,
+        h => h,
+    };
+    let suffix = if h24 < 12 { "am" } else { "pm" };
+    if min == 0 {
+        format!("{h12}{suffix}")
+    } else {
+        format!("{h12}:{min:02}{suffix}")
+    }
+}
+
+/// Closing minute when `row` covers `minutes` on weekday `weekday`, else
+/// `None`.
+///
+/// A `closes` at or below `opens` is an overnight range: it is live from the
+/// opening minute through the end of its own weekday, and again on the NEXT
+/// weekday until the closing minute (`5pm - 2am` is open at 1am Tuesday
+/// because of Monday's row). `closes == opens` is a full 24 hours.
+fn hours_row_open_until(row: &HoursRow, weekday: u8, minutes: u16) -> Option<u16> {
+    let (opens, closes) = (row.opens?, row.closes?);
+    if closes > opens {
+        (row.day == weekday && minutes >= opens && minutes < closes).then_some(closes)
+    } else if (row.day == weekday && minutes >= opens)
+        || (row.day == (weekday + 6) % 7 && minutes < closes)
+    {
+        Some(closes)
+    } else {
+        None
+    }
+}
+
+/// The next opening from `weekday`/`minutes`, as (days ahead, row, opening
+/// minute). Looks a full week forward; `None` when no row ever opens.
+fn hours_next_opening(
+    rows: &[HoursRow],
+    weekday: u8,
+    minutes: u16,
+) -> Option<(u8, &HoursRow, u16)> {
+    for ahead in 0..7u8 {
+        let day = (weekday + ahead) % 7;
+        let mut best: Option<(&HoursRow, u16)> = None;
+        for row in rows.iter().filter(|r| r.day == day) {
+            let Some(opens) = row.opens else { continue };
+            if ahead == 0 && opens <= minutes {
+                continue;
+            }
+            if best.is_none_or(|(_, seen)| opens < seen) {
+                best = Some((row, opens));
+            }
+        }
+        if let Some((row, opens)) = best {
+            return Some((ahead, row, opens));
+        }
+    }
+    None
+}
+
+/// The status span's class suffix and text for a local time, or `None` for
+/// the pure render (which has no clock and states nothing).
+fn hours_status(rows: &[HoursRow], now: Option<(u8, u16)>) -> Option<(&'static str, String)> {
+    let (weekday, minutes) = now?;
+    let weekday = weekday % 7;
+    if let Some(closes) = rows
+        .iter()
+        .find_map(|row| hours_row_open_until(row, weekday, minutes))
+    {
+        return Some(("is-open", format!("Open now · until {}", format_clock(closes))));
+    }
+    match hours_next_opening(rows, weekday, minutes) {
+        Some((0, _, opens)) => Some((
+            "is-closed",
+            format!("Closed · opens {}", format_clock(opens)),
+        )),
+        Some((_, row, opens)) => Some((
+            "is-closed",
+            format!(
+                "Closed · opens {} {}",
+                escape_html(&row.label),
+                format_clock(opens)
+            ),
+        )),
+        None => Some(("is-closed", "Closed".to_string())),
+    }
+}
+
+/// Render an `::hours` block. `now` is the caller's LOCAL weekday
+/// (0 = Sunday) and minutes since midnight; `None` renders the pure form —
+/// an empty status span and no `is-today` row.
+fn hours_html(
+    title: Option<&str>,
+    timezone: Option<&str>,
+    rows: &[HoursRow],
+    now: Option<(u8, u16)>,
+) -> String {
+    let tz_attr = timezone
+        .map(|t| format!(" data-timezone=\"{}\"", escape_html(t)))
+        .unwrap_or_default();
+    let mut out = format!("<div class=\"surfdoc-hours\"{tz_attr}>");
+    out.push_str("<h3 class=\"surfdoc-hours-title\">");
+    out.push_str(&escape_html(title.unwrap_or("Hours")));
+    match hours_status(rows, now) {
+        Some((state, text)) => out.push_str(&format!(
+            "<span class=\"surfdoc-hours-status {state}\">{text}</span>"
+        )),
+        None => out.push_str("<span class=\"surfdoc-hours-status\"></span>"),
+    }
+    out.push_str("</h3><table class=\"surfdoc-hours-table\"><tbody>");
+    let today = now.map(|(w, _)| w % 7);
+    for row in rows {
+        let is_today = if today == Some(row.day) { " is-today" } else { "" };
+        out.push_str(&format!(
+            "<tr class=\"surfdoc-hours-row{is_today}\" data-day=\"{}\">\
+             <th scope=\"row\" class=\"surfdoc-hours-day\">{}</th>\
+             <td class=\"surfdoc-hours-time\">{}</td></tr>",
+            row.day,
+            escape_html(&row.label),
+            escape_html(&row.text),
+        ));
+    }
+    out.push_str("</tbody></table></div>");
+    out
+}
+
+/// Render an `::hours` block with the caller's local time stamped in: today's
+/// row gains `is-today` and the status span reads open or closed with the next
+/// boundary.
+///
+/// `weekday` is 0 = Sunday … 6 = Saturday and `minutes_since_midnight` is
+/// 0..=1439, both already resolved in the SITE's timezone — this crate holds
+/// no clock and no tz database, so an unknown `timezone=` attribute is the
+/// caller's problem, not the renderer's. Returns `None` for any other block.
+pub fn render_hours_with_now(
+    block: &Block,
+    weekday: u8,
+    minutes_since_midnight: u16,
+) -> Option<String> {
+    let Block::Hours {
+        title,
+        timezone,
+        rows,
+        ..
+    } = block
+    else {
+        return None;
+    };
+    Some(hours_html(
+        title.as_deref(),
+        timezone.as_deref(),
+        rows,
+        Some((weekday, minutes_since_midnight)),
+    ))
+}
+
+/// Render a `::marquee` band. The item/separator sequence is emitted TWICE so
+/// a CSS `translateX(-50%)` loop on the track meets itself seamlessly; the
+/// wrapper is hidden from assistive tech because the copy is decorative and
+/// repeated.
+fn marquee_html(items: &[String]) -> String {
+    let mut out =
+        String::from("<div class=\"surfdoc-marquee\" aria-hidden=\"true\"><div class=\"surfdoc-marquee-track\">");
+    for _ in 0..2 {
+        for item in items {
+            out.push_str(&format!(
+                "<span class=\"surfdoc-marquee-item\">{}</span>\
+                 <i class=\"surfdoc-marquee-sep\">·</i>",
+                escape_html(item)
+            ));
+        }
+    }
+    out.push_str("</div></div>");
+    out
+}
+
 fn render_block_inner(block: &Block) -> String {
     match block {
         Block::Markdown { content, .. } => render_markdown(content),
@@ -3743,6 +3967,18 @@ fn render_block_inner(block: &Block) -> String {
             parts.push("</section>".to_string());
             parts.join("")
         }
+
+        // The pure render states NO open/closed state — this renderer has no
+        // clock. A host that knows the site's local time calls
+        // `render_hours_with_now` instead (no client script).
+        Block::Hours {
+            title,
+            timezone,
+            rows,
+            ..
+        } => hours_html(title.as_deref(), timezone.as_deref(), rows, None),
+
+        Block::Marquee { items, .. } => marquee_html(items),
 
         Block::ProductGrid { groups, tiles: true, .. } => {
             // apple.com-style promo tiles: a full-bleed (site-capped) 2-up band;
@@ -6964,6 +7200,32 @@ fn build_site_nav_html(
     nav_html
 }
 
+/// The `<head>` CSS for a site page: the base stylesheet (unless the consumer
+/// links it itself — `PageConfig::embed_css = false`), then the site-nav sheet
+/// and the per-site accent overrides, which are structural and always emitted,
+/// then one `<link>` per configured external stylesheet. Same order as the
+/// shell path (render_html.rs:1465).
+///
+/// With the default config (`embed_css = true`, no `stylesheets`) the string is
+/// byte-for-byte the `<style>{css}{nav_css}{override_block}</style>` the site
+/// renderers emitted before 0.21.0, so no golden or corpus snapshot churns.
+fn site_style_block(config: &PageConfig, override_block: &str) -> String {
+    let mut out = String::from("<style>");
+    if config.embed_css {
+        out.push_str(SURFDOC_CSS);
+    }
+    out.push_str(SITE_NAV_CSS);
+    out.push_str(override_block);
+    out.push_str("</style>");
+    for href in &config.stylesheets {
+        out.push_str(&format!(
+            "\n    <link rel=\"stylesheet\" href=\"{}\">",
+            escape_html(href)
+        ));
+    }
+    out
+}
+
 /// Render a full HTML page for one route within a multi-page site.
 ///
 /// Produces a `<!DOCTYPE html>` page with site-level `<nav>`, page content,
@@ -7128,7 +7390,7 @@ pub fn render_site_page(
     <meta name="generator" content="SurfDoc v0.1">
     <link rel="alternate" type="text/surfdoc" href="{source_path}">
     <title>{title}</title>{meta_extra}
-    <style>{css}{nav_css}{override_block}</style>
+    {style_block}
     {theme_resolver}
 </head>
 <body>
@@ -7144,9 +7406,7 @@ pub fn render_site_page(
         lang = escape_html(lang),
         title = title_escaped,
         meta_extra = meta_extra,
-        css = SURFDOC_CSS,
-        nav_css = SITE_NAV_CSS,
-        override_block = override_block,
+        style_block = site_style_block(config, &override_block),
         theme_resolver = theme_resolver,
         nav = nav_html,
         body = body,
@@ -7278,7 +7538,7 @@ fn render_site_document(
     <meta name="generator" content="SurfDoc v0.1">
     <link rel="alternate" type="text/surfdoc" href="{source_path}">
     <title>{title}</title>{meta_extra}
-    <style>{css}{nav_css}{override_block}</style>
+    {style_block}
     {theme_resolver}
 </head>
 <body>
@@ -7295,9 +7555,7 @@ fn render_site_document(
         lang = escape_html(lang),
         title = title_escaped,
         meta_extra = meta_extra,
-        css = SURFDOC_CSS,
-        nav_css = SITE_NAV_CSS,
-        override_block = override_block,
+        style_block = site_style_block(config, &override_block),
         theme_resolver = theme_resolver,
         nav = nav_html,
         body = body,
@@ -8639,6 +8897,181 @@ mod tests {
         assert!(html.contains("href=\"/contact\""));
     }
 
+    // -- ::hours ---------------------------------------------------------
+
+    /// Sunday closed, a weekday range, and two overnight nights.
+    const HOURS_SRC: &str = "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\n\
+         Sunday: Closed\n\
+         Monday: 11am - 9pm\n\
+         Friday: 5pm - 2am\n\
+         Saturday: 5pm - 2am\n\
+         ::";
+
+    fn first_block(src: &str) -> Block {
+        crate::parse(src)
+            .doc
+            .blocks
+            .into_iter()
+            .next()
+            .expect("one block")
+    }
+
+    /// The pure renderer has no clock, so it states nothing: an EMPTY status
+    /// span and no `is-today` row.
+    #[test]
+    fn html_hours_pure_render_states_no_open_state() {
+        let html = to_html(&crate::parse(HOURS_SRC).doc);
+        assert!(html.contains("<span class=\"surfdoc-hours-status\"></span>"));
+        assert!(!html.contains("is-open"));
+        assert!(!html.contains("is-closed"));
+        assert!(!html.contains("is-today"));
+        assert!(html.contains("data-timezone=\"America/Los_Angeles\""));
+        for day in 0..=6u8 {
+            let present = html.contains(&format!("data-day=\"{day}\""));
+            assert_eq!(
+                present,
+                matches!(day, 0 | 1 | 5 | 6),
+                "data-day={day} presence must follow the authored rows"
+            );
+        }
+    }
+
+    /// Saturday 5pm–2am is still live at 1am on SUNDAY — the overnight rule
+    /// reads the previous weekday's row.
+    #[test]
+    fn html_hours_overnight_range_is_open_after_midnight_next_weekday() {
+        let block = first_block(HOURS_SRC);
+        let html = render_hours_with_now(&block, 0, 60).expect("hours block");
+        assert!(html.contains("<span class=\"surfdoc-hours-status is-open\">Open now · until 2am</span>"));
+        // Today is Sunday, whose own row is closed — the marker follows the
+        // calendar day, not the open range.
+        assert!(html.contains("class=\"surfdoc-hours-row is-today\" data-day=\"0\""));
+    }
+
+    #[test]
+    fn html_hours_open_at_the_exact_opening_minute_and_closed_at_the_closing_one() {
+        let block = first_block(HOURS_SRC);
+        let open = render_hours_with_now(&block, 1, 660).expect("hours block");
+        assert!(open.contains("is-open\">Open now · until 9pm"));
+        let closed = render_hours_with_now(&block, 1, 1260).expect("hours block");
+        assert!(
+            closed.contains("is-closed\">Closed · opens Friday 5pm"),
+            "the next opening is four days out and names its day: {closed}"
+        );
+    }
+
+    /// A closed day points at the next day that opens; a same-day opening
+    /// still to come names no day.
+    #[test]
+    fn html_hours_closed_day_points_at_the_next_opening() {
+        let block = first_block(HOURS_SRC);
+        let sunday_morning = render_hours_with_now(&block, 0, 600).expect("hours block");
+        assert!(sunday_morning.contains("is-closed\">Closed · opens Monday 11am"));
+        let monday_dawn = render_hours_with_now(&block, 1, 300).expect("hours block");
+        assert!(monday_dawn.contains("is-closed\">Closed · opens 11am"));
+    }
+
+    #[test]
+    fn html_hours_midnight_and_noon_boundaries() {
+        let block = first_block("::hours\nMonday: 12am - 12pm\n::");
+        assert!(render_hours_with_now(&block, 1, 0)
+            .expect("hours block")
+            .contains("is-open\">Open now · until 12pm"));
+        assert!(render_hours_with_now(&block, 1, 720)
+            .expect("hours block")
+            .contains("is-closed\">Closed"));
+    }
+
+    /// No row ever opens (and a weekday with no row at all) — just "Closed",
+    /// with no phantom next opening.
+    #[test]
+    fn html_hours_with_no_opening_anywhere_reads_closed() {
+        let block = first_block("::hours\nMonday: By appointment\n::");
+        let html = render_hours_with_now(&block, 3, 600).expect("hours block");
+        assert!(html.contains("<span class=\"surfdoc-hours-status is-closed\">Closed</span>"));
+        assert!(!html.contains("is-today"), "Thursday has no row to mark");
+    }
+
+    #[test]
+    fn html_hours_escapes_every_authored_string() {
+        let block = first_block(
+            "::hours[title=\"Hours & <b>\" timezone=\"Zone/\\\"x\\\"\"]\nMonday: 9am - 5pm & \"late\"\n::",
+        );
+        let html = render_hours_with_now(&block, 1, 600).expect("hours block");
+        assert!(html.contains("Hours &amp; &lt;b&gt;"));
+        assert!(!html.contains("<b>"));
+        assert!(html.contains("&amp; &quot;late&quot;"));
+        assert!(html.contains("data-timezone=\"Zone/&quot;x&quot;\""));
+    }
+
+    #[test]
+    fn html_hours_projects_schema_org_opening_hours() {
+        let spec = hours_opening_specification(&first_block(HOURS_SRC));
+        assert_eq!(spec.len(), 3, "closed days carry no entry");
+        assert_eq!(spec[0].day_of_week, "Monday");
+        assert_eq!((spec[0].opens.as_str(), spec[0].closes.as_str()), ("11:00", "21:00"));
+        assert_eq!(spec[1].day_of_week, "Friday");
+        assert_eq!(
+            (spec[1].opens.as_str(), spec[1].closes.as_str()),
+            ("17:00", "02:00"),
+            "an overnight range keeps its authored pair"
+        );
+        assert!(hours_opening_specification(&first_block("::marquee\n- x\n::")).is_empty());
+    }
+
+    // -- ::marquee -------------------------------------------------------
+
+    #[test]
+    fn html_marquee_emits_the_sequence_twice_inside_a_hidden_track() {
+        let html = to_html(&crate::parse("::marquee\n- Fresh daily\n- Open late\n::").doc);
+        assert!(html.contains("<div class=\"surfdoc-marquee\" aria-hidden=\"true\">"));
+        assert!(html.contains("<div class=\"surfdoc-marquee-track\">"));
+        assert_eq!(
+            html.matches("<span class=\"surfdoc-marquee-item\">Fresh daily</span>").count(),
+            2,
+            "each item appears exactly twice so translateX(-50%) meets itself"
+        );
+        assert_eq!(
+            html.matches("<span class=\"surfdoc-marquee-item\">Open late</span>").count(),
+            2
+        );
+        assert_eq!(
+            html.matches("surfdoc-marquee-sep").count(),
+            4,
+            "one separator per item, both halves"
+        );
+    }
+
+    #[test]
+    fn html_marquee_escapes_item_text() {
+        let html = to_html(&crate::parse("::marquee\n- Fresh <daily> & local\n::").doc);
+        assert!(html.contains("Fresh &lt;daily&gt; &amp; local"));
+        assert!(!html.contains("<daily>"));
+    }
+
+    /// The loop is pure CSS, and it stops for a reader who asked motion to
+    /// stop — the block emits no script for either.
+    #[test]
+    fn css_marquee_animation_and_reduced_motion_rules_shipped() {
+        assert!(SURFDOC_CSS.contains("@keyframes surfdoc-marquee-scroll"));
+        assert!(SURFDOC_CSS.contains("translateX(-50%)"));
+        assert!(SURFDOC_CSS.contains("animation: surfdoc-marquee-scroll"));
+        // The stop rule must sit inside a reduced-motion block: the nearest
+        // preceding at-rule is the one that guards it.
+        let stop = SURFDOC_CSS
+            .find(".surfdoc-marquee-track { animation: none;")
+            .expect("the marquee stop rule ships");
+        let guard = SURFDOC_CSS[..stop]
+            .rfind("@media")
+            .expect("the stop rule is guarded");
+        assert!(
+            SURFDOC_CSS[guard..stop].starts_with("@media (prefers-reduced-motion: reduce)"),
+            "the marquee must stop under prefers-reduced-motion"
+        );
+        let html = to_html(&crate::parse("::marquee\n- x\n::").doc);
+        assert!(!html.contains("<script"), "the band carries no script");
+    }
+
     #[test]
     fn html_hero_external_button_opens_new_tab() {
         let src = "::hero\n# H\n\n[Go](https://x.com){primary external}\n[Stay](/here){primary}\n::";
@@ -9870,6 +10303,100 @@ mod tests {
         assert!(html.contains("Hello World"));
         assert!(html.contains("surfdoc-site-footer"));
         assert!(html.contains("#3b82f6")); // accent override
+    }
+
+    /// One site/page/nav triple for the head-CSS tests below.
+    fn site_css_fixture() -> (SiteConfig, PageEntry, Vec<(String, String)>) {
+        let site = SiteConfig {
+            name: Some("Test Site".into()),
+            accent: Some("#3b82f6".into()),
+            ..Default::default()
+        };
+        let page = PageEntry {
+            route: "/".into(),
+            layout: None,
+            title: Some("Home".into()),
+            sidebar: false,
+            children: vec![Block::Markdown {
+                content: "# Hello World".into(),
+                span: span(),
+            }],
+        };
+        (site, page, vec![("/".into(), "Home".into())])
+    }
+
+    /// The default config keeps 0.20.0's head CSS byte for byte: one
+    /// `<style>` holding the base sheet, then the nav sheet, then the accent
+    /// overrides — and no external `<link>`. Golden and corpus snapshots
+    /// must not churn on the 0.21.0 config wiring.
+    #[test]
+    fn render_site_page_default_config_css_is_byte_identical() {
+        let (site, page, nav_items) = site_css_fixture();
+        let html = render_site_page(&page, &site, &nav_items, &PageConfig::default());
+        let ink_light = accent_ink_color("#3b82f6", false);
+        let ink_dark = accent_ink_color("#3b82f6", true);
+        let expected = format!(
+            "    <style>{css}{nav}\n:root {{\n--accent: #3b82f6;\n--accent-text: {text};\n\
+             --accent-ink: {ink_light};\n}}\n[data-theme=\"dark\"] {{ --accent-ink: {ink_dark}; }}\n\
+             @media (prefers-color-scheme: dark) {{ :root:not([data-theme]) {{ --accent-ink: {ink_dark}; }} }}</style>\n",
+            css = SURFDOC_CSS,
+            nav = SITE_NAV_CSS,
+            text = crate::resolve::accent_text_color("#3b82f6"),
+        );
+        // The finished page goes through the slot pass, which rewrites the
+        // `«IMG:»` marker inside a stylesheet comment — so the expectation
+        // does too, or it would not match its own bytes.
+        let expected = crate::slots::resolve_slot_markers(expected);
+        assert!(html.contains(&expected), "default site head CSS drifted");
+        assert!(
+            !html.contains("<link rel=\"stylesheet\""),
+            "no external sheet is configured"
+        );
+    }
+
+    /// `embed-css: false` drops the base sheet only — the nav sheet and the
+    /// accent override block are structural and stay, or the page loses its
+    /// own chrome along with the stylesheet the consumer replaces.
+    #[test]
+    fn render_site_page_embed_css_false_keeps_nav_and_accent() {
+        let (site, page, nav_items) = site_css_fixture();
+        let config = PageConfig {
+            embed_css: false,
+            ..Default::default()
+        };
+        let html = render_site_page(&page, &site, &nav_items, &config);
+        // A selector the base sheet owns and the nav sheet does not.
+        assert!(SURFDOC_CSS.contains(".surfdoc-callout"));
+        assert!(!SITE_NAV_CSS.contains(".surfdoc-callout"));
+        assert!(
+            !html.contains(".surfdoc-callout"),
+            "base sheet must be omitted"
+        );
+        assert!(html.contains(SITE_NAV_CSS), "nav sheet must stay");
+        assert!(html.contains("--accent: #3b82f6;"), "accent vars must stay");
+        assert!(html.contains("--accent-ink:"), "accent-ink pair must stay");
+    }
+
+    /// Configured stylesheets emit escaped `<link>` tags, in order, AFTER the
+    /// style tag — so a consumer sheet wins the cascade.
+    #[test]
+    fn render_site_page_emits_configured_stylesheets_after_the_style_tag() {
+        let (site, page, nav_items) = site_css_fixture();
+        let config = PageConfig {
+            embed_css: false,
+            stylesheets: vec!["/site.css?v=2&mode=a".into(), "/print.css".into()],
+            ..Default::default()
+        };
+        let html = render_site_page(&page, &site, &nav_items, &config);
+        let first = html
+            .find("<link rel=\"stylesheet\" href=\"/site.css?v=2&amp;mode=a\">")
+            .expect("first sheet linked and escaped");
+        let second = html
+            .find("<link rel=\"stylesheet\" href=\"/print.css\">")
+            .expect("second sheet linked");
+        let style_end = html.find("</style>").expect("style tag closes");
+        assert!(style_end < first, "links follow the style tag");
+        assert!(first < second, "links keep their configured order");
     }
 
     #[test]

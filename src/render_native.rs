@@ -2733,6 +2733,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         Block::Unknown { .. }
         | Block::Style { .. }
         | Block::Logo { .. }
+        | Block::Hours { .. }
+        | Block::Marquee { .. }
         | Block::Action { .. }
         | Block::Dashboard { .. }
         | Block::ChatInput { .. }
@@ -3056,6 +3058,8 @@ pub fn block_tier(block: &Block) -> BlockTier {
         Block::Unknown { .. }
         | Block::Style { .. }
         | Block::Logo { .. }
+        | Block::Hours { .. }
+        | Block::Marquee { .. }
         | Block::Action { .. }
         | Block::Dashboard { .. }
         | Block::ChatInput { .. }

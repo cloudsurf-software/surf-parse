@@ -331,11 +331,13 @@ fn hostile_shell_max_depth_nesting() {
         html.contains("Modal at max depth"),
         "{name}: the deepest modal must survive the nesting"
     );
-    // Pinned degradation: `::section` does not adopt directive children, so
-    // the chrome nested under it is dropped whole — not partially rendered.
+    // 0.21.0: `::section` DOES adopt directive children — the pre-0.21 drop
+    // was the `parse_section` body-drop bug (a headline-less section lost
+    // every line before its last blank line), not a nesting rule. The branch
+    // now renders whole, and identity/no-breakout above still pin it.
     assert!(
-        !html.contains("does not nest directives"),
-        "{name}: the non-adopting branch must degrade, not half-render"
+        html.contains("does not nest directives"),
+        "{name}: the nested branch must render whole, not half-render"
     );
     assert!(!html.contains("<script"), "{name}: no script element may be constructed");
 }

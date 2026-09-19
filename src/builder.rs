@@ -1823,6 +1823,38 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             format!("{fence}banner{attrs_str}\n{}\n{fence}", content_lines.join("\n").trim_end())
         }
 
+        Block::Hours {
+            title,
+            timezone,
+            rows,
+            ..
+        } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(t) = title {
+                attrs_parts.push(format!("title=\"{}\"", escape_attr(t)));
+            }
+            if let Some(tz) = timezone {
+                attrs_parts.push(format!("timezone=\"{}\"", escape_attr(tz)));
+            }
+            let attrs_str = if attrs_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attrs_parts.join(" "))
+            };
+            // `text` is the authored right-hand side, kept verbatim by the
+            // parser, so `label: text` re-parses to the same row.
+            let content_lines: Vec<String> = rows
+                .iter()
+                .map(|r| format!("{}: {}", r.label, r.text))
+                .collect();
+            format!("{fence}hours{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
+        }
+
+        Block::Marquee { items, .. } => {
+            let content_lines: Vec<String> = items.iter().map(|i| format!("- {i}")).collect();
+            format!("{fence}marquee\n{}\n{fence}", content_lines.join("\n"))
+        }
+
         Block::ProductGrid { groups, tiles, .. } => {
             let mut content_lines = Vec::new();
             for group in groups {

@@ -1,0 +1,24 @@
+---
+title: Site blocks
+---
+
+# Site blocks
+
+The 0.21.0 site pair: an opening-hours table the host stamps with its own
+clock, and a decorative looping band.
+
+::hours[title="Hours & Holidays" timezone="America/Los_Angeles"]
+- Monday: 11am - 9pm
+- Tuesday: 11am – 9pm
+- Wednesday: Closed
+- Thursday: 11:00 - 21:00
+- Friday: 5pm - 2am
+- Saturday: 5pm – 2am
+- Sunday: 12pm - 6pm
+::
+
+::marquee
+- Fresh <daily> & local
+- Open late
+- "Walk-ins welcome"
+::

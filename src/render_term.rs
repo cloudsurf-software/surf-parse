@@ -696,6 +696,7 @@ fn render_block(block: &Block) -> String {
         | Block::List { .. } | Block::Board { .. } | Block::Action { .. }
         | Block::FilterBar { .. } | Block::Search { .. } | Block::Dashboard { .. }
         | Block::ChatInput { .. } | Block::Feed { .. } | Block::Booking { .. } | Block::Store { .. } | Block::Editor { .. }
+        | Block::Hours { .. } | Block::Marquee { .. }
         | Block::Chart { .. } | Block::SplitPane { .. }
         | Block::App { .. } | Block::Build { .. } | Block::InfraDatabase { .. }
         | Block::Deploy { .. } | Block::InfraEnv { .. } | Block::Health { .. }

@@ -858,6 +858,27 @@ pub enum Block {
         content: String,
         span: Span,
     },
+    /// Opening hours: one row per authored weekday, plus an optional title
+    /// and IANA timezone name.
+    ///
+    /// The block carries no clock. `render_html::render_block` emits the
+    /// table with an EMPTY status span; a host that knows the local time
+    /// calls [`crate::render_html::render_hours_with_now`] instead, and
+    /// [`crate::render_html::hours_opening_specification`] projects the rows
+    /// for schema.org JSON-LD.
+    Hours {
+        title: Option<String>,
+        /// IANA timezone name as authored (e.g. `America/Los_Angeles`).
+        /// Never interpreted here — resolving it is the caller's job.
+        timezone: Option<String>,
+        rows: Vec<HoursRow>,
+        span: Span,
+    },
+    /// Looping ticker band of short items (a decorative marquee).
+    Marquee {
+        items: Vec<String>,
+        span: Span,
+    },
     /// Grid of product link-cards, optionally split into labelled groups.
     ProductGrid {
         groups: Vec<ProductGroup>,
@@ -1687,6 +1708,8 @@ impl Block {
             | Block::Embed { span, .. }
             | Block::Form { span, .. }
             | Block::Banner { span, .. }
+            | Block::Hours { span, .. }
+            | Block::Marquee { span, .. }
             | Block::ProductGrid { span, .. }
             | Block::PostGrid { span, .. }
             | Block::Gate { span, .. }
@@ -2391,6 +2414,27 @@ pub struct StoreItem {
     pub badge: Option<String>,
     /// Category for the filter chips. `None` groups under "All".
     pub category: Option<String>,
+}
+
+/// One weekday row of an `Hours` block.
+///
+/// `opens`/`closes` are minutes since LOCAL midnight (0..=1439). Both are
+/// `None` on a closed day. A `closes` at or below `opens` means the range
+/// runs past midnight into the next weekday (`5pm - 2am`); `closes == opens`
+/// is a full 24 hours.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HoursRow {
+    /// Weekday index, `0` = Sunday … `6` = Saturday.
+    pub day: u8,
+    /// The day name exactly as authored ("Monday", "Mon").
+    pub label: String,
+    /// Opening time, minutes since local midnight. `None` = closed.
+    pub opens: Option<u16>,
+    /// Closing time, minutes since local midnight. `None` = closed.
+    pub closes: Option<u16>,
+    /// The authored right-hand text ("11am - 9pm", "Closed"), kept verbatim
+    /// so the rendered cell and the serializer reproduce the source.
+    pub text: String,
 }
 
 /// A bookable service in a `Booking` block (e.g. "60-min Strategy Call").

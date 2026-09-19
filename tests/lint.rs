@@ -189,6 +189,8 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     ("marketplace-spec.surf", &[]),
     ("nesting.surf", &[]),
     ("plan-app.surf", &[]),
+    // 0.21.0: the ::hours + ::marquee fixture — a well-formed page.
+    ("site-blocks.surf", &[]),
     ("single.surf", &[]),
     ("site.surf", &[]),
     ("strategy-sample.surf", &[]),
@@ -525,4 +527,26 @@ fn l020_block_name_vocabulary_still_works_beside_l044() {
     // The unknown-block rule is untouched by the new data attributes.
     let source = "::datta[source=\"file:abc123\"]\nbody\n::\n";
     assert_eq!(l_codes(source), vec!["L020".to_string()]);
+}
+
+/// 0.21.0: the two new site directives are registered, so L020 (unknown
+/// block) must stay quiet for both — including the `timezone=` attribute the
+/// registry declares.
+#[test]
+fn site_blocks_hours_and_marquee_lint_clean_of_l020() {
+    for name in ["hours", "marquee"] {
+        assert!(
+            surf_parse::lint::known_block_names().contains(name),
+            "::{name} must be a registered block name"
+        );
+    }
+    let src = "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\nMonday: 11am - 9pm\n::\n\n::marquee\n- Fresh daily\n::\n";
+    let report = surf_parse::check(src);
+    let codes: Vec<&str> = report
+        .diagnostics
+        .iter()
+        .filter_map(|d| d.code.as_deref())
+        .filter(|c| c.starts_with("L02"))
+        .collect();
+    assert!(codes.is_empty(), "unexpected lint codes: {codes:?}");
 }

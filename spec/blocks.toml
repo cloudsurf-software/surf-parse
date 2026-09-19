@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 120
-registry_updated = "2026-09-04"
+total_blocks = 122
+registry_updated = "2026-09-18"
 
 [blocks.ai-context]
 status = "planned"
@@ -995,3 +995,23 @@ purpose = "Presenter notes — inside a ::slide the parser folds this into the s
 attributes = []
 degradation = "omitted from the rendered deck"
 enum_variant = "Notes"
+
+# ----- Site blocks added in 0.21.0 -----
+# Both render server-side only: `::hours` takes the local time from the host
+# (render_html::render_hours_with_now), `::marquee` loops in CSS. No script.
+
+[blocks.hours]
+status = "implemented"
+category = "site"
+purpose = "Opening hours — one row per weekday, plus a status line the host stamps with its own clock"
+attributes = ["title", "timezone"]
+degradation = "plain table of days and hours"
+enum_variant = "Hours"
+
+[blocks.marquee]
+status = "implemented"
+category = "site"
+purpose = "Looping ticker band of short items, emitted twice so a CSS translate loop is seamless"
+attributes = []
+degradation = "comma-joined line"
+enum_variant = "Marquee"

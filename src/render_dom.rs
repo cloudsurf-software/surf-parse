@@ -1755,6 +1755,69 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.close();
         }
 
+        // Twin of the render_html Hours arm (render_html::hours_html). The
+        // constructive path renders the PURE form only — the `_with_now`
+        // variant is a server-side call, never a live mount.
+        Block::Hours { title, timezone, rows, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-hours"));
+            if let Some(tz) = timezone {
+                dom.attr("data-timezone", AttrVal::Markup(tz));
+            }
+            dom.open("h3", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-hours-title"));
+            dom.text_markup(title.as_deref().unwrap_or("Hours"));
+            dom.open("span", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-hours-status"));
+            dom.close();
+            dom.close();
+            dom.open("table", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-hours-table"));
+            dom.open("tbody", CloseStyle::Normal);
+            for row in rows {
+                dom.open("tr", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-hours-row"));
+                dom.attr("data-day", AttrVal::Markup(&row.day.to_string()));
+                dom.open("th", CloseStyle::Normal);
+                dom.attr("scope", AttrVal::Markup("row"));
+                dom.attr("class", AttrVal::Markup("surfdoc-hours-day"));
+                dom.text_markup(&row.label);
+                dom.close();
+                dom.open("td", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-hours-time"));
+                dom.text_markup(&row.text);
+                dom.close();
+                dom.close();
+            }
+            dom.close();
+            dom.close();
+            dom.close();
+        }
+
+        // Twin of the render_html Marquee arm (render_html::marquee_html):
+        // the item/separator sequence twice over, inside one hidden track.
+        Block::Marquee { items, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-marquee"));
+            dom.attr("aria-hidden", AttrVal::Markup("true"));
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-marquee-track"));
+            for _ in 0..2 {
+                for item in items {
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-marquee-item"));
+                    dom.text_markup(item);
+                    dom.close();
+                    dom.open("i", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-marquee-sep"));
+                    dom.text_markup("·");
+                    dom.close();
+                }
+            }
+            dom.close();
+            dom.close();
+        }
+
         Block::Hero {
             headline,
             subtitle,

@@ -3,6 +3,60 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.21.0 — 2026-09-18 (`::hours` + `::marquee`, section body fix, site-page stylesheet config)
+
+### Added
+
+- **`::hours`** — an opening-hours table: one `Monday: 11am - 9pm` row per
+  line (hyphen or en dash; `9`, `9:30`, `21:00`, `9am`, `9:30 PM`; `Closed`),
+  with `title=` and an IANA `timezone=` recorded but never interpreted. The
+  block parses each row to a weekday index (0 = Sunday) and opening/closing
+  minutes since local midnight; a `closes` at or below `opens` is an overnight
+  range. The renderer emits `.surfdoc-hours` → an `h3.surfdoc-hours-title`
+  carrying a `span.surfdoc-hours-status`, then a table whose rows carry
+  `data-day`. **The pure render states no open state — this crate holds no
+  clock.**
+- **`render_hours_with_now(block, weekday, minutes_since_midnight)`** — the
+  same markup with the caller's LOCAL time stamped in: today's row gains
+  `is-today`, the status span gains `is-open`/`is-closed` and reads
+  `Open now · until 10pm` / `Closed · opens 11am` (naming the day when the
+  next opening is not today). The hosted container calls it at serve time
+  with the site's timezone, so the band needs no client script.
+  **`hours_opening_specification(block)`** projects the rows onto schema.org
+  `openingHoursSpecification` entries for JSON-LD.
+- **`::marquee`** — a looping ticker band: one item per body line (optional
+  leading `- `), rendered as `div.surfdoc-marquee[aria-hidden]` wrapping a
+  `.surfdoc-marquee-track` whose item/separator sequence is emitted TWICE, so
+  the stylesheet's `translateX(-50%)` loop meets itself seamlessly. The
+  animation and a `prefers-reduced-motion: reduce` rule that stops it ship in
+  `assets/surfdoc.css`. No script.
+- Registry rows for both (`total_blocks` 120 → 122), parsers, the `render_dom`
+  twins (byte-identical), markdown degradation (hours → a plain table,
+  marquee → a comma-joined line), serializer fixed points, a `css_coverage`
+  snippet each, and the fixture `tests/fixtures/site-blocks.surf`, pinned in
+  the lint parse baseline and the DOM byte-identity corpus.
+
+### Fixed
+
+- **`::section` dropped its body** when it carried no leading `## ` headline:
+  the scan pushed the body start past every blank line while it was still
+  hunting for one, so only the text after the LAST blank line survived — and
+  a `## ` appearing later, including inside a nested child, was stolen as the
+  section's headline. Only the FIRST non-blank line can be the headline now;
+  otherwise the body starts there. The subtitle rule and the child span math
+  are unchanged. A hostile-corpus expectation that had pinned the dropped
+  branch as "`::section` does not adopt directive children" is corrected: it
+  does, and now renders whole.
+
+### Changed
+
+- `render_site_page` and `render_site_document` honour `PageConfig::embed_css`
+  and `PageConfig::stylesheets`, which only the shell path read before:
+  `embed-css: false` omits the base sheet but KEEPS the site-nav sheet and the
+  accent override block, and each configured stylesheet emits an escaped
+  `<link>` after the style tag. With the default config the bytes are
+  unchanged, so no golden or corpus snapshot churns.
+
 ## 0.20.0 — 2026-09-04 (type: spreadsheet + `::data` name/source/rows/cols)
 
 ### Added

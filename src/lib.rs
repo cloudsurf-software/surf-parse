@@ -92,6 +92,7 @@ pub use render_html::{
     PageConfig, SiteConfig, PageEntry, extract_site, humanize_route, render_site_page,
     render_site_single_file,
     accent_ink_color, contrast_ratio, to_shell_page, HeadIcon, HeadScript,
+    hours_opening_specification, render_hours_with_now, OpeningHoursSpec,
 };
 pub use slots::{resolve_slot_markers, IMG_SLOT_PLACEHOLDER_URI};
 #[cfg(feature = "slides")]

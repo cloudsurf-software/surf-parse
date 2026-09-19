@@ -84,6 +84,14 @@ fn identity_data_preview_thirty_rows() {
     assert_identity("data-preview.surf");
 }
 
+/// 0.21.0 site pair: the `::hours` table (status span empty — the pure
+/// render has no clock) and the doubled `::marquee` track, with authored
+/// text that must escape identically in both backends.
+#[test]
+fn identity_site_blocks_hours_and_marquee() {
+    assert_identity("site-blocks.surf");
+}
+
 // -- the six thelove222 routes (census source) --------------------------------
 
 #[test]

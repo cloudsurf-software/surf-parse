@@ -10,7 +10,7 @@ use crate::types::{
     Format, StoreItem,
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
-    FormField, FormFieldType, GalleryItem, HeroButton, HttpMethod, ListDisplay, ListFilter,
+    FormField, FormFieldType, GalleryItem, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
     AdaptiveLayout, AdaptiveMode, AppShellLayout,
     ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
     RowAction, RowState, SchemaField, SegmentItem, SizeClass, PAGE_LAYOUTS,
@@ -66,6 +66,8 @@ pub fn resolve_block(block: Block) -> Block {
         "embed" => parse_embed(attrs, *span),
         "form" => parse_form(attrs, content, *span),
         "banner" => parse_banner(attrs, content, *span),
+        "hours" => parse_hours(attrs, content, *span),
+        "marquee" => parse_marquee(content, *span),
         "product-grid" => parse_product_grid(attrs, content, *span),
         "post-grid" => parse_post_grid(attrs, content, *span),
         "gate" => parse_gate(attrs, content, *span),
@@ -2066,6 +2068,168 @@ fn parse_banner(attrs: &Attrs, content: &str, span: Span) -> Block {
     }
 }
 
+/// Weekday names `::hours` accepts, mapped to the weekday index the rendered
+/// `data-day` attribute carries (0 = Sunday, matching `Date.getDay()`).
+const HOURS_DAY_NAMES: &[(&str, u8)] = &[
+    ("sunday", 0),
+    ("sun", 0),
+    ("monday", 1),
+    ("mon", 1),
+    ("tuesday", 2),
+    ("tues", 2),
+    ("tue", 2),
+    ("wednesday", 3),
+    ("weds", 3),
+    ("wed", 3),
+    ("thursday", 4),
+    ("thurs", 4),
+    ("thur", 4),
+    ("thu", 4),
+    ("friday", 5),
+    ("fri", 5),
+    ("saturday", 6),
+    ("sat", 6),
+];
+
+/// Weekday index for an authored day name, or `None` when the line does not
+/// open with one (case and a trailing `.` are ignored).
+fn parse_hours_day(raw: &str) -> Option<u8> {
+    let name = raw.trim().trim_end_matches('.').to_ascii_lowercase();
+    HOURS_DAY_NAMES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, d)| *d)
+}
+
+/// One clock time as minutes since local midnight (0..=1439).
+///
+/// Accepts `9`, `9:30`, `21:00`, `9am`, `9:30 PM`. `12am` is midnight and
+/// `12pm` is noon — the two the naive `hour + 12` formula gets wrong. `24:00`
+/// is the legal end-of-day spelling and folds onto midnight, where the
+/// overnight rule in the renderer already reads it as "closes at midnight".
+fn parse_hours_time(raw: &str) -> Option<u16> {
+    let lowered = raw.trim().to_ascii_lowercase();
+    let compact: String = lowered.chars().filter(|c| !c.is_whitespace()).collect();
+    let (digits, pm) = if let Some(rest) = compact.strip_suffix("am") {
+        (rest.to_string(), Some(false))
+    } else if let Some(rest) = compact.strip_suffix("pm") {
+        (rest.to_string(), Some(true))
+    } else {
+        (compact.clone(), None)
+    };
+    let (hour_str, minute_str) = match digits.split_once(':') {
+        Some((h, m)) => (h, m),
+        None => (digits.as_str(), "0"),
+    };
+    let hour: u16 = hour_str.parse().ok()?;
+    let minute: u16 = minute_str.parse().ok()?;
+    if minute > 59 {
+        return None;
+    }
+    let hour = match pm {
+        Some(_) if hour == 0 || hour > 12 => return None,
+        Some(true) => {
+            if hour == 12 {
+                12
+            } else {
+                hour + 12
+            }
+        }
+        Some(false) => {
+            if hour == 12 {
+                0
+            } else {
+                hour
+            }
+        }
+        None if hour == 24 => {
+            if minute != 0 {
+                return None;
+            }
+            0
+        }
+        None if hour > 23 => return None,
+        None => hour,
+    };
+    Some(hour * 60 + minute)
+}
+
+/// Split `11am - 9pm` (hyphen, en dash or em dash) into opening and closing
+/// minutes. `closed`, an empty cell, and any text the clock grammar does not
+/// cover (`By appointment`) all read as closed — the authored text still
+/// renders verbatim in the cell.
+fn parse_hours_range(text: &str) -> (Option<u16>, Option<u16>) {
+    let t = text.trim();
+    if t.is_empty() || t.eq_ignore_ascii_case("closed") {
+        return (None, None);
+    }
+    let sep = t
+        .char_indices()
+        .find(|(i, c)| *i > 0 && matches!(c, '-' | '\u{2013}' | '\u{2014}'));
+    let Some((idx, c)) = sep else {
+        return (None, None);
+    };
+    let (before, after) = t.split_at(idx);
+    match (
+        parse_hours_time(before),
+        parse_hours_time(&after[c.len_utf8()..]),
+    ) {
+        (Some(opens), Some(closes)) => (Some(opens), Some(closes)),
+        _ => (None, None),
+    }
+}
+
+/// Parse an `::hours` block: one `Day: 11am - 9pm` row per line.
+///
+/// Attrs: `title` (heading text) and `timezone` (an IANA name, recorded but
+/// never interpreted — this crate carries no clock and no tz database). A
+/// line that does not open with a weekday name is ignored.
+fn parse_hours(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let mut rows: Vec<HoursRow> = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let trimmed = trimmed.strip_prefix("- ").unwrap_or(trimmed);
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some((day_raw, rest)) = trimmed.split_once(':') else {
+            continue;
+        };
+        let Some(day) = parse_hours_day(day_raw) else {
+            continue;
+        };
+        let text = rest.trim().to_string();
+        let (opens, closes) = parse_hours_range(&text);
+        rows.push(HoursRow {
+            day,
+            label: day_raw.trim().to_string(),
+            opens,
+            closes,
+            text,
+        });
+    }
+
+    Block::Hours {
+        title: attr_string(attrs, "title"),
+        timezone: attr_string(attrs, "timezone"),
+        rows,
+        span,
+    }
+}
+
+/// Parse a `::marquee` block: one ticker item per body line, with an optional
+/// leading `- `.
+fn parse_marquee(content: &str, span: Span) -> Block {
+    let items = content
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| l.strip_prefix("- ").unwrap_or(l).trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    Block::Marquee { items, span }
+}
+
 /// Parse a `::product-grid` block.
 ///
 /// `### Group` headings split the grid into labelled groups. Each card is a
@@ -2739,20 +2903,29 @@ fn parse_section(attrs: &Attrs, content: &str, span: Span) -> Block {
     let mut subtitle: Option<String> = None;
     let mut body_start = 0;
     let mut found_headline = false;
+    // Whether the scan has passed the section's first non-blank line yet.
+    let mut seen_non_blank = false;
 
     for (i, line) in content.lines().enumerate() {
         let trimmed = line.trim();
-        if trimmed.is_empty() && !found_headline {
+        if trimmed.is_empty() && !found_headline && !seen_non_blank {
             body_start = i + 1;
             continue;
         }
-        if !found_headline {
+        if !found_headline && !seen_non_blank {
+            // Only the FIRST non-blank line can be the section headline. A
+            // `## ` further down belongs to the body (or to a nested child)
+            // and must not be stolen — and a headline-less section's body
+            // starts right here, not after the next blank line.
+            seen_non_blank = true;
             if let Some(rest) = trimmed.strip_prefix("## ") {
                 headline = Some(rest.trim().to_string());
                 found_headline = true;
                 body_start = i + 1;
                 continue;
             }
+            body_start = i;
+            break;
         }
         if found_headline && subtitle.is_none() && !trimmed.is_empty() {
             // Check if this line looks like a subtitle (plain text, not a directive or heading)
@@ -7970,6 +8143,180 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(headline, Some("Features".to_string()));
             }
             other => panic!("Expected Section, got {other:?}"),
+        }
+    }
+
+    /// Every markdown child's text, joined — the section body as it survived
+    /// the headline scan.
+    fn section_body_text(children: &[Block]) -> String {
+        children
+            .iter()
+            .filter_map(|b| match b {
+                Block::Markdown { content, .. } => Some(content.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// A headline-less section keeps its WHOLE body. The pre-fix scan kept
+    /// pushing `body_start` past each blank line while it was still hunting
+    /// for a `## ` headline, so only the text after the last blank line
+    /// survived.
+    #[test]
+    fn resolve_section_without_headline_keeps_body_across_blank_lines() {
+        let content = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
+        let block = unknown("section", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Section {
+                headline,
+                subtitle,
+                children,
+                ..
+            } => {
+                assert_eq!(headline, None);
+                assert_eq!(subtitle, None);
+                let body = section_body_text(&children);
+                for para in ["First paragraph.", "Second paragraph.", "Third paragraph."] {
+                    assert!(body.contains(para), "body lost {para:?}: {body:?}");
+                }
+            }
+            other => panic!("Expected Section, got {other:?}"),
+        }
+    }
+
+    /// A `## ` heading inside a NESTED child is the child's, never the
+    /// section's: only the first non-blank line can name the section.
+    #[test]
+    fn resolve_section_does_not_steal_a_nested_headline() {
+        let content = "Intro line.\n\n::callout[type=note]\n## Inner heading\nBody\n::";
+        let block = unknown("section", Attrs::new(), content);
+        match resolve_block(block) {
+            Block::Section {
+                headline, children, ..
+            } => {
+                assert_eq!(headline, None, "nested heading must not become the headline");
+                let body = section_body_text(&children);
+                assert!(body.contains("Intro line."), "body lost the intro: {body:?}");
+                assert!(
+                    children
+                        .iter()
+                        .any(|b| matches!(b, Block::Callout { content, .. } if content.contains("Inner heading"))),
+                    "the nested callout must keep its own heading: {children:?}"
+                );
+            }
+            other => panic!("Expected Section, got {other:?}"),
+        }
+    }
+
+    // -- Hours -----------------------------------------------------
+
+    fn hours_rows(content: &str) -> Vec<HoursRow> {
+        match resolve_block(unknown("hours", Attrs::new(), content)) {
+            Block::Hours { rows, .. } => rows,
+            other => panic!("Expected Hours, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_hours_accepts_every_clock_form() {
+        let rows = hours_rows(
+            "Monday: 11am - 9pm\n\
+             Tuesday: 11:30am – 9:45pm\n\
+             Wednesday: 11:00 - 21:00\n\
+             Thursday: 9 - 17",
+        );
+        assert_eq!(rows.len(), 4);
+        assert_eq!((rows[0].opens, rows[0].closes), (Some(660), Some(1260)));
+        assert_eq!((rows[1].opens, rows[1].closes), (Some(690), Some(1305)));
+        assert_eq!((rows[2].opens, rows[2].closes), (Some(660), Some(1260)));
+        assert_eq!((rows[3].opens, rows[3].closes), (Some(540), Some(1020)));
+    }
+
+    /// The two the naive `hour + 12` formula gets wrong.
+    #[test]
+    fn parse_hours_midnight_and_noon() {
+        let rows = hours_rows("Monday: 12am - 12pm\nTuesday: 12:30am - 12:30pm");
+        assert_eq!((rows[0].opens, rows[0].closes), (Some(0), Some(720)));
+        assert_eq!((rows[1].opens, rows[1].closes), (Some(30), Some(750)));
+    }
+
+    #[test]
+    fn parse_hours_closed_and_unreadable_days_carry_no_times() {
+        let rows = hours_rows("Monday: Closed\nTuesday: closed\nWednesday: By appointment");
+        assert_eq!(rows.len(), 3);
+        for row in &rows {
+            assert_eq!((row.opens, row.closes), (None, None));
+        }
+        // The authored text survives for the rendered cell either way.
+        assert_eq!(rows[2].text, "By appointment");
+    }
+
+    /// An overnight range keeps its authored order — `closes <= opens` is the
+    /// signal the renderer reads, never a swap here.
+    #[test]
+    fn parse_hours_overnight_range_keeps_its_order() {
+        let rows = hours_rows("Friday: 5pm - 2am");
+        assert_eq!((rows[0].opens, rows[0].closes), (Some(1020), Some(120)));
+    }
+
+    #[test]
+    fn parse_hours_omitted_days_and_stray_lines_are_dropped() {
+        let rows = hours_rows("- Monday: 11am - 9pm\nnot a day line\nSaturday 5pm\n\n- Sun: Closed");
+        assert_eq!(rows.len(), 2);
+        assert_eq!((rows[0].day, rows[0].label.as_str()), (1, "Monday"));
+        assert_eq!((rows[1].day, rows[1].label.as_str()), (0, "Sun"));
+    }
+
+    #[test]
+    fn parse_hours_reads_title_and_timezone_attrs() {
+        let block = resolve_block(unknown(
+            "hours",
+            attrs(&[
+                ("title", AttrValue::String("Kitchen".into())),
+                ("timezone", AttrValue::String("America/Los_Angeles".into())),
+            ]),
+            "Monday: 11am - 9pm",
+        ));
+        match block {
+            Block::Hours {
+                title, timezone, ..
+            } => {
+                assert_eq!(title, Some("Kitchen".to_string()));
+                assert_eq!(timezone, Some("America/Los_Angeles".to_string()));
+            }
+            other => panic!("Expected Hours, got {other:?}"),
+        }
+    }
+
+    // -- Marquee ---------------------------------------------------
+
+    #[test]
+    fn parse_marquee_takes_dashed_and_bare_items() {
+        let block = resolve_block(unknown(
+            "marquee",
+            Attrs::new(),
+            "- Fresh daily\nOpen late\n\n-   Free parking   ",
+        ));
+        match block {
+            Block::Marquee { items, .. } => assert_eq!(
+                items,
+                vec![
+                    "Fresh daily".to_string(),
+                    "Open late".to_string(),
+                    "Free parking".to_string(),
+                ]
+            ),
+            other => panic!("Expected Marquee, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_marquee_keeps_authored_markup_characters_verbatim() {
+        let block = resolve_block(unknown("marquee", Attrs::new(), "- Fresh <daily> & local"));
+        match block {
+            Block::Marquee { items, .. } => assert_eq!(items, vec!["Fresh <daily> & local"]),
+            other => panic!("Expected Marquee, got {other:?}"),
         }
     }
 
