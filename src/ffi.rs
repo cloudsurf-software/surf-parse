@@ -85,9 +85,17 @@ pub fn parse_to_native_styled(
             .map(|p| p.value.clone())
     });
 
-    let theme = resolve::resolve_theme(
-        accent.or(doc_accent).as_deref(),
-        font.or(doc_font).as_deref(),
+    // Document-derived theme inputs from `::style` blocks (D-S8-5, 0.22.0).
+    // Precedence: host argument, then `::style`, then `::site`, then the
+    // platform default — `::style` is the more specific override of the two
+    // document sources, exactly as its CSS wins in `render_html`.
+    let style = resolve::style_theme_inputs(&doc.blocks);
+
+    let theme = resolve::resolve_theme_with_fonts(
+        accent.or(style.accent).or(doc_accent).as_deref(),
+        font.or(style.font.clone()).or(doc_font).as_deref(),
+        style.heading_font.as_deref(),
+        style.body_font.as_deref(),
         style_pack.or(doc_pack).as_deref(),
     );
 
@@ -180,12 +188,12 @@ mod tests {
         assert_eq!(resolve_size_class(1024), "desktop");
     }
 
-    /// Schema v6 is what tells a client the new fields are present.
+    /// Schema v7 is what tells a client the new variants are present.
     #[test]
-    fn native_doc_schema_version_is_six() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 6);
+    fn native_doc_schema_version_is_seven() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 7);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 6);
+        assert_eq!(doc.schema_version, 7);
     }
 
     /// v6 addressing: `id=`/`label=` reach the FFI as a span-indexed list.

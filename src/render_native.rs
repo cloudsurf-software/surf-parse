@@ -2,9 +2,11 @@
 //!
 //! Converts a `SurfDoc` into a flat `Vec<NativeBlock>` suitable for export
 //! across the FFI boundary. Wavesite-specific block types (Site, Page, Nav,
-//! HeroImage, Footer, Embed, PricingTable) are now native. Remaining web-only
-//! types (Style, Logo, Unknown, and app-spec / infra blocks) still degrade to
-//! their markdown equivalent.
+//! HeroImage, Footer, Embed, PricingTable) are now native, and schema v7
+//! added the last eight that were borrowed or degraded (Style, Logo, Route,
+//! Action, Model, App, SegmentedControl, DropdownSelect). Remaining web-only
+//! types (Unknown and the build/infra manifest blocks) still degrade to their
+//! markdown equivalent.
 
 use serde::{Deserialize, Serialize};
 
@@ -20,8 +22,18 @@ use crate::types::{
 const MAX_SECTION_DEPTH: u32 = 8;
 
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 74 native variants (pinned cross-platform by the
+// NativeBlock enum — 82 native variants (pinned cross-platform by the
 // SurfDocKit DispatchCoverageTests / Android NativeBlockCoverageTest census)
+//
+// HARD CAP (measured 0.22.0, S8): uniffi 0.28.3 encodes this enum's whole
+// metadata — module path, every variant and field name, every TYPE_ID_META
+// and EVERY `///` docstring — into one 16 KiB const buffer
+// (`uniffi_core::metadata::BUF_SIZE`). Overflowing it is a const-eval panic
+// at the `derive(uniffi::Enum)` line, not a readable error. At v7 the eight
+// new variants left roughly 200 bytes of slack, so a new variant here must
+// come with a ONE- OR TWO-LINE docstring; prose belongs on the supporting
+// record types (whose own buffers are nearly empty) or in this file's
+// module docs, which cost nothing.
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Simplified block representation for native mobile rendering via UniFFI.
@@ -30,8 +42,8 @@ const MAX_SECTION_DEPTH: u32 = 8;
 /// `Option<T>`, `Vec<T>`, and simple structs of the same. No `BTreeMap`,
 /// no `Span`, no serde tags, no `enum` sub-types with complex discriminants.
 ///
-/// Web-only blocks (Style, Logo, Banner, the build-engine/manifest blocks,
-/// Unknown, …) are degraded to their markdown equivalent and emitted as
+/// Web-only blocks (Unknown, the build-engine/manifest blocks, …) are
+/// degraded to their markdown equivalent and emitted as
 /// `NativeBlock::Markdown`. The reader-content blocks ProductCard, Chart,
 /// Row, InfoCard and Diagram render structurally (below).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -672,6 +684,82 @@ pub enum NativeBlock {
         left: Vec<NativeBlock>,
         right: Vec<NativeBlock>,
     },
+
+    // ── Schema v7 (0.22.0): the eight blocks that used to cross the FFI
+    //    borrowed (SegmentedControl→TabBar, DropdownSelect→CommandPalette)
+    //    or as Markdown (Style, Logo, Route, Action, Model, App). ────────
+
+    /// `::style` — `properties` = the `key: value` body lines (`accent`,
+    /// `font`, `heading-font`, `body-font`), already in [`NativeTheme`].
+    Style { properties: Vec<NativeStyleProperty> },
+
+    /// `::dropdown-select` — `label=`/`icon=`/`selected=`/`align=` trigger,
+    /// `options` = the `- "Label" description= icon= action=` lines.
+    DropdownSelect {
+        label: Option<String>,
+        icon: Option<String>,
+        selected: Option<String>,
+        align: String,
+        options: Vec<NativeDropdownOption>,
+    },
+
+    /// `::segmented-control` — filter pills, not tabs: `active=`, `size=`,
+    /// `action=` (via [`parse_native_action`]), `- id "Label"` segments.
+    SegmentedControl {
+        active: Option<String>,
+        size: String,
+        action: Option<NativeAction>,
+        segments: Vec<NativeSegmentItem>,
+    },
+
+    /// `::route` — `method=` uppercased, `path=`, the `auth:`/`returns:`/
+    /// `body:` lines, `handler` = fenced source, `content` = the rest.
+    Route {
+        method: String,
+        path: String,
+        auth: Option<String>,
+        returns: Option<String>,
+        body: Option<String>,
+        handler: Option<String>,
+        content: String,
+    },
+
+    /// `::action` — `method=` uppercased, `target=`, `label=`, `confirm=`;
+    /// `fields` map exactly as `::form`'s `- Label (type)` lines.
+    Action {
+        method: String,
+        target: String,
+        label: String,
+        fields: Vec<NativeFormField>,
+        confirm: Option<String>,
+    },
+
+    /// `::model` — `name=` and the `- field: type [constraints]` lines
+    /// (see [`NativeModelField`]).
+    Model {
+        name: String,
+        fields: Vec<NativeModelField>,
+    },
+
+    /// `::app` — `name=`/`binary=`/`region=`/`port=`/`platform=`/`auth=`,
+    /// `content` = raw body, `children` = the parsed child blocks.
+    App {
+        name: String,
+        binary: Option<String>,
+        region: Option<String>,
+        port: Option<u32>,
+        platform: Option<String>,
+        auth: Option<String>,
+        content: String,
+        children: Vec<NativeBlock>,
+    },
+
+    /// `::logo` — `src=`, `alt=`, `size=` in pixels.
+    Logo {
+        src: String,
+        alt: Option<String>,
+        size: Option<u32>,
+    },
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -971,6 +1059,63 @@ pub fn parse_native_action(raw: &str) -> NativeAction {
         payload,
         raw: raw_trim.to_string(),
     }
+}
+
+/// One `key: value` presentation override inside a native `Style` block —
+/// the body lines of `::style` (`accent: #ff0000`, `font: inter`,
+/// `heading-font: …`, `body-font: …`). New in schema v7.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeStyleProperty {
+    /// The override name, left of the colon, verbatim.
+    pub key: String,
+    /// The override value, right of the colon, verbatim.
+    pub value: String,
+}
+
+/// One option within a native `DropdownSelect` — a `- "Label"
+/// description= icon= action=` body line of `::dropdown-select`.
+/// New in schema v7.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeDropdownOption {
+    /// The option's quoted label.
+    pub label: String,
+    /// `description=` — the secondary line under the label.
+    pub description: Option<String>,
+    /// `icon=` — the leading glyph token.
+    pub icon: Option<String>,
+    /// `action=` parsed through [`parse_native_action`]; `raw` keeps the
+    /// authored string so bare-name registries keep working.
+    pub action: Option<NativeAction>,
+}
+
+/// One segment within a native `SegmentedControl` — a `- id "Label"` body
+/// line of `::segmented-control`. New in schema v7.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeSegmentItem {
+    /// The segment id, matched against the block's `active=`.
+    pub id: String,
+    /// The segment's display label (the id itself when none was quoted).
+    pub label: String,
+}
+
+/// One typed field within a native `Model` — a `- name: type [constraints]`
+/// body line of `::model`. New in schema v7.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeModelField {
+    /// The field name, left of the colon.
+    pub name: String,
+    /// The spec spelling of the field's type: `uuid`, `string`, `int`,
+    /// `float`, `bool`, `datetime`, `text`, `json`, `money`, `image`,
+    /// `email`, `url`, `enum(a, b)` or `ref(Model)`.
+    pub field_type: String,
+    /// The spec spellings of the bracketed constraints, in authored order:
+    /// `primary`, `auto`, `required`, `optional`, `unique`, `index`,
+    /// `max=255`, `min=1`, `default=now()`.
+    pub constraints: Vec<String>,
 }
 
 /// A single formatted entry within a native `Bibliography`.
@@ -1295,11 +1440,29 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 ///    `value`/`max`, `ProductCard` gains `price`/`currency`,
 ///    `PricingTable` gains `highlight`/`current`, `Data` gains `caption`
 ///    and `total`.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 6;
+/// v7 (0.22.0) — the last eight borrowed/degraded blocks get their own
+/// variants (S8, the first FFI session):
+/// 1. `NativeBlock::SegmentedControl` — was borrowed as `TabBar`, losing
+///    `size=` and the block-level `action=`; `NativeBlock::DropdownSelect`
+///    — was borrowed as `CommandPalette`, losing `icon=`, `align=` and the
+///    label/selected distinction. Clients matching those two variants must
+///    stop expecting segmented-control / dropdown payloads there.
+/// 2. `NativeBlock::Style`, `Logo`, `Route`, `Action`, `Model` and `App` —
+///    were `Markdown` strings; they now carry their parsed shape, with
+///    `Style`/`App` filed under Chrome, `Logo` under Site and
+///    `Route`/`Action`/`Model` under Content in [`block_tier`].
+/// 3. New records `NativeStyleProperty`, `NativeDropdownOption`,
+///    `NativeSegmentItem`, `NativeModelField`.
+/// 4. `NativeBlock` is now an 83-variant enum (82 structural + `Markdown`).
+/// 5. [`NativeTheme`] now carries a document's `::style` overrides: the
+///    resolver reads `accent` / `font` / `heading-font` / `body-font` from
+///    `::style` body lines (D-S8-5), so a themed `::style` no longer
+///    reaches native only through the style pack.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 7;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
-/// `NativeBlock` is a 75-variant enum, so `block_id`/`label` cannot be flat
+/// `NativeBlock` is an 83-variant enum, so `block_id`/`label` cannot be flat
 /// fields on it; the metadata rides beside the tree instead, indexed by the
 /// same `Span` byte extent the HTML renderer uses. Empty for a document that
 /// authored no `id=`/`label=`. New in schema v6.
@@ -1986,18 +2149,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             submit_label,
             ..
         } => NativeBlock::Form {
-            fields: fields
-                .iter()
-                .map(|f| NativeFormField {
-                    label: f.label.clone(),
-                    name: f.name.clone(),
-                    field_type: form_field_type_str(f.field_type),
-                    required: f.required,
-                    placeholder: f.placeholder.clone(),
-                    options: f.options.clone(),
-                    group: f.group.clone(),
-                })
-                .collect(),
+            fields: convert_form_fields(fields),
             submit_label: submit_label
                 .clone()
                 .unwrap_or_else(|| "Submit".to_string()),
@@ -2163,36 +2315,50 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             children: convert_children(children, depth + 1),
         },
 
-        // No dedicated NativeBlock variant (no schema bump needed): a
-        // segmented-control maps onto TabBar — same id/label single-select
-        // shape — until a native round gives it its own variant.
-        Block::SegmentedControl { active, segments, .. } => NativeBlock::TabBar {
+        // Schema v7: a segmented-control is its own variant. It used to
+        // ride TabBar's id/label shape, which dropped `size=` and the
+        // block-level `action=` and told the client it was switching panes.
+        Block::SegmentedControl {
+            active,
+            size,
+            action,
+            segments,
+            ..
+        } => NativeBlock::SegmentedControl {
             active: active.clone(),
-            items: segments
+            size: size.clone(),
+            action: action.as_deref().map(parse_native_action),
+            segments: segments
                 .iter()
-                .map(|s| NativeTabBarItem {
+                .map(|s| NativeSegmentItem {
                     id: s.id.clone(),
                     label: s.label.clone(),
-                    icon: None,
-                    unread: false,
-                    role: None,
                 })
                 .collect(),
         },
 
-        // No dedicated NativeBlock variant (no schema bump needed): a
-        // dropdown-select degrades to a CommandPalette — same trigger +
-        // option-list shape — until a native round gives it its own variant.
-        Block::DropdownSelect { label, selected, options, .. } => NativeBlock::CommandPalette {
-            trigger: label.clone().or_else(|| selected.clone()),
-            items: options
+        // Schema v7: a dropdown-select is its own variant. It used to ride
+        // CommandPalette's trigger/item shape, which dropped `icon=`,
+        // `align=` and the label/selected distinction.
+        Block::DropdownSelect {
+            label,
+            icon,
+            selected,
+            align,
+            options,
+            ..
+        } => NativeBlock::DropdownSelect {
+            label: label.clone(),
+            icon: icon.clone(),
+            selected: selected.clone(),
+            align: align.clone(),
+            options: options
                 .iter()
-                .map(|o| NativeCommandItem {
+                .map(|o| NativeDropdownOption {
                     label: o.label.clone(),
                     description: o.description.clone(),
-                    action: o.action.as_deref().map(parse_native_action),
                     icon: o.icon.clone(),
-                    group: None,
+                    action: o.action.as_deref().map(parse_native_action),
                 })
                 .collect(),
         },
@@ -2728,21 +2894,102 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .collect(),
         },
 
+        // ── Schema v7: six blocks that used to degrade to Markdown ──
+
+        Block::Style { properties, .. } => NativeBlock::Style {
+            properties: properties
+                .iter()
+                .map(|p| NativeStyleProperty {
+                    key: p.key.clone(),
+                    value: p.value.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Logo { src, alt, size, .. } => NativeBlock::Logo {
+            src: src.clone(),
+            alt: alt.clone(),
+            size: *size,
+        },
+
+        Block::Route {
+            method,
+            path,
+            auth,
+            returns,
+            body,
+            handler,
+            content,
+            ..
+        } => NativeBlock::Route {
+            method: http_method_str(*method),
+            path: path.clone(),
+            auth: auth.clone(),
+            returns: returns.clone(),
+            body: body.clone(),
+            handler: handler.clone(),
+            content: content.clone(),
+        },
+
+        Block::Action {
+            method,
+            target,
+            label,
+            fields,
+            confirm,
+            ..
+        } => NativeBlock::Action {
+            method: http_method_str(*method),
+            target: target.clone(),
+            label: label.clone(),
+            fields: convert_form_fields(fields),
+            confirm: confirm.clone(),
+        },
+
+        Block::Model { name, fields, .. } => NativeBlock::Model {
+            name: name.clone(),
+            fields: fields
+                .iter()
+                .map(|f| NativeModelField {
+                    name: f.name.clone(),
+                    field_type: model_field_type_str(&f.field_type),
+                    constraints: f.constraints.iter().map(field_constraint_str).collect(),
+                })
+                .collect(),
+        },
+
+        Block::App {
+            name,
+            binary,
+            region,
+            port,
+            platform,
+            auth,
+            content,
+            children,
+            ..
+        } => NativeBlock::App {
+            name: name.clone(),
+            binary: binary.clone(),
+            region: region.clone(),
+            port: *port,
+            platform: platform.clone(),
+            auth: auth.clone(),
+            content: content.clone(),
+            children: convert_children(children, depth + 1),
+        },
+
         // ── Markdown fallback: web-only / unsupported block types ───
 
         Block::Unknown { .. }
-        | Block::Style { .. }
-        | Block::Logo { .. }
         | Block::Hours { .. }
         | Block::Marquee { .. }
-        | Block::Action { .. }
         | Block::Dashboard { .. }
         | Block::ChatInput { .. }
         | Block::Feed { .. }
         | Block::Booking { .. }
         | Block::Store { .. }
         | Block::Editor { .. }
-        | Block::App { .. }
         | Block::Build { .. }
         | Block::InfraDatabase { .. }
         | Block::Deploy { .. }
@@ -2755,8 +3002,6 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         | Block::Crates { .. }
         | Block::DeployUrls { .. }
         | Block::Volumes { .. }
-        | Block::Model { .. }
-        | Block::Route { .. }
         | Block::Auth { .. }
         | Block::Binding { .. }
         | Block::Schema { .. }
@@ -2933,6 +3178,48 @@ fn form_field_type_str(ft: FormFieldType) -> String {
     .to_string()
 }
 
+/// Map a `::form` / `::action` field list onto its native shape. Shared so
+/// the two blocks can never drift apart at the FFI.
+fn convert_form_fields(fields: &[crate::types::FormField]) -> Vec<NativeFormField> {
+    fields
+        .iter()
+        .map(|f| NativeFormField {
+            label: f.label.clone(),
+            name: f.name.clone(),
+            field_type: form_field_type_str(f.field_type),
+            required: f.required,
+            placeholder: f.placeholder.clone(),
+            options: f.options.clone(),
+            group: f.group.clone(),
+        })
+        .collect()
+}
+
+/// The uppercase HTTP verb of a `::route` / `::action` `method=`.
+fn http_method_str(m: crate::types::HttpMethod) -> String {
+    use crate::types::HttpMethod;
+    match m {
+        HttpMethod::Get => "GET",
+        HttpMethod::Post => "POST",
+        HttpMethod::Put => "PUT",
+        HttpMethod::Patch => "PATCH",
+        HttpMethod::Delete => "DELETE",
+    }
+    .to_string()
+}
+
+/// The spec spelling of a `::model` field type (schema v7). Same strings the
+/// markdown and HTML renderers emit, so a native client and a web preview
+/// name a type identically.
+fn model_field_type_str(ft: &crate::types::ModelFieldType) -> String {
+    crate::render_md::model_field_type_md(ft)
+}
+
+/// The spec spelling of a `::model` field constraint (schema v7).
+fn field_constraint_str(c: &crate::types::FieldConstraint) -> String {
+    crate::render_md::constraint_md(c)
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Conformance: block tier model
 // ═══════════════════════════════════════════════════════════════════════
@@ -2987,7 +3274,11 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Chart { .. }
         | Block::Row { .. }
         | Block::InfoCard { .. }
-        | Block::Toc { .. } => BlockTier::Content,
+        | Block::Toc { .. }
+        // Schema v7: the app-spec trio now converts structurally.
+        | Block::Route { .. }
+        | Block::Action { .. }
+        | Block::Model { .. } => BlockTier::Content,
 
         // ── Tier 2: site/marketing ───────────────────────────────────
         Block::Hero { .. }
@@ -3017,7 +3308,9 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Footer { .. }
         | Block::Embed { .. }
         // A ::slide outside the deck renderer is a SectionContainer.
-        | Block::Slide { .. } => BlockTier::Site,
+        | Block::Slide { .. }
+        // Schema v7: ::logo is a brand element, not a degraded string.
+        | Block::Logo { .. } => BlockTier::Site,
 
         // ── Tier 3: app chrome ───────────────────────────────────────
         Block::AppShell { .. }
@@ -3052,22 +3345,21 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::RecipientPicker { .. }
         | Block::Qr { .. }
         // Split-pane layout crosses the FFI boundary natively (0.16).
-        | Block::SplitPane { .. } => BlockTier::Chrome,
+        | Block::SplitPane { .. }
+        // Schema v7: presentation overrides and the app manifest shell.
+        | Block::Style { .. }
+        | Block::App { .. } => BlockTier::Chrome,
 
         // ── Tier 4: explicit markdown degradation ────────────────────
         Block::Unknown { .. }
-        | Block::Style { .. }
-        | Block::Logo { .. }
         | Block::Hours { .. }
         | Block::Marquee { .. }
-        | Block::Action { .. }
         | Block::Dashboard { .. }
         | Block::ChatInput { .. }
         | Block::Feed { .. }
         | Block::Booking { .. }
         | Block::Store { .. }
         | Block::Editor { .. }
-        | Block::App { .. }
         | Block::Build { .. }
         | Block::InfraDatabase { .. }
         | Block::Deploy { .. }
@@ -3080,8 +3372,6 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Crates { .. }
         | Block::DeployUrls { .. }
         | Block::Volumes { .. }
-        | Block::Model { .. }
-        | Block::Route { .. }
         | Block::Auth { .. }
         | Block::Binding { .. }
         | Block::Schema { .. }
@@ -3405,8 +3695,16 @@ mod tests {
 ::callout[type=info]\nNote\n::\n
 ::hero\nheadline: H\n::\n
 ::badge[value=3]\n::\n
-::app[name=demo]\n::\n
-::section\nInner\n::\n";
+::deck[theme=dark]\n::\n
+::section\nInner\n::\n
+::style\naccent: #ff0000\n::\n
+::logo[src=/logo.png]\n::\n
+::route[method=GET path=/api/x]\n::\n
+::action[method=DELETE target=/api/x label=Delete]\n- Reason (text)\n::\n
+::model[name=User]\n- id: uuid [primary]\n::\n
+::segmented-control[active=all]\n- all \"All\"\n::\n
+::dropdown-select[label=Sort]\n- \"Newest\" action=sort_newest\n::\n
+::app[name=demo]\n::\n";
         let result = crate::parse(source);
         let mut saw_degraded = false;
         let mut saw_structured = false;
@@ -3432,6 +3730,300 @@ mod tests {
             }
         }
         assert!(saw_degraded && saw_structured, "fixture must cover both paths");
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Schema v7 (S8): the eight blocks that stopped being borrowed or
+    // degraded. One test per variant, parsed from real source so the
+    // conversion arm and the parser are pinned together.
+    // ═══════════════════════════════════════════════════════════════
+
+    fn convert_first(source: &str) -> NativeBlock {
+        let result = crate::parse(source);
+        convert_block(&result.doc.blocks[0], 0)
+    }
+
+    #[test]
+    fn style_converts_structurally() {
+        // `::style` reads `key: value` BODY lines, not attributes.
+        match convert_first("::style\naccent: #ff0000\nheading-font: inter\n::\n") {
+            NativeBlock::Style { properties } => {
+                assert_eq!(
+                    properties,
+                    vec![
+                        NativeStyleProperty { key: "accent".into(), value: "#ff0000".into() },
+                        NativeStyleProperty { key: "heading-font".into(), value: "inter".into() },
+                    ]
+                );
+            }
+            other => panic!("expected Style, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn logo_converts_structurally() {
+        match convert_first("::logo[src=/brand.png alt=\"Mark\" size=48]\n::\n") {
+            NativeBlock::Logo { src, alt, size } => {
+                assert_eq!(src, "/brand.png");
+                assert_eq!(alt.as_deref(), Some("Mark"));
+                assert_eq!(size, Some(48));
+            }
+            other => panic!("expected Logo, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn route_converts_structurally() {
+        let source = "::route[method=post path=/api/users]\n\
+                      auth: required\n\
+                      returns: list(User)\n\
+                      body: User\n\
+                      Creates a user.\n\
+                      ```rust\n\
+                      fn handler() {}\n\
+                      ```\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Route { method, path, auth, returns, body, handler, content } => {
+                assert_eq!(method, "POST", "method crosses uppercased");
+                assert_eq!(path, "/api/users");
+                assert_eq!(auth.as_deref(), Some("required"));
+                assert_eq!(returns.as_deref(), Some("list(User)"));
+                assert_eq!(body.as_deref(), Some("User"));
+                assert_eq!(handler.as_deref(), Some("fn handler() {}"));
+                assert_eq!(content, "Creates a user.");
+            }
+            other => panic!("expected Route, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn action_converts_structurally() {
+        let source = "::action[method=delete target=\"/api/users/1\" confirm=\"Sure?\"]\n\
+                      - Reason (text)\n\
+                      - Delete\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Action { method, target, label, fields, confirm } => {
+                assert_eq!(method, "DELETE");
+                assert_eq!(target, "/api/users/1");
+                // Trailing bare item becomes the submit label, not a field.
+                assert_eq!(label, "Delete");
+                assert_eq!(confirm.as_deref(), Some("Sure?"));
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].label, "Reason");
+                assert_eq!(fields[0].name, "reason");
+                assert_eq!(fields[0].field_type, "text");
+                assert_eq!(fields[0].group, None, "fieldsets are a ::form feature");
+            }
+            other => panic!("expected Action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn model_converts_structurally() {
+        let source = "::model[name=User]\n\
+                      - id: uuid [primary, auto]\n\
+                      - email: string [required, unique, max=254]\n\
+                      - role: enum(admin, member) []\n\
+                      - team: ref(Team) [optional]\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Model { name, fields } => {
+                assert_eq!(name, "User");
+                assert_eq!(fields.len(), 4);
+                assert_eq!(
+                    fields[0],
+                    NativeModelField {
+                        name: "id".into(),
+                        field_type: "uuid".into(),
+                        constraints: vec!["primary".into(), "auto".into()],
+                    }
+                );
+                assert_eq!(
+                    fields[1].constraints,
+                    vec!["required".to_string(), "unique".to_string(), "max=254".to_string()]
+                );
+                assert_eq!(fields[2].field_type, "enum(admin, member)");
+                assert_eq!(fields[3].field_type, "ref(Team)");
+            }
+            other => panic!("expected Model, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn app_converts_structurally_with_children() {
+        let source = "::app[name=demo binary=demo-bin region=sjc port=8080 platform=fly auth=password]\n\
+                      ::callout[type=info]\n\
+                      Inner\n\
+                      ::\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::App {
+                name, binary, region, port, platform, auth, content, children,
+            } => {
+                assert_eq!(name, "demo");
+                assert_eq!(binary.as_deref(), Some("demo-bin"));
+                assert_eq!(region.as_deref(), Some("sjc"));
+                assert_eq!(port, Some(8080));
+                assert_eq!(platform.as_deref(), Some("fly"));
+                assert_eq!(auth.as_deref(), Some("password"));
+                assert!(content.contains("::callout"), "raw body is carried: {content}");
+                assert!(
+                    children.iter().any(|c| matches!(c, NativeBlock::Callout { .. })),
+                    "children convert through convert_children: {children:?}"
+                );
+            }
+            other => panic!("expected App, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn segmented_control_converts_structurally() {
+        let source = "::segmented-control[active=all size=regular action=setTasksView]\n\
+                      - all \"All\"\n\
+                      - mine \"Mine\"\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::SegmentedControl { active, size, action, segments } => {
+                assert_eq!(active.as_deref(), Some("all"));
+                assert_eq!(size, "regular");
+                // A bare verb parses as `invoke`, and `raw` keeps the
+                // authored text so bare-name registries still resolve.
+                let action = action.expect("action= crosses the FFI");
+                assert_eq!(action.verb, "invoke");
+                assert_eq!(action.target, "setTasksView");
+                assert_eq!(action.payload, None);
+                assert_eq!(action.raw, "setTasksView");
+                assert_eq!(
+                    segments,
+                    vec![
+                        NativeSegmentItem { id: "all".into(), label: "All".into() },
+                        NativeSegmentItem { id: "mine".into(), label: "Mine".into() },
+                    ]
+                );
+            }
+            other => panic!("expected SegmentedControl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dropdown_select_converts_structurally() {
+        let source = "::dropdown-select[label=\"Sort\" icon=arrow selected=\"Newest\" align=right]\n\
+                      - \"Newest\" description=\"Most recent first\" action=open:/docs/1 icon=clock\n\
+                      - \"Oldest\"\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::DropdownSelect { label, icon, selected, align, options } => {
+                assert_eq!(label.as_deref(), Some("Sort"));
+                assert_eq!(icon.as_deref(), Some("arrow"));
+                assert_eq!(selected.as_deref(), Some("Newest"));
+                assert_eq!(align, "right");
+                assert_eq!(options.len(), 2);
+                assert_eq!(options[0].label, "Newest");
+                assert_eq!(options[0].description.as_deref(), Some("Most recent first"));
+                assert_eq!(options[0].icon.as_deref(), Some("clock"));
+                let action = options[0].action.clone().expect("option action=");
+                assert_eq!((action.verb.as_str(), action.target.as_str()), ("open", "/docs/1"));
+                assert_eq!(options[1].action, None);
+            }
+            other => panic!("expected DropdownSelect, got {other:?}"),
+        }
+    }
+
+    /// The two borrowed arms are gone: a segmented-control is no longer a
+    /// TabBar and a dropdown-select is no longer a CommandPalette.
+    #[test]
+    fn borrowed_arms_are_retired() {
+        assert!(matches!(
+            convert_first("::segmented-control\n- one\n::\n"),
+            NativeBlock::SegmentedControl { .. }
+        ));
+        assert!(matches!(
+            convert_first("::dropdown-select\n- \"One\"\n::\n"),
+            NativeBlock::DropdownSelect { .. }
+        ));
+    }
+
+    /// D-S8-5: a document's own `::style` now reaches [`NativeTheme`].
+    /// The pure half (no `uniffi` feature needed): the resolver reads the
+    /// block, and the projection carries it.
+    #[test]
+    fn style_block_theme_inputs_reach_the_native_theme() {
+        let doc = crate::parse("::style\naccent: #ff0000\n::\n\n# Doc\n").doc;
+        let inputs = crate::resolve::style_theme_inputs(&doc.blocks);
+        assert_eq!(inputs.accent.as_deref(), Some("#ff0000"));
+
+        let theme = NativeTheme::from(&crate::resolve::resolve_theme_with_fonts(
+            inputs.accent.as_deref(),
+            inputs.font.as_deref(),
+            inputs.heading_font.as_deref(),
+            inputs.body_font.as_deref(),
+            None,
+        ));
+        assert_eq!(theme.accent, "#ff0000");
+    }
+
+    /// D-S8-5: the split font keys land in the right slots, and the legacy
+    /// `font:` still sets both.
+    #[test]
+    fn style_block_fonts_reach_the_native_theme() {
+        let native_theme = |source: &str| {
+            let doc = crate::parse(source).doc;
+            let i = crate::resolve::style_theme_inputs(&doc.blocks);
+            NativeTheme::from(&crate::resolve::resolve_theme_with_fonts(
+                i.accent.as_deref(),
+                i.font.as_deref(),
+                i.heading_font.as_deref(),
+                i.body_font.as_deref(),
+                None,
+            ))
+        };
+
+        let split = native_theme("::style\nheading-font: playfair\nbody-font: inter\n::\n");
+        let display = split.font_display.expect("heading-font resolves");
+        let body = split.font_body.expect("body-font resolves");
+        assert!(display.to_lowercase().contains("playfair"), "{display}");
+        assert!(body.to_lowercase().contains("inter"), "{body}");
+
+        let legacy = native_theme("::style\nfont: inter\n::\n");
+        assert_eq!(legacy.font_display, legacy.font_body);
+        assert!(legacy.font_display.is_some());
+    }
+
+    /// D-S8-5 must be additive: a document with no `::style` resolves the
+    /// same theme it always did.
+    #[test]
+    fn a_document_without_style_keeps_the_default_theme() {
+        let doc = crate::parse("# Just a heading\n").doc;
+        let inputs = crate::resolve::style_theme_inputs(&doc.blocks);
+        assert_eq!(inputs, crate::resolve::StyleThemeInputs::default());
+
+        let theme = NativeTheme::from(&crate::resolve::resolve_theme_with_fonts(
+            inputs.accent.as_deref(),
+            inputs.font.as_deref(),
+            inputs.heading_font.as_deref(),
+            inputs.body_font.as_deref(),
+            None,
+        ));
+        assert_eq!(theme, NativeTheme::from(&crate::resolve::resolve_theme(None, None, None)));
+        assert_eq!(theme.accent, crate::resolve::DEFAULT_ACCENT);
+        assert_eq!(theme.font_display, None);
+        assert_eq!(theme.font_body, None);
+    }
+
+    /// D-S8-5 end to end, through the real FFI entry point.
+    #[cfg(feature = "uniffi")]
+    #[test]
+    fn style_block_accent_reaches_a_native_doc() {
+        let doc =
+            crate::ffi::parse_to_native("::style\naccent: #ff0000\n::\n\n# Doc\n".to_string())
+                .expect("parses");
+        assert_eq!(doc.theme.accent, "#ff0000");
+        assert_eq!(doc.schema_version, NATIVE_DOC_SCHEMA_VERSION);
+
+        let plain = crate::ffi::parse_to_native("# Doc\n".to_string()).expect("parses");
+        assert_eq!(plain.theme.accent, crate::resolve::DEFAULT_ACCENT);
     }
 
     /// A-04 / BR-APP-7: the five reader-content blocks render structurally on
@@ -4339,8 +4931,10 @@ mod tests {
         }
     }
 
+    /// Schema v7 retired this block's Markdown fallback: `::style` now
+    /// crosses as its own variant carrying the authored properties.
     #[test]
-    fn fallback_style_empty() {
+    fn style_no_longer_falls_back_to_markdown() {
         let block = Block::Style {
             properties: vec![StyleProperty {
                 key: "bg".to_string(),
@@ -4349,8 +4943,13 @@ mod tests {
             span: syn(),
         };
         match convert_block(&block, 0) {
-            NativeBlock::Markdown { .. } => {}
-            other => panic!("Expected Markdown fallback, got {:?}", other),
+            NativeBlock::Style { properties } => {
+                assert_eq!(
+                    properties,
+                    vec![NativeStyleProperty { key: "bg".into(), value: "blue".into() }]
+                );
+            }
+            other => panic!("Expected Style, got {:?}", other),
         }
     }
 
@@ -4991,7 +5590,7 @@ mod tests {
         // round (chat-thread message children, chipInput kind, row
         // avatar/rtime/unread-count) — schema v4.
         // 0.18: the size-class axis + the FFI holes it closed — schema v5.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 6);
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 7);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

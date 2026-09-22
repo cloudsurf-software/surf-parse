@@ -11,7 +11,7 @@
 [meta]
 spec_version = "0.1"
 total_blocks = 122
-registry_updated = "2026-09-18"
+registry_updated = "2026-09-22"
 
 [blocks.ai-context]
 status = "planned"
@@ -460,7 +460,7 @@ enum_variant = "Section"
 status = "implemented"
 category = "web"
 purpose = "Rich product card with badge, body text, feature list, and CTA"
-attributes = ["title", "subtitle", "badge", "badge_color", "cta_label", "cta_href", "price", "currency"]
+attributes = ["title", "subtitle", "badge", "badge-color", "cta-label", "cta-href", "price", "currency"]
 degradation = "heading with bulleted features and link"
 enum_variant = "ProductCard"
 
@@ -470,15 +470,15 @@ enum_variant = "ProductCard"
 status = "implemented"
 category = "advanced"
 purpose = "Dynamic data list with filtering, sorting, and display modes"
-attributes = ["source", "display", "preload", "stream", "on_select"]
+attributes = ["source", "display", "preload", "stream", "on-select"]
 degradation = "bulleted list"
 enum_variant = "List"
 
 [blocks.board]
 status = "implemented"
 category = "advanced"
-purpose = "Kanban board with draggable cards grouped by column values"
-attributes = ["source", "columns", "card_template", "preload"]
+purpose = "Kanban board with draggable cards grouped by column values; a `columns: To Do | Done` line names the columns and a `card-template: …` line the card layout"
+attributes = ["source", "preload"]
 degradation = "section-per-column with task list"
 enum_variant = "Board"
 
@@ -494,7 +494,7 @@ enum_variant = "Action"
 status = "implemented"
 category = "advanced"
 purpose = "Filter controls for data views with named fields and option lists"
-attributes = ["target_selector"]
+attributes = ["target"]
 degradation = "bulleted filter labels"
 enum_variant = "FilterBar"
 
@@ -770,7 +770,7 @@ enum_variant = "Sidebar"
 status = "implemented"
 category = "advanced"
 purpose = "Resizable bottom or side panel with height and class-conditional visibility. desktop-only=true is a DEPRECATED alias for classes=desktop (lint L042); it still parses and normalizes into the same class set"
-attributes = ["position", "resizable", "height", "desktop_only", "classes", "min-class"]
+attributes = ["position", "resizable", "height", "desktop-only", "classes", "min-class"]
 degradation = "sequential child blocks"
 enum_variant = "Panel"
 
@@ -794,7 +794,7 @@ enum_variant = "TabContent"
 status = "implemented"
 category = "advanced"
 purpose = "Horizontal toolbar with buttons (label/action/icon/style/disabled/toggled), separators, badges, dropdowns, and text items"
-attributes = ["title", "title_source"]
+attributes = ["title", "title-source"]
 degradation = "bulleted action list"
 enum_variant = "Toolbar"
 
@@ -833,7 +833,7 @@ enum_variant = "DropdownSelect"
 [blocks.command-palette]
 status = "implemented"
 category = "advanced"
-purpose = "Searchable command picker with labeled actions, descriptions, and groups"
+purpose = "Searchable command picker with labeled actions, descriptions, icons, and groups (`- \"Label\" description= action= icon= group=`)"
 attributes = ["trigger"]
 degradation = "bulleted command list"
 enum_variant = "CommandPalette"
@@ -842,7 +842,7 @@ enum_variant = "CommandPalette"
 status = "implemented"
 category = "advanced"
 purpose = "Syntax-highlighted code editor with optional data source and line numbers"
-attributes = ["lang", "source", "line_numbers"]
+attributes = ["lang", "source", "line-numbers"]
 degradation = "fenced code block"
 enum_variant = "CodeEditor"
 
@@ -866,7 +866,7 @@ enum_variant = "Terminal"
 status = "implemented"
 category = "advanced"
 purpose = "File/navigation tree with source and optional select/rename/delete callbacks"
-attributes = ["source", "on_select", "on_rename", "on_delete"]
+attributes = ["source", "on-select", "on-rename", "on-delete"]
 degradation = "bulleted file list"
 enum_variant = "NavTree"
 
@@ -890,7 +890,7 @@ enum_variant = "SuggestionChips"
 status = "implemented"
 category = "advanced"
 purpose = "Recipient picker: select one or more entries from a data source and submit the selection (group compose)"
-attributes = ["source", "mode", "on_submit"]
+attributes = ["source", "mode", "on-submit"]
 degradation = "labeled source description"
 enum_variant = "RecipientPicker"
 
@@ -898,7 +898,7 @@ enum_variant = "RecipientPicker"
 status = "implemented"
 category = "advanced"
 purpose = "Platform-conditional QR block: show-my-code or scan, with a resolve action fired on a successful scan/exchange"
-attributes = ["mode", "on_resolve"]
+attributes = ["mode", "on-resolve"]
 degradation = "italic placeholder text"
 enum_variant = "Qr"
 
@@ -906,7 +906,7 @@ enum_variant = "Qr"
 status = "implemented"
 category = "advanced"
 purpose = "Chat conversation thread display from source with optional action callback; 0.17 adds authored message children (side, sender, in-bubble timestamp, read-only reaction pills)"
-attributes = ["source", "on_action", "on_react", "on_doc_open"]
+attributes = ["source", "on-action", "on-react", "on-doc-open"]
 degradation = "sequential message list"
 enum_variant = "ChatThread"
 
@@ -922,7 +922,7 @@ enum_variant = "ChatInputSimple"
 status = "implemented"
 category = "advanced"
 purpose = "Recipient chip input (compose To: line): label, removable chips with a close glyph, inline filter input; shape-only in HTML, behavior dispatcher-owned"
-attributes = ["label", "placeholder", "source", "on_change"]
+attributes = ["label", "placeholder", "source", "on-change"]
 degradation = "labeled chip list"
 enum_variant = "ChipInput"
 

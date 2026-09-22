@@ -399,23 +399,89 @@ pub fn resolve_theme(
     font: Option<&str>,
     style_pack: Option<&str>,
 ) -> ResolvedTheme {
+    resolve_theme_with_fonts(accent, font, None, None, style_pack)
+}
+
+/// [`resolve_theme`] with the display and body font stacks addressed
+/// separately (0.22.0).
+///
+/// `::style` can set `heading-font=` and `body-font=` independently of the
+/// legacy `font=`, which sets both. Precedence per slot: the split key when
+/// it resolves to a preset, else the combined `font`, else the platform
+/// default. Passing `None` for both split keys reproduces
+/// [`resolve_theme`] exactly, so every pre-0.22 caller is unchanged.
+pub fn resolve_theme_with_fonts(
+    accent: Option<&str>,
+    font: Option<&str>,
+    heading_font: Option<&str>,
+    body_font: Option<&str>,
+    style_pack: Option<&str>,
+) -> ResolvedTheme {
     let accent = accent
         .map(str::trim)
         .filter(|a| !a.is_empty())
         .unwrap_or(DEFAULT_ACCENT)
         .to_string();
     let (pack_id, tokens) = resolve_style_pack(style_pack.unwrap_or(DEFAULT_STYLE_PACK));
-    let font_stack = font.and_then(resolve_font_preset).map(|p| p.stack.to_string());
+    let stack = |name: Option<&str>| name.and_then(resolve_font_preset).map(|p| p.stack.to_string());
+    let font_stack = stack(font);
     ResolvedTheme {
         on_accent: accent_text_color(&accent).to_string(),
         accent_ink_light: accent_ink_color(&accent, false),
         accent_ink_dark: accent_ink_color(&accent, true),
         accent,
-        font_display: font_stack.clone(),
-        font_body: font_stack,
+        font_display: stack(heading_font).or_else(|| font_stack.clone()),
+        font_body: stack(body_font).or(font_stack),
         pack_id: pack_id.to_string(),
         tokens,
     }
+}
+
+/// The theme inputs a document's own `::style` blocks carry (D-S8-5).
+///
+/// Before 0.22.0 nothing in this module read [`Block::Style`]: `::style`
+/// reached the web through `render_html`'s CSS override pass and reached
+/// native not at all, so a themed document crossed the FFI wearing only its
+/// style pack. [`style_theme_inputs`] closes that hole — the same four keys
+/// `render_html::apply_style_overrides` honours, read once, here.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StyleThemeInputs {
+    /// `accent:` — the brand accent (any CSS colour the contrast math reads).
+    pub accent: Option<String>,
+    /// `font:` — the legacy key that sets heading AND body.
+    pub font: Option<String>,
+    /// `heading-font:` — display/heading stack only.
+    pub heading_font: Option<String>,
+    /// `body-font:` — body stack only.
+    pub body_font: Option<String>,
+}
+
+/// Collect the theme-bearing `::style` properties of a block tree, in
+/// document order — a later `::style` wins, matching the CSS cascade
+/// `render_html` emits. Documents with no `::style` return the default
+/// (all `None`), so their resolved theme is bit-identical to pre-0.22.
+pub fn style_theme_inputs(blocks: &[Block]) -> StyleThemeInputs {
+    let mut out = StyleThemeInputs::default();
+    for block in blocks {
+        let Block::Style { properties, .. } = block else {
+            continue;
+        };
+        for prop in properties {
+            let value = prop.value.trim();
+            if value.is_empty() {
+                continue;
+            }
+            let slot = match prop.key.trim() {
+                "accent" => &mut out.accent,
+                "font" => &mut out.font,
+                "heading-font" => &mut out.heading_font,
+                "body-font" => &mut out.body_font,
+                _ => continue,
+            };
+            *slot = Some(value.to_string());
+        }
+    }
+    out
 }
 
 /// Project a block tree onto ONE size class (0.18).

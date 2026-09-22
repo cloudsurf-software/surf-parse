@@ -3,6 +3,79 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.22.0 — 2026-09-22 (native schema v7: the last eight web-only blocks)
+
+### Added
+
+- **Eight new `NativeBlock` variants — schema v7.** The blocks that crossed
+  the FFI borrowed or as a Markdown string now carry their parsed shape:
+  - **`Style { properties }`** — the `key: value` body lines of `::style`
+    (`accent`, `font`, `heading-font`, `body-font`, …), via the new
+    `NativeStyleProperty`.
+  - **`Logo { src, alt, size }`** — `::logo`.
+  - **`Route { method, path, auth, returns, body, handler, content }`** —
+    `::route`; `method` crosses as the uppercase verb (GET/POST/PUT/PATCH/
+    DELETE) and `handler` as the fenced source.
+  - **`Action { method, target, label, fields, confirm }`** — `::action`;
+    `fields` are `NativeFormField`s mapped by the same helper `::form` uses,
+    so the two can never drift.
+  - **`Model { name, fields }`** — `::model`, via the new
+    `NativeModelField { name, field_type, constraints }` carrying the spec
+    spellings (`uuid`, `enum(a, b)`, `ref(Team)`; `primary`, `max=254`,
+    `default=now()`).
+  - **`App { name, binary, region, port, platform, auth, content, children }`**
+    — `::app`; children convert through `convert_children`, so the infra
+    blocks inside still degrade to Markdown.
+  - **`SegmentedControl { active, size, action, segments }`** — `::segmented-
+    control`, via the new `NativeSegmentItem`. It used to be BORROWED as a
+    `TabBar`, which dropped `size=` and the block-level `action=` and told
+    the client it was switching panes rather than picking a filter value.
+  - **`DropdownSelect { label, icon, selected, align, options }`** —
+    `::dropdown-select`, via the new `NativeDropdownOption`. It used to be
+    BORROWED as a `CommandPalette`, which dropped `icon=`, `align=` and the
+    label/selected distinction.
+  `NativeBlock` is now an 83-variant enum. `block_tier` files Route, Action
+  and Model under Content, Logo under Site, and Style and App under Chrome;
+  the two borrowed arms are gone, so a client matching `TabBar` or
+  `CommandPalette` no longer receives segmented-control or dropdown payloads
+  there.
+- **`NATIVE_DOC_SCHEMA_VERSION` 6 → 7.**
+- **D-S8-5 — `::style` reaches `NativeTheme`.** Nothing in `resolve` read
+  `Block::Style` before, so a document's own `accent`/`font` crossed the FFI
+  only if it also carried a `::site` block. New
+  `resolve::style_theme_inputs(&blocks) -> StyleThemeInputs` collects the
+  four theme-bearing keys (`accent`, `font`, `heading-font`, `body-font` —
+  the same set `render_html::apply_style_overrides` honours, last `::style`
+  wins), and new `resolve::resolve_theme_with_fonts(...)` addresses the
+  display and body stacks separately. `ffi::parse_to_native_styled` applies
+  them with precedence host argument > `::style` > `::site` > default.
+  `resolve_theme` is unchanged and delegates, so a document with no
+  `::style` resolves exactly the theme it did before.
+
+### Changed
+
+- `spec/blocks.toml` now states what the parser actually reads (D-S8-6): the
+  attributes the parser reads hyphenated are spelled hyphenated
+  (`badge-color`, `cta-label`, `cta-href`, `on-select`, `desktop-only`,
+  `title-source`, `line-numbers`, `on-rename`, `on-delete`, `on-submit`,
+  `on-resolve`, `on-action`, `on-react`, `on-doc-open`, `on-change`);
+  `[blocks.filter-bar]` reads `target=`, not `target_selector`;
+  `[blocks.board]`'s `columns` and `card_template` are BODY lines
+  (`columns: A | B`, `card-template: …`), not attributes, and moved into
+  `purpose`; `[blocks.command-palette].purpose` now names the `icon` its
+  parser reads. The registry's table count is unchanged (122). The
+  underscored attributes the parser really does read underscored
+  (`::database`'s `shared_auth`/`volume_gb`, `::deploy`'s
+  `auto_stop`/`min_machines`, `::concurrency`'s
+  `hard_limit`/`soft_limit`/`force_https`) are left as they are.
+
+### Notes
+
+- `NativeBlock`'s uniffi metadata (names, types and EVERY `///` docstring)
+  must fit one 16 KiB const buffer in uniffi 0.28.3; v7 leaves roughly 200
+  bytes of slack. New variants need one- or two-line docstrings — the prose
+  belongs on the supporting record types or the module docs.
+
 ## 0.21.0 — 2026-09-18 (`::hours` + `::marquee`, section body fix, site-page stylesheet config)
 
 ### Added

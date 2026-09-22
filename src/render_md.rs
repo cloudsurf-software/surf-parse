@@ -1304,7 +1304,7 @@ pub(crate) fn render_block(block: &Block) -> String {
     }
 }
 
-fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
+pub(crate) fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
     use crate::types::ModelFieldType;
     match ft {
         ModelFieldType::Uuid => "uuid".to_string(),
@@ -1324,7 +1324,7 @@ fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
     }
 }
 
-fn constraint_md(c: &crate::types::FieldConstraint) -> String {
+pub(crate) fn constraint_md(c: &crate::types::FieldConstraint) -> String {
     use crate::types::FieldConstraint;
     match c {
         FieldConstraint::Primary => "primary".to_string(),

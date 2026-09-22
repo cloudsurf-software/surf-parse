@@ -4,28 +4,58 @@
     "content": "\n# App spec"
   },
   {
-    "type": "markdown",
-    "content": "## App: corpus-app"
+    "type": "app",
+    "name": "corpus-app",
+    "binary": null,
+    "region": null,
+    "port": null,
+    "platform": null,
+    "auth": null,
+    "content": "",
+    "children": []
   },
   {
-    "type": "markdown",
-    "content": "**Model: User**\n\n| Field | Type | Constraints |\n|-------|------|-------------|\n| id | string |  |\n| email | string |  |"
+    "type": "model",
+    "name": "User",
+    "fields": [
+      {
+        "name": "id",
+        "field_type": "string",
+        "constraints": []
+      },
+      {
+        "name": "email",
+        "field_type": "string",
+        "constraints": []
+      }
+    ]
   },
   {
     "type": "markdown",
     "content": "**Authentication**\n- provider: email"
   },
   {
-    "type": "markdown",
-    "content": "**GET `/api/users`**"
+    "type": "route",
+    "method": "GET",
+    "path": "/api/users",
+    "auth": null,
+    "returns": null,
+    "body": null,
+    "handler": null,
+    "content": ""
   },
   {
     "type": "markdown",
     "content": "**Deploy: unknown**"
   },
   {
-    "type": "markdown",
-    "content": ""
+    "type": "style",
+    "properties": [
+      {
+        "key": "accent",
+        "value": "#2563eb"
+      }
+    ]
   },
   {
     "type": "markdown",
