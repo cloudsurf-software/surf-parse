@@ -3,6 +3,69 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.23.0 — 2026-09-22 (native schema v8: the last ten blocks with measured use)
+
+### Added
+
+- **Ten new `NativeBlock` variants — schema v8** (session 9 of the blocks
+  program, the second FFI session). Every one crossed as a `Markdown` string
+  before; each now carries its parsed shape:
+  - **`Auth { provider, session, roles, default_role }`** — `::auth`;
+    `provider` is the parser's lowercase word (`email` · `oauth` · `api-key`
+    · `token`).
+  - **`AppDeploy { region, scale, domain, memory, properties }`** —
+    `::app-deploy`; the parser's `(key, value)` tuples cross as
+    `NativeStyleProperty` (a tuple cannot cross UniFFI).
+  - **`Booking { title, service_label, services, days }`** — `::booking`,
+    via the new `NativeBookingService { name, duration, price }` and
+    `NativeBookingDay { date, slots }`.
+  - **`Schema { name, fields }`** — `::schema`, reusing `NativeModelField`
+    (a schema field is a model field; types and constraints spelled the
+    model way: `enum(a, b)`, `ref(X)`, `min=1`, `default=x`).
+  - **`ChatInput { action, placeholder, modes }`** — `::chat-input` (the
+    routed composer; `::chat-input-simple` stays `ChatInputSimple`).
+  - **`Store { title, currency, items }`** — `::store`, via the new
+    `NativeStoreItem { name, price, blurb, badge, category }`.
+  - **`AppEnv { vars }`** — `::app-env`, via the new
+    `NativeEnvVar { name, description, required }`.
+  - **`Binding { source, target, events }`** — `::binding`, via the new
+    `NativeBindingEvent { event, action }`.
+  - **`Build { base, runtime, edition, properties }`** and
+    **`Cicd { provider, properties }`** — `::build`, `::cicd`, over
+    `NativeStyleProperty`.
+- `block_tier`: auth / app-deploy / app-env / binding / build / cicd /
+  chat-input → Chrome, booking / store → Site, schema → Content. An `::app`
+  manifest's children are therefore structural now — the S8 frame stops
+  drawing markdown inside itself.
+- `NATIVE_DOC_SCHEMA_VERSION` 7 → 8. `NativeBlock` is a 93-variant enum.
+- `spec/blocks.toml`: `[blocks.app].attributes` gains `auth` (the parser
+  has read it since the manifest format existed).
+
+### Changed
+
+- **The `NativeBlock` enum's docstrings moved to a module-level variant
+  ledger** (lane 0 of session 9). uniffi 0.28.3 packs every variant and
+  field docstring into one 16 KiB metadata buffer
+  (`uniffi_core::metadata::BUF_SIZE`); the prose measured ~9 KB of it at
+  v7 and left ~200 bytes of slack. Each variant keeps a one-line
+  `/// ::block`; the generated Swift comments change accordingly. No
+  shape change.
+- **Attributes-vs-body (D-S9-5):** `::style` (accent / font / heading-font
+  / body-font), `::route` (auth / returns / body), `::auth` (session /
+  roles / default_role) and `::chat-input` (modes) now parse their keys as
+  ATTRIBUTES as well as body lines — the form `spec/blocks.toml` lists. A
+  body line wins over the attribute. Documents that author body lines are
+  byte-identical; the corpus manifest fixture, which authors
+  `::route[… returns=list(User)]`, gains its `returns` in both snapshots.
+
+### Tests
+
+- The tier fixture covers the ten (`::deck` stays the Degraded probe); one
+  conversion test per variant from real source (the attribute forms
+  included); `app_children_are_structural_at_schema_v8`; a uniffi-gated
+  end-to-end through `parse_to_native`; `tier4-manifest` snapshots
+  regenerated (auth and route serialize structurally, `returns` present).
+
 ## 0.22.0 — 2026-09-22 (native schema v7: the last eight web-only blocks)
 
 ### Added

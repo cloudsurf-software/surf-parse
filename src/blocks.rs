@@ -55,7 +55,7 @@ pub fn resolve_block(block: Block) -> Block {
         "cta" => parse_cta(attrs, *span),
         "hero-image" => parse_hero_image(attrs, *span),
         "testimonial" => parse_testimonial(attrs, content, *span),
-        "style" => parse_style(content, *span),
+        "style" => parse_style(attrs, content, *span),
         "faq" => parse_faq(content, *span),
         "pricing-table" => parse_pricing_table(attrs, content, *span),
         "site" => parse_site(attrs, content, *span),
@@ -920,8 +920,20 @@ fn parse_testimonial(attrs: &Attrs, content: &str, span: Span) -> Block {
     }
 }
 
-fn parse_style(content: &str, span: Span) -> Block {
+fn parse_style(attrs: &Attrs, content: &str, span: Span) -> Block {
     let mut properties = Vec::new();
+
+    // D-S9-5 (0.23.0): `spec/blocks.toml` lists accent / font / heading-font /
+    // body-font as ATTRIBUTES; the body-line grammar is what documents author.
+    // Both parse — attributes first, then the body lines, so a body line wins
+    // for any consumer that reads the last occurrence (the theme resolver does).
+    for key in ["accent", "font", "heading-font", "body-font"] {
+        if let Some(value) = attr_string(attrs, key) {
+            if !value.is_empty() {
+                properties.push(StyleProperty { key: key.to_string(), value });
+            }
+        }
+    }
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -3472,7 +3484,11 @@ fn parse_chat_input(attrs: &Attrs, content: &str, span: Span) -> Block {
         .unwrap_or_default();
     let placeholder = attr_string(attrs, "placeholder");
 
-    let mut modes = Vec::new();
+    // D-S9-5 (0.23.0): the toml lists `modes` as an attribute (`modes="ask | build"`);
+    // it parses as such, and a `modes:` body line below overrides.
+    let mut modes: Vec<String> = attr_string(attrs, "modes")
+        .map(|m| m.split('|').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
+        .unwrap_or_default();
     for line in content.lines() {
         let trimmed = line.trim();
         if let Some(mode_list) = trimmed.strip_prefix("modes:") {
@@ -4125,9 +4141,11 @@ fn parse_route(attrs: &Attrs, content: &str, span: Span) -> Block {
     };
     let path = attr_string(attrs, "path").unwrap_or_default();
 
-    let mut auth = None;
-    let mut returns = None;
-    let mut body = None;
+    // D-S9-5 (0.23.0): the toml lists auth / returns / body as attributes;
+    // they parse as such, and a `key: value` body line below overrides.
+    let mut auth = attr_string(attrs, "auth");
+    let mut returns = attr_string(attrs, "returns");
+    let mut body = attr_string(attrs, "body");
     let mut handler = None;
     let mut extra_lines = Vec::new();
 
@@ -4194,9 +4212,14 @@ fn parse_auth(attrs: &Attrs, content: &str, span: Span) -> Block {
         _ => AuthProvider::Email,
     };
 
-    let mut session = None;
-    let mut roles = Vec::new();
-    let mut default_role = None;
+    // D-S9-5 (0.23.0): the toml lists session / default_role as attributes;
+    // they (and `roles=`) parse as such, and a body line below overrides.
+    let mut session = attr_string(attrs, "session");
+    let mut roles: Vec<String> = attr_string(attrs, "roles")
+        .map(|r| r.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
+        .unwrap_or_default();
+    let mut default_role =
+        attr_string(attrs, "default_role").or_else(|| attr_string(attrs, "default-role"));
 
     for line in content.lines() {
         let trimmed = line.trim();

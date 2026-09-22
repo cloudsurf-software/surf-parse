@@ -31,15 +31,18 @@
     ]
   },
   {
-    "type": "markdown",
-    "content": "**Authentication**\n- provider: email"
+    "type": "auth",
+    "provider": "email",
+    "session": null,
+    "roles": [],
+    "default_role": null
   },
   {
     "type": "route",
     "method": "GET",
     "path": "/api/users",
     "auth": null,
-    "returns": null,
+    "returns": "list(User)",
     "body": null,
     "handler": null,
     "content": ""

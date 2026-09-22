@@ -562,7 +562,7 @@ enum_variant = "SplitPane"
 status = "implemented"
 category = "advanced"
 purpose = "Top-level app manifest container with name, region, port, and child blocks"
-attributes = ["name", "binary", "region", "port", "platform"]
+attributes = ["name", "binary", "region", "port", "platform", "auth"]
 degradation = "heading with child blocks"
 enum_variant = "App"
 

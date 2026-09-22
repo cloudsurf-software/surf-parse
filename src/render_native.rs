@@ -7,6 +7,323 @@
 //! Action, Model, App, SegmentedControl, DropdownSelect). Remaining web-only
 //! types (Unknown and the build/infra manifest blocks) still degrade to their
 //! markdown equivalent.
+//!
+//! # `NativeBlock` variant ledger
+//!
+//! The prose that used to sit on the enum's variants and fields lives here
+//! since 0.23.0 (session 9, lane 0, D-S9-1): uniffi 0.28.3 packs every `///`
+//! inside a `derive(uniffi::Enum)` into ONE 16 KiB metadata buffer
+//! (`uniffi_core::metadata::BUF_SIZE`), and the enum's docstrings measured
+//! about 9 KB of it at schema v7. Module docs cost the buffer nothing. Each
+//! variant keeps a one-line `/// ::block` inside the enum; the record types
+//! keep their own field docs (their buffers are nearly empty).
+//!
+//! - **`Markdown`**
+//!   Plain markdown text. Also the fallback for unsupported block types.
+//! - **`Callout`**
+//!   Callout/admonition box with colored border.
+//!   `callout_type` is one of: "info", "warning", "danger", "tip", "note", "success".
+//! - **`Code`**
+//!   Fenced code block with optional language tag and file path.
+//! - **`DataTable`**
+//!   Structured data table with headers and rows.
+//!   - `caption`: Table caption (schema v6).
+//!   - `total`: Summary row rendered under the body (schema v6).
+//! - **`Tasks`**
+//!   Task checklist with checkbox items.
+//! - **`Decision`**
+//!   Decision record.
+//!   `status` is one of: "proposed", "accepted", "rejected", "superseded".
+//! - **`Metric`**
+//!   Single metric display with trend indicator.
+//!   `trend` is one of: "up", "down", "flat", or None.
+//!   - `min`: Gauge floor / ceiling (schema v6). With `max` set the metric draws
+//!     as a gauge natively.
+//! - **`Summary`**
+//!   Executive summary box.
+//! - **`Figure`**
+//!   Image with optional caption and alt text.
+//! - **`Tabs`**
+//!   Tabbed content panels (renders as segmented picker or TabView).
+//! - **`Columns`**
+//!   Multi-column layout.
+//! - **`Quote`**
+//!   Attributed quote with optional source.
+//! - **`Cta`**
+//!   Call-to-action button/link.
+//! - **`Testimonial`**
+//!   Customer testimonial with author info.
+//! - **`Faq`**
+//!   FAQ accordion with question/answer pairs.
+//! - **`Details`**
+//!   Collapsible content section.
+//! - **`Divider`**
+//!   Thematic divider with optional label.
+//! - **`Hero`**
+//!   Hero section — headline + subtitle + optional badge, optional
+//!   banner image, alignment hint (`left` / `center` / `right`), a
+//!   list of action buttons, and free-form body content that renders
+//!   between the subtitle and the buttons on the web.
+//! - **`Features`**
+//!   Feature card grid.
+//!   - `cols`: Per-size-class column count (schema v5); `None` = client default.
+//! - **`Steps`**
+//!   Numbered process/timeline steps.
+//! - **`Stats`**
+//!   Row of stat cards.
+//! - **`Comparison`**
+//!   Feature comparison matrix.
+//! - **`Toc`**
+//!   Table of contents with navigation entries.
+//! - **`BeforeAfter`**
+//!   Before/After comparison visualization.
+//! - **`Pipeline`**
+//!   Pipeline flow with labeled steps.
+//! - **`Form`**
+//!   Form with typed input fields for native rendering.
+//!   No action URL — the native app controls form submission.
+//! - **`Gallery`**
+//!   Image gallery with grid layout and optional category filtering.
+//!   - `columns`: Per-size-class column count (schema v5); a document that authored
+//!     a single value carries the same number in all three fields.
+//! - **`SectionContainer`**
+//!   Page section container with optional background and headline.
+//!   This is the only recursive NativeBlock variant — `children` contains
+//!   nested NativeBlock values. UniFFI supports recursive enums via boxing.
+//! - **`AppShell`**
+//!   Application shell with layout mode and nested children.
+//!   `layout` is one of: "sidebar", "split", "tabs".
+//!   - `adaptive`: Present only for `layout == "adaptive"` (schema v5).
+//! - **`Sidebar`**
+//!   Collapsible sidebar navigation panel.
+//!   `position` is one of: "left", "right".
+//!   - `width`: Per-size-class since schema v5.
+//! - **`Panel`**
+//!   Resizable panel (bottom or side).
+//!   `position` is one of: "bottom", "right", "left".
+//!   - `desktop_only`: DEPRECATED at schema v5 — read `gate` instead.
+//! - **`TabBar`**
+//!   Tab strip navigation bar with selectable items.
+//! - **`TabContent`**
+//!   Content pane associated with a specific tab.
+//!   - `width`: Content-column width cap, per size class. Reached HTML from 0.13
+//!     but died at the FFI until schema v5.
+//!   - `align`: Horizontal alignment of the capped column ("center"). Same hole.
+//! - **`Toolbar`**
+//!   Horizontal toolbar with buttons, separators, badges, dropdowns.
+//!   - `title`: Static toolbar/screen title (0.12).
+//!   - `title_source`: Source-bound dynamic title — a registry name the client
+//!     resolves at render time (e.g. `thread.display_name`). (0.12)
+//! - **`Drawer`**
+//!   Slide-out drawer panel.
+//!   `position` is one of: "left", "right".
+//!   - `width`: Per-size-class since schema v5.
+//! - **`Modal`**
+//!   Dialog overlay / modal.
+//! - **`CommandPalette`**
+//!   Searchable command palette / picker.
+//! - **`CodeEditor`**
+//!   Syntax-highlighted code editor.
+//! - **`BlockEditor`**
+//!   Visual block editor mount point.
+//! - **`Terminal`**
+//!   Shell/terminal panel.
+//! - **`NavTree`**
+//!   File/navigation tree.
+//! - **`Badge`**
+//!   Status badge pill.
+//! - **`SuggestionChips`**
+//!   Clickable suggestion chip list.
+//! - **`ChatThread`**
+//!   Chat conversation thread display.
+//!   - `on_react`: Reaction/tapback seam (0.12).
+//!   - `on_doc_open`: Doc-chip open seam (0.12).
+//!   - `messages`: Authored message children (0.17); empty = registry-bound thread.
+//! - **`ChatInputSimple`**
+//!   Simple chat message input.
+//! - **`ChipInput`**
+//!   Recipient chip input (0.17) — the compose "To:" line: label,
+//!   removable chips, inline filter input.
+//! - **`Progress`**
+//!   Step/progress indicator.
+//!   - `value`: Numeric mode (schema v6): with `value` set the block is a
+//!     determinate bar and `steps` is empty.
+//! - **`LogStream`**
+//!   Live log output stream.
+//! - **`ProblemList`**
+//!   Error/warning problem list.
+//! - **`List`**
+//!   Data-bound list view (::list).
+//!   `display` is one of: "card", "table", "compact".
+//!   - `filters`: Filterable field names declared on the list.
+//!   - `stream`: Stream-seam event name the list live-updates on (0.12).
+//!   - `on_select`: Primary row-select action (0.12).
+//! - **`Board`**
+//!   Kanban board with cards grouped into columns (::board).
+//! - **`FilterBar`**
+//!   Filter controls for data views (::filter-bar).
+//! - **`Search`**
+//!   Search input with typeahead results (::search).
+//! - **`RecipientPicker`**
+//!   Recipient picker (::recipient-picker) — choose one or more entries
+//!   from a data source and submit the selection (group compose).
+//!   `mode` is one of: "single", "multi".
+//! - **`Qr`**
+//!   Platform-conditional QR block (::qr) — show-my-code or scan.
+//!   `mode` is one of: "show", "scan"; `on_resolve` fires with the
+//!   resolved payload after a successful scan/exchange.
+//! - **`Site`**
+//!   Site-level configuration block (::site).
+//!
+//!   Flattens the `{key: value}` properties vec into a handful of
+//!   well-known fields used for native theming + chrome. Any additional
+//!   keys live in `extras` as `"{key}={value}"` strings.
+//! - **`Page`**
+//!   Single-page-app style page container (::page).
+//!
+//!   `children` holds the parsed body of the page; the native renderer
+//!   walks them recursively. The web renderer maps one `::page` to one
+//!   route; native renderers can either render all pages stacked and
+//!   scroll between them, or show one at a time.
+//! - **`Nav`**
+//!   Navigation bar (::nav) with logo + labelled links.
+//! - **`HeroImage`**
+//!   Hero image (::hero-image) — full-bleed illustrative image.
+//! - **`Footer`**
+//!   Footer (::footer) with link sections, copyright, social icons.
+//! - **`Embed`**
+//!   External embed (::embed) — map / video / audio / generic iframe.
+//!   `embed_type` is one of: "map", "video", "audio", "generic".
+//! - **`PricingTable`**
+//!   Pricing comparison table (::pricing-table).
+//!   - `highlight`: Tier names to feature / mark as the viewer's own (schema v6).
+//! - **`ProductCard`**
+//!   Product/pricing card (::product-card) — title, optional subtitle and
+//!   badge, body prose, feature bullets, and an optional CTA.
+//!   - `price`: Price as authored, plus its currency code (schema v6).
+//! - **`Chart`**
+//!   Chart (::chart). `chart_type` is the chart kind (line/bar/pie/…),
+//!   `source` names the data series for live-data mount points. `scene`
+//!   carries the typed chart geometry for blocks with an inline dataset
+//!   (same layout math as the web SVG); source-only charts stay `None`
+//!   and keep the labelled-preview path.
+//! - **`Row`**
+//!   Compact navigable list row (::row) — icon + title + description, an
+//!   optional link target, and a `state` of "default"/"loading"/"empty".
+//!   `actions` (0.12) carries the per-row labelled action seam
+//!   (contact rows, accept/deny request rows).
+//!   - `avatar`: Avatar spec (0.17): initials text or "group" for the users
+//!     glyph; `auto` is already derived to initials at parse.
+//!   - `rtime`: Right-side bucketed relative-time meta (0.17).
+//!   - `unread_count`: Unread count pill (0.17); replaces the dot when present.
+//!   - `actions`: Labelled per-row actions, typed through the action grammar (0.12).
+//! - **`InfoCard`**
+//!   Rich entity card (::info-card / ::infocard) — an intent badge, title +
+//!   subtitle, a summary line, an optional image, and EITHER numbered steps
+//!   OR a label/value fact list. `state` is "default"/"loading"/"empty".
+//! - **`Diagram`**
+//!   Diagram (::diagram) — `diagram_type` is e.g. "architecture"/"erd".
+//!   `scene` carries the laid-out geometry (same layout the web SVG is
+//!   serialized from) so native clients draw typed shapes; it is `None`
+//!   when the DSL fails to parse, and the raw `content` remains for the
+//!   titled-card fallback either way.
+//! - **`Banner`**
+//!   Full-width banner strip (::banner) — headline + subtitle + action
+//!   buttons over free-form body content. `anchor_id` is the optional
+//!   in-page anchor (`#contact`).
+//! - **`Cite`**
+//!   A single reference definition (::cite). Renders as nothing or as a
+//!   compact reference chip; the formatted entry is resolved in Rust with
+//!   the document's active citation style so clients never reimplement
+//!   citation formatting.
+//! - **`Bibliography`**
+//!   Rendered reference list (::bibliography / ::references). Entries are
+//!   pre-formatted in Rust (same string on every platform) in the active
+//!   citation style, numbered/ordered per that style's rules.
+//! - **`Gate`**
+//!   Access-code card (::gate) — password field + submit button. The
+//!   native app controls submission (like `Form`); `action` names the
+//!   POST target for the client to bind.
+//! - **`ProductGrid`**
+//!   Grid of product link-cards (::product-grid), optionally grouped.
+//!   `tiles` selects the full-bleed promo-tile rendering.
+//!   - `cols`: Block-level per-size-class column count (schema v5). Per-group
+//!     `cols` on [`NativeProductGroup`] still wins locally.
+//! - **`PostGrid`**
+//!   Card grid for a blog/news/events index (::post-grid).
+//! - **`Slide`**
+//!   Presentation slide (::slide) rendered outside the deck renderer.
+//!   `layout` is the SlideLayout css-class token ("cover", "bullets", …).
+//!   Recursive like `SectionContainer` (UniFFI boxes recursive enums).
+//! - **`SplitPane`**
+//!   Resizable side-by-side layout (::split-pane) with left/right planes.
+//!   `back_label` / `back_action` drive the small-screen back control in
+//!   the right plane. Recursive like `SectionContainer` and `Slide`
+//!   (UniFFI boxes recursive enums).
+//! - **`Style`**
+//!   `::style` — `properties` = the `key: value` body lines (`accent`,
+//!   `font`, `heading-font`, `body-font`), already in [`NativeTheme`].
+//! - **`DropdownSelect`**
+//!   `::dropdown-select` — `label=`/`icon=`/`selected=`/`align=` trigger,
+//!   `options` = the `- "Label" description= icon= action=` lines.
+//! - **`SegmentedControl`**
+//!   `::segmented-control` — filter pills, not tabs: `active=`, `size=`,
+//!   `action=` (via [`parse_native_action`]), `- id "Label"` segments.
+//! - **`Route`**
+//!   `::route` — `method=` uppercased, `path=`, the `auth:`/`returns:`/
+//!   `body:` lines, `handler` = fenced source, `content` = the rest.
+//! - **`Action`**
+//!   `::action` — `method=` uppercased, `target=`, `label=`, `confirm=`;
+//!   `fields` map exactly as `::form`'s `- Label (type)` lines.
+//! - **`Model`**
+//!   `::model` — `name=` and the `- field: type [constraints]` lines
+//!   (see [`NativeModelField`]).
+//! - **`App`**
+//!   `::app` — `name=`/`binary=`/`region=`/`port=`/`platform=`/`auth=`,
+//!   `content` = raw body, `children` = the parsed child blocks.
+//! - **`Logo`**
+//!   `::logo` — `src=`, `alt=`, `size=` in pixels.
+//! - **`Auth`**
+//!   `::auth` — `provider=` as the parser's lowercase word (`email`, `oauth`,
+//!   `api-key`, `token`); `session`, `roles` (comma list) and `default_role`
+//!   from the `key: value` body lines (attributes accepted since 0.23.0).
+//!   Schema v8 (session 9).
+//! - **`AppDeploy`**
+//!   `::app-deploy` — `region=`, `scale=`, `domain=`, `memory=`; `properties` =
+//!   the remaining `key: value` body lines as [`NativeStyleProperty`] (the
+//!   Rust `Vec<(String, String)>` tuple cannot cross UniFFI, D-S9-3). v8.
+//! - **`Booking`**
+//!   `::booking` — `title=`, `service-label=`; `services` = the
+//!   `- service: Name | duration | price` lines ([`NativeBookingService`]),
+//!   `days` = the `- day: YYYY-MM-DD | slot, slot` lines ([`NativeBookingDay`],
+//!   `full`/`none`/empty = no slots). v8.
+//! - **`Schema`**
+//!   `::schema` — `name=`; `fields` = the `- name (type) constraint…` body
+//!   lines (`enum:a,b`, `ref:Model`, `min:1`, `default:x` — the schema
+//!   dialect) as [`NativeModelField`], spelled the MODEL way (`enum(a, b)`,
+//!   `min=1`) because a schema field IS a model field (D-S9-2). v8.
+//! - **`ChatInput`**
+//!   `::chat-input` — `action=` (through `validate_source_path`; an external
+//!   target arrives blank), `placeholder=`, `modes` = the `modes: a | b` body
+//!   line (or the attribute since 0.23.0). NOT `::chat-input-simple`, which is
+//!   `ChatInputSimple`. v8.
+//! - **`Store`**
+//!   `::store` — `title=`, `currency=`; `items` = the
+//!   `- item: Name | price | blurb | badge` lines under `- category: …`
+//!   lines ([`NativeStoreItem`]). v8.
+//! - **`AppEnv`**
+//!   `::app-env` — `vars` = the `- NAME * "description"` body lines
+//!   ([`NativeEnvVar`]; `*` = required); attributes alone name variables
+//!   with no description. v8.
+//! - **`Binding`**
+//!   `::binding` — `source=`, `target=`; `events` = the `event: action` body
+//!   lines ([`NativeBindingEvent`]). v8.
+//! - **`Build`**
+//!   `::build` — `base=`, `runtime=`, `edition=`; `properties` = the remaining
+//!   `key: value` body lines ([`NativeStyleProperty`]). v8.
+//! - **`Cicd`**
+//!   `::cicd` — `provider=`; `properties` = the `key: value` body lines
+//!   ([`NativeStyleProperty`]). v8.
 
 use serde::{Deserialize, Serialize};
 
@@ -22,70 +339,60 @@ use crate::types::{
 const MAX_SECTION_DEPTH: u32 = 8;
 
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 82 native variants (pinned cross-platform by the
+// NativeBlock enum — 92 native variants (pinned cross-platform by the
 // SurfDocKit DispatchCoverageTests / Android NativeBlockCoverageTest census)
 //
-// HARD CAP (measured 0.22.0, S8): uniffi 0.28.3 encodes this enum's whole
-// metadata — module path, every variant and field name, every TYPE_ID_META
-// and EVERY `///` docstring — into one 16 KiB const buffer
-// (`uniffi_core::metadata::BUF_SIZE`). Overflowing it is a const-eval panic
-// at the `derive(uniffi::Enum)` line, not a readable error. At v7 the eight
-// new variants left roughly 200 bytes of slack, so a new variant here must
-// come with a ONE- OR TWO-LINE docstring; prose belongs on the supporting
-// record types (whose own buffers are nearly empty) or in this file's
-// module docs, which cost nothing.
+// HARD CAP (measured 0.22.0, S8; cleared 0.23.0, S9 lane 0): uniffi 0.28.3
+// encodes this enum's whole metadata — module path, every variant and field
+// name, every TYPE_ID_META and EVERY `///` docstring (variant AND field) —
+// into one 16 KiB const buffer (`uniffi_core::metadata::BUF_SIZE`).
+// Overflowing it is a const-eval panic at the `derive(uniffi::Enum)` line,
+// not a readable error. At v7 the docstrings alone measured ~9 KB and left
+// ~200 bytes of slack; at v8 every variant keeps ONE `/// ::block` line and
+// the prose lives in this file's module docs (the variant ledger above, which
+// costs the buffer nothing) or on the record types (whose own buffers are
+// nearly empty). Keep it that way: a new variant here gets its one line and
+// a ledger entry, never a paragraph.
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Simplified block representation for native mobile rendering via UniFFI.
-///
-/// Every field uses only UniFFI-safe types: `String`, `bool`, `u32`,
-/// `Option<T>`, `Vec<T>`, and simple structs of the same. No `BTreeMap`,
-/// no `Span`, no serde tags, no `enum` sub-types with complex discriminants.
-///
-/// Web-only blocks (Unknown, the build-engine/manifest blocks, …) are
-/// degraded to their markdown equivalent and emitted as
-/// `NativeBlock::Markdown`. The reader-content blocks ProductCard, Chart,
-/// Row, InfoCard and Diagram render structurally (below).
+/// Simplified block representation for native rendering via UniFFI —
+/// see the variant ledger in this file's module docs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NativeBlock {
-    /// Plain markdown text. Also the fallback for unsupported block types.
+    /// ::markdown
     Markdown { content: String },
 
-    /// Callout/admonition box with colored border.
-    /// `callout_type` is one of: "info", "warning", "danger", "tip", "note", "success".
+    /// ::callout
     Callout {
         callout_type: String,
         title: Option<String>,
         content: String,
     },
 
-    /// Fenced code block with optional language tag and file path.
+    /// ::code
     Code {
         language: Option<String>,
         file_path: Option<String>,
         content: String,
     },
 
-    /// Structured data table with headers and rows.
+    /// ::data
     DataTable {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
         sortable: bool,
-        /// Table caption (schema v6).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         caption: Option<String>,
-        /// Summary row rendered under the body (schema v6).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         total: Vec<String>,
     },
 
-    /// Task checklist with checkbox items.
+    /// ::tasks
     Tasks { items: Vec<NativeTaskItem> },
 
-    /// Decision record.
-    /// `status` is one of: "proposed", "accepted", "rejected", "superseded".
+    /// ::decision
     Decision {
         status: String,
         date: Option<String>,
@@ -93,51 +400,48 @@ pub enum NativeBlock {
         content: String,
     },
 
-    /// Single metric display with trend indicator.
-    /// `trend` is one of: "up", "down", "flat", or None.
+    /// ::metric
     Metric {
         label: String,
         value: String,
         trend: Option<String>,
         unit: Option<String>,
-        /// Gauge floor / ceiling (schema v6). With `max` set the metric draws
-        /// as a gauge natively.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         min: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<String>,
     },
 
-    /// Executive summary box.
+    /// ::summary
     Summary { content: String },
 
-    /// Image with optional caption and alt text.
+    /// ::figure
     Figure {
         src: String,
         caption: Option<String>,
         alt: Option<String>,
     },
 
-    /// Tabbed content panels (renders as segmented picker or TabView).
+    /// ::tabs
     Tabs { tabs: Vec<NativeTabPanel> },
 
-    /// Multi-column layout.
+    /// ::columns
     Columns { columns: Vec<NativeColumnContent> },
 
-    /// Attributed quote with optional source.
+    /// ::quote
     Quote {
         content: String,
         attribution: Option<String>,
     },
 
-    /// Call-to-action button/link.
+    /// ::cta
     Cta {
         label: String,
         href: String,
         primary: bool,
     },
 
-    /// Customer testimonial with author info.
+    /// ::testimonial
     Testimonial {
         content: String,
         author: Option<String>,
@@ -145,23 +449,20 @@ pub enum NativeBlock {
         company: Option<String>,
     },
 
-    /// FAQ accordion with question/answer pairs.
+    /// ::faq
     Faq { items: Vec<NativeFaqItem> },
 
-    /// Collapsible content section.
+    /// ::details
     Details {
         title: Option<String>,
         open: bool,
         content: String,
     },
 
-    /// Thematic divider with optional label.
+    /// ::divider
     Divider { label: Option<String> },
 
-    /// Hero section — headline + subtitle + optional badge, optional
-    /// banner image, alignment hint (`left` / `center` / `right`), a
-    /// list of action buttons, and free-form body content that renders
-    /// between the subtitle and the buttons on the web.
+    /// ::hero
     Hero {
         headline: Option<String>,
         subtitle: Option<String>,
@@ -172,60 +473,54 @@ pub enum NativeBlock {
         content: String,
     },
 
-    /// Feature card grid.
+    /// ::features
     Features {
         cards: Vec<NativeFeatureCard>,
-        /// Per-size-class column count (schema v5); `None` = client default.
         cols: Option<NativePerClassU32>,
     },
 
-    /// Numbered process/timeline steps.
+    /// ::steps
     Steps { steps: Vec<NativeStepItem> },
 
-    /// Row of stat cards.
+    /// ::stats
     Stats { items: Vec<NativeStatItem> },
 
-    /// Feature comparison matrix.
+    /// ::comparison
     Comparison {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
         highlight: Option<String>,
     },
 
-    /// Table of contents with navigation entries.
+    /// ::toc
     Toc {
         depth: u32,
         entries: Vec<NativeTocEntry>,
     },
 
-    /// Before/After comparison visualization.
+    /// ::before-after
     BeforeAfter {
         before_items: Vec<NativeBeforeAfterItem>,
         after_items: Vec<NativeBeforeAfterItem>,
         transition: Option<String>,
     },
 
-    /// Pipeline flow with labeled steps.
+    /// ::pipeline
     Pipeline { steps: Vec<NativePipelineStep> },
 
-    /// Form with typed input fields for native rendering.
-    /// No action URL — the native app controls form submission.
+    /// ::form
     Form {
         fields: Vec<NativeFormField>,
         submit_label: String,
     },
 
-    /// Image gallery with grid layout and optional category filtering.
+    /// ::gallery
     Gallery {
         items: Vec<NativeGalleryItem>,
-        /// Per-size-class column count (schema v5); a document that authored
-        /// a single value carries the same number in all three fields.
         columns: NativePerClassU32,
     },
 
-    /// Page section container with optional background and headline.
-    /// This is the only recursive NativeBlock variant — `children` contains
-    /// nested NativeBlock values. UniFFI supports recursive enums via boxing.
+    /// ::section
     SectionContainer {
         bg: Option<String>,
         headline: Option<String>,
@@ -236,143 +531,125 @@ pub enum NativeBlock {
     // ── Interactive block types (20 new variants) ──────────────────
 
     // Layout
-    /// Application shell with layout mode and nested children.
-    /// `layout` is one of: "sidebar", "split", "tabs".
+    /// ::app-shell
     AppShell {
         layout: String,
-        /// Present only for `layout == "adaptive"` (schema v5).
         adaptive: Option<NativeAdaptiveLayout>,
         children: Vec<NativeBlock>,
     },
-    /// Collapsible sidebar navigation panel.
-    /// `position` is one of: "left", "right".
+    /// ::sidebar
     Sidebar {
         position: String,
         collapsible: bool,
-        /// Per-size-class since schema v5.
         width: Option<NativePerClassU32>,
         gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
-    /// Resizable panel (bottom or side).
-    /// `position` is one of: "bottom", "right", "left".
+    /// ::panel
     Panel {
         position: String,
         resizable: bool,
         height: Option<u32>,
-        /// DEPRECATED at schema v5 — read `gate` instead.
         desktop_only: bool,
         gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
 
     // Navigation
-    /// Tab strip navigation bar with selectable items.
+    /// ::tab-bar
     TabBar {
         active: Option<String>,
         items: Vec<NativeTabBarItem>,
     },
-    /// Content pane associated with a specific tab.
+    /// ::tab-content
     TabContent {
         tab: String,
-        /// Content-column width cap, per size class. Reached HTML from 0.13
-        /// but died at the FFI until schema v5.
         width: Option<NativePerClassU32>,
-        /// Horizontal alignment of the capped column ("center"). Same hole.
         align: Option<String>,
         gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
-    /// Horizontal toolbar with buttons, separators, badges, dropdowns.
+    /// ::toolbar
     Toolbar {
-        /// Static toolbar/screen title (0.12).
         title: Option<String>,
-        /// Source-bound dynamic title — a registry name the client
-        /// resolves at render time (e.g. `thread.display_name`). (0.12)
         title_source: Option<String>,
         items: Vec<NativeToolbarItem>,
     },
 
     // Overlays
-    /// Slide-out drawer panel.
-    /// `position` is one of: "left", "right".
+    /// ::drawer
     Drawer {
         name: String,
         position: String,
-        /// Per-size-class since schema v5.
         width: Option<NativePerClassU32>,
         trigger: Option<String>,
         gate: NativeClassGate,
         children: Vec<NativeBlock>,
     },
-    /// Dialog overlay / modal.
+    /// ::modal
     Modal {
         name: String,
         title: Option<String>,
         children: Vec<NativeBlock>,
     },
-    /// Searchable command palette / picker.
+    /// ::command-palette
     CommandPalette {
         trigger: Option<String>,
         items: Vec<NativeCommandItem>,
     },
 
     // Interactive
-    /// Syntax-highlighted code editor.
+    /// ::code-editor
     CodeEditor {
         lang: Option<String>,
         source: Option<String>,
         line_numbers: bool,
         content: String,
     },
-    /// Visual block editor mount point.
+    /// ::block-editor
     BlockEditor {
         source: Option<String>,
     },
-    /// Shell/terminal panel.
+    /// ::terminal
     Terminal {
         shell: Option<String>,
         cwd: Option<String>,
     },
 
     // Data
-    /// File/navigation tree.
+    /// ::nav-tree
     NavTree {
         source: Option<String>,
         on_select: Option<NativeAction>,
         on_rename: Option<NativeAction>,
         on_delete: Option<NativeAction>,
     },
-    /// Status badge pill.
+    /// ::badge
     Badge {
         value: String,
         color: Option<String>,
     },
-    /// Clickable suggestion chip list.
+    /// ::suggestion-chips
     SuggestionChips {
         source: Option<String>,
         max: Option<u32>,
         dismissible: bool,
     },
-    /// Chat conversation thread display.
+    /// ::chat-thread
     ChatThread {
         source: Option<String>,
         on_action: Option<NativeAction>,
-        /// Reaction/tapback seam (0.12).
         on_react: Option<NativeAction>,
-        /// Doc-chip open seam (0.12).
         on_doc_open: Option<NativeAction>,
-        /// Authored message children (0.17); empty = registry-bound thread.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         messages: Vec<NativeChatMessage>,
     },
-    /// Simple chat message input.
+    /// ::chat-input-simple
     ChatInputSimple {
         placeholder: Option<String>,
         action: Option<NativeAction>,
     },
-    /// Recipient chip input (0.17) — the compose "To:" line: label,
-    /// removable chips, inline filter input.
+    /// ::chip-input
     ChipInput {
         label: Option<String>,
         placeholder: Option<String>,
@@ -380,58 +657,52 @@ pub enum NativeBlock {
         on_change: Option<NativeAction>,
         chips: Vec<String>,
     },
-    /// Step/progress indicator.
+    /// ::progress
     Progress {
         source: Option<String>,
         steps: Vec<NativeProgressStep>,
-        /// Numeric mode (schema v6): with `value` set the block is a
-        /// determinate bar and `steps` is empty.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         value: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<String>,
     },
-    /// Live log output stream.
+    /// ::log-stream
     LogStream {
         source: Option<String>,
         tail: Option<u32>,
     },
-    /// Error/warning problem list.
+    /// ::problem-list
     ProblemList {
         source: Option<String>,
     },
 
     // ── App data views promoted from tier 4 (0.11) ─────────────────
 
-    /// Data-bound list view (::list).
-    /// `display` is one of: "card", "table", "compact".
+    /// ::list
     List {
         source: String,
         display: String,
         item_template: String,
-        /// Filterable field names declared on the list.
         filters: Vec<String>,
         sort_field: Option<String>,
         sort_descending: bool,
         preload: bool,
-        /// Stream-seam event name the list live-updates on (0.12).
         stream: Option<String>,
-        /// Primary row-select action (0.12).
         on_select: Option<NativeAction>,
     },
-    /// Kanban board with cards grouped into columns (::board).
+    /// ::board
     Board {
         source: String,
         columns: Vec<String>,
         card_template: Option<String>,
         preload: bool,
     },
-    /// Filter controls for data views (::filter-bar).
+    /// ::filter-bar
     FilterBar {
         target_selector: String,
         fields: Vec<NativeFilterField>,
     },
-    /// Search input with typeahead results (::search).
+    /// ::search
     Search {
         source: String,
         placeholder: Option<String>,
@@ -439,17 +710,13 @@ pub enum NativeBlock {
 
     // ── Messages/Contacts vocabulary (0.12) ────────────────────────
 
-    /// Recipient picker (::recipient-picker) — choose one or more entries
-    /// from a data source and submit the selection (group compose).
-    /// `mode` is one of: "single", "multi".
+    /// ::recipient-picker
     RecipientPicker {
         source: String,
         mode: String,
         on_submit: Option<NativeAction>,
     },
-    /// Platform-conditional QR block (::qr) — show-my-code or scan.
-    /// `mode` is one of: "show", "scan"; `on_resolve` fires with the
-    /// resolved payload after a successful scan/exchange.
+    /// ::qr
     Qr {
         mode: String,
         on_resolve: Option<NativeAction>,
@@ -457,11 +724,7 @@ pub enum NativeBlock {
 
     // ── Wavesite site-format variants (7 new) ──────────────────────
 
-    /// Site-level configuration block (::site).
-    ///
-    /// Flattens the `{key: value}` properties vec into a handful of
-    /// well-known fields used for native theming + chrome. Any additional
-    /// keys live in `extras` as `"{key}={value}"` strings.
+    /// ::site
     Site {
         name: Option<String>,
         description: Option<String>,
@@ -471,12 +734,7 @@ pub enum NativeBlock {
         extras: Vec<String>,
     },
 
-    /// Single-page-app style page container (::page).
-    ///
-    /// `children` holds the parsed body of the page; the native renderer
-    /// walks them recursively. The web renderer maps one `::page` to one
-    /// route; native renderers can either render all pages stacked and
-    /// scroll between them, or show one at a time.
+    /// ::page
     Page {
         route: String,
         title: Option<String>,
@@ -484,46 +742,43 @@ pub enum NativeBlock {
         children: Vec<NativeBlock>,
     },
 
-    /// Navigation bar (::nav) with logo + labelled links.
+    /// ::nav
     Nav {
         logo: Option<String>,
         items: Vec<NativeNavItem>,
     },
 
-    /// Hero image (::hero-image) — full-bleed illustrative image.
+    /// ::hero-image
     HeroImage {
         src: String,
         alt: Option<String>,
     },
 
-    /// Footer (::footer) with link sections, copyright, social icons.
+    /// ::footer
     Footer {
         copyright: Option<String>,
         sections: Vec<NativeFooterSection>,
         social: Vec<NativeSocialLink>,
     },
 
-    /// External embed (::embed) — map / video / audio / generic iframe.
-    /// `embed_type` is one of: "map", "video", "audio", "generic".
+    /// ::embed
     Embed {
         src: String,
         title: Option<String>,
         embed_type: String,
     },
 
-    /// Pricing comparison table (::pricing-table).
+    /// ::pricing-table
     PricingTable {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
-        /// Tier names to feature / mark as the viewer's own (schema v6).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         highlight: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         current: Option<String>,
     },
 
-    /// Product/pricing card (::product-card) — title, optional subtitle and
-    /// badge, body prose, feature bullets, and an optional CTA.
+    /// ::product-card
     ProductCard {
         title: String,
         subtitle: Option<String>,
@@ -533,18 +788,13 @@ pub enum NativeBlock {
         features: Vec<String>,
         cta_label: Option<String>,
         cta_href: Option<String>,
-        /// Price as authored, plus its currency code (schema v6).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         price: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         currency: Option<String>,
     },
 
-    /// Chart (::chart). `chart_type` is the chart kind (line/bar/pie/…),
-    /// `source` names the data series for live-data mount points. `scene`
-    /// carries the typed chart geometry for blocks with an inline dataset
-    /// (same layout math as the web SVG); source-only charts stay `None`
-    /// and keep the labelled-preview path.
+    /// ::chart
     Chart {
         chart_type: String,
         source: String,
@@ -553,33 +803,23 @@ pub enum NativeBlock {
         scene: Option<NativeDiagramScene>,
     },
 
-    /// Compact navigable list row (::row) — icon + title + description, an
-    /// optional link target, and a `state` of "default"/"loading"/"empty".
-    /// `actions` (0.12) carries the per-row labelled action seam
-    /// (contact rows, accept/deny request rows).
+    /// ::row
     Row {
         icon: String,
         title: String,
         description: String,
         href: Option<String>,
         state: String,
-        /// Avatar spec (0.17): initials text or "group" for the users
-        /// glyph; `auto` is already derived to initials at parse.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         avatar: Option<String>,
-        /// Right-side bucketed relative-time meta (0.17).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         rtime: Option<String>,
-        /// Unread count pill (0.17); replaces the dot when present.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         unread_count: Option<u32>,
-        /// Labelled per-row actions, typed through the action grammar (0.12).
         actions: Vec<NativeRowAction>,
     },
 
-    /// Rich entity card (::info-card / ::infocard) — an intent badge, title +
-    /// subtitle, a summary line, an optional image, and EITHER numbered steps
-    /// OR a label/value fact list. `state` is "default"/"loading"/"empty".
+    /// ::infocard
     InfoCard {
         intent: String,
         title: String,
@@ -591,11 +831,7 @@ pub enum NativeBlock {
         state: String,
     },
 
-    /// Diagram (::diagram) — `diagram_type` is e.g. "architecture"/"erd".
-    /// `scene` carries the laid-out geometry (same layout the web SVG is
-    /// serialized from) so native clients draw typed shapes; it is `None`
-    /// when the DSL fails to parse, and the raw `content` remains for the
-    /// titled-card fallback either way.
+    /// ::diagram
     Diagram {
         diagram_type: String,
         title: Option<String>,
@@ -606,9 +842,7 @@ pub enum NativeBlock {
 
     // ── FFI-hole closure (0.11): tier-1–3 kinds that previously degraded ──
 
-    /// Full-width banner strip (::banner) — headline + subtitle + action
-    /// buttons over free-form body content. `anchor_id` is the optional
-    /// in-page anchor (`#contact`).
+    /// ::banner
     Banner {
         headline: Option<String>,
         subtitle: Option<String>,
@@ -617,26 +851,19 @@ pub enum NativeBlock {
         content: String,
     },
 
-    /// A single reference definition (::cite). Renders as nothing or as a
-    /// compact reference chip; the formatted entry is resolved in Rust with
-    /// the document's active citation style so clients never reimplement
-    /// citation formatting.
+    /// ::cite
     Cite {
         key: String,
         formatted: String,
     },
 
-    /// Rendered reference list (::bibliography / ::references). Entries are
-    /// pre-formatted in Rust (same string on every platform) in the active
-    /// citation style, numbered/ordered per that style's rules.
+    /// ::bibliography
     Bibliography {
         heading: String,
         entries: Vec<NativeReferenceEntry>,
     },
 
-    /// Access-code card (::gate) — password field + submit button. The
-    /// native app controls submission (like `Form`); `action` names the
-    /// POST target for the client to bind.
+    /// ::gate
     Gate {
         title: Option<String>,
         subtitle: Option<String>,
@@ -646,26 +873,21 @@ pub enum NativeBlock {
         error: Option<String>,
     },
 
-    /// Grid of product link-cards (::product-grid), optionally grouped.
-    /// `tiles` selects the full-bleed promo-tile rendering.
+    /// ::product-grid
     ProductGrid {
         tiles: bool,
-        /// Block-level per-size-class column count (schema v5). Per-group
-        /// `cols` on [`NativeProductGroup`] still wins locally.
         cols: Option<NativePerClassU32>,
         groups: Vec<NativeProductGroup>,
     },
 
-    /// Card grid for a blog/news/events index (::post-grid).
+    /// ::post-grid
     PostGrid {
         title: Option<String>,
         subtitle: Option<String>,
         items: Vec<NativePostItem>,
     },
 
-    /// Presentation slide (::slide) rendered outside the deck renderer.
-    /// `layout` is the SlideLayout css-class token ("cover", "bullets", …).
-    /// Recursive like `SectionContainer` (UniFFI boxes recursive enums).
+    /// ::slide
     Slide {
         layout: String,
         kicker: Option<String>,
@@ -673,10 +895,7 @@ pub enum NativeBlock {
         children: Vec<NativeBlock>,
     },
 
-    /// Resizable side-by-side layout (::split-pane) with left/right planes.
-    /// `back_label` / `back_action` drive the small-screen back control in
-    /// the right plane. Recursive like `SectionContainer` and `Slide`
-    /// (UniFFI boxes recursive enums).
+    /// ::split-pane
     SplitPane {
         ratio: String,
         back_label: Option<String>,
@@ -689,12 +908,10 @@ pub enum NativeBlock {
     //    borrowed (SegmentedControl→TabBar, DropdownSelect→CommandPalette)
     //    or as Markdown (Style, Logo, Route, Action, Model, App). ────────
 
-    /// `::style` — `properties` = the `key: value` body lines (`accent`,
-    /// `font`, `heading-font`, `body-font`), already in [`NativeTheme`].
+    /// ::style
     Style { properties: Vec<NativeStyleProperty> },
 
-    /// `::dropdown-select` — `label=`/`icon=`/`selected=`/`align=` trigger,
-    /// `options` = the `- "Label" description= icon= action=` lines.
+    /// ::dropdown-select
     DropdownSelect {
         label: Option<String>,
         icon: Option<String>,
@@ -703,8 +920,7 @@ pub enum NativeBlock {
         options: Vec<NativeDropdownOption>,
     },
 
-    /// `::segmented-control` — filter pills, not tabs: `active=`, `size=`,
-    /// `action=` (via [`parse_native_action`]), `- id "Label"` segments.
+    /// ::segmented-control
     SegmentedControl {
         active: Option<String>,
         size: String,
@@ -712,8 +928,7 @@ pub enum NativeBlock {
         segments: Vec<NativeSegmentItem>,
     },
 
-    /// `::route` — `method=` uppercased, `path=`, the `auth:`/`returns:`/
-    /// `body:` lines, `handler` = fenced source, `content` = the rest.
+    /// ::route
     Route {
         method: String,
         path: String,
@@ -724,8 +939,7 @@ pub enum NativeBlock {
         content: String,
     },
 
-    /// `::action` — `method=` uppercased, `target=`, `label=`, `confirm=`;
-    /// `fields` map exactly as `::form`'s `- Label (type)` lines.
+    /// ::action
     Action {
         method: String,
         target: String,
@@ -734,15 +948,13 @@ pub enum NativeBlock {
         confirm: Option<String>,
     },
 
-    /// `::model` — `name=` and the `- field: type [constraints]` lines
-    /// (see [`NativeModelField`]).
+    /// ::model
     Model {
         name: String,
         fields: Vec<NativeModelField>,
     },
 
-    /// `::app` — `name=`/`binary=`/`region=`/`port=`/`platform=`/`auth=`,
-    /// `content` = raw body, `children` = the parsed child blocks.
+    /// ::app
     App {
         name: String,
         binary: Option<String>,
@@ -754,11 +966,83 @@ pub enum NativeBlock {
         children: Vec<NativeBlock>,
     },
 
-    /// `::logo` — `src=`, `alt=`, `size=` in pixels.
+    /// ::logo
     Logo {
         src: String,
         alt: Option<String>,
         size: Option<u32>,
+    },
+
+    // ── Schema v8 (0.23.0, session 9): the last ten blocks with measured
+    //    use — the app manifest's children and three site widgets. ───────
+
+    /// ::auth
+    Auth {
+        provider: String,
+        session: Option<String>,
+        roles: Vec<String>,
+        default_role: Option<String>,
+    },
+
+    /// ::app-deploy
+    AppDeploy {
+        region: Option<String>,
+        scale: Option<u32>,
+        domain: Option<String>,
+        memory: Option<String>,
+        properties: Vec<NativeStyleProperty>,
+    },
+
+    /// ::booking
+    Booking {
+        title: Option<String>,
+        service_label: Option<String>,
+        services: Vec<NativeBookingService>,
+        days: Vec<NativeBookingDay>,
+    },
+
+    /// ::schema
+    Schema {
+        name: String,
+        fields: Vec<NativeModelField>,
+    },
+
+    /// ::chat-input
+    ChatInput {
+        action: String,
+        placeholder: Option<String>,
+        modes: Vec<String>,
+    },
+
+    /// ::store
+    Store {
+        title: Option<String>,
+        currency: Option<String>,
+        items: Vec<NativeStoreItem>,
+    },
+
+    /// ::app-env
+    AppEnv { vars: Vec<NativeEnvVar> },
+
+    /// ::binding
+    Binding {
+        source: String,
+        target: String,
+        events: Vec<NativeBindingEvent>,
+    },
+
+    /// ::build
+    Build {
+        base: Option<String>,
+        runtime: Option<String>,
+        edition: Option<String>,
+        properties: Vec<NativeStyleProperty>,
+    },
+
+    /// ::cicd
+    Cicd {
+        provider: Option<String>,
+        properties: Vec<NativeStyleProperty>,
     },
 }
 
@@ -1118,6 +1402,76 @@ pub struct NativeModelField {
     pub constraints: Vec<String>,
 }
 
+/// One bookable service within a native `Booking` — a
+/// `- service: Name | duration | price` body line of `::booking`.
+/// New in schema v8.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeBookingService {
+    /// The service name, the first `|` field.
+    pub name: String,
+    /// Free-text duration (`60 min`), the second field; absent when blank.
+    pub duration: Option<String>,
+    /// Free-text price (`$120`, `Free`), the third field; absent when blank.
+    pub price: Option<String>,
+}
+
+/// One day of availability within a native `Booking` — a
+/// `- day: YYYY-MM-DD | 9:00 AM, 10:00 AM` body line of `::booking`.
+/// New in schema v8.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeBookingDay {
+    /// The ISO date as authored.
+    pub date: String,
+    /// The selectable slot labels, in authored order; empty when the day
+    /// was written `full`, `none` or with no slots at all.
+    pub slots: Vec<String>,
+}
+
+/// One product within a native `Store` — a
+/// `- item: Name | price | blurb | badge` body line of `::store`, filed
+/// under the most recent `- category: …` line. New in schema v8.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeStoreItem {
+    /// The product name.
+    pub name: String,
+    /// The price as authored (`48`, `12.50`); the block's `currency=` is
+    /// the prefix.
+    pub price: String,
+    /// The one-line description under the name.
+    pub blurb: Option<String>,
+    /// The corner badge (`Bestseller`, `New`).
+    pub badge: Option<String>,
+    /// The category chip the item files under; `None` groups under "All".
+    pub category: Option<String>,
+}
+
+/// One declared environment variable within a native `AppEnv` — a
+/// `- NAME * "description"` body line of `::app-env`. New in schema v8.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeEnvVar {
+    /// The variable name, the first word of the line.
+    pub name: String,
+    /// The quoted description, when one was written.
+    pub description: Option<String>,
+    /// True when the line carried a `*`.
+    pub required: bool,
+}
+
+/// One event within a native `Binding` — an `event: action` body line of
+/// `::binding`. New in schema v8.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeBindingEvent {
+    /// The event word, left of the colon.
+    pub event: String,
+    /// The action, right of the colon, verbatim.
+    pub action: String,
+}
+
 /// A single formatted entry within a native `Bibliography`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -1458,11 +1812,30 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 ///    resolver reads `accent` / `font` / `heading-font` / `body-font` from
 ///    `::style` body lines (D-S8-5), so a themed `::style` no longer
 ///    reaches native only through the style pack.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 7;
+/// v8 (0.23.0) — the last ten blocks with measured use (S9, the second FFI
+/// session; every one was a `Markdown` string before):
+/// 1. `NativeBlock::Auth`, `AppDeploy`, `AppEnv`, `Binding`, `Build`, `Cicd`
+///    — the app manifest's children, filed under Chrome, so an `App`'s
+///    `children` are structural now; `ChatInput` (the routed composer,
+///    Chrome); `Booking` and `Store` (Site); `Schema` (Content — a schema is
+///    a definition table, like a model).
+/// 2. New records `NativeBookingService`, `NativeBookingDay`,
+///    `NativeStoreItem`, `NativeEnvVar`, `NativeBindingEvent`;
+///    `NativeModelField` (schema) and `NativeStyleProperty` (app-deploy,
+///    build, cicd) reused.
+/// 3. `NativeBlock` is now a 93-variant enum (92 structural + `Markdown`).
+///    Its docstrings moved to the module-level variant ledger (lane 0 of
+///    S9): the enum's UniFFI metadata buffer is 16 KiB and the prose alone
+///    measured ~9 KB at v7.
+/// 4. The parser accepts `::style`, `::route`, `::auth` and `::chat-input`
+///    keys as ATTRIBUTES as well as body lines (D-S9-5; body lines win) —
+///    a parse change, not a schema change, listed here because the corpus
+///    snapshot for the manifest fixture moved with it.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 8;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
-/// `NativeBlock` is an 83-variant enum, so `block_id`/`label` cannot be flat
+/// `NativeBlock` is a 93-variant enum, so `block_id`/`label` cannot be flat
 /// fields on it; the metadata rides beside the tree instead, indexed by the
 /// same `Span` byte extent the HTML renderer uses. Empty for a document that
 /// authored no `id=`/`label=`. New in schema v6.
@@ -2979,35 +3352,196 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             children: convert_children(children, depth + 1),
         },
 
+        // ── Schema v8 (session 9): the last ten blocks with measured use ──
+
+        Block::Auth {
+            provider,
+            session,
+            roles,
+            default_role,
+            ..
+        } => NativeBlock::Auth {
+            provider: auth_provider_str(*provider),
+            session: session.clone(),
+            roles: roles.clone(),
+            default_role: default_role.clone(),
+        },
+
+        Block::AppDeploy {
+            region,
+            scale,
+            domain,
+            memory,
+            properties,
+            ..
+        } => NativeBlock::AppDeploy {
+            region: region.clone(),
+            scale: *scale,
+            domain: domain.clone(),
+            memory: memory.clone(),
+            // The parser keeps `(key, value)` tuples here; a tuple cannot
+            // cross UniFFI, so the pairs ride the v7 key/value record (D-S9-3).
+            properties: properties
+                .iter()
+                .map(|(k, v)| NativeStyleProperty {
+                    key: k.clone(),
+                    value: v.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Booking {
+            title,
+            service_label,
+            services,
+            days,
+            ..
+        } => NativeBlock::Booking {
+            title: title.clone(),
+            service_label: service_label.clone(),
+            services: services
+                .iter()
+                .map(|s| NativeBookingService {
+                    name: s.name.clone(),
+                    duration: s.duration.clone(),
+                    price: s.price.clone(),
+                })
+                .collect(),
+            days: days
+                .iter()
+                .map(|d| NativeBookingDay {
+                    date: d.date.clone(),
+                    slots: d.slots.clone(),
+                })
+                .collect(),
+        },
+
+        // A schema field IS a model field (same name / type / constraints
+        // shape), so `::schema` reuses the v7 record (D-S9-2).
+        Block::Schema { name, fields, .. } => NativeBlock::Schema {
+            name: name.clone(),
+            fields: fields
+                .iter()
+                .map(|f| NativeModelField {
+                    name: f.name.clone(),
+                    field_type: model_field_type_str(&f.field_type),
+                    constraints: f.constraints.iter().map(field_constraint_str).collect(),
+                })
+                .collect(),
+        },
+
+        Block::ChatInput {
+            action,
+            placeholder,
+            modes,
+            ..
+        } => NativeBlock::ChatInput {
+            action: action.clone(),
+            placeholder: placeholder.clone(),
+            modes: modes.clone(),
+        },
+
+        Block::Store {
+            title,
+            currency,
+            items,
+            ..
+        } => NativeBlock::Store {
+            title: title.clone(),
+            currency: currency.clone(),
+            items: items
+                .iter()
+                .map(|it| NativeStoreItem {
+                    name: it.name.clone(),
+                    price: it.price.clone(),
+                    blurb: it.blurb.clone(),
+                    badge: it.badge.clone(),
+                    category: it.category.clone(),
+                })
+                .collect(),
+        },
+
+        Block::AppEnv { vars, .. } => NativeBlock::AppEnv {
+            vars: vars
+                .iter()
+                .map(|v| NativeEnvVar {
+                    name: v.name.clone(),
+                    description: v.description.clone(),
+                    required: v.required,
+                })
+                .collect(),
+        },
+
+        Block::Binding {
+            source,
+            target,
+            events,
+            ..
+        } => NativeBlock::Binding {
+            source: source.clone(),
+            target: target.clone(),
+            events: events
+                .iter()
+                .map(|e| NativeBindingEvent {
+                    event: e.event.clone(),
+                    action: e.action.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Build {
+            base,
+            runtime,
+            edition,
+            properties,
+            ..
+        } => NativeBlock::Build {
+            base: base.clone(),
+            runtime: runtime.clone(),
+            edition: edition.clone(),
+            properties: properties
+                .iter()
+                .map(|p| NativeStyleProperty {
+                    key: p.key.clone(),
+                    value: p.value.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Cicd {
+            provider,
+            properties,
+            ..
+        } => NativeBlock::Cicd {
+            provider: provider.clone(),
+            properties: properties
+                .iter()
+                .map(|p| NativeStyleProperty {
+                    key: p.key.clone(),
+                    value: p.value.clone(),
+                })
+                .collect(),
+        },
+
         // ── Markdown fallback: web-only / unsupported block types ───
 
         Block::Unknown { .. }
         | Block::Hours { .. }
         | Block::Marquee { .. }
         | Block::Dashboard { .. }
-        | Block::ChatInput { .. }
         | Block::Feed { .. }
-        | Block::Booking { .. }
-        | Block::Store { .. }
         | Block::Editor { .. }
-        | Block::Build { .. }
         | Block::InfraDatabase { .. }
         | Block::Deploy { .. }
         | Block::InfraEnv { .. }
         | Block::Health { .. }
         | Block::Concurrency { .. }
-        | Block::Cicd { .. }
         | Block::Smoke { .. }
         | Block::Domains { .. }
         | Block::Crates { .. }
         | Block::DeployUrls { .. }
         | Block::Volumes { .. }
-        | Block::Auth { .. }
-        | Block::Binding { .. }
-        | Block::Schema { .. }
-        | Block::Use { .. }
-        | Block::AppEnv { .. }
-        | Block::AppDeploy { .. } => {
+        | Block::Use { .. } => {
             let md = render_md::render_block(block);
             NativeBlock::Markdown { content: md }
         }
@@ -3211,6 +3745,19 @@ fn http_method_str(m: crate::types::HttpMethod) -> String {
 /// The spec spelling of a `::model` field type (schema v7). Same strings the
 /// markdown and HTML renderers emit, so a native client and a web preview
 /// name a type identically.
+/// The spec spelling of an `::auth` provider — the same four words
+/// `parse_auth` reads (schema v8).
+fn auth_provider_str(p: crate::types::AuthProvider) -> String {
+    use crate::types::AuthProvider;
+    match p {
+        AuthProvider::Email => "email",
+        AuthProvider::OAuth => "oauth",
+        AuthProvider::ApiKey => "api-key",
+        AuthProvider::Token => "token",
+    }
+    .to_string()
+}
+
 fn model_field_type_str(ft: &crate::types::ModelFieldType) -> String {
     crate::render_md::model_field_type_md(ft)
 }
@@ -3278,7 +3825,9 @@ pub fn block_tier(block: &Block) -> BlockTier {
         // Schema v7: the app-spec trio now converts structurally.
         | Block::Route { .. }
         | Block::Action { .. }
-        | Block::Model { .. } => BlockTier::Content,
+        | Block::Model { .. }
+        // Schema v8: a schema is a definition table, like a model.
+        | Block::Schema { .. } => BlockTier::Content,
 
         // ── Tier 2: site/marketing ───────────────────────────────────
         Block::Hero { .. }
@@ -3310,7 +3859,10 @@ pub fn block_tier(block: &Block) -> BlockTier {
         // A ::slide outside the deck renderer is a SectionContainer.
         | Block::Slide { .. }
         // Schema v7: ::logo is a brand element, not a degraded string.
-        | Block::Logo { .. } => BlockTier::Site,
+        | Block::Logo { .. }
+        // Schema v8: the two site widgets.
+        | Block::Booking { .. }
+        | Block::Store { .. } => BlockTier::Site,
 
         // ── Tier 3: app chrome ───────────────────────────────────────
         Block::AppShell { .. }
@@ -3348,36 +3900,34 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::SplitPane { .. }
         // Schema v7: presentation overrides and the app manifest shell.
         | Block::Style { .. }
-        | Block::App { .. } => BlockTier::Chrome,
+        | Block::App { .. }
+        // Schema v8: the manifest's children and the routed composer.
+        | Block::Auth { .. }
+        | Block::AppDeploy { .. }
+        | Block::AppEnv { .. }
+        | Block::Binding { .. }
+        | Block::Build { .. }
+        | Block::Cicd { .. }
+        | Block::ChatInput { .. } => BlockTier::Chrome,
 
         // ── Tier 4: explicit markdown degradation ────────────────────
         Block::Unknown { .. }
         | Block::Hours { .. }
         | Block::Marquee { .. }
         | Block::Dashboard { .. }
-        | Block::ChatInput { .. }
         | Block::Feed { .. }
-        | Block::Booking { .. }
-        | Block::Store { .. }
         | Block::Editor { .. }
-        | Block::Build { .. }
         | Block::InfraDatabase { .. }
         | Block::Deploy { .. }
         | Block::InfraEnv { .. }
         | Block::Health { .. }
         | Block::Concurrency { .. }
-        | Block::Cicd { .. }
         | Block::Smoke { .. }
         | Block::Domains { .. }
         | Block::Crates { .. }
         | Block::DeployUrls { .. }
         | Block::Volumes { .. }
-        | Block::Auth { .. }
-        | Block::Binding { .. }
-        | Block::Schema { .. }
         | Block::Use { .. }
-        | Block::AppEnv { .. }
-        | Block::AppDeploy { .. }
         // ::deck is presentation config; produces no native content.
         | Block::Deck { .. } => BlockTier::Degraded,
     }
@@ -3704,7 +4254,17 @@ mod tests {
 ::model[name=User]\n- id: uuid [primary]\n::\n
 ::segmented-control[active=all]\n- all \"All\"\n::\n
 ::dropdown-select[label=Sort]\n- \"Newest\" action=sort_newest\n::\n
-::app[name=demo]\n::\n";
+::app[name=demo]\n::\n
+::auth[provider=oauth]\nroles: admin, member\n::\n
+::app-deploy[region=sjc scale=2]\nmemory: 512mb\n::\n
+::booking[title=Book]\n- service: Cut | 30 min | $40\n- day: 2026-10-01 | 9:00 AM\n::\n
+::schema[name=User]\n- id (uuid) primary\n::\n
+::chat-input[action=/api/chat]\nmodes: ask | build\n::\n
+::store[title=Shop currency=$]\n- item: Tee | 20\n::\n
+::app-env\n- DATABASE_URL * \"postgres\"\n::\n
+::binding[source=/api/tasks target=list]\nchange: refresh\n::\n
+::build[base=rust]\nfeatures: full\n::\n
+::cicd[provider=github]\ndeploy: main\n::\n";
         let result = crate::parse(source);
         let mut saw_degraded = false;
         let mut saw_structured = false;
@@ -3878,6 +4438,297 @@ mod tests {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Schema v8 (S9): the last ten blocks with measured use. One test
+    // per variant from real source, so the parser's grammar (attributes
+    // vs body lines, the `|` fields, the `*` flag) is pinned with the arm.
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn auth_converts_structurally() {
+        let source = "::auth[provider=OAuth]\n\
+                      session: jwt\n\
+                      roles: admin, member, guest\n\
+                      default-role: member\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Auth { provider, session, roles, default_role } => {
+                assert_eq!(provider, "oauth", "the spec's lowercase word, whatever the author's case");
+                assert_eq!(session.as_deref(), Some("jwt"));
+                assert_eq!(roles, vec!["admin", "member", "guest"]);
+                assert_eq!(default_role.as_deref(), Some("member"));
+            }
+            other => panic!("expected Auth, got {other:?}"),
+        }
+        // D-S9-5: the toml's attribute form parses too; a body line wins.
+        match convert_first("::auth[provider=token session=cookie default_role=viewer]\nsession: jwt\n::\n") {
+            NativeBlock::Auth { provider, session, default_role, .. } => {
+                assert_eq!(provider, "token");
+                assert_eq!(session.as_deref(), Some("jwt"), "the body line overrides the attribute");
+                assert_eq!(default_role.as_deref(), Some("viewer"));
+            }
+            other => panic!("expected Auth, got {other:?}"),
+        }
+        // A bare `::auth` is an email provider with nothing else (parse_auth's default).
+        match convert_first("::auth\n::\n") {
+            NativeBlock::Auth { provider, session, roles, default_role } => {
+                assert_eq!(provider, "email");
+                assert!(session.is_none() && roles.is_empty() && default_role.is_none());
+            }
+            other => panic!("expected Auth, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn app_deploy_converts_structurally() {
+        let source = "::app-deploy[region=sjc scale=3 domain=app.example.com memory=1gb]\n\
+                      min_instances: 1\n\
+                      cpu: shared\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::AppDeploy { region, scale, domain, memory, properties } => {
+                assert_eq!(region.as_deref(), Some("sjc"));
+                assert_eq!(scale, Some(3));
+                assert_eq!(domain.as_deref(), Some("app.example.com"));
+                assert_eq!(memory.as_deref(), Some("1gb"));
+                assert_eq!(
+                    properties,
+                    vec![
+                        NativeStyleProperty { key: "min_instances".into(), value: "1".into() },
+                        NativeStyleProperty { key: "cpu".into(), value: "shared".into() },
+                    ],
+                    "the (key, value) tuples cross as the v7 key/value record (D-S9-3)"
+                );
+            }
+            other => panic!("expected AppDeploy, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn booking_converts_structurally() {
+        let source = "::booking[title=\"Book a visit\" service-label=Treatment]\n\
+                      - service: Consultation | 30 min | Free\n\
+                      - service: Deep clean | 60 min | $120\n\
+                      - service: Whitening\n\
+                      - day: 2026-10-01 | 9:00 AM, 10:30 AM, 2:00 PM\n\
+                      - day: 2026-10-02 | full\n\
+                      - day: 2026-10-03\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Booking { title, service_label, services, days } => {
+                assert_eq!(title.as_deref(), Some("Book a visit"));
+                assert_eq!(service_label.as_deref(), Some("Treatment"));
+                assert_eq!(services.len(), 3);
+                assert_eq!(
+                    services[1],
+                    NativeBookingService {
+                        name: "Deep clean".into(),
+                        duration: Some("60 min".into()),
+                        price: Some("$120".into()),
+                    }
+                );
+                assert_eq!(services[2].duration, None, "a two-field line has no duration");
+                assert_eq!(days.len(), 3);
+                assert_eq!(days[0].slots, vec!["9:00 AM", "10:30 AM", "2:00 PM"]);
+                assert!(days[1].slots.is_empty(), "`full` is a day with no slots");
+                assert!(days[2].slots.is_empty(), "no `|` is a day with no slots");
+            }
+            other => panic!("expected Booking, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn schema_converts_structurally_through_the_model_field_record() {
+        // `parse_schema`'s grammar is `- name (type) constraint…` with
+        // `enum:a,b` / `ref:Model` types and `min:1` / `default:x`
+        // constraints — NOT the model's `- name: type [constraints]`. The
+        // crossing shape is the same record, and it spells types and
+        // constraints the MODEL way (`enum(a, b)`, `min=1`) so one Swift
+        // grid draws both (D-S9-2).
+        let source = "::schema[name=Order]\n\
+                      - id (uuid) primary auto\n\
+                      - total (money) required min:1\n\
+                      - status (enum:open,paid) default:open\n\
+                      - owner (ref:User)\n\
+                      - note\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Schema { name, fields } => {
+                assert_eq!(name, "Order");
+                assert_eq!(fields.len(), 5);
+                assert_eq!(
+                    fields[0],
+                    NativeModelField {
+                        name: "id".into(),
+                        field_type: "uuid".into(),
+                        constraints: vec!["primary".into(), "auto".into()],
+                    }
+                );
+                assert_eq!(fields[1].constraints, vec!["required".to_string(), "min=1".to_string()]);
+                assert_eq!(fields[2].field_type, "enum(open, paid)");
+                assert_eq!(fields[3].field_type, "ref(User)");
+                assert_eq!(fields[4].field_type, "string", "a bare name is a string field");
+            }
+            other => panic!("expected Schema, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn chat_input_converts_structurally() {
+        match convert_first("::chat-input[action=/api/chat placeholder=\"Ask Surfy\"]\nmodes: ask | build | plan\n::\n") {
+            NativeBlock::ChatInput { action, placeholder, modes } => {
+                assert_eq!(action, "/api/chat");
+                assert_eq!(placeholder.as_deref(), Some("Ask Surfy"));
+                assert_eq!(modes, vec!["ask", "build", "plan"]);
+            }
+            other => panic!("expected ChatInput, got {other:?}"),
+        }
+        // D-S9-5: `modes=` as the toml's attribute; an external action arrives blank.
+        match convert_first("::chat-input[action=https://evil.example/x modes=\"ask | build\"]\n::\n") {
+            NativeBlock::ChatInput { action, modes, .. } => {
+                assert_eq!(action, "", "validate_source_path drops an external target");
+                assert_eq!(modes, vec!["ask", "build"]);
+            }
+            other => panic!("expected ChatInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn store_converts_structurally() {
+        let source = "::store[title=\"Surf Shop\" currency=€]\n\
+                      - category: Boards\n\
+                      - item: Longboard | 480 | Nine feet of glide | Bestseller\n\
+                      - item: Fish | 390\n\
+                      - category:\n\
+                      - item: Wax | 4 | Cold water\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Store { title, currency, items } => {
+                assert_eq!(title.as_deref(), Some("Surf Shop"));
+                assert_eq!(currency.as_deref(), Some("€"));
+                assert_eq!(items.len(), 3);
+                assert_eq!(
+                    items[0],
+                    NativeStoreItem {
+                        name: "Longboard".into(),
+                        price: "480".into(),
+                        blurb: Some("Nine feet of glide".into()),
+                        badge: Some("Bestseller".into()),
+                        category: Some("Boards".into()),
+                    }
+                );
+                assert_eq!(items[1].category.as_deref(), Some("Boards"), "a category holds until the next one");
+                assert_eq!(items[2].category, None, "an empty category line groups under All");
+                assert_eq!(items[2].badge, None);
+            }
+            other => panic!("expected Store, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn app_env_converts_structurally() {
+        let source = "::app-env\n\
+                      - DATABASE_URL * \"Postgres connection string\"\n\
+                      - LOG_LEVEL \"info by default\"\n\
+                      - SECRET_KEY *\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::AppEnv { vars } => {
+                assert_eq!(vars.len(), 3);
+                assert_eq!(
+                    vars[0],
+                    NativeEnvVar {
+                        name: "DATABASE_URL".into(),
+                        description: Some("Postgres connection string".into()),
+                        required: true,
+                    }
+                );
+                assert!(!vars[1].required);
+                assert_eq!(vars[2].description, None);
+                assert!(vars[2].required);
+            }
+            other => panic!("expected AppEnv, got {other:?}"),
+        }
+        // Attributes alone name variables with no description (parse_app_env's first arm).
+        match convert_first("::app-env[PORT=8080]\n::\n") {
+            NativeBlock::AppEnv { vars } => {
+                assert_eq!(vars.len(), 1);
+                assert_eq!(vars[0].name, "PORT");
+                assert!(!vars[0].required);
+            }
+            other => panic!("expected AppEnv, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn binding_converts_structurally() {
+        match convert_first("::binding[source=/api/tasks target=task-list]\nchange: refresh\nsubmit: post\n::\n") {
+            NativeBlock::Binding { source, target, events } => {
+                assert_eq!(source, "/api/tasks");
+                assert_eq!(target, "task-list");
+                assert_eq!(
+                    events,
+                    vec![
+                        NativeBindingEvent { event: "change".into(), action: "refresh".into() },
+                        NativeBindingEvent { event: "submit".into(), action: "post".into() },
+                    ]
+                );
+            }
+            other => panic!("expected Binding, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_converts_structurally() {
+        match convert_first("::build[base=rust runtime=tokio edition=2024]\nfeatures: pdf, native\nprofile: release\n::\n") {
+            NativeBlock::Build { base, runtime, edition, properties } => {
+                assert_eq!(base.as_deref(), Some("rust"));
+                assert_eq!(runtime.as_deref(), Some("tokio"));
+                assert_eq!(edition.as_deref(), Some("2024"));
+                assert_eq!(properties.len(), 2);
+                assert_eq!(properties[0], NativeStyleProperty { key: "features".into(), value: "pdf, native".into() });
+            }
+            other => panic!("expected Build, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cicd_converts_structurally() {
+        match convert_first("::cicd[provider=github]\ndeploy: on push to main\ntest: cargo test\n::\n") {
+            NativeBlock::Cicd { provider, properties } => {
+                assert_eq!(provider.as_deref(), Some("github"));
+                assert_eq!(properties.len(), 2);
+                assert_eq!(properties[1], NativeStyleProperty { key: "test".into(), value: "cargo test".into() });
+            }
+            other => panic!("expected Cicd, got {other:?}"),
+        }
+        match convert_first("::cicd\n::\n") {
+            NativeBlock::Cicd { provider, properties } => {
+                assert!(provider.is_none() && properties.is_empty());
+            }
+            other => panic!("expected Cicd, got {other:?}"),
+        }
+    }
+
+    /// The manifest's children turn structural: an `::app` whose body
+    /// authors the infra blocks carries them as their own variants now.
+    #[test]
+    fn app_children_are_structural_at_schema_v8() {
+        let source = "::app[name=demo]\n\
+                      ::build[base=rust]\n::\n\
+                      ::app-env\n- PORT\n::\n\
+                      ::app-deploy[region=sjc]\n::\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::App { children, .. } => {
+                assert!(matches!(children[0], NativeBlock::Build { .. }), "{children:?}");
+                assert!(matches!(children[1], NativeBlock::AppEnv { .. }), "{children:?}");
+                assert!(matches!(children[2], NativeBlock::AppDeploy { .. }), "{children:?}");
+            }
+            other => panic!("expected App, got {other:?}"),
+        }
+    }
+
     #[test]
     fn segmented_control_converts_structurally() {
         let source = "::segmented-control[active=all size=regular action=setTasksView]\n\
@@ -4024,6 +4875,25 @@ mod tests {
 
         let plain = crate::ffi::parse_to_native("# Doc\n".to_string()).expect("parses");
         assert_eq!(plain.theme.accent, crate::resolve::DEFAULT_ACCENT);
+    }
+
+    /// Schema v8 end to end, through the real FFI entry point: a manifest's
+    /// children cross as their own variants.
+    #[cfg(feature = "uniffi")]
+    #[test]
+    fn manifest_children_cross_the_ffi_structurally() {
+        let doc = crate::ffi::parse_to_native(
+            "::app[name=demo]\n::auth[provider=email]\n::\n::build[base=rust]\n::\n::\n".to_string(),
+        )
+        .expect("parses");
+        assert_eq!(doc.schema_version, 8);
+        match &doc.blocks[0] {
+            NativeBlock::App { children, .. } => {
+                assert!(matches!(children[0], NativeBlock::Auth { .. }));
+                assert!(matches!(children[1], NativeBlock::Build { .. }));
+            }
+            other => panic!("expected App, got {other:?}"),
+        }
     }
 
     /// A-04 / BR-APP-7: the five reader-content blocks render structurally on
@@ -5590,7 +6460,9 @@ mod tests {
         // round (chat-thread message children, chipInput kind, row
         // avatar/rtime/unread-count) — schema v4.
         // 0.18: the size-class axis + the FFI holes it closed — schema v5.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 7);
+        // 0.22: the eight web-only blocks — schema v7. 0.23: the last ten
+        // with measured use (the manifest's children) — schema v8.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 8);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the
