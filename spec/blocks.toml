@@ -14,7 +14,7 @@ total_blocks = 122
 registry_updated = "2026-09-22"
 
 [blocks.ai-context]
-status = "planned"
+status = "implemented"
 category = "advanced"
 purpose = "AI generation metadata"
 attributes = ["model", "tokens", "loaded"]
@@ -22,7 +22,7 @@ degradation = "fenced code block"
 enum_variant = "AiContext"
 
 [blocks.ai-generated]
-status = "planned"
+status = "implemented"
 category = "advanced"
 purpose = "AI attribution"
 attributes = ["model", "date", "reviewed"]
@@ -30,9 +30,9 @@ degradation = "blockquote with attribution"
 enum_variant = "AiGenerated"
 
 [blocks.alternatives]
-status = "planned"
+status = "implemented"
 category = "data"
-purpose = "Option comparison"
+purpose = "Option comparison — a pipe table whose verdict column is colour-coded (Selected / Rejected / Considered)"
 attributes = []
 degradation = "markdown table"
 enum_variant = "Alternatives"
@@ -70,7 +70,7 @@ degradation = "sequential sections with horizontal rules"
 enum_variant = "Columns"
 
 [blocks.countdown]
-status = "planned"
+status = "implemented"
 category = "web"
 purpose = "Event countdown"
 attributes = ["date", "label"]
@@ -78,7 +78,7 @@ degradation = "paragraph with date"
 enum_variant = "Countdown"
 
 [blocks.css]
-status = "planned"
+status = "implemented"
 category = "utility"
 purpose = "Raw CSS escape hatch"
 attributes = []
@@ -167,7 +167,7 @@ degradation = "horizontal rule with links"
 enum_variant = "Footer"
 
 [blocks.footnote]
-status = "planned"
+status = "implemented"
 category = "core"
 purpose = "Citation"
 attributes = ["id"]
@@ -199,17 +199,17 @@ degradation = "markdown image"
 enum_variant = "HeroImage"
 
 [blocks.kernel]
-status = "planned"
+status = "implemented"
 category = "advanced"
-purpose = "Execution environment"
+purpose = "Execution environment — `lang=`/`env=` name it, `runtime:` / `packages: [a, b]` / `sandbox:` body lines (or attributes) describe it"
 attributes = ["lang", "env", "runtime", "packages", "sandbox"]
 degradation = "fenced code block with language"
 enum_variant = "Kernel"
 
 [blocks.logo-cloud]
-status = "planned"
+status = "implemented"
 category = "web"
-purpose = "Logo strip"
+purpose = "Logo strip — `- src`, `- src | Name` or `- [Name](src)` lines"
 attributes = ["title"]
 degradation = "bulleted list of names"
 enum_variant = "LogoCloud"
@@ -231,9 +231,9 @@ degradation = "bulleted link list"
 enum_variant = "Nav"
 
 [blocks.output]
-status = "planned"
+status = "implemented"
 category = "advanced"
-purpose = "Execution output"
+purpose = "Execution output — the verbatim stdout of the `::code` block named by `for=`"
 attributes = ["for", "timestamp", "exit", "format"]
 degradation = "fenced code block"
 enum_variant = "Output"
@@ -295,9 +295,9 @@ degradation = "blockquote with attribution"
 enum_variant = "Quote"
 
 [blocks.related]
-status = "planned"
+status = "implemented"
 category = "core"
-purpose = "Cross-references"
+purpose = "Cross-references — `- [Title](href) — relation`, `- relation: href` or `- href — note` lines"
 attributes = []
 degradation = "bulleted link list"
 enum_variant = "Related"
@@ -319,7 +319,7 @@ degradation = "omitted"
 enum_variant = "Style"
 
 [blocks.subscribe]
-status = "planned"
+status = "implemented"
 category = "web"
 purpose = "Email subscription"
 attributes = ["action", "placeholder"]
@@ -359,17 +359,17 @@ degradation = "blockquote with attribution"
 enum_variant = "Testimonial"
 
 [blocks.timeline]
-status = "planned"
+status = "implemented"
 category = "data"
-purpose = "Chronological sequence"
-attributes = []
+purpose = "Chronological sequence — `- when — label` (or `- when: label`) entries, grouped under `## heading` lines"
+attributes = ["title"]
 degradation = "ordered list with dates"
 enum_variant = "Timeline"
 
 [blocks.turn]
-status = "planned"
+status = "implemented"
 category = "core"
-purpose = "Conversation turn"
+purpose = "Conversation turn — a markdown body from one participant; `timestamp=` is read as `time=`, the role is inferred from the participant when absent"
 attributes = ["participant", "time", "role", "model"]
 degradation = "blockquote with speaker prefix"
 enum_variant = "Turn"
@@ -989,9 +989,9 @@ degradation = "bulleted reference list"
 enum_variant = "Bibliography"
 
 [blocks.notes]
-status = "planned"
+status = "implemented"
 category = "core"
-purpose = "Presenter notes — inside a ::slide the parser folds this into the slide's notes field; there is no standalone Block variant yet"
+purpose = "Presenter notes — inside a ::slide the parser folds this into the slide's notes field; standalone (0.25.0) it is a Notes block the deck renderer omits"
 attributes = []
 degradation = "omitted from the rendered deck"
 enum_variant = "Notes"

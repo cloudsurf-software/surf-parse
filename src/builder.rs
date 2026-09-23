@@ -3419,6 +3419,191 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             if let Some(a) = on_resolve { attrs_parts.push(format!("on-resolve=\"{}\"", escape_attr(a))); }
             format!("{fence}qr[{}]\n{fence}", attrs_parts.join(" "))
         }
+
+        // ── The fourteen planned blocks (0.25.0). Each arm writes the
+        //    canonical spelling of the grammar its parser reads. ────────
+
+        Block::Related { items, .. } => {
+            let lines: Vec<String> = items
+                .iter()
+                .map(|i| match (&i.title, &i.relation) {
+                    (Some(t), Some(r)) => format!("- [{t}]({}) \u{2014} {r}", i.href),
+                    (Some(t), None) => format!("- [{t}]({})", i.href),
+                    // A one-word relation takes the `relation: href` form, a
+                    // sentence the dashed one — both re-parse to the same item.
+                    (None, Some(r)) if !r.contains(char::is_whitespace) && !r.contains('/') => {
+                        format!("- {r}: {}", i.href)
+                    }
+                    (None, Some(r)) => format!("- {} \u{2014} {r}", i.href),
+                    (None, None) => format!("- {}", i.href),
+                })
+                .collect();
+            format!("{fence}related\n{}\n{fence}", lines.join("\n"))
+        }
+
+        Block::Turn { participant, time, role, model, content, .. } => {
+            let mut attrs_parts = vec![format!("participant=\"{}\"", escape_attr(participant))];
+            if let Some(t) = time { attrs_parts.push(format!("time=\"{}\"", escape_attr(t))); }
+            if let Some(r) = role { attrs_parts.push(format!("role={r}")); }
+            if let Some(m) = model { attrs_parts.push(format!("model=\"{}\"", escape_attr(m))); }
+            if content.is_empty() {
+                format!("{fence}turn[{}]\n{fence}", attrs_parts.join(" "))
+            } else {
+                format!("{fence}turn[{}]\n{content}\n{fence}", attrs_parts.join(" "))
+            }
+        }
+
+        Block::Timeline { title, entries, .. } => {
+            let attrs_str = match title {
+                Some(t) => format!("[title=\"{}\"]", escape_attr(t)),
+                None => String::new(),
+            };
+            let mut lines = Vec::new();
+            let mut current: Option<&str> = None;
+            for e in entries {
+                if e.group.as_deref() != current {
+                    if let Some(g) = &e.group {
+                        lines.push(format!("## {g}"));
+                    }
+                    current = e.group.as_deref();
+                }
+                match &e.when {
+                    Some(w) => lines.push(format!("- {w} \u{2014} {}", e.label)),
+                    None => lines.push(format!("- {}", e.label)),
+                }
+            }
+            format!("{fence}timeline{attrs_str}\n{}\n{fence}", lines.join("\n"))
+        }
+
+        Block::Output { for_id, timestamp, exit, format, content, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(f) = for_id { attrs_parts.push(format!("for=\"{}\"", escape_attr(f))); }
+            if let Some(t) = timestamp { attrs_parts.push(format!("timestamp=\"{}\"", escape_attr(t))); }
+            if let Some(e) = exit { attrs_parts.push(format!("exit={e}")); }
+            if let Some(f) = format { attrs_parts.push(format!("format={f}")); }
+            let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
+            if content.is_empty() {
+                format!("{fence}output{attrs_str}\n{fence}")
+            } else {
+                format!("{fence}output{attrs_str}\n{content}\n{fence}")
+            }
+        }
+
+        Block::AiGenerated { model, date, reviewed, content, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(m) = model { attrs_parts.push(format!("model=\"{}\"", escape_attr(m))); }
+            if let Some(d) = date { attrs_parts.push(format!("date=\"{}\"", escape_attr(d))); }
+            attrs_parts.push(format!("reviewed={reviewed}"));
+            if content.is_empty() {
+                format!("{fence}ai-generated[{}]\n{fence}", attrs_parts.join(" "))
+            } else {
+                format!("{fence}ai-generated[{}]\n{content}\n{fence}", attrs_parts.join(" "))
+            }
+        }
+
+        Block::Alternatives { headers, rows, .. } => {
+            let mut lines = Vec::new();
+            if !headers.is_empty() {
+                lines.push(format!("| {} |", headers.join(" | ")));
+                lines.push(format!("|{}|", headers.iter().map(|_| "---").collect::<Vec<_>>().join("|")));
+            }
+            for row in rows {
+                lines.push(format!("| {} |", row.join(" | ")));
+            }
+            format!("{fence}alternatives\n{}\n{fence}", lines.join("\n"))
+        }
+
+        Block::AiContext { model, tokens, loaded, content, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(m) = model { attrs_parts.push(format!("model=\"{}\"", escape_attr(m))); }
+            if let Some(t) = tokens { attrs_parts.push(format!("tokens={t}")); }
+            attrs_parts.push(format!("loaded={loaded}"));
+            if content.is_empty() {
+                format!("{fence}ai-context[{}]\n{fence}", attrs_parts.join(" "))
+            } else {
+                format!("{fence}ai-context[{}]\n{content}\n{fence}", attrs_parts.join(" "))
+            }
+        }
+
+        Block::Countdown { date, label, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(d) = date { attrs_parts.push(format!("date=\"{}\"", escape_attr(d))); }
+            if let Some(l) = label { attrs_parts.push(format!("label=\"{}\"", escape_attr(l))); }
+            let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
+            format!("{fence}countdown{attrs_str}\n{fence}")
+        }
+
+        Block::Css { content, .. } => {
+            if content.is_empty() {
+                format!("{fence}css\n{fence}")
+            } else {
+                format!("{fence}css\n{content}\n{fence}")
+            }
+        }
+
+        Block::Footnote { id, content, .. } => {
+            let attrs_str = match id {
+                Some(i) => format!("[id=\"{}\"]", escape_attr(i)),
+                None => String::new(),
+            };
+            if content.is_empty() {
+                format!("{fence}footnote{attrs_str}\n{fence}")
+            } else {
+                format!("{fence}footnote{attrs_str}\n{content}\n{fence}")
+            }
+        }
+
+        Block::Kernel { lang, env, runtime, packages, sandbox, properties, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(l) = lang { attrs_parts.push(format!("lang={l}")); }
+            if let Some(e) = env { attrs_parts.push(format!("env=\"{}\"", escape_attr(e))); }
+            let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
+            let mut lines = Vec::new();
+            if let Some(r) = runtime { lines.push(format!("runtime: {r}")); }
+            if !packages.is_empty() { lines.push(format!("packages: [{}]", packages.join(", "))); }
+            if let Some(s) = sandbox { lines.push(format!("sandbox: {s}")); }
+            for p in properties { lines.push(format!("{}: {}", p.key, p.value)); }
+            if lines.is_empty() {
+                format!("{fence}kernel{attrs_str}\n{fence}")
+            } else {
+                format!("{fence}kernel{attrs_str}\n{}\n{fence}", lines.join("\n"))
+            }
+        }
+
+        Block::LogoCloud { title, items, .. } => {
+            let attrs_str = match title {
+                Some(t) => format!("[title=\"{}\"]", escape_attr(t)),
+                None => String::new(),
+            };
+            let lines: Vec<String> = items
+                .iter()
+                .map(|i| match &i.name {
+                    Some(n) => format!("- {} | {n}", i.src),
+                    None => format!("- {}", i.src),
+                })
+                .collect();
+            format!("{fence}logo-cloud{attrs_str}\n{}\n{fence}", lines.join("\n"))
+        }
+
+        Block::Subscribe { action, placeholder, content, .. } => {
+            let mut attrs_parts = Vec::new();
+            if let Some(a) = action { attrs_parts.push(format!("action=\"{}\"", escape_attr(a))); }
+            if let Some(p) = placeholder { attrs_parts.push(format!("placeholder=\"{}\"", escape_attr(p))); }
+            let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
+            if content.is_empty() {
+                format!("{fence}subscribe{attrs_str}\n{fence}")
+            } else {
+                format!("{fence}subscribe{attrs_str}\n{content}\n{fence}")
+            }
+        }
+
+        Block::Notes { content, .. } => {
+            if content.is_empty() {
+                format!("{fence}notes\n{fence}")
+            } else {
+                format!("{fence}notes\n{content}\n{fence}")
+            }
+        }
     }
 }
 

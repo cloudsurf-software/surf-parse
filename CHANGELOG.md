@@ -3,6 +3,70 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.25.0 — 2026-09-22 (native schema v10: the last twenty — every registered block is implemented)
+
+### Added
+
+- **The fourteen planned blocks are implemented** (sessions 11 + 12 of the
+  blocks program, one session; the spec batch first): every
+  `status = "planned"` row of `spec/blocks.toml` is `implemented` now —
+  `::related`, `::turn`, `::timeline`, `::output`, `::ai-generated`,
+  `::alternatives`, `::ai-context`, `::countdown`, `::css`, `::footnote`,
+  `::kernel`, `::logo-cloud`, `::subscribe`, `::notes`. Each has a `Block`
+  variant, a parser whose grammar is the corpus's authored one (the format
+  specification's examples and the plans that use the block), an HTML
+  render with a byte-identical `render_dom` twin, the markdown degradation
+  the spec row names, a serializer arm that reaches a fixed point on the
+  first pass, a stylesheet rule for every class, and the L020 vocabulary.
+  - `Related { items }` over the new `RelatedItem { title, href, relation }`
+    — `- [Title](href) — relation`, `- relation: href` or `- href — note`;
+    a `javascript:` / `data:` / `vbscript:` target is replaced by `#`.
+  - `Turn { participant, time, role, model, content }` — `timestamp=` is
+    read as `time=`; `role` is the authored value, and `types::turn_role`
+    resolves `human` / `ai` / `system` (inferring from the participant).
+  - `Timeline { title, entries }` over `TimelineEntry { when, label, group }`
+    — `- when — label` / `- when: label` (bold markers stripped), `## heading`
+    lines grouping; `title=` joins the spec row (the corpus authors it).
+  - `Output { for_id, timestamp, exit, format, content }` — `for=` crosses
+    as `for_id`.
+  - `AiGenerated { model, date, reviewed, content }`,
+    `AiContext { model, tokens, loaded, content }`.
+  - `Alternatives { headers, rows }` — a pipe table; the renderer colour-codes
+    the `Verdict` column (else the last) by its words.
+  - `Countdown { date, label }` — no clock in the crate; the web render
+    stamps `data-date` for the host.
+  - `Css { content }` — a `<style class="surfdoc-css">` with `</` written as
+    `<\/`; the constructive DOM declines the document as
+    `script-emitting:css` (a rawtext body) while staying byte-identical.
+  - `Footnote { id, content }`, `Notes { content }` (standalone; inside a
+    `::slide` the parser still folds `::notes` into the slide's `notes`).
+  - `Kernel { lang, env, runtime, packages, sandbox, properties }` — body
+    lines win over attributes; `packages: [a, b]`.
+  - `LogoCloud { title, items }` over `LogoItem { src, name }`;
+    `Subscribe { action, placeholder, content }`.
+- **Twenty new `NativeBlock` variants — schema v10.** The six web-only blocks
+  that still degraded (`Health`, `Hours`, `Marquee`, `Smoke`, `Use`,
+  `Volumes`) and the fourteen above cross structurally; eight new records
+  (`NativeHoursRow`, `NativeSmokeCheck`, `NativeCrateDep`,
+  `NativeVolumeEntry`, `NativeRelatedItem`, `NativeTimelineEntry`,
+  `NativeAlternativeRow`, `NativeLogoItem`); `NativeStyleProperty` reused
+  for the kernel's ledger. `Turn.role` crosses resolved. `block_tier`:
+  `Health` / `Smoke` / `Use` / `Volumes` / `Css` / `Kernel` → Chrome,
+  `Hours` / `Marquee` / `Countdown` / `LogoCloud` / `Subscribe` → Site, the
+  other nine → Content; only `Unknown` and `Deck` still degrade.
+  `NATIVE_DOC_SCHEMA_VERSION = 10`; `NativeBlock` is a 123-variant enum
+  (the enum keeps one `///` line per variant; the ledger is in the module
+  docs).
+- A corpus fixture for the twenty (`tests/corpus/tier6-the-last-twenty.surf`)
+  with HTML + native snapshot pins; identity fixtures
+  `tests/fixtures/planned-blocks.surf` and `planned-css.surf`.
+
+### Changed
+
+- `spec/blocks.toml`: fourteen rows `planned` → `implemented`; `[blocks.timeline]`
+  gains `title`. 122 registered, 122 implemented, 0 planned — the registry
+  is complete.
+
 ## 0.24.0 — 2026-09-22 (native schema v9: the ten infra blocks of the app format)
 
 ### Added

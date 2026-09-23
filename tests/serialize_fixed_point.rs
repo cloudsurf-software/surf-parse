@@ -330,3 +330,45 @@ fn site_blocks_hours_and_marquee_round_trip() {
         assert_eq!(html1, html2, "render drifted across the round trip:\n{src}");
     }
 }
+
+/// 0.25.0: the fourteen blocks that were planned until sessions 11 + 12.
+/// Each source is the corpus's own authored shape; the serializer writes the
+/// canonical spelling (`related` normalises a sentence relation onto the
+/// dashed form, `timeline` its entries onto ` — `, `kernel` its packages
+/// onto `[a, b]`), and every one reaches a fixed point on the FIRST pass —
+/// HTML included — and re-parses to the same typed block.
+#[test]
+fn the_fourteen_planned_blocks_round_trip() {
+    for src in [
+        "::related\n- [Architecture Plan](plans/product/plan.md) \u{2014} produces\n- research/ards-v3/paper.md \u{2014} specific standard (cited for P2)\n- consumes: research/surfdoc/FINDINGS.md\n- plans/ideas/wiki.md\n::\n",
+        "::turn[participant=\"claude\" time=\"2026-02-10T04:01Z\" role=ai model=\"opus\"]\nYes \u{2014} file before launch.\n\n1. **Prior art.**\n::\n",
+        "::turn[participant=\"brady\"]\nShould we?\n::\n",
+        "::timeline[title=\"Product Milestones\"]\n## Q1 2026\n- 2026-01: TaskSurf beta launch\n- 18:30 \u{2014} Deploy Build #38\n## Q2 2026\n- Wavesite launched\n::\n",
+        "::output[for=\"analysis\" timestamp=\"2026-02-10T12:00:00Z\" exit=0 format=chart]\n{\"type\": \"bar\"}\n::\n",
+        "::ai-generated[model=\"claude-opus-4\" date=\"2026-02-10\" reviewed=false]\nThis analysis suggests growth.\n::\n",
+        "::alternatives\n| Option | Pros | Cons | Verdict |\n|---|---|---|---|\n| GTK4 | 5MB binary | Linux-first | **Selected** |\n| Electron | Cross-platform | 150MB | Rejected \u{2014} bloat |\n::\n",
+        "::ai-context[model=\"opus\" tokens=2400 loaded=true]\nHow much context was available.\n::\n",
+        "::countdown[date=\"2026-03-15\" label=\"Launch day\"]\n::\n",
+        "::css\n.custom-thing { border: 2px dashed red; }\n::\n",
+        "::footnote[id=\"1\"]\nGartner, \"Magic Quadrant,\" 2025. Tier 1 source.\n::\n",
+        "::kernel[lang=python env=\"analysis\"]\n  runtime: python3.12\n  packages: [numpy, pandas, matplotlib]\n  sandbox: strict\n::\n",
+        "::logo-cloud[title=\"Trusted by\"]\n- assets/logos/acme.svg\n- assets/logos/initech.svg | Initech\n::\n",
+        "::subscribe[action=\"https://api.example.com/newsletter\" placeholder=\"you@email.com\"]\nGet notified when we launch.\n::\n",
+        "::notes\nPause here, ask for questions.\n::\n",
+    ] {
+        let parsed = surf_parse::parse(src).doc;
+        let first = surf_parse::builder::to_surf_source(&parsed);
+        let second = surf_parse::builder::to_surf_source(&surf_parse::parse(&first).doc);
+        assert_eq!(first, second, "not a fixed point for:\n{src}first pass:\n{first}");
+        let html0 = surf_parse::render_html::to_html(&parsed);
+        let html1 = surf_parse::render_html::to_html(&surf_parse::parse(&first).doc);
+        assert_eq!(html0, html1, "render drifted across the round trip:\n{src}first pass:\n{first}");
+        // The typed block itself survives (serde is the equality the enum has).
+        let before = serde_json::to_value(&parsed.blocks[0]).unwrap();
+        let after = serde_json::to_value(&surf_parse::parse(&first).doc.blocks[0]).unwrap();
+        // Spans move with the canonical spelling; everything else must not.
+        before.as_object().unwrap().keys().filter(|k| *k != "span").for_each(|k| {
+            assert_eq!(before[k], after[k], "field {k} drifted for:\n{src}first pass:\n{first}");
+        });
+    }
+}

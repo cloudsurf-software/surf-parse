@@ -1,0 +1,103 @@
+---
+title: The fourteen planned blocks
+---
+
+# The fourteen
+
+Every block that was `planned` in spec/blocks.toml until 0.25.0, with the
+corpus's own grammar and text that must escape identically on both paths:
+`<angle>` & "quotes" in a label, a **bold** verdict, a link inside a turn.
+
+::related
+- [Architecture Plan](plans/product/2026-02-10-notesurf-plan.md) — produces
+- research/ards-v3/manuscript/v1/ards-v3-paper.md — specific standard (cited as evidence for P2, P3)
+- consumes: research/surfdoc/analysis/study-9.3/results/FINDINGS.md
+- plans/ideas/2026-02-22-surfdoc-wiki-idea.md
+- [Evil](javascript:alert(1)) — never
+::
+
+::turn[participant=brady time=2026-02-10T04:00Z role=human]
+We're about to open-source ARDS v3. Should I file the provisionals first?
+The filing fees are ~$1K each & Meng hasn't sent terms yet.
+::
+
+::turn[participant=claude time=2026-02-10T04:01Z role=ai model=opus]
+Yes — file before launch. Two reasons:
+
+1. **Prior art.** The moment ARDS v3 is public, anyone can cite it.
+2. **12-month clock.** See [the plan](plans/plan.md).
+::
+
+::turn[participant=system]
+<context loaded>
+::
+
+::timeline[title="Product Milestones & Incidents"]
+## Q1 2026
+- 2026-01: TaskSurf beta launch
+- 18:30 — Deploy Build #38 to main (PR #28 merge)
+- 18:32 — All pages return `500` errors
+
+## Q2 2026
+- **2026-02**: First paying customers
+- Wavesite launched at wave.site
+::
+
+::output[for=analysis timestamp="2026-02-10T12:00:00Z" exit=0]
+Mean quarterly revenue: $12,000
+Growth: 633% <not a tag>
+::
+
+::output[for=chart-data format=chart exit=1]
+{"type": "bar", "x": ["Q1", "Q2"], "y": [3, 8]}
+::
+
+::ai-generated[model=claude-opus-4 date=2026-02-10 reviewed=false]
+This analysis suggests revenue will grow 30% quarter-over-quarter.
+::
+
+::ai-generated[model=opus reviewed=true]
+Reviewed by a human.
+::
+
+::alternatives
+| Option | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| GTK4 | 5MB binary, native | Linux-first | **Selected** |
+| Electron | Cross-platform | 150MB, RAM-heavy | Rejected — bloat |
+| Tauri | 8MB, cross-platform | Less mature | Considered for v2 |
+| Qt | Mature | Licence "fees" | Open |
+::
+
+::ai-context[model=opus tokens=2400 loaded=true]
+This block tells the rendering engine how much context was available
+when this section was written.
+::
+
+::countdown[date=2026-03-15 label="Launch day"]
+::
+
+::footnote[id=1]
+Gartner, "Magic Quadrant for Project Management Tools," 2025. Tier 1 source.
+::
+
+::kernel[lang=python env=analysis]
+  runtime: python3.12
+  packages: [numpy, pandas, matplotlib]
+  sandbox: strict
+  memory: 2gb
+::
+
+::logo-cloud[title="Trusted by"]
+- assets/logos/acme.svg
+- assets/logos/initech.svg | Initech
+- [Hooli](assets/logos/hooli.png)
+::
+
+::subscribe[action=https://api.example.com/newsletter placeholder="you@email.com"]
+Get notified when we **launch**.
+::
+
+::notes
+Pause here & ask for questions.
+::

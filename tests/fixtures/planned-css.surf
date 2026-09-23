@@ -1,0 +1,10 @@
+---
+title: A raw stylesheet
+---
+
+# Styled
+
+::css
+.custom-thing { border: 2px dashed red; }
+.evil::after { content: "</style><script>alert(1)</script>"; }
+::

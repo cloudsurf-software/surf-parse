@@ -190,10 +190,10 @@ mod tests {
 
     /// The schema number is what tells a client the new variants are present.
     #[test]
-    fn native_doc_schema_version_is_nine() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 9);
+    fn native_doc_schema_version_is_ten() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 10);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 9);
+        assert_eq!(doc.schema_version, 10);
     }
 
     /// v6 addressing: `id=`/`label=` reach the FFI as a span-indexed list.

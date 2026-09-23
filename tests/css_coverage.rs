@@ -60,7 +60,7 @@ const ALLOWLIST: &[&str] = &[
 ];
 
 /// One minimal source document per implemented registry kind
-/// (spec/blocks.toml, status = "implemented"; registry currently has 108
+/// (spec/blocks.toml, status = "implemented"; registry currently has 122
 /// implemented of 122 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 const SNIPPETS: &[(&str, &str)] = &[
@@ -88,6 +88,21 @@ const SNIPPETS: &[(&str, &str)] = &[
     ("hero-image", "::hero-image[src=/img/hero.png alt=\"Hero\"]\n::"),
     ("hours", "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\n- Monday: 11am - 9pm\n- Sunday: Closed\n::"),
     ("marquee", "::marquee\n- Fresh daily\n- Open late\n::"),
+    // 0.25.0: the fourteen blocks that were planned until sessions 11 + 12.
+    ("related", "::related\n- [Architecture Plan](plans/plan.md) \u{2014} produces\n- consumes: research/FINDINGS.md\n::"),
+    ("turn", "::turn[participant=claude time=2026-02-10T04:01Z role=ai model=opus]\nYes \u{2014} file before launch.\n::"),
+    ("timeline", "::timeline[title=\"Milestones\"]\n## Q1\n- 2026-01 \u{2014} Beta\n- Launch\n::"),
+    ("output", "::output[for=analysis timestamp=\"2026-02-10T12:00:00Z\" exit=0 format=text]\nMean: $12,000\n::"),
+    ("ai-generated", "::ai-generated[model=opus date=2026-02-10 reviewed=false]\nMaybe.\n::"),
+    ("alternatives", "::alternatives\n| Option | Pros | Cons | Verdict |\n|---|---|---|---|\n| GTK4 | small | Linux-first | **Selected** |\n| Electron | everywhere | heavy | Rejected |\n| Tauri | small | young | Considered |\n| Qt | mature | licence | Open |\n::"),
+    ("ai-context", "::ai-context[model=opus tokens=2400 loaded=true]\nA note.\n::"),
+    ("countdown", "::countdown[date=2026-03-15 label=\"Launch day\"]\n::"),
+    ("css", "::css\n.custom-thing { border: 2px dashed red; }\n::"),
+    ("footnote", "::footnote[id=1]\nGartner, 2025.\n::"),
+    ("kernel", "::kernel[lang=python env=analysis]\nruntime: python3.12\npackages: [numpy, pandas]\nsandbox: strict\n::"),
+    ("logo-cloud", "::logo-cloud[title=\"Trusted by\"]\n- assets/logos/acme.svg\n- assets/logos/initech.svg | Initech\n::"),
+    ("subscribe", "::subscribe[action=/subscribe placeholder=\"you@email.com\"]\nGet notified.\n::"),
+    ("notes", "::notes\nPause here.\n::"),
     ("metric", "::metric[label=\"Tests\" value=42 trend=up unit=tests]\n::"),
     ("nav", "::nav[logo=\"Co\"]\n- Home /\n- Pricing /pricing\n::"),
     ("page", "::page[route=/ title=\"Home\"]\nBody\n::"),

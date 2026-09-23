@@ -189,6 +189,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     ("marketplace-spec.surf", &[]),
     ("nesting.surf", &[]),
     ("plan-app.surf", &[]),
+    // 0.25.0: the fourteen planned blocks' identity fixtures — well-formed.
+    ("planned-blocks.surf", &[]),
+    ("planned-css.surf", &[]),
     // 0.21.0: the ::hours + ::marquee fixture — a well-formed page.
     ("site-blocks.surf", &[]),
     ("single.surf", &[]),
@@ -541,6 +544,34 @@ fn site_blocks_hours_and_marquee_lint_clean_of_l020() {
         );
     }
     let src = "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\nMonday: 11am - 9pm\n::\n\n::marquee\n- Fresh daily\n::\n";
+    let report = surf_parse::check(src);
+    let codes: Vec<&str> = report
+        .diagnostics
+        .iter()
+        .filter_map(|d| d.code.as_deref())
+        .filter(|c| c.starts_with("L02"))
+        .collect();
+    assert!(codes.is_empty(), "unexpected lint codes: {codes:?}");
+}
+
+/// 0.25.0: the fourteen directives that were `planned` are registered and
+/// implemented, so L020 (unknown block) stays quiet for every one — and the
+/// two `::notes` aliases stay on the parser-only allowlist, not the spec.
+#[test]
+fn the_fourteen_planned_blocks_lint_clean_of_l020() {
+    for name in [
+        "related", "turn", "timeline", "output", "ai-generated", "alternatives", "ai-context",
+        "countdown", "css", "footnote", "kernel", "logo-cloud", "subscribe", "notes",
+    ] {
+        assert!(
+            surf_parse::lint::known_block_names().contains(name),
+            "::{name} must be a registered block name"
+        );
+    }
+    for alias in ["speaker-notes", "presenter-notes"] {
+        assert!(surf_parse::lint::EXTRA_KNOWN_BLOCK_NAMES.contains(&alias), "{alias} stays an alias");
+    }
+    let src = "::related\n- plans/plan.md \u{2014} produces\n::\n\n::turn[participant=brady time=2026-02-10T04:00Z role=human]\nHi\n::\n\n::timeline[title=\"T\"]\n- 2026-01 \u{2014} Beta\n::\n\n::output[for=a exit=0]\nok\n::\n\n::ai-generated[model=opus date=2026-02-10 reviewed=false]\nx\n::\n\n::alternatives\n| A | Verdict |\n|---|---|\n| a | Selected |\n::\n\n::ai-context[model=opus tokens=1 loaded=true]\nx\n::\n\n::countdown[date=2026-03-15 label=\"L\"]\n::\n\n::css\n.x{}\n::\n\n::footnote[id=1]\nx\n::\n\n::kernel[lang=python env=a]\nruntime: python3\n::\n\n::logo-cloud[title=\"T\"]\n- a.svg\n::\n\n::subscribe[action=/s placeholder=\"e\"]\nx\n::\n\n::notes\nx\n::\n";
     let report = surf_parse::check(src);
     let codes: Vec<&str> = report
         .diagnostics

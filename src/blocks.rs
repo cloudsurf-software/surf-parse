@@ -11,6 +11,7 @@ use crate::types::{
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
+    LogoItem, RelatedItem, TimelineEntry,
     AdaptiveLayout, AdaptiveMode, AppShellLayout,
     ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
     RowAction, RowState, SchemaField, SegmentItem, SizeClass, PAGE_LAYOUTS,
@@ -68,6 +69,21 @@ pub fn resolve_block(block: Block) -> Block {
         "banner" => parse_banner(attrs, content, *span),
         "hours" => parse_hours(attrs, content, *span),
         "marquee" => parse_marquee(content, *span),
+        // The fourteen planned blocks (0.25.0, sessions 11 + 12)
+        "related" => parse_related(content, *span),
+        "turn" => parse_turn(attrs, content, *span),
+        "timeline" => parse_timeline(attrs, content, *span),
+        "output" => parse_output(attrs, content, *span),
+        "ai-generated" => parse_ai_generated(attrs, content, *span),
+        "alternatives" => parse_alternatives(content, *span),
+        "ai-context" => parse_ai_context(attrs, content, *span),
+        "countdown" => parse_countdown(attrs, *span),
+        "css" => parse_css(content, *span),
+        "footnote" => parse_footnote(attrs, content, *span),
+        "kernel" => parse_kernel(attrs, content, *span),
+        "logo-cloud" => parse_logo_cloud(attrs, content, *span),
+        "subscribe" => parse_subscribe(attrs, content, *span),
+        "notes" | "speaker-notes" | "presenter-notes" => parse_notes(content, *span),
         "product-grid" => parse_product_grid(attrs, content, *span),
         "post-grid" => parse_post_grid(attrs, content, *span),
         "gate" => parse_gate(attrs, content, *span),
@@ -1117,9 +1133,20 @@ fn parse_slide(attrs: &Attrs, content: &str, span: Span) -> Block {
     // The `notes=` attribute, if present, takes precedence.
     let mut extracted_notes: Option<String> = None;
     children.retain(|child| {
-        if let Block::Unknown { name, content, .. } = child
-            && (name == "notes" || name == "speaker-notes" || name == "presenter-notes")
-        {
+        // 0.25.0: `::notes` (and its two aliases) resolve to `Block::Notes`
+        // now; inside a slide the fold below still wins and the block never
+        // reaches the rendered children. The Unknown arm is kept for a
+        // child the resolver could not type (never, today).
+        let notes_text = match child {
+            Block::Notes { content, .. } => Some(content.as_str()),
+            Block::Unknown { name, content, .. }
+                if name == "notes" || name == "speaker-notes" || name == "presenter-notes" =>
+            {
+                Some(content.as_str())
+            }
+            _ => None,
+        };
+        if let Some(content) = notes_text {
             if extracted_notes.is_none() {
                 let text = content.trim();
                 if !text.is_empty() {
@@ -2240,6 +2267,344 @@ fn parse_marquee(content: &str, span: Span) -> Block {
         .filter(|l| !l.is_empty())
         .collect();
     Block::Marquee { items, span }
+}
+
+// ------------------------------------------------------------------
+// The fourteen planned blocks (0.25.0, sessions 11 + 12 of the blocks
+// program). Each grammar is the corpus's authored one — the format
+// specification's examples and the plans that use the block — and
+// nothing more.
+// ------------------------------------------------------------------
+
+/// A body line with its list bullet (`- ` / `* `) removed.
+fn strip_bullet(line: &str) -> &str {
+    let l = line.trim();
+    l.strip_prefix("- ")
+        .or_else(|| l.strip_prefix("* "))
+        .map(str::trim)
+        .unwrap_or(l)
+}
+
+/// `Some(trimmed)` unless blank.
+fn non_empty(s: &str) -> Option<String> {
+    let t = s.trim();
+    if t.is_empty() { None } else { Some(t.to_string()) }
+}
+
+/// Split at the first spaced dash — em (` — `), en (` – `) or hyphen
+/// (` - `) — the separator the corpus writes between a target and its note.
+fn split_dash(line: &str) -> Option<(&str, &str)> {
+    let mut best: Option<(usize, usize)> = None;
+    for sep in [" \u{2014} ", " \u{2013} ", " - "] {
+        if let Some(at) = line.find(sep) {
+            if best.map(|(b, _)| at < b).unwrap_or(true) {
+                best = Some((at, sep.len()));
+            }
+        }
+    }
+    best.map(|(at, len)| (line[..at].trim(), line[at + len..].trim()))
+}
+
+/// Surrounding `**` (or `__`) markers removed — the vscode example writes
+/// its timeline dates bold.
+fn unbold(s: &str) -> &str {
+    let t = s.trim();
+    t.strip_prefix("**")
+        .and_then(|r| r.strip_suffix("**"))
+        .or_else(|| t.strip_prefix("__").and_then(|r| r.strip_suffix("__")))
+        .map(str::trim)
+        .unwrap_or(t)
+}
+
+/// A link target for the HTML `href=` / `src=` / `action=` attributes: the
+/// authored value trimmed, with a script scheme (`javascript:`, `data:`,
+/// `vbscript:`) replaced by `#`. Relative paths and http(s) URLs pass — a
+/// cross-reference points at a repo file or a page, not a mount point, so
+/// `validate_source_path`'s relative-only rule does not apply.
+fn sanitize_href(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("javascript:") || lower.starts_with("data:") || lower.starts_with("vbscript:") {
+        return "#".to_string();
+    }
+    trimmed.to_string()
+}
+
+/// A signed integer attribute (`exit=0`, `exit=-1`); absent or unparsable
+/// reads as `None`.
+fn attr_i32(attrs: &Attrs, key: &str) -> Option<i32> {
+    attrs.get(key).and_then(|v| match v {
+        AttrValue::Number(n) if n.is_finite() && n.fract() == 0.0 => Some(*n as i32),
+        AttrValue::String(s) => s.trim().parse().ok(),
+        _ => None,
+    })
+}
+
+/// One `::related` line. Three forms, tried in order:
+/// 1. `[Title](href) — relation` (the relation optional);
+/// 2. `href — note` (any spaced dash);
+/// 3. `relation: href` where the relation is one word (never a URL scheme).
+/// Anything else is a bare target.
+fn parse_related_item(line: &str) -> RelatedItem {
+    if let Some(rest) = line.strip_prefix('[') {
+        if let Some((title, after)) = rest.split_once("](") {
+            if let Some((href, tail)) = after.split_once(')') {
+                let tail = tail.trim();
+                let relation = tail
+                    .strip_prefix('\u{2014}')
+                    .or_else(|| tail.strip_prefix('\u{2013}'))
+                    .or_else(|| tail.strip_prefix('-'))
+                    .unwrap_or(tail);
+                return RelatedItem {
+                    title: non_empty(title),
+                    href: sanitize_href(href),
+                    relation: non_empty(relation),
+                };
+            }
+        }
+    }
+    if let Some((href, note)) = split_dash(line) {
+        return RelatedItem { title: None, href: sanitize_href(href), relation: non_empty(note) };
+    }
+    if let Some((word, rest)) = line.split_once(':') {
+        let word = word.trim();
+        let rest = rest.trim();
+        if !word.is_empty()
+            && !word.contains(char::is_whitespace)
+            && !word.contains('/')
+            && !rest.is_empty()
+            && !rest.starts_with("//")
+        {
+            return RelatedItem {
+                title: None,
+                href: sanitize_href(rest),
+                relation: Some(word.to_string()),
+            };
+        }
+    }
+    RelatedItem { title: None, href: sanitize_href(line), relation: None }
+}
+
+/// Parse a `::related` block: one cross-reference per body line.
+fn parse_related(content: &str, span: Span) -> Block {
+    let items = content
+        .lines()
+        .map(strip_bullet)
+        .filter(|l| !l.is_empty())
+        .map(parse_related_item)
+        .collect();
+    Block::Related { items, span }
+}
+
+/// Parse a `::turn` block: `participant=` (required by the spec, blank when
+/// absent), `time=` (or its `timestamp=` spelling), `role=` as authored,
+/// `model=`; the body is the turn's markdown.
+fn parse_turn(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::Turn {
+        participant: attr_string(attrs, "participant").unwrap_or_default(),
+        time: attr_string(attrs, "time").or_else(|| attr_string(attrs, "timestamp")),
+        role: attr_string(attrs, "role").and_then(|r| non_empty(&r.to_ascii_lowercase())),
+        model: attr_string(attrs, "model"),
+        content: content.to_string(),
+        span,
+    }
+}
+
+/// `when — label` / `when: label` / a bare label.
+fn split_timeline_entry(line: &str) -> (Option<String>, String) {
+    if let Some((when, label)) = split_dash(line) {
+        return (non_empty(unbold(when)), unbold(label).to_string());
+    }
+    if let Some((when, label)) = line.split_once(": ") {
+        return (non_empty(unbold(when)), label.trim().to_string());
+    }
+    (None, line.to_string())
+}
+
+/// Parse a `::timeline` block: `- when — label` (or `- when: label`)
+/// entries, a `## heading` line opening a group for the entries under it.
+fn parse_timeline(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let mut entries = Vec::new();
+    let mut group: Option<String> = None;
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(heading) = line.strip_prefix('#') {
+            group = non_empty(heading.trim_start_matches('#'));
+            continue;
+        }
+        let line = strip_bullet(line);
+        if line.is_empty() {
+            continue;
+        }
+        let (when, label) = split_timeline_entry(line);
+        entries.push(TimelineEntry { when, label, group: group.clone() });
+    }
+    Block::Timeline { title: attr_string(attrs, "title"), entries, span }
+}
+
+/// Parse an `::output` block: `for=`, `timestamp=`, `exit=`, `format=`; the
+/// body is the output, verbatim.
+fn parse_output(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::Output {
+        for_id: attr_string(attrs, "for"),
+        timestamp: attr_string(attrs, "timestamp"),
+        exit: attr_i32(attrs, "exit"),
+        format: attr_string(attrs, "format"),
+        content: content.to_string(),
+        span,
+    }
+}
+
+/// Parse an `::ai-generated` block: `model=`, `date=`, `reviewed=` (false
+/// unless authored true); the body is the generated markdown.
+fn parse_ai_generated(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::AiGenerated {
+        model: attr_string(attrs, "model"),
+        date: attr_string(attrs, "date"),
+        reviewed: attr_bool(attrs, "reviewed"),
+        content: content.to_string(),
+        span,
+    }
+}
+
+/// Parse an `::alternatives` block: the body is a pipe table (the same
+/// reader `::data` uses).
+fn parse_alternatives(content: &str, span: Span) -> Block {
+    let (headers, rows) = parse_table_content(content);
+    Block::Alternatives { headers, rows, span }
+}
+
+/// Parse an `::ai-context` block: `model=`, `tokens=`, `loaded=`; the body
+/// is a note.
+fn parse_ai_context(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::AiContext {
+        model: attr_string(attrs, "model"),
+        tokens: attr_u32(attrs, "tokens"),
+        loaded: attr_bool(attrs, "loaded"),
+        content: content.to_string(),
+        span,
+    }
+}
+
+/// Parse a `::countdown` block: `date=` and `label=`; no body.
+fn parse_countdown(attrs: &Attrs, span: Span) -> Block {
+    Block::Countdown {
+        date: attr_string(attrs, "date"),
+        label: attr_string(attrs, "label"),
+        span,
+    }
+}
+
+/// Parse a `::css` block: the body verbatim.
+fn parse_css(content: &str, span: Span) -> Block {
+    Block::Css { content: content.to_string(), span }
+}
+
+/// Parse a `::footnote` block: `id=`; the body is the citation's markdown.
+fn parse_footnote(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::Footnote {
+        id: attr_string(attrs, "id"),
+        content: content.to_string(),
+        span,
+    }
+}
+
+/// `[a, b, c]` / `a, b, c` / `a b c` → the names.
+fn parse_package_list(raw: &str) -> Vec<String> {
+    let inner = raw.trim().trim_start_matches('[').trim_end_matches(']');
+    inner
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Parse a `::kernel` block: `lang=` and `env=` name the kernel; `runtime`,
+/// `packages` and `sandbox` come from attributes or `key: value` body lines
+/// (body lines win); every other body line is a property.
+fn parse_kernel(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let mut runtime = attr_string(attrs, "runtime");
+    let mut packages = attr_string(attrs, "packages")
+        .map(|p| parse_package_list(&p))
+        .unwrap_or_default();
+    let mut sandbox = attr_string(attrs, "sandbox");
+    let mut properties = Vec::new();
+    for raw in content.lines() {
+        let line = strip_bullet(raw);
+        if line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+        if key.is_empty() || value.is_empty() {
+            continue;
+        }
+        match key {
+            "runtime" => runtime = Some(value.to_string()),
+            "packages" => packages = parse_package_list(value),
+            "sandbox" => sandbox = Some(value.to_string()),
+            _ => properties.push(StyleProperty { key: key.to_string(), value: value.to_string() }),
+        }
+    }
+    Block::Kernel {
+        lang: attr_string(attrs, "lang"),
+        env: attr_string(attrs, "env"),
+        runtime,
+        packages,
+        sandbox,
+        properties,
+        span,
+    }
+}
+
+/// One `::logo-cloud` line: `[Name](src)`, `src | Name` or a bare `src`.
+fn parse_logo_item(line: &str) -> LogoItem {
+    if let Some(rest) = line.strip_prefix('[') {
+        if let Some((name, after)) = rest.split_once("](") {
+            if let Some((src, _)) = after.split_once(')') {
+                return LogoItem { src: sanitize_href(src), name: non_empty(name) };
+            }
+        }
+    }
+    if let Some((src, name)) = line.split_once('|') {
+        return LogoItem { src: sanitize_href(src), name: non_empty(name) };
+    }
+    LogoItem { src: sanitize_href(line), name: None }
+}
+
+/// Parse a `::logo-cloud` block: `title=`; one logo per body line.
+fn parse_logo_cloud(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let items = content
+        .lines()
+        .map(strip_bullet)
+        .filter(|l| !l.is_empty())
+        .map(parse_logo_item)
+        .collect();
+    Block::LogoCloud { title: attr_string(attrs, "title"), items, span }
+}
+
+/// Parse a `::subscribe` block: `action=` (the form's target, scheme-checked
+/// like a link), `placeholder=`; the body is the pitch.
+fn parse_subscribe(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::Subscribe {
+        action: attr_string(attrs, "action").map(|a| sanitize_href(&a)),
+        placeholder: attr_string(attrs, "placeholder"),
+        content: content.to_string(),
+        span,
+    }
+}
+
+/// Parse a standalone `::notes` block (a slide folds its own — see
+/// `parse_slide`): the body verbatim.
+fn parse_notes(content: &str, span: Span) -> Block {
+    Block::Notes { content: content.to_string(), span }
 }
 
 /// Parse a `::product-grid` block.
@@ -8309,6 +8674,276 @@ Saturday 7am-4pm, Sunday 8am-2pm.
                 assert_eq!(timezone, Some("America/Los_Angeles".to_string()));
             }
             other => panic!("Expected Hours, got {other:?}"),
+        }
+    }
+
+    // -- The fourteen planned blocks (0.25.0) ------------------------------
+
+    #[test]
+    fn related_reads_the_three_authored_forms() {
+        let src = "- [Architecture Plan](plans/product/plan.md) \u{2014} produces\n\
+                   - research/ards-v3/paper.md \u{2014} specific standard (cited for P2)\n\
+                   - consumes: research/surfdoc/FINDINGS.md\n\
+                   - plans/ideas/wiki.md\n\
+                   - [Evil](javascript:alert(1))\n";
+        match resolve_block(unknown("related", Attrs::new(), src)) {
+            Block::Related { items, .. } => {
+                assert_eq!(items.len(), 5);
+                assert_eq!(items[0], RelatedItem { title: Some("Architecture Plan".into()), href: "plans/product/plan.md".into(), relation: Some("produces".into()) });
+                assert_eq!(items[1], RelatedItem { title: None, href: "research/ards-v3/paper.md".into(), relation: Some("specific standard (cited for P2)".into()) });
+                assert_eq!(items[2], RelatedItem { title: None, href: "research/surfdoc/FINDINGS.md".into(), relation: Some("consumes".into()) });
+                assert_eq!(items[3], RelatedItem { title: None, href: "plans/ideas/wiki.md".into(), relation: None });
+                assert_eq!(items[4].href, "#", "a script scheme is replaced by #");
+            }
+            other => panic!("Expected Related, got {other:?}"),
+        }
+        // A URL is never split at its scheme's colon.
+        match resolve_block(unknown("related", Attrs::new(), "- https://surf.space/docs\n")) {
+            Block::Related { items, .. } => assert_eq!(items[0], RelatedItem { title: None, href: "https://surf.space/docs".into(), relation: None }),
+            other => panic!("Expected Related, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn turn_reads_time_or_timestamp_and_keeps_the_authored_role() {
+        let mut attrs = Attrs::new();
+        attrs.insert("participant".into(), AttrValue::String("claude".into()));
+        attrs.insert("time".into(), AttrValue::String("2026-02-10T04:01Z".into()));
+        attrs.insert("role".into(), AttrValue::String("AI".into()));
+        attrs.insert("model".into(), AttrValue::String("opus".into()));
+        match resolve_block(unknown("turn", attrs, "Yes \u{2014} file before launch.")) {
+            Block::Turn { participant, time, role, model, content, .. } => {
+                assert_eq!(participant, "claude");
+                assert_eq!(time.as_deref(), Some("2026-02-10T04:01Z"));
+                assert_eq!(role.as_deref(), Some("ai"), "the role is lowercased");
+                assert_eq!(model.as_deref(), Some("opus"));
+                assert_eq!(content, "Yes \u{2014} file before launch.");
+            }
+            other => panic!("Expected Turn, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("participant".into(), AttrValue::String("user".into()));
+        attrs.insert("timestamp".into(), AttrValue::String("2026-02-22".into()));
+        match resolve_block(unknown("turn", attrs, "Can you?")) {
+            Block::Turn { time, role, .. } => {
+                assert_eq!(time.as_deref(), Some("2026-02-22"), "timestamp= is read as time=");
+                assert_eq!(role, None, "an unauthored role stays absent (turn_role infers it)");
+            }
+            other => panic!("Expected Turn, got {other:?}"),
+        }
+        assert_eq!(crate::types::turn_role("claude", None), "ai");
+        assert_eq!(crate::types::turn_role("assistant", None), "ai");
+        assert_eq!(crate::types::turn_role("brady", None), "human");
+        assert_eq!(crate::types::turn_role("system", None), "system");
+        assert_eq!(crate::types::turn_role("brady", Some("ai")), "ai");
+        assert_eq!(crate::types::turn_role("claude", Some("human")), "human");
+    }
+
+    #[test]
+    fn timeline_reads_dashed_and_colon_entries_under_headings() {
+        let mut attrs = Attrs::new();
+        attrs.insert("title".into(), AttrValue::String("Product Milestones".into()));
+        let src = "## Q1 2026\n- Wavesite launched at wave.site\n- 18:30 \u{2014} Deploy Build #38 to main\n\n## Q2 2026\n- **2026-02**: First paying customers\n- 2026-03: Angel round ($150-250K SAFE)\n";
+        match resolve_block(unknown("timeline", attrs, src)) {
+            Block::Timeline { title, entries, .. } => {
+                assert_eq!(title.as_deref(), Some("Product Milestones"));
+                assert_eq!(entries.len(), 4);
+                assert_eq!(entries[0], TimelineEntry { when: None, label: "Wavesite launched at wave.site".into(), group: Some("Q1 2026".into()) });
+                assert_eq!(entries[1], TimelineEntry { when: Some("18:30".into()), label: "Deploy Build #38 to main".into(), group: Some("Q1 2026".into()) });
+                assert_eq!(entries[2], TimelineEntry { when: Some("2026-02".into()), label: "First paying customers".into(), group: Some("Q2 2026".into()) });
+                assert_eq!(entries[3], TimelineEntry { when: Some("2026-03".into()), label: "Angel round ($150-250K SAFE)".into(), group: Some("Q2 2026".into()) });
+            }
+            other => panic!("Expected Timeline, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn output_reads_for_timestamp_exit_and_format() {
+        let mut attrs = Attrs::new();
+        attrs.insert("for".into(), AttrValue::String("analysis".into()));
+        attrs.insert("timestamp".into(), AttrValue::String("2026-02-10T12:00:00Z".into()));
+        attrs.insert("exit".into(), AttrValue::Number(0.0));
+        match resolve_block(unknown("output", attrs, "Mean quarterly revenue: $12,000\nGrowth: 633%")) {
+            Block::Output { for_id, timestamp, exit, format, content, .. } => {
+                assert_eq!(for_id.as_deref(), Some("analysis"));
+                assert_eq!(timestamp.as_deref(), Some("2026-02-10T12:00:00Z"));
+                assert_eq!(exit, Some(0));
+                assert_eq!(format, None);
+                assert_eq!(content, "Mean quarterly revenue: $12,000\nGrowth: 633%");
+            }
+            other => panic!("Expected Output, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("for".into(), AttrValue::String("chart-data".into()));
+        attrs.insert("format".into(), AttrValue::String("chart".into()));
+        attrs.insert("exit".into(), AttrValue::String("-1".into()));
+        match resolve_block(unknown("output", attrs, "{}")) {
+            Block::Output { exit, format, .. } => {
+                assert_eq!(exit, Some(-1));
+                assert_eq!(format.as_deref(), Some("chart"));
+            }
+            other => panic!("Expected Output, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ai_generated_and_ai_context_read_their_attributes() {
+        let mut attrs = Attrs::new();
+        attrs.insert("model".into(), AttrValue::String("claude-opus-4".into()));
+        attrs.insert("date".into(), AttrValue::String("2026-02-10".into()));
+        attrs.insert("reviewed".into(), AttrValue::Bool(false));
+        match resolve_block(unknown("ai-generated", attrs, "This analysis suggests 30% growth.")) {
+            Block::AiGenerated { model, date, reviewed, content, .. } => {
+                assert_eq!(model.as_deref(), Some("claude-opus-4"));
+                assert_eq!(date.as_deref(), Some("2026-02-10"));
+                assert!(!reviewed);
+                assert_eq!(content, "This analysis suggests 30% growth.");
+            }
+            other => panic!("Expected AiGenerated, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("model".into(), AttrValue::String("opus".into()));
+        attrs.insert("tokens".into(), AttrValue::Number(2400.0));
+        attrs.insert("loaded".into(), AttrValue::Bool(true));
+        match resolve_block(unknown("ai-context", attrs, "How much context was available.")) {
+            Block::AiContext { model, tokens, loaded, content, .. } => {
+                assert_eq!(model.as_deref(), Some("opus"));
+                assert_eq!(tokens, Some(2400));
+                assert!(loaded);
+                assert_eq!(content, "How much context was available.");
+            }
+            other => panic!("Expected AiContext, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn alternatives_is_a_pipe_table() {
+        let src = "| Option | Pros | Cons | Verdict |\n|--------|------|------|---------|\n| GTK4 | 5MB binary | Linux-first | **Selected** |\n| Electron | Cross-platform | 150MB | Rejected \u{2014} bloat |\n";
+        match resolve_block(unknown("alternatives", Attrs::new(), src)) {
+            Block::Alternatives { headers, rows, .. } => {
+                assert_eq!(headers, vec!["Option", "Pros", "Cons", "Verdict"]);
+                assert_eq!(rows.len(), 2);
+                assert_eq!(rows[0][3], "**Selected**");
+                assert_eq!(rows[1][0], "Electron");
+            }
+            other => panic!("Expected Alternatives, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn countdown_css_footnote_subscribe_and_notes_read_their_shapes() {
+        let mut attrs = Attrs::new();
+        attrs.insert("date".into(), AttrValue::String("2026-03-15".into()));
+        attrs.insert("label".into(), AttrValue::String("Launch day".into()));
+        match resolve_block(unknown("countdown", attrs, "")) {
+            Block::Countdown { date, label, .. } => {
+                assert_eq!(date.as_deref(), Some("2026-03-15"));
+                assert_eq!(label.as_deref(), Some("Launch day"));
+            }
+            other => panic!("Expected Countdown, got {other:?}"),
+        }
+        match resolve_block(unknown("css", Attrs::new(), ".custom-thing { border: 2px dashed red; }")) {
+            Block::Css { content, .. } => assert_eq!(content, ".custom-thing { border: 2px dashed red; }"),
+            other => panic!("Expected Css, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("id".into(), AttrValue::Number(1.0));
+        match resolve_block(unknown("footnote", attrs, "Gartner, 2025. Tier 1 source.")) {
+            Block::Footnote { id, content, .. } => {
+                assert_eq!(id.as_deref(), Some("1"));
+                assert_eq!(content, "Gartner, 2025. Tier 1 source.");
+            }
+            other => panic!("Expected Footnote, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("action".into(), AttrValue::String("https://api.example.com/newsletter".into()));
+        attrs.insert("placeholder".into(), AttrValue::String("you@email.com".into()));
+        match resolve_block(unknown("subscribe", attrs, "Get notified when we launch.")) {
+            Block::Subscribe { action, placeholder, content, .. } => {
+                assert_eq!(action.as_deref(), Some("https://api.example.com/newsletter"));
+                assert_eq!(placeholder.as_deref(), Some("you@email.com"));
+                assert_eq!(content, "Get notified when we launch.");
+            }
+            other => panic!("Expected Subscribe, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("action".into(), AttrValue::String("javascript:alert(1)".into()));
+        match resolve_block(unknown("subscribe", attrs, "")) {
+            Block::Subscribe { action, .. } => assert_eq!(action.as_deref(), Some("#")),
+            other => panic!("Expected Subscribe, got {other:?}"),
+        }
+        for name in ["notes", "speaker-notes", "presenter-notes"] {
+            match resolve_block(unknown(name, Attrs::new(), "Pause here.")) {
+                Block::Notes { content, .. } => assert_eq!(content, "Pause here."),
+                other => panic!("Expected Notes for ::{name}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn kernel_reads_body_lines_over_attributes() {
+        let mut attrs = Attrs::new();
+        attrs.insert("lang".into(), AttrValue::String("python".into()));
+        attrs.insert("env".into(), AttrValue::String("analysis".into()));
+        attrs.insert("sandbox".into(), AttrValue::String("loose".into()));
+        let src = "  runtime: python3.12\n  packages: [numpy, pandas, matplotlib]\n  sandbox: strict\n  memory: 2gb\n";
+        match resolve_block(unknown("kernel", attrs, src)) {
+            Block::Kernel { lang, env, runtime, packages, sandbox, properties, .. } => {
+                assert_eq!(lang.as_deref(), Some("python"));
+                assert_eq!(env.as_deref(), Some("analysis"));
+                assert_eq!(runtime.as_deref(), Some("python3.12"));
+                assert_eq!(packages, vec!["numpy", "pandas", "matplotlib"]);
+                assert_eq!(sandbox.as_deref(), Some("strict"), "the body line wins over the attribute");
+                assert_eq!(properties.len(), 1);
+                assert_eq!(properties[0].key, "memory");
+                assert_eq!(properties[0].value, "2gb");
+            }
+            other => panic!("Expected Kernel, got {other:?}"),
+        }
+        let mut attrs = Attrs::new();
+        attrs.insert("lang".into(), AttrValue::String("rust".into()));
+        attrs.insert("packages".into(), AttrValue::String("serde tokio".into()));
+        match resolve_block(unknown("kernel", attrs, "")) {
+            Block::Kernel { packages, runtime, .. } => {
+                assert_eq!(packages, vec!["serde", "tokio"]);
+                assert_eq!(runtime, None);
+            }
+            other => panic!("Expected Kernel, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn logo_cloud_reads_paths_named_paths_and_links() {
+        let mut attrs = Attrs::new();
+        attrs.insert("title".into(), AttrValue::String("Trusted by".into()));
+        let src = "- assets/logos/acme.svg\n- assets/logos/initech.svg | Initech\n- [Hooli](assets/logos/hooli.png)\n";
+        match resolve_block(unknown("logo-cloud", attrs, src)) {
+            Block::LogoCloud { title, items, .. } => {
+                assert_eq!(title.as_deref(), Some("Trusted by"));
+                assert_eq!(items, vec![
+                    LogoItem { src: "assets/logos/acme.svg".into(), name: None },
+                    LogoItem { src: "assets/logos/initech.svg".into(), name: Some("Initech".into()) },
+                    LogoItem { src: "assets/logos/hooli.png".into(), name: Some("Hooli".into()) },
+                ]);
+            }
+            other => panic!("Expected LogoCloud, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_slide_still_folds_its_notes_block_now_that_notes_is_typed() {
+        let src = "::slide[layout=bullets]\n# Point\n::notes\nPause here.\n::\n::\n";
+        let doc = crate::parse(src).doc;
+        match &doc.blocks[0] {
+            Block::Slide { notes, children, .. } => {
+                assert_eq!(notes.as_deref(), Some("Pause here."));
+                assert!(!children.iter().any(|c| matches!(c, Block::Notes { .. })), "the notes never render as a child");
+            }
+            other => panic!("Expected Slide, got {other:?}"),
+        }
+        match &crate::parse("::notes\nStandalone.\n::\n").doc.blocks[0] {
+            Block::Notes { content, .. } => assert_eq!(content, "Standalone."),
+            other => panic!("Expected Notes, got {other:?}"),
         }
     }
 

@@ -4963,3 +4963,116 @@ button.surfdoc-booking-day.is-sel { background: var(--accent); color: var(--acce
 @media (prefers-reduced-motion: reduce) {
     .surfdoc-marquee-track { animation: none; transform: none; }
 }
+
+/* ===== 0.25.0: the fourteen blocks that were planned until sessions 11 + 12 ===== */
+
+/* ::related — a cross-reference list: the link, then the relationship word muted. */
+.surfdoc-related { list-style: none; margin: var(--ws-space-md) 0; padding: 0; display: grid; gap: var(--ws-space-xs); }
+.surfdoc-related-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ws-space-sm); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.surfdoc-related-link { color: var(--accent); text-decoration: none; font-weight: var(--font-weight-semibold); overflow-wrap: anywhere; }
+.surfdoc-related-link:hover { text-decoration: underline; }
+.surfdoc-related-rel { font-size: var(--font-size-caption); color: var(--text-muted); }
+
+/* ::turn — one conversation turn: an avatar letter, the participant, the time and model, the body. */
+.surfdoc-turn { margin: var(--ws-space-md) 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.surfdoc-turn-ai { background: var(--surface-alt); }
+.surfdoc-turn-system { border-style: dashed; color: var(--text-muted); }
+.surfdoc-turn-head { display: flex; align-items: center; gap: var(--ws-space-sm); margin-bottom: 6px; font-size: var(--font-size-caption); }
+.surfdoc-turn-avatar { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-circle); background: var(--accent-soft); color: var(--accent-text); font-weight: var(--font-weight-bold); }
+.surfdoc-turn-ai .surfdoc-turn-avatar { background: var(--accent); color: var(--accent-ink); }
+.surfdoc-turn-participant { font-weight: var(--font-weight-semibold); color: var(--text); }
+.surfdoc-turn-time { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.surfdoc-turn-model { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--font-size-micro); }
+.surfdoc-turn-body > :last-child { margin-bottom: 0; }
+
+/* ::timeline — an ordered list with the date set in a fixed column, groups as run-in heads. */
+.surfdoc-timeline { margin: var(--ws-space-md) 0; }
+.surfdoc-timeline-title { font-weight: var(--font-weight-semibold); margin-bottom: var(--ws-space-sm); }
+.surfdoc-timeline-list { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--border); }
+.surfdoc-timeline-group { margin: var(--ws-space-sm) 0 var(--ws-space-xs); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-muted); }
+.surfdoc-timeline-entry { position: relative; display: flex; gap: var(--ws-space-sm); padding: 4px 0; }
+.surfdoc-timeline-entry::before { content: ""; position: absolute; left: -19px; top: 12px; width: 8px; height: 8px; border-radius: var(--radius-circle); background: var(--accent); }
+.surfdoc-timeline-when { flex: 0 0 auto; min-width: 5.5em; color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: var(--font-size-caption); }
+.surfdoc-timeline-label { color: var(--text); }
+
+/* ::output — execution output: a caption of facts over a monospaced body. */
+.surfdoc-output { margin: var(--ws-space-md) 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-code); overflow: hidden; }
+.surfdoc-output-head { display: flex; flex-wrap: wrap; gap: var(--ws-space-sm); padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: var(--font-size-micro); font-family: var(--font-mono); color: var(--text-muted); }
+.surfdoc-output-for { color: var(--text); }
+.surfdoc-output-exit { font-weight: var(--font-weight-semibold); }
+.surfdoc-output-exit-ok { color: var(--success); }
+.surfdoc-output-exit-fail { color: var(--danger); }
+.surfdoc-output-time { font-variant-numeric: tabular-nums; }
+.surfdoc-output-format { text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+.surfdoc-output-body { margin: 0; padding: 12px; overflow-x: auto; font-family: var(--font-mono); font-size: var(--font-size-caption); white-space: pre; }
+
+/* ::ai-generated — an AI attribution badge over the generated body. */
+.surfdoc-ai-generated { margin: var(--ws-space-md) 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); }
+.surfdoc-ai-generated-unreviewed { border-color: var(--warning); }
+.surfdoc-ai-generated-reviewed { border-color: var(--success); }
+.surfdoc-ai-badge { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ws-space-sm); margin-bottom: 6px; font-size: var(--font-size-micro); color: var(--text-muted); }
+.surfdoc-ai-mark { padding: 1px 6px; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-ink); font-weight: var(--font-weight-bold); letter-spacing: var(--tracking-wide); }
+.surfdoc-ai-meta { font-family: var(--font-mono); }
+.surfdoc-ai-body > :last-child { margin-bottom: 0; }
+
+/* ::alternatives — a decision matrix; the verdict column is colour-coded by its words. */
+.surfdoc-alternatives { width: 100%; border-collapse: collapse; font-size: var(--font-size-caption); }
+.surfdoc-alternatives th, .surfdoc-alternatives td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.surfdoc-alternatives th { font-weight: var(--font-weight-semibold); color: var(--text-muted); }
+.surfdoc-verdict { font-weight: var(--font-weight-semibold); white-space: nowrap; }
+.surfdoc-verdict-selected { color: var(--success); }
+.surfdoc-verdict-rejected { color: var(--danger); }
+.surfdoc-verdict-considered { color: var(--warning); }
+.surfdoc-verdict-open { color: var(--text-muted); }
+
+/* ::ai-context — generation metadata as a definition list over a note. */
+.surfdoc-ai-context { margin: var(--ws-space-md) 0; padding: 10px 14px; border: 1px solid var(--border); background: var(--surface-alt); border-radius: var(--radius-sm); font-size: var(--font-size-caption); }
+.surfdoc-ai-context-meta { display: flex; flex-wrap: wrap; gap: 2px var(--ws-space-md); margin: 0; font-family: var(--font-mono); font-size: var(--font-size-micro); color: var(--text-muted); }
+.surfdoc-ai-context-meta dt { display: inline; }
+.surfdoc-ai-context-meta dt::after { content: ":"; }
+.surfdoc-ai-context-meta dd { display: inline; margin: 0 var(--ws-space-sm) 0 0; color: var(--text); }
+.surfdoc-ai-context-body { margin-top: 6px; }
+.surfdoc-ai-context-body > :last-child { margin-bottom: 0; }
+
+/* ::countdown — the label and the date; a host script may replace the time's text with the remaining days. */
+.surfdoc-countdown { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--ws-space-sm); margin: var(--ws-space-md) 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.surfdoc-countdown-label { font-weight: var(--font-weight-semibold); }
+.surfdoc-countdown-date { color: var(--accent); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+
+/* ::css — the author's stylesheet; the element paints nothing itself. */
+.surfdoc-css { display: none; }
+
+/* ::footnote — a citation with its number set in the margin colour. */
+.surfdoc-footnote { display: flex; gap: var(--ws-space-sm); margin: var(--ws-space-sm) 0; padding: 6px 0; border-top: 1px solid var(--border); font-size: var(--font-size-caption); color: var(--text-muted); }
+.surfdoc-footnote-id { flex: 0 0 auto; color: var(--accent); font-weight: var(--font-weight-semibold); }
+.surfdoc-footnote-body > :last-child { margin-bottom: 0; }
+
+/* ::kernel — the execution environment: a head of chips over a definition list. */
+.surfdoc-kernel { margin: var(--ws-space-md) 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-alt); font-size: var(--font-size-caption); }
+.surfdoc-kernel-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ws-space-sm); margin-bottom: 6px; }
+.surfdoc-kernel-word { font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-size: var(--font-size-micro); color: var(--text-muted); }
+.surfdoc-kernel-lang, .surfdoc-kernel-env { padding: 1px 8px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font-family: var(--font-mono); font-size: var(--font-size-micro); }
+.surfdoc-kernel-ledger { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--ws-space-md); margin: 0; }
+.surfdoc-kernel-ledger dt { color: var(--text-muted); font-family: var(--font-mono); }
+.surfdoc-kernel-ledger dd { margin: 0; color: var(--text); }
+
+/* ::logo-cloud — a strip of logos, greyed until hovered. */
+.surfdoc-logo-cloud { margin: var(--ws-space-lg) 0; text-align: center; }
+.surfdoc-logo-cloud-title { margin-bottom: var(--ws-space-sm); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-muted); }
+.surfdoc-logo-cloud-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--ws-space-lg); }
+.surfdoc-logo-cloud-item { display: flex; }
+.surfdoc-logo-cloud-logo { max-height: 40px; max-width: 160px; object-fit: contain; filter: grayscale(1); opacity: 0.7; transition: opacity 0.2s var(--sd-ease), filter 0.2s var(--sd-ease); }
+.surfdoc-logo-cloud-item:hover .surfdoc-logo-cloud-logo { filter: none; opacity: 1; }
+
+/* ::subscribe — a pitch, an email field and its button. */
+.surfdoc-subscribe { margin: var(--ws-space-md) 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); }
+.surfdoc-subscribe-pitch { margin: 0 0 var(--ws-space-sm); }
+.surfdoc-subscribe-field { display: flex; flex-wrap: wrap; gap: var(--ws-space-sm); }
+.surfdoc-subscribe-email { flex: 1 1 200px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--ws-control-radius); background: var(--surface); color: var(--text); font: inherit; }
+.surfdoc-subscribe-button { padding: 8px 16px; border: 0; border-radius: var(--ws-control-radius); background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: var(--font-weight-semibold); cursor: pointer; }
+.surfdoc-subscribe-button:hover { background: var(--accent-hover); }
+
+/* ::notes — presenter notes outside a deck: a labelled aside. */
+.surfdoc-notes { margin: var(--ws-space-md) 0; padding: 10px 14px; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--font-size-caption); }
+.surfdoc-notes-label { margin-bottom: 4px; font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+.surfdoc-notes-body > :last-child { margin-bottom: 0; }

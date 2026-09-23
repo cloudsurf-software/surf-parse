@@ -738,6 +738,12 @@ fn render_block(block: &Block) -> String {
         | Block::Progress { .. }
         | Block::LogStream { .. }
         | Block::ProblemList { .. }
+        // 0.25.0: the fourteen planned blocks read as their markdown degradation
+        | Block::Related { .. } | Block::Turn { .. } | Block::Timeline { .. }
+        | Block::Output { .. } | Block::AiGenerated { .. } | Block::Alternatives { .. }
+        | Block::AiContext { .. } | Block::Countdown { .. } | Block::Css { .. }
+        | Block::Footnote { .. } | Block::Kernel { .. } | Block::LogoCloud { .. }
+        | Block::Subscribe { .. } | Block::Notes { .. }
         | Block::PostGrid { .. }
         | Block::Cite { .. }
         | Block::Bibliography { .. }

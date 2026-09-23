@@ -3074,6 +3074,77 @@ fn marquee_html(items: &[String]) -> String {
     out
 }
 
+// ------------------------------------------------------------------
+// The fourteen planned blocks (0.25.0): the small rules both the string
+// renderer and the constructive DOM twin (render_dom.rs) read, so the two
+// paths cannot disagree on a class name or a derived word.
+// ------------------------------------------------------------------
+
+/// The avatar letter of a `::turn`: the participant's first character,
+/// uppercased; `?` for a blank participant.
+pub(crate) fn turn_initial(participant: &str) -> String {
+    participant
+        .trim()
+        .chars()
+        .next()
+        .map(|c| c.to_uppercase().collect::<String>())
+        .unwrap_or_else(|| "?".to_string())
+}
+
+/// The verdict column of an `::alternatives` table: the header named
+/// `Verdict` (any case), else the last column; `None` for a headerless table.
+pub(crate) fn alternatives_verdict_column(headers: &[String]) -> Option<usize> {
+    if headers.is_empty() {
+        return None;
+    }
+    headers
+        .iter()
+        .position(|h| h.trim().eq_ignore_ascii_case("verdict"))
+        .or(Some(headers.len() - 1))
+}
+
+/// The verdict cell's colour class: `selected` / `rejected` / `considered`
+/// by the cell's own words, `open` otherwise.
+pub(crate) fn verdict_class(cell: &str) -> &'static str {
+    let lower = cell.to_ascii_lowercase();
+    if lower.contains("select") || lower.contains("chosen") || lower.contains("accept") {
+        "selected"
+    } else if lower.contains("reject") || lower.contains("declin") {
+        "rejected"
+    } else if lower.contains("consider") || lower.contains("defer") {
+        "considered"
+    } else {
+        "open"
+    }
+}
+
+/// The `exit` class of an `::output`: `ok` for 0, `fail` for anything else.
+pub(crate) fn output_exit_class(exit: i32) -> &'static str {
+    if exit == 0 { "ok" } else { "fail" }
+}
+
+/// A logo's alt text: its name, else the file name without its extension.
+pub(crate) fn logo_alt(src: &str, name: Option<&str>) -> String {
+    if let Some(n) = name {
+        return n.to_string();
+    }
+    let file = src.rsplit('/').next().unwrap_or(src);
+    let stem = file.rsplit_once('.').map(|(s, _)| s).unwrap_or(file);
+    stem.replace(['-', '_'], " ")
+}
+
+/// The `::css` body as a `<style>` element's text: a `</` sequence is
+/// written as the CSS escape `<\/` so the body can never close the element
+/// early. Nothing else is touched — it is the author's stylesheet.
+pub(crate) fn css_style_body(content: &str) -> String {
+    content.replace("</", "<\\/")
+}
+
+/// The `::ai-generated` review word.
+pub(crate) fn ai_review_word(reviewed: bool) -> &'static str {
+    if reviewed { "reviewed" } else { "not reviewed" }
+}
+
 fn render_block_inner(block: &Block) -> String {
     match block {
         Block::Markdown { content, .. } => render_markdown(content),
@@ -6513,6 +6584,295 @@ fn render_block_inner(block: &Block) -> String {
             }
             html.push_str("</ol>");
             html
+        }
+
+        // ── The fourteen planned blocks (0.25.0, sessions 11 + 12). Every
+        //    arm has a byte-identical twin in render_dom.rs. ────────────
+
+        Block::Related { items, .. } => {
+            let mut html = String::from("<ul class=\"surfdoc-related\">");
+            for item in items {
+                html.push_str(&format!(
+                    "<li class=\"surfdoc-related-item\"><a class=\"surfdoc-related-link\" href=\"{}\">{}</a>",
+                    escape_html(&item.href),
+                    escape_html(item.title.as_deref().unwrap_or(&item.href)),
+                ));
+                if let Some(rel) = &item.relation {
+                    html.push_str(&format!("<span class=\"surfdoc-related-rel\">{}</span>", escape_html(rel)));
+                }
+                html.push_str("</li>");
+            }
+            html.push_str("</ul>");
+            html
+        }
+
+        Block::Turn { participant, time, role, model, content, .. } => {
+            let role = crate::types::turn_role(participant, role.as_deref());
+            let mut html = format!(
+                "<div class=\"surfdoc-turn surfdoc-turn-{role}\"><div class=\"surfdoc-turn-head\"><span class=\"surfdoc-turn-avatar\">{}</span><span class=\"surfdoc-turn-participant\">{}</span>",
+                escape_html(&turn_initial(participant)),
+                escape_html(participant),
+            );
+            if let Some(t) = time {
+                html.push_str(&format!(
+                    "<time class=\"surfdoc-turn-time\" data-time=\"{0}\">{0}</time>",
+                    escape_html(t)
+                ));
+            }
+            if let Some(m) = model {
+                html.push_str(&format!("<span class=\"surfdoc-turn-model\">{}</span>", escape_html(m)));
+            }
+            html.push_str(&format!(
+                "</div><div class=\"surfdoc-turn-body\">{}</div></div>",
+                render_inline_markdown(content)
+            ));
+            html
+        }
+
+        Block::Timeline { title, entries, .. } => {
+            let mut html = String::from("<div class=\"surfdoc-timeline\">");
+            if let Some(t) = title {
+                html.push_str(&format!("<div class=\"surfdoc-timeline-title\">{}</div>", escape_html(t)));
+            }
+            html.push_str("<ol class=\"surfdoc-timeline-list\">");
+            let mut current: Option<&str> = None;
+            for entry in entries {
+                if entry.group.as_deref() != current {
+                    if let Some(g) = &entry.group {
+                        html.push_str(&format!("<li class=\"surfdoc-timeline-group\">{}</li>", escape_html(g)));
+                    }
+                    current = entry.group.as_deref();
+                }
+                html.push_str("<li class=\"surfdoc-timeline-entry\">");
+                if let Some(w) = &entry.when {
+                    html.push_str(&format!("<span class=\"surfdoc-timeline-when\">{}</span>", escape_html(w)));
+                }
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-timeline-label\">{}</span></li>",
+                    render_inline_markdown_phrasing(&entry.label)
+                ));
+            }
+            html.push_str("</ol></div>");
+            html
+        }
+
+        Block::Output { for_id, timestamp, exit, format, content, .. } => {
+            let mut head = String::new();
+            if let Some(f) = for_id {
+                head.push_str(&format!("<span class=\"surfdoc-output-for\">for {}</span>", escape_html(f)));
+            }
+            if let Some(e) = exit {
+                head.push_str(&format!(
+                    "<span class=\"surfdoc-output-exit surfdoc-output-exit-{}\">exit {e}</span>",
+                    output_exit_class(*e)
+                ));
+            }
+            if let Some(t) = timestamp {
+                head.push_str(&format!(
+                    "<time class=\"surfdoc-output-time\" data-time=\"{0}\">{0}</time>",
+                    escape_html(t)
+                ));
+            }
+            if let Some(f) = format {
+                head.push_str(&format!("<span class=\"surfdoc-output-format\">{}</span>", escape_html(f)));
+            }
+            let mut html = String::from("<figure class=\"surfdoc-output\">");
+            if !head.is_empty() {
+                html.push_str(&format!("<figcaption class=\"surfdoc-output-head\">{head}</figcaption>"));
+            }
+            html.push_str(&format!(
+                "<pre class=\"surfdoc-output-body\"><code>{}</code></pre></figure>",
+                escape_html(content)
+            ));
+            html
+        }
+
+        Block::AiGenerated { model, date, reviewed, content, .. } => {
+            let state = if *reviewed { "reviewed" } else { "unreviewed" };
+            let mut html = format!(
+                "<aside class=\"surfdoc-ai-generated surfdoc-ai-generated-{state}\" role=\"note\"><div class=\"surfdoc-ai-badge\"><span class=\"surfdoc-ai-mark\">AI</span>"
+            );
+            if let Some(m) = model {
+                html.push_str(&format!("<span class=\"surfdoc-ai-meta\">{}</span>", escape_html(m)));
+            }
+            if let Some(d) = date {
+                html.push_str(&format!("<span class=\"surfdoc-ai-meta\">{}</span>", escape_html(d)));
+            }
+            html.push_str(&format!(
+                "<span class=\"surfdoc-ai-meta\">{}</span></div><div class=\"surfdoc-ai-body\">{}</div></aside>",
+                ai_review_word(*reviewed),
+                render_inline_markdown(content)
+            ));
+            html
+        }
+
+        Block::Alternatives { headers, rows, .. } => {
+            let verdict = alternatives_verdict_column(headers);
+            let mut html = String::from("<div class=\"surfdoc-table-wrap\"><table class=\"surfdoc-alternatives\">");
+            if !headers.is_empty() {
+                html.push_str("<thead><tr>");
+                for hd in headers {
+                    html.push_str(&format!("<th scope=\"col\">{}</th>", render_inline_markdown_phrasing(hd)));
+                }
+                html.push_str("</tr></thead>");
+            }
+            html.push_str("<tbody>");
+            for row in rows {
+                html.push_str("<tr>");
+                let width = headers.len().max(row.len());
+                for i in 0..width {
+                    let cell = row.get(i).map(String::as_str).unwrap_or("");
+                    if Some(i) == verdict {
+                        html.push_str(&format!(
+                            "<td class=\"surfdoc-verdict surfdoc-verdict-{}\">{}</td>",
+                            verdict_class(cell),
+                            render_inline_markdown_phrasing(cell)
+                        ));
+                    } else {
+                        html.push_str(&format!("<td>{}</td>", render_inline_markdown_phrasing(cell)));
+                    }
+                }
+                html.push_str("</tr>");
+            }
+            html.push_str("</tbody></table></div>");
+            html
+        }
+
+        Block::AiContext { model, tokens, loaded, content, .. } => {
+            let mut html = String::from(
+                "<aside class=\"surfdoc-ai-context\" role=\"note\"><dl class=\"surfdoc-ai-context-meta\">"
+            );
+            if let Some(m) = model {
+                html.push_str(&format!("<dt>model</dt><dd>{}</dd>", escape_html(m)));
+            }
+            if let Some(t) = tokens {
+                html.push_str(&format!("<dt>tokens</dt><dd>{t}</dd>"));
+            }
+            html.push_str(&format!("<dt>loaded</dt><dd>{}</dd></dl>", if *loaded { "yes" } else { "no" }));
+            if !content.trim().is_empty() {
+                html.push_str(&format!(
+                    "<div class=\"surfdoc-ai-context-body\">{}</div>",
+                    render_inline_markdown(content)
+                ));
+            }
+            html.push_str("</aside>");
+            html
+        }
+
+        Block::Countdown { date, label, .. } => {
+            let mut html = String::from("<div class=\"surfdoc-countdown\"");
+            if let Some(d) = date {
+                html.push_str(&format!(" data-date=\"{}\"", escape_html(d)));
+            }
+            html.push('>');
+            if let Some(l) = label {
+                html.push_str(&format!("<span class=\"surfdoc-countdown-label\">{}</span>", escape_html(l)));
+            }
+            if let Some(d) = date {
+                html.push_str(&format!(
+                    "<time class=\"surfdoc-countdown-date\" data-date=\"{0}\">{0}</time>",
+                    escape_html(d)
+                ));
+            }
+            html.push_str("</div>");
+            html
+        }
+
+        Block::Css { content, .. } => {
+            format!("<style class=\"surfdoc-css\">{}</style>", css_style_body(content))
+        }
+
+        Block::Footnote { id, content, .. } => {
+            let mut html = String::from("<aside class=\"surfdoc-footnote\" role=\"doc-footnote\"");
+            if let Some(i) = id {
+                html.push_str(&format!(" id=\"fn-{}\"", escape_html(i)));
+            }
+            html.push('>');
+            if let Some(i) = id {
+                html.push_str(&format!("<span class=\"surfdoc-footnote-id\">{}</span>", escape_html(i)));
+            }
+            html.push_str(&format!(
+                "<div class=\"surfdoc-footnote-body\">{}</div></aside>",
+                render_inline_markdown(content)
+            ));
+            html
+        }
+
+        Block::Kernel { lang, env, runtime, packages, sandbox, properties, .. } => {
+            let mut html = String::from(
+                "<div class=\"surfdoc-kernel\"><div class=\"surfdoc-kernel-head\"><span class=\"surfdoc-kernel-word\">kernel</span>"
+            );
+            if let Some(l) = lang {
+                html.push_str(&format!("<span class=\"surfdoc-kernel-lang\">{}</span>", escape_html(l)));
+            }
+            if let Some(e) = env {
+                html.push_str(&format!("<span class=\"surfdoc-kernel-env\">{}</span>", escape_html(e)));
+            }
+            html.push_str("</div>");
+            let mut ledger = String::new();
+            if let Some(r) = runtime {
+                ledger.push_str(&format!("<dt>runtime</dt><dd>{}</dd>", escape_html(r)));
+            }
+            if !packages.is_empty() {
+                ledger.push_str(&format!("<dt>packages</dt><dd>{}</dd>", escape_html(&packages.join(", "))));
+            }
+            if let Some(s) = sandbox {
+                ledger.push_str(&format!("<dt>sandbox</dt><dd>{}</dd>", escape_html(s)));
+            }
+            for p in properties {
+                ledger.push_str(&format!("<dt>{}</dt><dd>{}</dd>", escape_html(&p.key), escape_html(&p.value)));
+            }
+            if !ledger.is_empty() {
+                html.push_str(&format!("<dl class=\"surfdoc-kernel-ledger\">{ledger}</dl>"));
+            }
+            html.push_str("</div>");
+            html
+        }
+
+        Block::LogoCloud { title, items, .. } => {
+            let mut html = format!(
+                "<section class=\"surfdoc-logo-cloud\" aria-label=\"{}\">",
+                escape_html(title.as_deref().unwrap_or("Logos"))
+            );
+            if let Some(t) = title {
+                html.push_str(&format!("<div class=\"surfdoc-logo-cloud-title\">{}</div>", escape_html(t)));
+            }
+            html.push_str("<ul class=\"surfdoc-logo-cloud-list\">");
+            for item in items {
+                html.push_str(&format!(
+                    "<li class=\"surfdoc-logo-cloud-item\"><img class=\"surfdoc-logo-cloud-logo\" src=\"{}\" alt=\"{}\" loading=\"lazy\" /></li>",
+                    escape_html(&item.src),
+                    escape_html(&logo_alt(&item.src, item.name.as_deref())),
+                ));
+            }
+            html.push_str("</ul></section>");
+            html
+        }
+
+        Block::Subscribe { action, placeholder, content, .. } => {
+            let mut html = String::from("<form class=\"surfdoc-subscribe\" method=\"post\"");
+            if let Some(a) = action {
+                html.push_str(&format!(" action=\"{}\"", escape_html(a)));
+            }
+            html.push('>');
+            if !content.trim().is_empty() {
+                html.push_str(&format!(
+                    "<p class=\"surfdoc-subscribe-pitch\">{}</p>",
+                    render_inline_markdown_phrasing(content)
+                ));
+            }
+            html.push_str(&format!(
+                "<div class=\"surfdoc-subscribe-field\"><input class=\"surfdoc-subscribe-email\" type=\"email\" name=\"email\" placeholder=\"{}\" required><button class=\"surfdoc-subscribe-button\" type=\"submit\">Subscribe</button></div></form>",
+                escape_html(placeholder.as_deref().unwrap_or("you@example.com"))
+            ));
+            html
+        }
+
+        Block::Notes { content, .. } => {
+            format!(
+                "<aside class=\"surfdoc-notes\" role=\"note\"><div class=\"surfdoc-notes-label\">Presenter notes</div><div class=\"surfdoc-notes-body\">{}</div></aside>",
+                render_inline_markdown(content)
+            )
         }
 
         Block::LogStream { source, tail, .. } => {

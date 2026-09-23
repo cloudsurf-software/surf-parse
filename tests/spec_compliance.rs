@@ -37,6 +37,9 @@ const ENUM_VARIANTS: &[&str] = &[
     "SuggestionChips", "TabBar", "TabContent", "Terminal", "Toolbar",
     // Messages/Contacts vocabulary (0.12)
     "RecipientPicker", "Qr",
+    // The fourteen planned blocks, implemented in 0.25.0 (sessions 11 + 12)
+    "Related", "Turn", "Timeline", "Output", "AiGenerated", "Alternatives", "AiContext",
+    "Countdown", "Css", "Footnote", "Kernel", "LogoCloud", "Subscribe", "Notes",
 ];
 
 #[derive(Debug, Deserialize)]

@@ -1297,6 +1297,159 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.join("\n")
         }
 
+        // ── The fourteen planned blocks (0.25.0): each arm IS the
+        //    `degradation` sentence of its spec/blocks.toml row. ──────────
+
+        // "bulleted link list"
+        Block::Related { items, .. } => {
+            let lines: Vec<String> = items
+                .iter()
+                .map(|i| {
+                    let target = match &i.title {
+                        Some(t) => format!("[{t}]({})", i.href),
+                        None => i.href.clone(),
+                    };
+                    match &i.relation {
+                        Some(r) => format!("- {target} \u{2014} {r}"),
+                        None => format!("- {target}"),
+                    }
+                })
+                .collect();
+            lines.join("\n")
+        }
+
+        // "blockquote with speaker prefix"
+        Block::Turn { participant, time, content, .. } => {
+            let speaker = match time {
+                Some(t) => format!("> **{participant}** ({t})"),
+                None => format!("> **{participant}**"),
+            };
+            let mut lines = vec![speaker, ">".to_string()];
+            lines.extend(content.lines().map(|l| format!("> {l}")));
+            lines.join("\n")
+        }
+
+        // "ordered list with dates"
+        Block::Timeline { title, entries, .. } => {
+            let mut lines = Vec::new();
+            if let Some(t) = title {
+                lines.push(format!("**{t}**"));
+                lines.push(String::new());
+            }
+            let mut current: Option<&str> = None;
+            for (i, e) in entries.iter().enumerate() {
+                if e.group.as_deref() != current {
+                    if let Some(g) = &e.group {
+                        if !lines.is_empty() && !lines.last().map(String::is_empty).unwrap_or(true) {
+                            lines.push(String::new());
+                        }
+                        lines.push(format!("### {g}"));
+                        lines.push(String::new());
+                    }
+                    current = e.group.as_deref();
+                }
+                match &e.when {
+                    Some(w) => lines.push(format!("{}. **{w}** \u{2014} {}", i + 1, e.label)),
+                    None => lines.push(format!("{}. {}", i + 1, e.label)),
+                }
+            }
+            lines.join("\n")
+        }
+
+        // "fenced code block"
+        Block::Output { content, .. } => format!("```\n{content}\n```"),
+
+        // "blockquote with attribution"
+        Block::AiGenerated { model, date, reviewed, content, .. } => {
+            let mut who = String::from("AI-generated");
+            if let Some(m) = model { who.push_str(&format!(" by {m}")); }
+            if let Some(d) = date { who.push_str(&format!(" on {d}")); }
+            who.push_str(if *reviewed { ", reviewed" } else { ", not reviewed" });
+            let mut lines = vec![format!("> *{who}*"), ">".to_string()];
+            lines.extend(content.lines().map(|l| format!("> {l}")));
+            lines.join("\n")
+        }
+
+        // "markdown table"
+        Block::Alternatives { headers, rows, .. } => {
+            let mut lines = Vec::new();
+            if !headers.is_empty() {
+                lines.push(format!("| {} |", headers.join(" | ")));
+                lines.push(format!("|{}|", headers.iter().map(|_| " --- ").collect::<Vec<_>>().join("|")));
+            }
+            for row in rows {
+                lines.push(format!("| {} |", row.join(" | ")));
+            }
+            lines.join("\n")
+        }
+
+        // "fenced code block"
+        Block::AiContext { model, tokens, loaded, content, .. } => {
+            let mut lines = vec!["```".to_string()];
+            if let Some(m) = model { lines.push(format!("model: {m}")); }
+            if let Some(t) = tokens { lines.push(format!("tokens: {t}")); }
+            lines.push(format!("loaded: {loaded}"));
+            if !content.trim().is_empty() {
+                lines.push(String::new());
+                lines.push(content.trim().to_string());
+            }
+            lines.push("```".to_string());
+            lines.join("\n")
+        }
+
+        // "paragraph with date"
+        Block::Countdown { date, label, .. } => match (label, date) {
+            (Some(l), Some(d)) => format!("**{l}** \u{2014} {d}"),
+            (Some(l), None) => format!("**{l}**"),
+            (None, Some(d)) => d.clone(),
+            (None, None) => String::new(),
+        },
+
+        // "omitted"
+        Block::Css { .. } => String::new(),
+
+        // "inline parenthetical"
+        Block::Footnote { id, content, .. } => match id {
+            Some(i) => format!("({i}) {}", content.trim()),
+            None => format!("({})", content.trim()),
+        },
+
+        // "fenced code block with language"
+        Block::Kernel { lang, runtime, packages, sandbox, properties, .. } => {
+            let mut lines = vec![format!("```{}", lang.as_deref().unwrap_or(""))];
+            if let Some(r) = runtime { lines.push(format!("runtime: {r}")); }
+            if !packages.is_empty() { lines.push(format!("packages: [{}]", packages.join(", "))); }
+            if let Some(s) = sandbox { lines.push(format!("sandbox: {s}")); }
+            for p in properties { lines.push(format!("{}: {}", p.key, p.value)); }
+            lines.push("```".to_string());
+            lines.join("\n")
+        }
+
+        // "bulleted list of names"
+        Block::LogoCloud { title, items, .. } => {
+            let mut lines = Vec::new();
+            if let Some(t) = title {
+                lines.push(format!("**{t}**"));
+                lines.push(String::new());
+            }
+            for i in items {
+                lines.push(format!("- {}", crate::render_html::logo_alt(&i.src, i.name.as_deref())));
+            }
+            lines.join("\n")
+        }
+
+        // "link to subscription page"
+        Block::Subscribe { action, content, .. } => {
+            let text = if content.trim().is_empty() { "Subscribe" } else { content.trim() };
+            match action {
+                Some(a) => format!("[{text}]({a})"),
+                None => text.to_string(),
+            }
+        }
+
+        // "omitted from the rendered deck"
+        Block::Notes { .. } => String::new(),
+
         Block::LogStream { .. } => "*Log stream*".to_string(),
 
         Block::ProblemList { .. } => "*Problem list*".to_string(),

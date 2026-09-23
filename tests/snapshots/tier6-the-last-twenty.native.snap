@@ -1,0 +1,240 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# The last twenty\n\nThe six web-only blocks that degraded to markdown until 0.25.0, then the\nfourteen that were planned: every one crosses the FFI structurally now."
+  },
+  {
+    "type": "health",
+    "path": "/healthz",
+    "method": "GET",
+    "grace": "10s",
+    "interval": "30s",
+    "timeout": "5s"
+  },
+  {
+    "type": "hours",
+    "title": "Hours",
+    "timezone": "America/Los_Angeles",
+    "rows": [
+      {
+        "day": 1,
+        "label": "Monday",
+        "opens": 660,
+        "closes": 1260,
+        "text": "11am - 9pm"
+      },
+      {
+        "day": 0,
+        "label": "Sunday",
+        "opens": null,
+        "closes": null,
+        "text": "Closed"
+      }
+    ]
+  },
+  {
+    "type": "marquee",
+    "items": [
+      "Fresh daily",
+      "Open late"
+    ]
+  },
+  {
+    "type": "smoke",
+    "script": "/smoke.sh",
+    "checks": [
+      {
+        "method": "GET",
+        "path": "/healthz",
+        "expected": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 201
+      }
+    ]
+  },
+  {
+    "type": "use",
+    "crates": [
+      {
+        "name": "reqwest",
+        "version": "0.12",
+        "features": [
+          "json",
+          "rustls-tls"
+        ]
+      },
+      {
+        "name": "lettre",
+        "version": null,
+        "features": []
+      }
+    ]
+  },
+  {
+    "type": "volumes",
+    "entries": [
+      {
+        "name": "data",
+        "mount": "/data"
+      },
+      {
+        "name": "cache",
+        "mount": "/var/cache"
+      }
+    ]
+  },
+  {
+    "type": "related",
+    "items": [
+      {
+        "title": "Architecture Plan",
+        "href": "plans/product/plan.md",
+        "relation": "produces"
+      },
+      {
+        "title": null,
+        "href": "research/FINDINGS.md",
+        "relation": "consumes"
+      },
+      {
+        "title": null,
+        "href": "plans/ideas/wiki.md",
+        "relation": null
+      }
+    ]
+  },
+  {
+    "type": "turn",
+    "participant": "brady",
+    "time": "2026-02-10T04:00Z",
+    "role": "human",
+    "model": null,
+    "content": "Should I file the provisionals first?"
+  },
+  {
+    "type": "turn",
+    "participant": "claude",
+    "time": "2026-02-10T04:01Z",
+    "role": "ai",
+    "model": "opus",
+    "content": "Yes — file before launch."
+  },
+  {
+    "type": "timeline",
+    "title": "Milestones",
+    "entries": [
+      {
+        "when": "2026-01",
+        "label": "TaskSurf beta launch",
+        "group": "Q1 2026"
+      },
+      {
+        "when": "18:30",
+        "label": "Deploy Build #38",
+        "group": "Q1 2026"
+      }
+    ]
+  },
+  {
+    "type": "output",
+    "for_id": "analysis",
+    "timestamp": "2026-02-10T12:00:00Z",
+    "exit": 0,
+    "format": null,
+    "content": "Mean quarterly revenue: $12,000"
+  },
+  {
+    "type": "ai_generated",
+    "model": "claude-opus-4",
+    "date": "2026-02-10",
+    "reviewed": false,
+    "content": "This analysis suggests revenue will grow 30% quarter-over-quarter."
+  },
+  {
+    "type": "alternatives",
+    "headers": [
+      "Option",
+      "Pros",
+      "Cons",
+      "Verdict"
+    ],
+    "rows": [
+      {
+        "cells": [
+          "GTK4",
+          "5MB binary",
+          "Linux-first",
+          "**Selected**"
+        ]
+      },
+      {
+        "cells": [
+          "Electron",
+          "Cross-platform",
+          "150MB",
+          "Rejected"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "ai_context",
+    "model": "opus",
+    "tokens": 2400,
+    "loaded": true,
+    "content": "How much context was available."
+  },
+  {
+    "type": "countdown",
+    "date": "2026-03-15",
+    "label": "Launch day"
+  },
+  {
+    "type": "css",
+    "content": ".custom-thing { border: 2px dashed red; }"
+  },
+  {
+    "type": "footnote",
+    "id": "1",
+    "content": "Gartner, 2025. Tier 1 source."
+  },
+  {
+    "type": "kernel",
+    "lang": "python",
+    "env": "analysis",
+    "runtime": "python3.12",
+    "packages": [
+      "numpy",
+      "pandas"
+    ],
+    "sandbox": "strict",
+    "properties": []
+  },
+  {
+    "type": "logo_cloud",
+    "title": "Trusted by",
+    "items": [
+      {
+        "src": "assets/logos/acme.svg",
+        "name": null
+      },
+      {
+        "src": "assets/logos/initech.svg",
+        "name": "Initech"
+      }
+    ]
+  },
+  {
+    "type": "subscribe",
+    "action": "https://api.example.com/newsletter",
+    "placeholder": "you@email.com",
+    "content": "Get notified when we launch."
+  },
+  {
+    "type": "notes",
+    "content": "Pause here."
+  }
+]

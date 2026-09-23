@@ -1,0 +1,106 @@
+---
+title: "Corpus — Tier 6: the last twenty"
+type: document
+---
+
+# The last twenty
+
+The six web-only blocks that degraded to markdown until 0.25.0, then the
+fourteen that were planned: every one crosses the FFI structurally now.
+
+::health[path=/healthz method=GET grace=10s interval=30s timeout=5s]
+::
+
+::hours[title="Hours" timezone="America/Los_Angeles"]
+- Monday: 11am - 9pm
+- Sunday: Closed
+::
+
+::marquee
+- Fresh daily
+- Open late
+::
+
+::smoke[script=/smoke.sh]
+GET /healthz -> 200
+POST /api/orders -> 201
+::
+
+::use
+- reqwest 0.12 [json, rustls-tls]
+- lettre
+::
+
+::volumes
+data -> /data
+cache -> /var/cache
+::
+
+::related
+- [Architecture Plan](plans/product/plan.md) — produces
+- consumes: research/FINDINGS.md
+- plans/ideas/wiki.md
+::
+
+::turn[participant=brady time=2026-02-10T04:00Z]
+Should I file the provisionals first?
+::
+
+::turn[participant=claude time=2026-02-10T04:01Z model=opus]
+Yes — file before launch.
+::
+
+::timeline[title="Milestones"]
+## Q1 2026
+- 2026-01: TaskSurf beta launch
+- 18:30 — Deploy Build #38
+::
+
+::output[for=analysis timestamp="2026-02-10T12:00:00Z" exit=0]
+Mean quarterly revenue: $12,000
+::
+
+::ai-generated[model=claude-opus-4 date=2026-02-10 reviewed=false]
+This analysis suggests revenue will grow 30% quarter-over-quarter.
+::
+
+::alternatives
+| Option | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| GTK4 | 5MB binary | Linux-first | **Selected** |
+| Electron | Cross-platform | 150MB | Rejected |
+::
+
+::ai-context[model=opus tokens=2400 loaded=true]
+How much context was available.
+::
+
+::countdown[date=2026-03-15 label="Launch day"]
+::
+
+::css
+.custom-thing { border: 2px dashed red; }
+::
+
+::footnote[id=1]
+Gartner, 2025. Tier 1 source.
+::
+
+::kernel[lang=python env=analysis]
+  runtime: python3.12
+  packages: [numpy, pandas]
+  sandbox: strict
+::
+
+::logo-cloud[title="Trusted by"]
+- assets/logos/acme.svg
+- assets/logos/initech.svg | Initech
+::
+
+::subscribe[action=https://api.example.com/newsletter placeholder="you@email.com"]
+Get notified when we launch.
+::
+
+::notes
+Pause here.
+::

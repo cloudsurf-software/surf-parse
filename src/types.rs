@@ -1666,6 +1666,123 @@ pub enum Block {
         on_resolve: Option<String>,
         span: Span,
     },
+
+    // ----- The fourteen planned blocks (0.25.0, sessions 11 + 12 of the
+    // blocks program): every row of spec/blocks.toml is implemented. -----
+
+    /// Cross-references (`::related`): one [`RelatedItem`] per body line.
+    Related {
+        items: Vec<RelatedItem>,
+        span: Span,
+    },
+    /// One conversation turn (`::turn[participant=… time=… role=… model=…]`)
+    /// with a markdown body. `timestamp=` is read as `time=`. `role` is the
+    /// authored value only; [`turn_role`] resolves it (inferring from the
+    /// participant when absent).
+    Turn {
+        participant: String,
+        time: Option<String>,
+        role: Option<String>,
+        model: Option<String>,
+        content: String,
+        span: Span,
+    },
+    /// Chronological sequence (`::timeline[title=…]`): [`TimelineEntry`]
+    /// rows, grouped by `## heading` lines.
+    Timeline {
+        title: Option<String>,
+        entries: Vec<TimelineEntry>,
+        span: Span,
+    },
+    /// Execution output (`::output[for=… timestamp=… exit=… format=…]`): the
+    /// verbatim stdout of the `::code` block named by `for=`.
+    Output {
+        /// `for=` — the id of the code block that produced it.
+        for_id: Option<String>,
+        timestamp: Option<String>,
+        exit: Option<i32>,
+        /// `format=` — `text` (default), `html`, `image`, `table`, `chart`.
+        format: Option<String>,
+        content: String,
+        span: Span,
+    },
+    /// AI attribution (`::ai-generated[model=… date=… reviewed=…]`) over a
+    /// markdown body.
+    AiGenerated {
+        model: Option<String>,
+        date: Option<String>,
+        reviewed: bool,
+        content: String,
+        span: Span,
+    },
+    /// Option comparison (`::alternatives`): a pipe table; the renderer
+    /// colour-codes a `Verdict` column by its words.
+    Alternatives {
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+        span: Span,
+    },
+    /// AI generation metadata (`::ai-context[model=… tokens=… loaded=…]`)
+    /// over a markdown note.
+    AiContext {
+        model: Option<String>,
+        tokens: Option<u32>,
+        loaded: bool,
+        content: String,
+        span: Span,
+    },
+    /// Event countdown (`::countdown[date=… label=…]`). The block carries no
+    /// clock: the web render stamps the date for the host's script or
+    /// stylesheet, the native side counts for itself.
+    Countdown {
+        date: Option<String>,
+        label: Option<String>,
+        span: Span,
+    },
+    /// Raw CSS escape hatch (`::css`): the body verbatim, emitted as a
+    /// `<style>` on the web and omitted everywhere else.
+    Css {
+        content: String,
+        span: Span,
+    },
+    /// Citation (`::footnote[id=…]`) with a markdown body.
+    Footnote {
+        id: Option<String>,
+        content: String,
+        span: Span,
+    },
+    /// Execution environment (`::kernel[lang=… env=…]`): `runtime:`,
+    /// `packages: [a, b]` and `sandbox:` from body lines (or attributes —
+    /// body lines win); every other `key: value` line lands in `properties`.
+    Kernel {
+        lang: Option<String>,
+        env: Option<String>,
+        runtime: Option<String>,
+        packages: Vec<String>,
+        sandbox: Option<String>,
+        properties: Vec<StyleProperty>,
+        span: Span,
+    },
+    /// Logo strip (`::logo-cloud[title=…]`): one [`LogoItem`] per body line.
+    LogoCloud {
+        title: Option<String>,
+        items: Vec<LogoItem>,
+        span: Span,
+    },
+    /// Email subscription (`::subscribe[action=… placeholder=…]`) with a
+    /// pitch as the body.
+    Subscribe {
+        action: Option<String>,
+        placeholder: Option<String>,
+        content: String,
+        span: Span,
+    },
+    /// Presenter notes (`::notes`) outside a slide. Inside a `::slide` the
+    /// parser folds the block into the slide's `notes` field instead.
+    Notes {
+        content: String,
+        span: Span,
+    },
 }
 
 impl Block {
@@ -1789,6 +1906,20 @@ impl Block {
             | Block::ProblemList { span, .. }
             | Block::RecipientPicker { span, .. }
             | Block::Qr { span, .. }
+            | Block::Related { span, .. }
+            | Block::Turn { span, .. }
+            | Block::Timeline { span, .. }
+            | Block::Output { span, .. }
+            | Block::AiGenerated { span, .. }
+            | Block::Alternatives { span, .. }
+            | Block::AiContext { span, .. }
+            | Block::Countdown { span, .. }
+            | Block::Css { span, .. }
+            | Block::Footnote { span, .. }
+            | Block::Kernel { span, .. }
+            | Block::LogoCloud { span, .. }
+            | Block::Subscribe { span, .. }
+            | Block::Notes { span, .. }
             => *span,
         }
     }
@@ -2009,6 +2140,69 @@ pub struct ColumnContent {
 pub struct StyleProperty {
     pub key: String,
     pub value: String,
+}
+
+/// One cross-reference of a `Related` block (0.25.0): `- [Title](href) —
+/// relation`, `- relation: href` (a single-word relation) or `- href — note`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RelatedItem {
+    /// The link text of the `[Title](href)` form; absent for a bare path.
+    pub title: Option<String>,
+    /// The target as authored (a repo path or a URL); a `javascript:` /
+    /// `data:` / `vbscript:` scheme is replaced by `#` at parse time.
+    pub href: String,
+    /// The relationship word or note (`produces`, `references`, `supersedes`,
+    /// or a free sentence after the dash).
+    pub relation: Option<String>,
+}
+
+/// One entry of a `Timeline` block (0.25.0): `- when — label` or
+/// `- when: label` (bold markers around `when` are stripped), grouped under
+/// the last `## heading` line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimelineEntry {
+    /// The date or time as authored; absent for a bare `- label` line.
+    pub when: Option<String>,
+    pub label: String,
+    /// The `## heading` the entry sits under, if any.
+    pub group: Option<String>,
+}
+
+/// One logo of a `LogoCloud` block (0.25.0): `- src`, `- src | Name` or
+/// `- [Name](src)`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogoItem {
+    pub src: String,
+    /// The name shown as the image's alt text and the degradation's list
+    /// item; absent means the renderer derives one from the file name.
+    pub name: Option<String>,
+}
+
+/// The resolved role of a `Turn`: the authored `role=` (`human`, `ai`,
+/// `system` and their synonyms), else inferred from the participant name —
+/// an assistant, model or bot name reads as `ai`, `system` as `system`,
+/// everything else as `human`. Every renderer and the native converter go
+/// through this one function, so the badge, the CSS tag and the FFI agree.
+pub fn turn_role(participant: &str, role: Option<&str>) -> &'static str {
+    let authored = role.map(|r| r.trim().to_ascii_lowercase());
+    match authored.as_deref() {
+        Some("ai") | Some("assistant") | Some("model") | Some("agent") | Some("bot") => return "ai",
+        Some("system") => return "system",
+        Some("human") | Some("user") | Some("person") => return "human",
+        _ => {}
+    }
+    let p = participant.trim().to_ascii_lowercase();
+    if p == "system" {
+        "system"
+    } else if matches!(
+        p.as_str(),
+        "claude" | "assistant" | "surfy" | "ai" | "agent" | "bot" | "model" | "gpt" | "chatgpt"
+            | "opus" | "sonnet" | "haiku" | "mako" | "gemini" | "copilot" | "llm"
+    ) {
+        "ai"
+    } else {
+        "human"
+    }
 }
 
 /// A question/answer pair within a `Faq` block.

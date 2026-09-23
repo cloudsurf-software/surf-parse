@@ -92,6 +92,29 @@ fn identity_site_blocks_hours_and_marquee() {
     assert_identity("site-blocks.surf");
 }
 
+/// 0.25.0: thirteen of the fourteen blocks that were planned until sessions
+/// 11 + 12 — every arm in render_dom.rs is a byte twin of its render_html
+/// arm, escaping included (an angle bracket in an output body, a quote in a
+/// verdict cell, a script-scheme href replaced by `#` at parse time).
+#[test]
+fn identity_the_planned_blocks() {
+    assert_identity("planned-blocks.surf");
+}
+
+/// The fourteenth, `::css`, is a `<style>` element with the author's text:
+/// a rawtext body the constructive path refuses to create, so the doc
+/// declines as script-emitting (typed `script-emitting:css`) while the
+/// native sink still serializes it byte-identically. A `</style>` inside
+/// the body is written as the CSS escape `<\/style>` on both paths.
+#[test]
+fn planned_css_declines_as_script_emitting_and_stays_identical() {
+    assert_identity_with_script_decline("planned-css.surf", "script-emitting:css");
+    let html = surf_parse::parse(&fixture("planned-css.surf")).doc.to_html_fragment();
+    assert!(html.contains("<style class=\"surfdoc-css\">"));
+    assert!(!html.contains("</style><script>"), "the body cannot close the element early:\n{html}");
+    assert!(html.contains("<\\/style><script>"), "the CSS escape form is what survives:\n{html}");
+}
+
 // -- the six thelove222 routes (census source) --------------------------------
 
 #[test]

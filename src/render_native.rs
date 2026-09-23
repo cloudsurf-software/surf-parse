@@ -7,9 +7,13 @@
 //! Action, Model, App, SegmentedControl, DropdownSelect), schema v8 the
 //! manifest's children and three widgets, and schema v9 the ten infra blocks
 //! of the app-format manifest (Concurrency, Crates, Dashboard,
-//! InfraDatabase, Deploy, DeployUrls, Domains, Editor, InfraEnv, Feed).
-//! Remaining web-only types (Unknown, Hours, Marquee, Health, Smoke,
-//! Volumes, Use) still degrade to their markdown equivalent.
+//! InfraDatabase, Deploy, DeployUrls, Domains, Editor, InfraEnv, Feed), and
+//! schema v10 the last twenty: the six web-only blocks that still degraded
+//! (Health, Hours, Marquee, Smoke, Use, Volumes) and the fourteen blocks
+//! that were `planned` until 0.25.0 (Related, Turn, Timeline, Output,
+//! AiGenerated, Alternatives, AiContext, Countdown, Css, Footnote, Kernel,
+//! LogoCloud, Subscribe, Notes). Only `Unknown` (and `Deck`, a config
+//! block) still degrade to a markdown string.
 //!
 //! # `NativeBlock` variant ledger
 //!
@@ -366,6 +370,71 @@
 //! - **`Feed`**
 //!   `::feed` — `source=` (validated; external arrives blank), `stream=`
 //!   (SSE vs polling). The kit streams nothing. v9.
+//! - **`Health`**
+//!   `::health` — `path=`, `method=`, `grace=`, `interval=`, `timeout=`;
+//!   attributes only, every one optional. Schema v10 (sessions 11 + 12, the
+//!   last twenty: the six web-only blocks and the fourteen planned ones).
+//! - **`Hours`**
+//!   `::hours` — `title=`, `timezone=` (an IANA name, never interpreted);
+//!   `rows` = one [`NativeHoursRow`] per authored weekday (`day` 0 = Sunday,
+//!   `opens`/`closes` in minutes since local midnight, `text` verbatim). The
+//!   block carries no clock — the client stamps "open now" itself. v10.
+//! - **`Marquee`**
+//!   `::marquee` — `items` = the ticker's lines. v10.
+//! - **`Smoke`**
+//!   `::smoke` — `script=`; `checks` = the `METHOD /path -> STATUS` body
+//!   lines ([`NativeSmokeCheck`]). v10.
+//! - **`Use`**
+//!   `::use` — `crates` = the `- name version [features]` body lines (or the
+//!   inline `::use[a, b]` names) as [`NativeCrateDep`]. Not `Crates`, which
+//!   is the app format's `::crates`. v10.
+//! - **`Volumes`**
+//!   `::volumes` — `entries` = the `name -> /mount` body lines
+//!   ([`NativeVolumeEntry`]). v10.
+//! - **`Related`**
+//!   `::related` — `items` = one [`NativeRelatedItem`] per line: `title`
+//!   (the `[Title](href)` form's text), `href`, `relation` (the word or note
+//!   after the dash, or the `relation:` prefix). v10.
+//! - **`Turn`**
+//!   `::turn` — `participant=`, `time=` (or `timestamp=`), `model=`; `role`
+//!   is RESOLVED (`human` / `ai` / `system` — `types::turn_role`, inferred
+//!   from the participant when not authored); `content` the turn's markdown.
+//!   v10.
+//! - **`Timeline`**
+//!   `::timeline` — `title=`; `entries` = [`NativeTimelineEntry`] rows
+//!   (`when`, `label`, `group` = the `## heading` above). v10.
+//! - **`Output`**
+//!   `::output` — `for_id` (the `for=` attribute; a keyword in Rust and in
+//!   Swift), `timestamp=`, `exit=`, `format=`; `content` verbatim. v10.
+//! - **`AiGenerated`**
+//!   `::ai-generated` — `model=`, `date=`, `reviewed=`; `content` the
+//!   generated markdown. v10.
+//! - **`Alternatives`**
+//!   `::alternatives` — `headers` and `rows` ([`NativeAlternativeRow`],
+//!   one `cells` list per row) of the authored pipe table; the client
+//!   colour-codes the verdict column (`Verdict` by name, else the last). v10.
+//! - **`AiContext`**
+//!   `::ai-context` — `model=`, `tokens=`, `loaded=`; `content` the note. v10.
+//! - **`Countdown`**
+//!   `::countdown` — `date=`, `label=`; no body. The client counts. v10.
+//! - **`Css`**
+//!   `::css` — `content` verbatim; the client applies nothing (the web's
+//!   escape hatch, carried so the explorer can show it). v10.
+//! - **`Footnote`**
+//!   `::footnote` — `id=`; `content` the citation's markdown. v10.
+//! - **`Kernel`**
+//!   `::kernel` — `lang=`, `env=`; `runtime`, `packages` (a list), `sandbox`
+//!   from body lines or attributes (body wins); `properties` = every other
+//!   `key: value` line ([`NativeStyleProperty`]). v10.
+//! - **`LogoCloud`**
+//!   `::logo-cloud` — `title=`; `items` = [`NativeLogoItem`] (`src`, `name`
+//!   optional — the client derives an alt from the file name). v10.
+//! - **`Subscribe`**
+//!   `::subscribe` — `action=`, `placeholder=`; `content` the pitch. The
+//!   client posts nothing itself. v10.
+//! - **`Notes`**
+//!   `::notes` standalone (a slide folds its own into `Slide.notes`) —
+//!   `content` verbatim. v10.
 
 use serde::{Deserialize, Serialize};
 
@@ -393,7 +462,7 @@ fn style_properties(properties: &[crate::types::StyleProperty]) -> Vec<NativeSty
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 102 native variants (pinned cross-platform by the
+// NativeBlock enum — 122 native variants (pinned cross-platform by the
 // SurfDocKit DispatchCoverageTests / Android NativeBlockCoverageTest census)
 //
 // HARD CAP (measured 0.22.0, S8; cleared 0.23.0, S9 lane 0): uniffi 0.28.3
@@ -1162,6 +1231,131 @@ pub enum NativeBlock {
 
     /// ::feed
     Feed { source: String, stream: bool },
+
+    // ── Schema v10 (0.25.0, sessions 11 + 12): the last twenty — the six
+    //    web-only blocks that still degraded, then the fourteen that were
+    //    planned until this release. ─────────────────────────────────────
+
+    /// ::health
+    Health {
+        path: Option<String>,
+        method: Option<String>,
+        grace: Option<String>,
+        interval: Option<String>,
+        timeout: Option<String>,
+    },
+
+    /// ::hours
+    Hours {
+        title: Option<String>,
+        timezone: Option<String>,
+        rows: Vec<NativeHoursRow>,
+    },
+
+    /// ::marquee
+    Marquee { items: Vec<String> },
+
+    /// ::smoke
+    Smoke {
+        script: Option<String>,
+        checks: Vec<NativeSmokeCheck>,
+    },
+
+    /// ::use
+    Use { crates: Vec<NativeCrateDep> },
+
+    /// ::volumes
+    Volumes { entries: Vec<NativeVolumeEntry> },
+
+    /// ::related
+    Related { items: Vec<NativeRelatedItem> },
+
+    /// ::turn
+    Turn {
+        participant: String,
+        time: Option<String>,
+        role: String,
+        model: Option<String>,
+        content: String,
+    },
+
+    /// ::timeline
+    Timeline {
+        title: Option<String>,
+        entries: Vec<NativeTimelineEntry>,
+    },
+
+    /// ::output
+    Output {
+        for_id: Option<String>,
+        timestamp: Option<String>,
+        exit: Option<i32>,
+        format: Option<String>,
+        content: String,
+    },
+
+    /// ::ai-generated
+    AiGenerated {
+        model: Option<String>,
+        date: Option<String>,
+        reviewed: bool,
+        content: String,
+    },
+
+    /// ::alternatives
+    Alternatives {
+        headers: Vec<String>,
+        rows: Vec<NativeAlternativeRow>,
+    },
+
+    /// ::ai-context
+    AiContext {
+        model: Option<String>,
+        tokens: Option<u32>,
+        loaded: bool,
+        content: String,
+    },
+
+    /// ::countdown
+    Countdown {
+        date: Option<String>,
+        label: Option<String>,
+    },
+
+    /// ::css
+    Css { content: String },
+
+    /// ::footnote
+    Footnote {
+        id: Option<String>,
+        content: String,
+    },
+
+    /// ::kernel
+    Kernel {
+        lang: Option<String>,
+        env: Option<String>,
+        runtime: Option<String>,
+        packages: Vec<String>,
+        sandbox: Option<String>,
+        properties: Vec<NativeStyleProperty>,
+    },
+
+    /// ::logo-cloud
+    LogoCloud {
+        title: Option<String>,
+        items: Vec<NativeLogoItem>,
+    },
+
+    /// ::subscribe
+    Subscribe {
+        action: Option<String>,
+        placeholder: Option<String>,
+        content: String,
+    },
+
+    /// ::notes
+    Notes { content: String },
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1627,6 +1821,98 @@ pub struct NativeEnvEntry {
     pub default_value: Option<String>,
 }
 
+/// One weekday row of a native `Hours` — `types::HoursRow` across the FFI.
+/// New in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeHoursRow {
+    /// Weekday index, `0` = Sunday … `6` = Saturday.
+    pub day: u8,
+    /// The day name exactly as authored ("Monday", "Mon").
+    pub label: String,
+    /// Opening time, minutes since local midnight; absent = closed.
+    pub opens: Option<u16>,
+    /// Closing time, minutes since local midnight; absent = closed.
+    pub closes: Option<u16>,
+    /// The authored right-hand text ("11am - 9pm", "Closed"), verbatim.
+    pub text: String,
+}
+
+/// One check of a native `Smoke` — a `METHOD /path -> STATUS` body line of
+/// `::smoke`. New in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeSmokeCheck {
+    pub method: String,
+    pub path: String,
+    /// The expected HTTP status.
+    pub expected: u16,
+}
+
+/// One dependency of a native `Use` — a `- name version [features]` body
+/// line of `::use`. Not `NativeCrateEntry`, which is `::crates`'s. New in
+/// schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeCrateDep {
+    pub name: String,
+    pub version: Option<String>,
+    pub features: Vec<String>,
+}
+
+/// One mount of a native `Volumes` — a `name -> /mount` body line of
+/// `::volumes`. New in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeVolumeEntry {
+    pub name: String,
+    pub mount: String,
+}
+
+/// One cross-reference of a native `Related` — `types::RelatedItem` across
+/// the FFI. New in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeRelatedItem {
+    /// The `[Title](href)` form's text; absent for a bare path.
+    pub title: Option<String>,
+    /// The target as authored (a script scheme already replaced by `#`).
+    pub href: String,
+    /// The relationship word or note.
+    pub relation: Option<String>,
+}
+
+/// One entry of a native `Timeline` — `types::TimelineEntry` across the
+/// FFI. New in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeTimelineEntry {
+    /// The date or time as authored; absent for a bare `- label`.
+    pub when: Option<String>,
+    pub label: String,
+    /// The `## heading` the entry sits under.
+    pub group: Option<String>,
+}
+
+/// One row of a native `Alternatives` table — the cells in header order
+/// (padded to the header count). A record rather than a nested list so
+/// every UniFFI target names it the same way. New in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeAlternativeRow {
+    pub cells: Vec<String>,
+}
+
+/// One logo of a native `LogoCloud` — `types::LogoItem` across the FFI. New
+/// in schema v10.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeLogoItem {
+    pub src: String,
+    /// The alt text and list name; absent means "derive it from the file".
+    pub name: Option<String>,
+}
+
 /// A single formatted entry within a native `Bibliography`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -2002,11 +2288,28 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// 4. `NativeBlock` is now a 103-variant enum (102 structural + `Markdown`).
 ///    Its docstrings stay in the module ledger (one line per variant inside
 ///    the enum, the UniFFI metadata buffer measured with room).
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 9;
+/// v10 (0.25.0) — the last twenty (S11 + S12 as one session; the program
+/// closes at 121 of 122 components, `::pane` absorbed by `SplitPane`):
+/// 1. The six web-only blocks that still degraded — `NativeBlock::Health`,
+///    `Smoke`, `Use`, `Volumes` (Chrome) and `Hours`, `Marquee` (Site).
+/// 2. The fourteen blocks that were `planned` in `spec/blocks.toml` until
+///    this release, now parsed, rendered on the web and crossing
+///    structurally — `Related`, `Turn`, `Timeline`, `Output`, `AiGenerated`,
+///    `Alternatives`, `AiContext`, `Footnote`, `Notes` (Content),
+///    `Countdown`, `LogoCloud`, `Subscribe` (Site), `Css`, `Kernel` (Chrome).
+/// 3. New records `NativeHoursRow`, `NativeSmokeCheck`, `NativeCrateDep`,
+///    `NativeVolumeEntry`, `NativeRelatedItem`, `NativeTimelineEntry`,
+///    `NativeAlternativeRow`, `NativeLogoItem`; `NativeStyleProperty` reused
+///    for the kernel's ledger.
+/// 4. `Turn.role` crosses RESOLVED (`human` / `ai` / `system`); `Output`'s
+///    `for=` crosses as `for_id` (a keyword on both sides of the FFI).
+/// 5. `NativeBlock` is now a 123-variant enum (122 structural + `Markdown`);
+///    only `Unknown` and `Deck` still convert to a `Markdown` string.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 10;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
-/// `NativeBlock` is a 103-variant enum, so `block_id`/`label` cannot be flat
+/// `NativeBlock` is a 123-variant enum, so `block_id`/`label` cannot be flat
 /// fields on it; the metadata rides beside the tree instead, indexed by the
 /// same `Span` byte extent the HTML renderer uses. Empty for a document that
 /// authored no `id=`/`label=`. New in schema v6.
@@ -3800,15 +4103,170 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             stream: *stream,
         },
 
-        // ── Markdown fallback: web-only / unsupported block types ───
+        // ── Schema v10: the last twenty ─────────────────────────────
 
-        Block::Unknown { .. }
-        | Block::Hours { .. }
-        | Block::Marquee { .. }
-        | Block::Health { .. }
-        | Block::Smoke { .. }
-        | Block::Volumes { .. }
-        | Block::Use { .. } => {
+        Block::Health { path, method, grace, interval, timeout, .. } => NativeBlock::Health {
+            path: path.clone(),
+            method: method.clone(),
+            grace: grace.clone(),
+            interval: interval.clone(),
+            timeout: timeout.clone(),
+        },
+
+        Block::Hours { title, timezone, rows, .. } => NativeBlock::Hours {
+            title: title.clone(),
+            timezone: timezone.clone(),
+            rows: rows
+                .iter()
+                .map(|r| NativeHoursRow {
+                    day: r.day,
+                    label: r.label.clone(),
+                    opens: r.opens,
+                    closes: r.closes,
+                    text: r.text.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Marquee { items, .. } => NativeBlock::Marquee { items: items.clone() },
+
+        Block::Smoke { script, checks, .. } => NativeBlock::Smoke {
+            script: script.clone(),
+            checks: checks
+                .iter()
+                .map(|c| NativeSmokeCheck {
+                    method: c.method.clone(),
+                    path: c.path.clone(),
+                    expected: c.expected,
+                })
+                .collect(),
+        },
+
+        Block::Use { crates, .. } => NativeBlock::Use {
+            crates: crates
+                .iter()
+                .map(|c| NativeCrateDep {
+                    name: c.name.clone(),
+                    version: c.version.clone(),
+                    features: c.features.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Volumes { entries, .. } => NativeBlock::Volumes {
+            entries: entries
+                .iter()
+                .map(|v| NativeVolumeEntry { name: v.name.clone(), mount: v.mount.clone() })
+                .collect(),
+        },
+
+        Block::Related { items, .. } => NativeBlock::Related {
+            items: items
+                .iter()
+                .map(|i| NativeRelatedItem {
+                    title: i.title.clone(),
+                    href: i.href.clone(),
+                    relation: i.relation.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Turn { participant, time, role, model, content, .. } => NativeBlock::Turn {
+            participant: participant.clone(),
+            time: time.clone(),
+            role: crate::types::turn_role(participant, role.as_deref()).to_string(),
+            model: model.clone(),
+            content: content.clone(),
+        },
+
+        Block::Timeline { title, entries, .. } => NativeBlock::Timeline {
+            title: title.clone(),
+            entries: entries
+                .iter()
+                .map(|e| NativeTimelineEntry {
+                    when: e.when.clone(),
+                    label: e.label.clone(),
+                    group: e.group.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Output { for_id, timestamp, exit, format, content, .. } => NativeBlock::Output {
+            for_id: for_id.clone(),
+            timestamp: timestamp.clone(),
+            exit: *exit,
+            format: format.clone(),
+            content: content.clone(),
+        },
+
+        Block::AiGenerated { model, date, reviewed, content, .. } => NativeBlock::AiGenerated {
+            model: model.clone(),
+            date: date.clone(),
+            reviewed: *reviewed,
+            content: content.clone(),
+        },
+
+        Block::Alternatives { headers, rows, .. } => NativeBlock::Alternatives {
+            headers: headers.clone(),
+            rows: rows
+                .iter()
+                .map(|r| {
+                    let mut cells = r.clone();
+                    while cells.len() < headers.len() {
+                        cells.push(String::new());
+                    }
+                    NativeAlternativeRow { cells }
+                })
+                .collect(),
+        },
+
+        Block::AiContext { model, tokens, loaded, content, .. } => NativeBlock::AiContext {
+            model: model.clone(),
+            tokens: *tokens,
+            loaded: *loaded,
+            content: content.clone(),
+        },
+
+        Block::Countdown { date, label, .. } => NativeBlock::Countdown {
+            date: date.clone(),
+            label: label.clone(),
+        },
+
+        Block::Css { content, .. } => NativeBlock::Css { content: content.clone() },
+
+        Block::Footnote { id, content, .. } => NativeBlock::Footnote {
+            id: id.clone(),
+            content: content.clone(),
+        },
+
+        Block::Kernel { lang, env, runtime, packages, sandbox, properties, .. } => NativeBlock::Kernel {
+            lang: lang.clone(),
+            env: env.clone(),
+            runtime: runtime.clone(),
+            packages: packages.clone(),
+            sandbox: sandbox.clone(),
+            properties: style_properties(properties),
+        },
+
+        Block::LogoCloud { title, items, .. } => NativeBlock::LogoCloud {
+            title: title.clone(),
+            items: items
+                .iter()
+                .map(|i| NativeLogoItem { src: i.src.clone(), name: i.name.clone() })
+                .collect(),
+        },
+
+        Block::Subscribe { action, placeholder, content, .. } => NativeBlock::Subscribe {
+            action: action.clone(),
+            placeholder: placeholder.clone(),
+            content: content.clone(),
+        },
+
+        Block::Notes { content, .. } => NativeBlock::Notes { content: content.clone() },
+
+        // ── Markdown fallback: the one untyped block ─────────────────
+
+        Block::Unknown { .. } => {
             let md = render_md::render_block(block);
             NativeBlock::Markdown { content: md }
         }
@@ -4094,7 +4552,17 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Action { .. }
         | Block::Model { .. }
         // Schema v8: a schema is a definition table, like a model.
-        | Block::Schema { .. } => BlockTier::Content,
+        | Block::Schema { .. }
+        // Schema v10: the reader's annotations and references.
+        | Block::Related { .. }
+        | Block::Turn { .. }
+        | Block::Timeline { .. }
+        | Block::Output { .. }
+        | Block::AiGenerated { .. }
+        | Block::Alternatives { .. }
+        | Block::AiContext { .. }
+        | Block::Footnote { .. }
+        | Block::Notes { .. } => BlockTier::Content,
 
         // ── Tier 2: site/marketing ───────────────────────────────────
         Block::Hero { .. }
@@ -4129,7 +4597,13 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Logo { .. }
         // Schema v8: the two site widgets.
         | Block::Booking { .. }
-        | Block::Store { .. } => BlockTier::Site,
+        | Block::Store { .. }
+        // Schema v10: the 0.21.0 site pair and the three marketing leaves.
+        | Block::Hours { .. }
+        | Block::Marquee { .. }
+        | Block::Countdown { .. }
+        | Block::LogoCloud { .. }
+        | Block::Subscribe { .. } => BlockTier::Site,
 
         // ── Tier 3: app chrome ───────────────────────────────────────
         Block::AppShell { .. }
@@ -4187,16 +4661,17 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Domains { .. }
         | Block::Editor { .. }
         | Block::InfraEnv { .. }
-        | Block::Feed { .. } => BlockTier::Chrome,
-
-        // ── Tier 4: explicit markdown degradation ────────────────────
-        Block::Unknown { .. }
-        | Block::Hours { .. }
-        | Block::Marquee { .. }
+        | Block::Feed { .. }
+        // Schema v10: the last manifest facts and the two utility blocks.
         | Block::Health { .. }
         | Block::Smoke { .. }
         | Block::Volumes { .. }
         | Block::Use { .. }
+        | Block::Css { .. }
+        | Block::Kernel { .. } => BlockTier::Chrome,
+
+        // ── Tier 4: explicit markdown degradation ────────────────────
+        Block::Unknown { .. }
         // ::deck is presentation config; produces no native content.
         | Block::Deck { .. } => BlockTier::Degraded,
     }
@@ -4543,7 +5018,27 @@ mod tests {
 ::domains\nsurf.space (the product)\n::\n
 ::editor[source=/docs/readme.surf lang=surfdoc]\n::\n
 ::env[tier=required]\nDATABASE_URL\n::\n
-::feed[source=/api/events stream=true]\n::\n";
+::feed[source=/api/events stream=true]\n::\n
+::health[path=/healthz method=GET]\n::\n
+::hours[title=Hours]\nMonday: 9am - 5pm\n::\n
+::marquee\n- Fresh daily\n::\n
+::smoke\nGET /healthz -> 200\n::\n
+::use\n- reqwest 0.12 [json]\n::\n
+::volumes\ndata -> /data\n::\n
+::related\n- [Plan](plans/plan.md) \u{2014} produces\n::\n
+::turn[participant=claude]\nYes.\n::\n
+::timeline\n- 2026-01 \u{2014} Beta\n::\n
+::output[for=analysis exit=0]\nok\n::\n
+::ai-generated[model=opus]\nMaybe.\n::\n
+::alternatives\n| Option | Verdict |\n|---|---|\n| A | Selected |\n::\n
+::ai-context[model=opus tokens=10]\nNote.\n::\n
+::countdown[date=2026-03-15 label=Launch]\n::\n
+::css\n.x { color: red; }\n::\n
+::footnote[id=1]\nA source.\n::\n
+::kernel[lang=python]\nruntime: python3.12\n::\n
+::logo-cloud[title=Trusted]\n- assets/acme.svg\n::\n
+::subscribe[action=/subscribe]\nJoin.\n::\n
+::notes\nPause.\n::\n";
         let result = crate::parse(source);
         let mut saw_degraded = false;
         let mut saw_structured = false;
@@ -5198,6 +5693,258 @@ mod tests {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Schema v10 (S11 + S12): the last twenty. One test per variant,
+    // parsed from real source, so the parser and the arm are pinned
+    // together; the six web-only ones were Markdown strings before.
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn health_converts_structurally() {
+        match convert_first("::health[path=/healthz method=GET grace=10s interval=30s timeout=5s]\n::\n") {
+            NativeBlock::Health { path, method, grace, interval, timeout } => {
+                assert_eq!(path.as_deref(), Some("/healthz"));
+                assert_eq!(method.as_deref(), Some("GET"));
+                assert_eq!(grace.as_deref(), Some("10s"));
+                assert_eq!(interval.as_deref(), Some("30s"));
+                assert_eq!(timeout.as_deref(), Some("5s"));
+            }
+            other => panic!("expected Health, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hours_converts_structurally_with_minutes() {
+        match convert_first("::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\nMonday: 11am - 9pm\nSunday: Closed\n::\n") {
+            NativeBlock::Hours { title, timezone, rows } => {
+                assert_eq!(title.as_deref(), Some("Hours"));
+                assert_eq!(timezone.as_deref(), Some("America/Los_Angeles"));
+                assert_eq!(rows.len(), 2);
+                assert_eq!(rows[0].day, 1);
+                assert_eq!(rows[0].label, "Monday");
+                assert_eq!(rows[0].opens, Some(11 * 60));
+                assert_eq!(rows[0].closes, Some(21 * 60));
+                assert_eq!(rows[0].text, "11am - 9pm");
+                assert_eq!(rows[1].day, 0);
+                assert_eq!(rows[1].opens, None, "a closed day carries no minutes");
+                assert_eq!(rows[1].text, "Closed");
+            }
+            other => panic!("expected Hours, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn marquee_smoke_use_and_volumes_convert_structurally() {
+        match convert_first("::marquee\n- Fresh daily\n- Open late\n::\n") {
+            NativeBlock::Marquee { items } => assert_eq!(items, vec!["Fresh daily", "Open late"]),
+            other => panic!("expected Marquee, got {other:?}"),
+        }
+        match convert_first("::smoke[script=/smoke.sh]\nGET /healthz -> 200\nPOST /api/x -> 201\n::\n") {
+            NativeBlock::Smoke { script, checks } => {
+                assert_eq!(script.as_deref(), Some("/smoke.sh"));
+                assert_eq!(checks, vec![
+                    NativeSmokeCheck { method: "GET".into(), path: "/healthz".into(), expected: 200 },
+                    NativeSmokeCheck { method: "POST".into(), path: "/api/x".into(), expected: 201 },
+                ]);
+            }
+            other => panic!("expected Smoke, got {other:?}"),
+        }
+        match convert_first("::use\n- reqwest 0.12 [json, rustls-tls]\n- lettre\n::\n") {
+            NativeBlock::Use { crates } => {
+                assert_eq!(crates, vec![
+                    NativeCrateDep { name: "reqwest".into(), version: Some("0.12".into()), features: vec!["json".into(), "rustls-tls".into()] },
+                    NativeCrateDep { name: "lettre".into(), version: None, features: vec![] },
+                ]);
+            }
+            other => panic!("expected Use, got {other:?}"),
+        }
+        match convert_first("::volumes\ndata -> /data\ncache -> /var/cache\n::\n") {
+            NativeBlock::Volumes { entries } => {
+                assert_eq!(entries, vec![
+                    NativeVolumeEntry { name: "data".into(), mount: "/data".into() },
+                    NativeVolumeEntry { name: "cache".into(), mount: "/var/cache".into() },
+                ]);
+            }
+            other => panic!("expected Volumes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn related_converts_structurally() {
+        match convert_first("::related\n- [Architecture Plan](plans/plan.md) \u{2014} produces\n- consumes: research/FINDINGS.md\n- plans/wiki.md\n::\n") {
+            NativeBlock::Related { items } => {
+                assert_eq!(items, vec![
+                    NativeRelatedItem { title: Some("Architecture Plan".into()), href: "plans/plan.md".into(), relation: Some("produces".into()) },
+                    NativeRelatedItem { title: None, href: "research/FINDINGS.md".into(), relation: Some("consumes".into()) },
+                    NativeRelatedItem { title: None, href: "plans/wiki.md".into(), relation: None },
+                ]);
+            }
+            other => panic!("expected Related, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn turn_converts_with_a_resolved_role() {
+        match convert_first("::turn[participant=claude time=2026-02-10T04:01Z model=opus]\nYes \u{2014} file before launch.\n::\n") {
+            NativeBlock::Turn { participant, time, role, model, content } => {
+                assert_eq!(participant, "claude");
+                assert_eq!(time.as_deref(), Some("2026-02-10T04:01Z"));
+                assert_eq!(role, "ai", "inferred from the participant");
+                assert_eq!(model.as_deref(), Some("opus"));
+                assert_eq!(content, "Yes \u{2014} file before launch.");
+            }
+            other => panic!("expected Turn, got {other:?}"),
+        }
+        match convert_first("::turn[participant=brady role=human]\nShould we?\n::\n") {
+            NativeBlock::Turn { role, .. } => assert_eq!(role, "human"),
+            other => panic!("expected Turn, got {other:?}"),
+        }
+        match convert_first("::turn[participant=user timestamp=2026-02-22]\nCan you?\n::\n") {
+            NativeBlock::Turn { role, time, .. } => {
+                assert_eq!(role, "human");
+                assert_eq!(time.as_deref(), Some("2026-02-22"), "timestamp= reads as time=");
+            }
+            other => panic!("expected Turn, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn timeline_converts_structurally() {
+        match convert_first("::timeline[title=\"Product Milestones\"]\n## Q1 2026\n- 2026-01: TaskSurf beta\n- 18:30 \u{2014} Deploy Build #38\n::\n") {
+            NativeBlock::Timeline { title, entries } => {
+                assert_eq!(title.as_deref(), Some("Product Milestones"));
+                assert_eq!(entries, vec![
+                    NativeTimelineEntry { when: Some("2026-01".into()), label: "TaskSurf beta".into(), group: Some("Q1 2026".into()) },
+                    NativeTimelineEntry { when: Some("18:30".into()), label: "Deploy Build #38".into(), group: Some("Q1 2026".into()) },
+                ]);
+            }
+            other => panic!("expected Timeline, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn output_ai_generated_and_ai_context_convert_structurally() {
+        match convert_first("::output[for=analysis timestamp=\"2026-02-10T12:00:00Z\" exit=0 format=text]\nMean: $12,000\n::\n") {
+            NativeBlock::Output { for_id, timestamp, exit, format, content } => {
+                assert_eq!(for_id.as_deref(), Some("analysis"));
+                assert_eq!(timestamp.as_deref(), Some("2026-02-10T12:00:00Z"));
+                assert_eq!(exit, Some(0));
+                assert_eq!(format.as_deref(), Some("text"));
+                assert_eq!(content, "Mean: $12,000");
+            }
+            other => panic!("expected Output, got {other:?}"),
+        }
+        match convert_first("::ai-generated[model=claude-opus-4 date=2026-02-10 reviewed=false]\nThis analysis suggests growth.\n::\n") {
+            NativeBlock::AiGenerated { model, date, reviewed, content } => {
+                assert_eq!(model.as_deref(), Some("claude-opus-4"));
+                assert_eq!(date.as_deref(), Some("2026-02-10"));
+                assert!(!reviewed);
+                assert_eq!(content, "This analysis suggests growth.");
+            }
+            other => panic!("expected AiGenerated, got {other:?}"),
+        }
+        match convert_first("::ai-context[model=opus tokens=2400 loaded=true]\nHow much context was available.\n::\n") {
+            NativeBlock::AiContext { model, tokens, loaded, content } => {
+                assert_eq!(model.as_deref(), Some("opus"));
+                assert_eq!(tokens, Some(2400));
+                assert!(loaded);
+                assert_eq!(content, "How much context was available.");
+            }
+            other => panic!("expected AiContext, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn alternatives_converts_with_padded_rows() {
+        match convert_first("::alternatives\n| Option | Pros | Verdict |\n|---|---|---|\n| GTK4 | 5MB | **Selected** |\n| Tauri | 8MB |\n::\n") {
+            NativeBlock::Alternatives { headers, rows } => {
+                assert_eq!(headers, vec!["Option", "Pros", "Verdict"]);
+                assert_eq!(rows.len(), 2);
+                assert_eq!(rows[0].cells, vec!["GTK4", "5MB", "**Selected**"]);
+                assert_eq!(rows[1].cells, vec!["Tauri", "8MB", ""], "a short row is padded to the headers");
+            }
+            other => panic!("expected Alternatives, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn countdown_css_footnote_and_notes_convert_structurally() {
+        match convert_first("::countdown[date=2026-03-15 label=\"Launch day\"]\n::\n") {
+            NativeBlock::Countdown { date, label } => {
+                assert_eq!(date.as_deref(), Some("2026-03-15"));
+                assert_eq!(label.as_deref(), Some("Launch day"));
+            }
+            other => panic!("expected Countdown, got {other:?}"),
+        }
+        match convert_first("::css\n.custom-thing { border: 2px dashed red; }\n::\n") {
+            NativeBlock::Css { content } => assert_eq!(content, ".custom-thing { border: 2px dashed red; }"),
+            other => panic!("expected Css, got {other:?}"),
+        }
+        match convert_first("::footnote[id=1]\nGartner, 2025. Tier 1 source.\n::\n") {
+            NativeBlock::Footnote { id, content } => {
+                assert_eq!(id.as_deref(), Some("1"));
+                assert_eq!(content, "Gartner, 2025. Tier 1 source.");
+            }
+            other => panic!("expected Footnote, got {other:?}"),
+        }
+        match convert_first("::notes\nPause here.\n::\n") {
+            NativeBlock::Notes { content } => assert_eq!(content, "Pause here."),
+            other => panic!("expected Notes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn kernel_logo_cloud_and_subscribe_convert_structurally() {
+        match convert_first("::kernel[lang=python env=analysis]\n  runtime: python3.12\n  packages: [numpy, pandas]\n  sandbox: strict\n  memory: 2gb\n::\n") {
+            NativeBlock::Kernel { lang, env, runtime, packages, sandbox, properties } => {
+                assert_eq!(lang.as_deref(), Some("python"));
+                assert_eq!(env.as_deref(), Some("analysis"));
+                assert_eq!(runtime.as_deref(), Some("python3.12"));
+                assert_eq!(packages, vec!["numpy", "pandas"]);
+                assert_eq!(sandbox.as_deref(), Some("strict"));
+                assert_eq!(properties, vec![NativeStyleProperty { key: "memory".into(), value: "2gb".into() }]);
+            }
+            other => panic!("expected Kernel, got {other:?}"),
+        }
+        match convert_first("::logo-cloud[title=\"Trusted by\"]\n- assets/logos/acme.svg\n- assets/logos/initech.svg | Initech\n::\n") {
+            NativeBlock::LogoCloud { title, items } => {
+                assert_eq!(title.as_deref(), Some("Trusted by"));
+                assert_eq!(items, vec![
+                    NativeLogoItem { src: "assets/logos/acme.svg".into(), name: None },
+                    NativeLogoItem { src: "assets/logos/initech.svg".into(), name: Some("Initech".into()) },
+                ]);
+            }
+            other => panic!("expected LogoCloud, got {other:?}"),
+        }
+        match convert_first("::subscribe[action=https://api.example.com/newsletter placeholder=\"you@email.com\"]\nGet notified when we launch.\n::\n") {
+            NativeBlock::Subscribe { action, placeholder, content } => {
+                assert_eq!(action.as_deref(), Some("https://api.example.com/newsletter"));
+                assert_eq!(placeholder.as_deref(), Some("you@email.com"));
+                assert_eq!(content, "Get notified when we launch.");
+            }
+            other => panic!("expected Subscribe, got {other:?}"),
+        }
+    }
+
+    /// Schema v10: nothing but an unknown directive (and a deck) degrades.
+    #[test]
+    fn only_unknown_and_deck_degrade_at_schema_v10() {
+        for src in [
+            "::health[path=/healthz]\n::\n",
+            "::hours\nMonday: 9am - 5pm\n::\n",
+            "::marquee\n- a\n::\n",
+            "::smoke\nGET / -> 200\n::\n",
+            "::use\n- serde\n::\n",
+            "::volumes\ndata -> /data\n::\n",
+        ] {
+            let block = &crate::parse(src).doc.blocks[0];
+            assert_ne!(block_tier(block), BlockTier::Degraded, "{src}");
+            assert!(!matches!(convert_block(block, 0), NativeBlock::Markdown { .. }), "{src}");
+        }
+        let unknown = &crate::parse("::hologram\nx\n::\n").doc.blocks[0];
+        assert_eq!(block_tier(unknown), BlockTier::Degraded);
+    }
+
     #[test]
     fn feed_converts_structurally() {
         match convert_first("::feed[source=/api/events stream=true]\n::\n") {
@@ -5401,7 +6148,7 @@ mod tests {
             "::app[name=demo]\n::auth[provider=email]\n::\n::build[base=rust]\n::\n::\n".to_string(),
         )
         .expect("parses");
-        assert_eq!(doc.schema_version, 9);
+        assert_eq!(doc.schema_version, NATIVE_DOC_SCHEMA_VERSION);
         match &doc.blocks[0] {
             NativeBlock::App { children, .. } => {
                 assert!(matches!(children[0], NativeBlock::Auth { .. }));
@@ -5420,7 +6167,7 @@ mod tests {
             "::app[name=demo]\n::deploy[env=production]\n::\n::domains\ndemo.surf.space\n::\n::\n".to_string(),
         )
         .expect("parses");
-        assert_eq!(doc.schema_version, 9);
+        assert_eq!(doc.schema_version, NATIVE_DOC_SCHEMA_VERSION);
         match &doc.blocks[0] {
             NativeBlock::App { children, .. } => {
                 assert!(matches!(children[0], NativeBlock::Deploy { .. }));
@@ -6996,8 +7743,10 @@ mod tests {
         // 0.18: the size-class axis + the FFI holes it closed — schema v5.
         // 0.22: the eight web-only blocks — schema v7. 0.23: the last ten
         // with measured use (the manifest's children) — schema v8. 0.24: the
-        // ten infra blocks of the app format — schema v9.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 9);
+        // ten infra blocks of the app format — schema v9. 0.25: the last
+        // twenty (the six web-only blocks and the fourteen that were
+        // planned) — schema v10; every registered block crosses.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 10);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

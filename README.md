@@ -16,16 +16,17 @@ let config = surf_parse::PageConfig::default();
 let html = result.doc.to_html_page(&config);
 ```
 
-## Block Types (122 registered · 108 implemented)
+## Block Types (122 registered · 122 implemented)
 
-The registry (`spec/blocks.toml`) is the authority: 122 directives, 108 of them
-implemented (107 `Block` variants — `::split-pane` and `::pane` share one), 14
-still planned. The implemented variants:
+The registry (`spec/blocks.toml`) is the authority: 122 directives, every one
+implemented since 0.25.0 (121 `Block` variants — `::split-pane` and `::pane`
+share one). The implemented variants:
 
-**Core**: Callout, Code, Data, Decision, Details, Diagram, Figure, Metric, Quote, Summary, Tasks
+**Core**: Callout, Code, Data, Decision, Details, Diagram, Figure, Footnote, Metric, Notes, Quote, Related, Summary, Tasks, Turn
 **Citations**: Cite, Bibliography
 **Layout**: Columns, Divider, Section, Tabs
-**Web**: Banner, BeforeAfter, Comparison, Cta, Embed, Faq, Features, Footer, Form, Gallery, Gate, Hero, HeroImage, Hours, Logo, Marquee, Nav, Pipeline, PostGrid, PricingTable, ProductCard, ProductGrid, Site, Page, Stats, Steps, Style, Testimonial, Toc
+**Web**: Banner, BeforeAfter, Comparison, Countdown, Cta, Embed, Faq, Features, Footer, Form, Gallery, Gate, Hero, HeroImage, Hours, Logo, LogoCloud, Marquee, Nav, Pipeline, PostGrid, PricingTable, ProductCard, ProductGrid, Site, Page, Stats, Steps, Style, Subscribe, Testimonial, Toc
+**Data / annotations**: Alternatives, Timeline, Output, Kernel, AiGenerated, AiContext, Css
 **App Description**: Action, Board, Booking, ChatInput, Dashboard, Feed, FilterBar, List, Search, Store
 **Compound Widgets**: Chart, Editor, SplitPane
 **Infrastructure Manifest**: App, Auth, Binding, Build, Cicd, Concurrency, Crates, Deploy, DeployUrls, Domains, Health, InfraDatabase, InfraEnv, Model, Route, Schema, Smoke, Use, Volumes
@@ -39,7 +40,7 @@ still planned. The implemented variants:
 
 - CommonMark-compatible inline text rendering
 - YAML front matter parsing
-- 108 implemented block directives (of 122 registered) with attribute parsing
+- 122 implemented block directives (every registered one) with attribute parsing
 - Renderers: HTML (with embedded CSS), markdown degradation, LaTeX, Typst, ANSI terminal, slides, native block tree (feature `native`), PDF (feature `pdf`)
 - Bindings: UniFFI (feature `uniffi`) and WASM (feature `wasm`)
 - `surf-lint` CLI (feature `cli`) — format/style lint with auto-fixes
