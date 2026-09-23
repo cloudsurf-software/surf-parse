@@ -3,6 +3,62 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.24.0 — 2026-09-22 (native schema v9: the ten infra blocks of the app format)
+
+### Added
+
+- **Ten new `NativeBlock` variants — schema v9** (session 10 of the blocks
+  program, the third FFI session and the first of the tail: these ten are
+  used by no document in the company's corpus yet — they are the app-format
+  manifest's remaining children, and every one crossed as a `Markdown`
+  string before):
+  - **`Concurrency { concurrency_type, hard_limit, soft_limit, force_https }`**
+    — `::concurrency` (attributes only; `type=` crosses as `concurrency_type`).
+  - **`Crates { entries }`** — `::crates`, via the new
+    `NativeCrateEntry { name, source, features }` (the paren grammar of
+    `parse_crates`: `github:`/`source:`, `features:`, `branch:` folded into
+    the source).
+  - **`Dashboard { source, refresh }`** — `::dashboard`; `source=` through
+    `validate_source_path` (an external target arrives blank).
+  - **`InfraDatabase { name, shared_auth, volume_gb, properties }`** —
+    `::database`; the `key: value` body lines over `NativeStyleProperty`.
+    The Rust name keeps the parser's `Infra` prefix; the serde tag is the
+    spec's `database`.
+  - **`Deploy { env, app, machines, memory, auto_stop, min_machines,
+    strategy, properties }`** — `::deploy` (not `::app-deploy`, which stays
+    `AppDeploy`); the body lines over `NativeStyleProperty`.
+  - **`DeployUrls { entries }`** — `::deploy-urls` / `::deploy_urls`; each
+    `env: url` line as a `NativeStyleProperty` (key = env, value = url).
+  - **`Domains { entries }`** — `::domains`, via the new
+    `NativeDomainEntry { domain, description }`.
+  - **`Editor { source, lang, preview }`** — `::editor`, the editor mount
+    point (not `CodeEditor` / `BlockEditor`); `source=` validated.
+  - **`InfraEnv { tier, entries }`** — `::env`, via the new
+    `NativeEnvEntry { name, default_value }` (`NAME=default` or a bare
+    `NAME`; not `::app-env`'s `NativeEnvVar`). The serde tag is the spec's
+    `env`.
+  - **`Feed { source, stream }`** — `::feed`; `source=` validated, `stream`
+    = SSE vs polling.
+- `block_tier`: all ten → Chrome. Every infra block the spec names inside an
+  `::app` is structural now; only `unknown`, `hours`, `marquee`, `health`,
+  `smoke`, `volumes`, `use` and `deck` stay Degraded.
+- `NATIVE_DOC_SCHEMA_VERSION` 8 → 9. `NativeBlock` is a 103-variant enum.
+  The enum's docstrings stay one line per variant (1,889 bytes inside the
+  enum, measured; `cargo check --features uniffi` clean — the 16 KiB
+  metadata buffer still has room).
+
+### Tests
+
+- The tier fixture covers the ten (`::deck` stays the Degraded probe); one
+  conversion test per variant from real source (the crates and domains paren
+  grammars, `NAME=default`, the validated sources, the underscored
+  `::deploy_urls`); `infra_children_are_structural_at_schema_v9`; the serde
+  tags of the two `Infra` variants; a uniffi-gated end-to-end through
+  `parse_to_native`; the `tier4-manifest` native snapshot regenerated
+  (`::deploy[target=fly]` serializes structurally with every fact absent —
+  `target=` is not an attribute the parser reads; the HTML snapshot is
+  byte-identical, the web renderer is untouched).
+
 ## 0.23.0 — 2026-09-22 (native schema v8: the last ten blocks with measured use)
 
 ### Added

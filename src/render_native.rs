@@ -4,9 +4,12 @@
 //! across the FFI boundary. Wavesite-specific block types (Site, Page, Nav,
 //! HeroImage, Footer, Embed, PricingTable) are now native, and schema v7
 //! added the last eight that were borrowed or degraded (Style, Logo, Route,
-//! Action, Model, App, SegmentedControl, DropdownSelect). Remaining web-only
-//! types (Unknown and the build/infra manifest blocks) still degrade to their
-//! markdown equivalent.
+//! Action, Model, App, SegmentedControl, DropdownSelect), schema v8 the
+//! manifest's children and three widgets, and schema v9 the ten infra blocks
+//! of the app-format manifest (Concurrency, Crates, Dashboard,
+//! InfraDatabase, Deploy, DeployUrls, Domains, Editor, InfraEnv, Feed).
+//! Remaining web-only types (Unknown, Hours, Marquee, Health, Smoke,
+//! Volumes, Use) still degrade to their markdown equivalent.
 //!
 //! # `NativeBlock` variant ledger
 //!
@@ -324,6 +327,45 @@
 //! - **`Cicd`**
 //!   `::cicd` — `provider=`; `properties` = the `key: value` body lines
 //!   ([`NativeStyleProperty`]). v8.
+//! - **`Concurrency`**
+//!   `::concurrency` — `type=` (crossing as `concurrency_type`),
+//!   `hard_limit=`, `soft_limit=`, `force_https=`; attributes only, no
+//!   body. Schema v9 (session 10, the tail: the ten web-only infra blocks of
+//!   the app-format manifest that no document uses yet).
+//! - **`Crates`**
+//!   `::crates` — `entries` = the `name (github: owner/repo, features: a b,
+//!   branch: x)` or bare `name` body lines ([`NativeCrateEntry`]; the
+//!   parser folds `branch:` and a bare continuation into `source`). v9.
+//! - **`Dashboard`**
+//!   `::dashboard` — `source=` (through `validate_source_path`; an external
+//!   target arrives blank), `refresh=` in seconds. The kit polls nothing. v9.
+//! - **`InfraDatabase`**
+//!   `::database` — `name=`, `shared_auth=`, `volume_gb=`; `properties` =
+//!   the `key: value` body lines ([`NativeStyleProperty`]). The Rust name
+//!   keeps the parser's `Infra` prefix (grep-able against
+//!   `Block::InfraDatabase`); the serde tag is the spec's `database`. v9.
+//! - **`Deploy`**
+//!   `::deploy` — `env=`, `app=`, `machines=`, `memory=` (MB), `auto_stop=`,
+//!   `min_machines=`, `strategy=`; `properties` = the `key: value` body
+//!   lines ([`NativeStyleProperty`]). NOT `::app-deploy`, which is
+//!   `AppDeploy`. v9.
+//! - **`DeployUrls`**
+//!   `::deploy-urls` — `entries` = the `env: url` body lines
+//!   ([`NativeStyleProperty`], key = env, value = url); no attributes. v9.
+//! - **`Domains`**
+//!   `::domains` — `entries` = the `domain (description)` or bare domain
+//!   body lines ([`NativeDomainEntry`]); no attributes. v9.
+//! - **`Editor`**
+//!   `::editor` — `source=` (validated; external arrives absent), `lang=`,
+//!   `preview=`. The editor MOUNT POINT of the app format — not
+//!   `CodeEditor` or `BlockEditor`, which are the two editors. v9.
+//! - **`InfraEnv`**
+//!   `::env` — `tier=`; `entries` = the `NAME=default` or bare `NAME` body
+//!   lines ([`NativeEnvEntry`]). NOT `::app-env`, which is `AppEnv` over
+//!   [`NativeEnvVar`]. The serde tag is the spec's `env`. v9.
+//! - **`Feed`**
+//!   `::feed` — `source=` (validated; external arrives blank), `stream=`
+//!   (SSE vs polling). The kit streams nothing. v9.
 
 use serde::{Deserialize, Serialize};
 
@@ -338,8 +380,20 @@ use crate::types::{
 /// At this depth, nested sections fall back to Markdown.
 const MAX_SECTION_DEPTH: u32 = 8;
 
+/// The parser's `key: value` lines as the v7 key/value record — the three
+/// v9 ledgers (`::database`, `::deploy`, `::deploy-urls`) share it.
+fn style_properties(properties: &[crate::types::StyleProperty]) -> Vec<NativeStyleProperty> {
+    properties
+        .iter()
+        .map(|p| NativeStyleProperty {
+            key: p.key.clone(),
+            value: p.value.clone(),
+        })
+        .collect()
+}
+
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 92 native variants (pinned cross-platform by the
+// NativeBlock enum — 102 native variants (pinned cross-platform by the
 // SurfDocKit DispatchCoverageTests / Android NativeBlockCoverageTest census)
 //
 // HARD CAP (measured 0.22.0, S8; cleared 0.23.0, S9 lane 0): uniffi 0.28.3
@@ -1044,6 +1098,70 @@ pub enum NativeBlock {
         provider: Option<String>,
         properties: Vec<NativeStyleProperty>,
     },
+
+    // ── Schema v9 (0.24.0, session 10): the ten web-only infra blocks of
+    //    the app-format manifest — used by no document yet. ────────────
+
+    /// ::concurrency
+    Concurrency {
+        concurrency_type: Option<String>,
+        hard_limit: Option<u32>,
+        soft_limit: Option<u32>,
+        force_https: bool,
+    },
+
+    /// ::crates
+    Crates { entries: Vec<NativeCrateEntry> },
+
+    /// ::dashboard
+    Dashboard {
+        source: String,
+        refresh: Option<u32>,
+    },
+
+    /// ::database
+    #[serde(rename = "database")]
+    InfraDatabase {
+        name: Option<String>,
+        shared_auth: bool,
+        volume_gb: Option<u32>,
+        properties: Vec<NativeStyleProperty>,
+    },
+
+    /// ::deploy
+    Deploy {
+        env: Option<String>,
+        app: Option<String>,
+        machines: Option<u32>,
+        memory: Option<u32>,
+        auto_stop: Option<String>,
+        min_machines: Option<u32>,
+        strategy: Option<String>,
+        properties: Vec<NativeStyleProperty>,
+    },
+
+    /// ::deploy-urls
+    DeployUrls { entries: Vec<NativeStyleProperty> },
+
+    /// ::domains
+    Domains { entries: Vec<NativeDomainEntry> },
+
+    /// ::editor
+    Editor {
+        source: Option<String>,
+        lang: Option<String>,
+        preview: bool,
+    },
+
+    /// ::env
+    #[serde(rename = "env")]
+    InfraEnv {
+        tier: Option<String>,
+        entries: Vec<NativeEnvEntry>,
+    },
+
+    /// ::feed
+    Feed { source: String, stream: bool },
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1472,6 +1590,43 @@ pub struct NativeBindingEvent {
     pub action: String,
 }
 
+/// One shared crate dependency within a native `Crates` — a
+/// `name (github: owner/repo, features: a b, branch: x)` or bare `name`
+/// body line of `::crates`. New in schema v9.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeCrateEntry {
+    /// The crate name, left of the paren (or the whole line).
+    pub name: String,
+    /// The `github:`/`source:` value, with any `branch:` folded in.
+    pub source: Option<String>,
+    /// The `features:` value, verbatim (space-separated as authored).
+    pub features: Option<String>,
+}
+
+/// One domain within a native `Domains` — a `domain (description)` or
+/// bare domain body line of `::domains`. New in schema v9.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeDomainEntry {
+    /// The domain, left of the paren (or the whole line).
+    pub domain: String,
+    /// The parenthesised description, when one was written.
+    pub description: Option<String>,
+}
+
+/// One variable within a native `InfraEnv` — a `NAME=default` or bare
+/// `NAME` body line of `::env`. Not `NativeEnvVar`, which is `::app-env`'s
+/// (a description and a required flag, no default). New in schema v9.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeEnvEntry {
+    /// The variable name, left of the `=` (or the whole line).
+    pub name: String,
+    /// The default, right of the `=`; absent for a bare name or a blank value.
+    pub default_value: Option<String>,
+}
+
 /// A single formatted entry within a native `Bibliography`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -1831,11 +1986,27 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 ///    keys as ATTRIBUTES as well as body lines (D-S9-5; body lines win) —
 ///    a parse change, not a schema change, listed here because the corpus
 ///    snapshot for the manifest fixture moved with it.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 8;
+/// v9 (0.24.0) — the ten web-only infra blocks of the app-format manifest
+/// (S10, the tail opens; every one was a `Markdown` string before, and no
+/// document in the company's corpus authors any of them yet):
+/// 1. `NativeBlock::Concurrency`, `Crates`, `Dashboard`, `InfraDatabase`,
+///    `Deploy`, `DeployUrls`, `Domains`, `Editor`, `InfraEnv`, `Feed` — all
+///    filed under Chrome, so every infra block the spec names inside an
+///    `App` is structural now; only `Unknown`, `Hours`, `Marquee`,
+///    `Health`, `Smoke`, `Volumes`, `Use` and `Deck` stay Degraded.
+/// 2. New records `NativeCrateEntry`, `NativeDomainEntry`,
+///    `NativeEnvEntry`; `NativeStyleProperty` reused for the database,
+///    deploy and deploy-urls ledgers.
+/// 3. `InfraDatabase` and `InfraEnv` keep the parser's Rust names and carry
+///    the spec's block names as their serde tags (`database`, `env`).
+/// 4. `NativeBlock` is now a 103-variant enum (102 structural + `Markdown`).
+///    Its docstrings stay in the module ledger (one line per variant inside
+///    the enum, the UniFFI metadata buffer measured with room).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 9;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
-/// `NativeBlock` is a 93-variant enum, so `block_id`/`label` cannot be flat
+/// `NativeBlock` is a 103-variant enum, so `block_id`/`label` cannot be flat
 /// fields on it; the metadata rides beside the tree instead, indexed by the
 /// same `Span` byte extent the HTML renderer uses. Empty for a document that
 /// authored no `id=`/`label=`. New in schema v6.
@@ -3523,23 +3694,119 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .collect(),
         },
 
+        // ── Schema v9 (session 10): the ten infra blocks of the app format ──
+
+        Block::Concurrency {
+            concurrency_type,
+            hard_limit,
+            soft_limit,
+            force_https,
+            ..
+        } => NativeBlock::Concurrency {
+            concurrency_type: concurrency_type.clone(),
+            hard_limit: *hard_limit,
+            soft_limit: *soft_limit,
+            force_https: *force_https,
+        },
+
+        Block::Crates { entries, .. } => NativeBlock::Crates {
+            entries: entries
+                .iter()
+                .map(|e| NativeCrateEntry {
+                    name: e.name.clone(),
+                    source: e.source.clone(),
+                    features: e.features.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Dashboard { source, refresh, .. } => NativeBlock::Dashboard {
+            source: source.clone(),
+            refresh: *refresh,
+        },
+
+        Block::InfraDatabase {
+            name,
+            shared_auth,
+            volume_gb,
+            properties,
+            ..
+        } => NativeBlock::InfraDatabase {
+            name: name.clone(),
+            shared_auth: *shared_auth,
+            volume_gb: *volume_gb,
+            properties: style_properties(properties),
+        },
+
+        Block::Deploy {
+            env,
+            app,
+            machines,
+            memory,
+            auto_stop,
+            min_machines,
+            strategy,
+            properties,
+            ..
+        } => NativeBlock::Deploy {
+            env: env.clone(),
+            app: app.clone(),
+            machines: *machines,
+            memory: *memory,
+            auto_stop: auto_stop.clone(),
+            min_machines: *min_machines,
+            strategy: strategy.clone(),
+            properties: style_properties(properties),
+        },
+
+        Block::DeployUrls { entries, .. } => NativeBlock::DeployUrls {
+            entries: style_properties(entries),
+        },
+
+        Block::Domains { entries, .. } => NativeBlock::Domains {
+            entries: entries
+                .iter()
+                .map(|e| NativeDomainEntry {
+                    domain: e.domain.clone(),
+                    description: e.description.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Editor {
+            source,
+            lang,
+            preview,
+            ..
+        } => NativeBlock::Editor {
+            source: source.clone(),
+            lang: lang.clone(),
+            preview: *preview,
+        },
+
+        Block::InfraEnv { tier, entries, .. } => NativeBlock::InfraEnv {
+            tier: tier.clone(),
+            entries: entries
+                .iter()
+                .map(|e| NativeEnvEntry {
+                    name: e.name.clone(),
+                    default_value: e.default_value.clone(),
+                })
+                .collect(),
+        },
+
+        Block::Feed { source, stream, .. } => NativeBlock::Feed {
+            source: source.clone(),
+            stream: *stream,
+        },
+
         // ── Markdown fallback: web-only / unsupported block types ───
 
         Block::Unknown { .. }
         | Block::Hours { .. }
         | Block::Marquee { .. }
-        | Block::Dashboard { .. }
-        | Block::Feed { .. }
-        | Block::Editor { .. }
-        | Block::InfraDatabase { .. }
-        | Block::Deploy { .. }
-        | Block::InfraEnv { .. }
         | Block::Health { .. }
-        | Block::Concurrency { .. }
         | Block::Smoke { .. }
-        | Block::Domains { .. }
-        | Block::Crates { .. }
-        | Block::DeployUrls { .. }
         | Block::Volumes { .. }
         | Block::Use { .. } => {
             let md = render_md::render_block(block);
@@ -3908,24 +4175,26 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Binding { .. }
         | Block::Build { .. }
         | Block::Cicd { .. }
-        | Block::ChatInput { .. } => BlockTier::Chrome,
+        | Block::ChatInput { .. }
+        // Schema v9: the ten infra blocks of the app format — every infra
+        // block the spec names inside an ::app is structural now.
+        | Block::Concurrency { .. }
+        | Block::Crates { .. }
+        | Block::Dashboard { .. }
+        | Block::InfraDatabase { .. }
+        | Block::Deploy { .. }
+        | Block::DeployUrls { .. }
+        | Block::Domains { .. }
+        | Block::Editor { .. }
+        | Block::InfraEnv { .. }
+        | Block::Feed { .. } => BlockTier::Chrome,
 
         // ── Tier 4: explicit markdown degradation ────────────────────
         Block::Unknown { .. }
         | Block::Hours { .. }
         | Block::Marquee { .. }
-        | Block::Dashboard { .. }
-        | Block::Feed { .. }
-        | Block::Editor { .. }
-        | Block::InfraDatabase { .. }
-        | Block::Deploy { .. }
-        | Block::InfraEnv { .. }
         | Block::Health { .. }
-        | Block::Concurrency { .. }
         | Block::Smoke { .. }
-        | Block::Domains { .. }
-        | Block::Crates { .. }
-        | Block::DeployUrls { .. }
         | Block::Volumes { .. }
         | Block::Use { .. }
         // ::deck is presentation config; produces no native content.
@@ -4264,7 +4533,17 @@ mod tests {
 ::app-env\n- DATABASE_URL * \"postgres\"\n::\n
 ::binding[source=/api/tasks target=list]\nchange: refresh\n::\n
 ::build[base=rust]\nfeatures: full\n::\n
-::cicd[provider=github]\ndeploy: main\n::\n";
+::cicd[provider=github]\ndeploy: main\n::\n
+::concurrency[type=connections hard_limit=1000]\n::\n
+::crates\nserde (features: derive)\n::\n
+::dashboard[source=/api/metrics refresh=30]\n::\n
+::database[name=main volume_gb=10]\nengine: postgres\n::\n
+::deploy[env=production machines=2]\nregion: sjc\n::\n
+::deploy-urls\nproduction: https://surf.space\n::\n
+::domains\nsurf.space (the product)\n::\n
+::editor[source=/docs/readme.surf lang=surfdoc]\n::\n
+::env[tier=required]\nDATABASE_URL\n::\n
+::feed[source=/api/events stream=true]\n::\n";
         let result = crate::parse(source);
         let mut saw_degraded = false;
         let mut saw_structured = false;
@@ -4729,6 +5008,242 @@ mod tests {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Schema v9 (S10): the ten infra blocks of the app format. One test
+    // per variant from real source — the parser's own grammar each.
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn concurrency_converts_structurally() {
+        match convert_first("::concurrency[type=connections hard_limit=1000 soft_limit=800 force_https=true]\n::\n") {
+            NativeBlock::Concurrency { concurrency_type, hard_limit, soft_limit, force_https } => {
+                assert_eq!(concurrency_type.as_deref(), Some("connections"));
+                assert_eq!(hard_limit, Some(1000));
+                assert_eq!(soft_limit, Some(800));
+                assert!(force_https);
+            }
+            other => panic!("expected Concurrency, got {other:?}"),
+        }
+        match convert_first("::concurrency\n::\n") {
+            NativeBlock::Concurrency { concurrency_type, hard_limit, soft_limit, force_https } => {
+                assert!(concurrency_type.is_none() && hard_limit.is_none() && soft_limit.is_none());
+                assert!(!force_https);
+            }
+            other => panic!("expected Concurrency, got {other:?}"),
+        }
+    }
+
+    /// `parse_crates`' paren grammar: `github:`/`source:` is the source,
+    /// `features:` the features, `branch:` folds into the source.
+    #[test]
+    fn crates_convert_structurally() {
+        let source = "::crates\n\
+                      surf-parse (github: cloudsurf/surf-parse, features: pdf native, branch: main)\n\
+                      serde\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Crates { entries } => {
+                assert_eq!(entries.len(), 2);
+                assert_eq!(
+                    entries[0],
+                    NativeCrateEntry {
+                        name: "surf-parse".into(),
+                        source: Some("cloudsurf/surf-parse, branch: main".into()),
+                        features: Some("pdf native".into()),
+                    }
+                );
+                assert_eq!(entries[1], NativeCrateEntry { name: "serde".into(), source: None, features: None });
+            }
+            other => panic!("expected Crates, got {other:?}"),
+        }
+    }
+
+    /// `source=` goes through `validate_source_path`: an external target
+    /// arrives blank (the `::chat-input` precedent, S9).
+    #[test]
+    fn dashboard_converts_structurally() {
+        match convert_first("::dashboard[source=/api/metrics refresh=30]\n::\n") {
+            NativeBlock::Dashboard { source, refresh } => {
+                assert_eq!(source, "/api/metrics");
+                assert_eq!(refresh, Some(30));
+            }
+            other => panic!("expected Dashboard, got {other:?}"),
+        }
+        match convert_first("::dashboard[source=https://evil.example/metrics]\n::\n") {
+            NativeBlock::Dashboard { source, refresh } => {
+                assert!(source.is_empty(), "an external source arrives blank");
+                assert!(refresh.is_none());
+            }
+            other => panic!("expected Dashboard, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn database_converts_structurally() {
+        let source = "::database[name=main shared_auth=true volume_gb=10]\n\
+                      engine: postgres\n\
+                      : orphan\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::InfraDatabase { name, shared_auth, volume_gb, properties } => {
+                assert_eq!(name.as_deref(), Some("main"));
+                assert!(shared_auth);
+                assert_eq!(volume_gb, Some(10));
+                assert_eq!(properties, vec![NativeStyleProperty { key: "engine".into(), value: "postgres".into() }]);
+            }
+            other => panic!("expected InfraDatabase, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deploy_converts_structurally() {
+        let source = "::deploy[env=production app=surf machines=2 memory=512 auto_stop=suspend min_machines=1 strategy=rolling]\n\
+                      region: sjc\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Deploy { env, app, machines, memory, auto_stop, min_machines, strategy, properties } => {
+                assert_eq!(env.as_deref(), Some("production"));
+                assert_eq!(app.as_deref(), Some("surf"));
+                assert_eq!(machines, Some(2));
+                assert_eq!(memory, Some(512));
+                assert_eq!(auto_stop.as_deref(), Some("suspend"));
+                assert_eq!(min_machines, Some(1));
+                assert_eq!(strategy.as_deref(), Some("rolling"));
+                assert_eq!(properties, vec![NativeStyleProperty { key: "region".into(), value: "sjc".into() }]);
+            }
+            other => panic!("expected Deploy, got {other:?}"),
+        }
+        // The corpus manifest's own line: `target=` is not an attribute the
+        // parser reads, so every fact is absent and the block is still structural.
+        match convert_first("::deploy[target=fly]\n::\n") {
+            NativeBlock::Deploy { env, properties, .. } => {
+                assert!(env.is_none() && properties.is_empty());
+            }
+            other => panic!("expected Deploy, got {other:?}"),
+        }
+    }
+
+    /// `env: url` — the first colon splits, so the URL's own `://` survives.
+    #[test]
+    fn deploy_urls_convert_structurally() {
+        let source = "::deploy-urls\n\
+                      production: https://surf.space\n\
+                      staging: https://staging.surf.space\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::DeployUrls { entries } => {
+                assert_eq!(entries.len(), 2);
+                assert_eq!(entries[0], NativeStyleProperty { key: "production".into(), value: "https://surf.space".into() });
+                assert_eq!(entries[1].key, "staging");
+            }
+            other => panic!("expected DeployUrls, got {other:?}"),
+        }
+        // The underscored spelling parses to the same block.
+        assert!(matches!(convert_first("::deploy_urls\nprod: https://x.y\n::\n"), NativeBlock::DeployUrls { .. }));
+    }
+
+    #[test]
+    fn domains_convert_structurally() {
+        let source = "::domains\n\
+                      surf.space (the product)\n\
+                      app.surf.space\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::Domains { entries } => {
+                assert_eq!(entries.len(), 2);
+                assert_eq!(entries[0], NativeDomainEntry { domain: "surf.space".into(), description: Some("the product".into()) });
+                assert_eq!(entries[1], NativeDomainEntry { domain: "app.surf.space".into(), description: None });
+            }
+            other => panic!("expected Domains, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn editor_converts_structurally() {
+        match convert_first("::editor[source=/docs/readme.surf lang=surfdoc preview=true]\n::\n") {
+            NativeBlock::Editor { source, lang, preview } => {
+                assert_eq!(source.as_deref(), Some("/docs/readme.surf"));
+                assert_eq!(lang.as_deref(), Some("surfdoc"));
+                assert!(preview);
+            }
+            other => panic!("expected Editor, got {other:?}"),
+        }
+        match convert_first("::editor[source=https://evil.example/x.surf]\n::\n") {
+            NativeBlock::Editor { source, lang, preview } => {
+                assert!(source.is_none(), "an external source arrives absent");
+                assert!(lang.is_none() && !preview);
+            }
+            other => panic!("expected Editor, got {other:?}"),
+        }
+    }
+
+    /// `parse_infra_env`: `NAME=default` or a bare `NAME`; a blank default
+    /// is absent.
+    #[test]
+    fn env_converts_structurally() {
+        let source = "::env[tier=required]\n\
+                      DATABASE_URL\n\
+                      PORT=8080\n\
+                      LOG_LEVEL=\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::InfraEnv { tier, entries } => {
+                assert_eq!(tier.as_deref(), Some("required"));
+                assert_eq!(entries.len(), 3);
+                assert_eq!(entries[0], NativeEnvEntry { name: "DATABASE_URL".into(), default_value: None });
+                assert_eq!(entries[1], NativeEnvEntry { name: "PORT".into(), default_value: Some("8080".into()) });
+                assert_eq!(entries[2], NativeEnvEntry { name: "LOG_LEVEL".into(), default_value: None });
+            }
+            other => panic!("expected InfraEnv, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn feed_converts_structurally() {
+        match convert_first("::feed[source=/api/events stream=true]\n::\n") {
+            NativeBlock::Feed { source, stream } => {
+                assert_eq!(source, "/api/events");
+                assert!(stream);
+            }
+            other => panic!("expected Feed, got {other:?}"),
+        }
+        match convert_first("::feed[source=/api/events]\n::\n") {
+            NativeBlock::Feed { stream, .. } => assert!(!stream, "polling by default"),
+            other => panic!("expected Feed, got {other:?}"),
+        }
+    }
+
+    /// Schema v9: an `::app` whose body authors the app-format infra blocks
+    /// carries them structurally too — every infra child the spec names.
+    #[test]
+    fn infra_children_are_structural_at_schema_v9() {
+        let source = "::app[name=demo]\n\
+                      ::deploy[env=production]\n::\n\
+                      ::env[tier=required]\nPORT=8080\n::\n\
+                      ::domains\ndemo.surf.space\n::\n\
+                      ::database[name=main]\n::\n\
+                      ::\n";
+        match convert_first(source) {
+            NativeBlock::App { children, .. } => {
+                assert!(matches!(children[0], NativeBlock::Deploy { .. }), "{children:?}");
+                assert!(matches!(children[1], NativeBlock::InfraEnv { .. }), "{children:?}");
+                assert!(matches!(children[2], NativeBlock::Domains { .. }), "{children:?}");
+                assert!(matches!(children[3], NativeBlock::InfraDatabase { .. }), "{children:?}");
+            }
+            other => panic!("expected App, got {other:?}"),
+        }
+    }
+
+    /// The serde tags of the two `Infra`-prefixed variants are the spec's
+    /// block names, not the Rust names.
+    #[test]
+    fn infra_variants_serialize_under_the_spec_names() {
+        let db = serde_json::to_string(&convert_first("::database[name=main]\n::\n")).unwrap();
+        assert!(db.starts_with("{\"type\":\"database\""), "{db}");
+        let env = serde_json::to_string(&convert_first("::env\nPORT\n::\n")).unwrap();
+        assert!(env.starts_with("{\"type\":\"env\""), "{env}");
+    }
+
     #[test]
     fn segmented_control_converts_structurally() {
         let source = "::segmented-control[active=all size=regular action=setTasksView]\n\
@@ -4886,11 +5401,30 @@ mod tests {
             "::app[name=demo]\n::auth[provider=email]\n::\n::build[base=rust]\n::\n::\n".to_string(),
         )
         .expect("parses");
-        assert_eq!(doc.schema_version, 8);
+        assert_eq!(doc.schema_version, 9);
         match &doc.blocks[0] {
             NativeBlock::App { children, .. } => {
                 assert!(matches!(children[0], NativeBlock::Auth { .. }));
                 assert!(matches!(children[1], NativeBlock::Build { .. }));
+            }
+            other => panic!("expected App, got {other:?}"),
+        }
+    }
+
+    /// Schema v9 end to end, through the real FFI entry point: the app
+    /// format's infra children cross as their own variants.
+    #[cfg(feature = "uniffi")]
+    #[test]
+    fn infra_children_cross_the_ffi_structurally() {
+        let doc = crate::ffi::parse_to_native(
+            "::app[name=demo]\n::deploy[env=production]\n::\n::domains\ndemo.surf.space\n::\n::\n".to_string(),
+        )
+        .expect("parses");
+        assert_eq!(doc.schema_version, 9);
+        match &doc.blocks[0] {
+            NativeBlock::App { children, .. } => {
+                assert!(matches!(children[0], NativeBlock::Deploy { .. }));
+                assert!(matches!(children[1], NativeBlock::Domains { .. }));
             }
             other => panic!("expected App, got {other:?}"),
         }
@@ -6461,8 +6995,9 @@ mod tests {
         // avatar/rtime/unread-count) — schema v4.
         // 0.18: the size-class axis + the FFI holes it closed — schema v5.
         // 0.22: the eight web-only blocks — schema v7. 0.23: the last ten
-        // with measured use (the manifest's children) — schema v8.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 8);
+        // with measured use (the manifest's children) — schema v8. 0.24: the
+        // ten infra blocks of the app format — schema v9.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 9);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

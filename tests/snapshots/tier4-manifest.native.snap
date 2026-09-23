@@ -48,8 +48,15 @@
     "content": ""
   },
   {
-    "type": "markdown",
-    "content": "**Deploy: unknown**"
+    "type": "deploy",
+    "env": null,
+    "app": null,
+    "machines": null,
+    "memory": null,
+    "auto_stop": null,
+    "min_machines": null,
+    "strategy": null,
+    "properties": []
   },
   {
     "type": "style",
