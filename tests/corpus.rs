@@ -102,8 +102,15 @@ const CORPUS_WIDTHS: [u32; 3] = [390, 834, 1280];
 /// pins per width-varying fixture.
 #[test]
 fn corpus_width_varying_pinned() {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/corpus/tier5-size-class.surf");
+    // 0.27: the panels fixture rides the same three-width pin (F-6) — its
+    // slot SET changes per class, not just its widths.
+    for name in ["tier5-size-class.surf", "tier7-panels.surf"] {
+        width_varying_fixture_pinned(name);
+    }
+}
+
+fn width_varying_fixture_pinned(name: &str) {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus").join(name);
     let src = fs::read_to_string(&fixture).unwrap();
     let doc = surf_parse::parse(&src).doc;
     for width in CORPUS_WIDTHS {

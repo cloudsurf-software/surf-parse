@@ -108,8 +108,9 @@ pub struct Span {
 
 ## Block Type Registry
 
-`spec/blocks.toml` registers 122 block directives; every one is implemented
-since 0.25.0 (121 `Block` variants — `::split-pane` and `::pane` share one).
+`spec/blocks.toml` registers 124 block directives; every one is implemented
+since 0.25.0 (123 `Block` variants — `::split-pane` and `::pane` share one;
+`::panel-slot` and `::preset` joined in 0.27.0 with the panels layout).
 The categories below are illustrative, not the full registry.
 
 ::tabs

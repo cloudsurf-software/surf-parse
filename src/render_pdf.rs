@@ -320,6 +320,7 @@ pub fn collect_image_srcs(doc: &SurfDoc) -> Vec<String> {
                 | Block::Section { children, .. }
                 | Block::App { children, .. }
                 | Block::AppShell { children, .. }
+                | Block::PanelSlot { children, .. }
                 | Block::Sidebar { children, .. }
                 | Block::Panel { children, .. }
                 | Block::TabContent { children, .. }

@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 122
-registry_updated = "2026-09-22"
+total_blocks = 124
+registry_updated = "2026-09-24"
 
 [blocks.ai-context]
 status = "implemented"
@@ -753,10 +753,26 @@ enum_variant = "InfoCard"
 [blocks.app-shell]
 status = "implemented"
 category = "advanced"
-purpose = "Root app container with layout mode, optional explicit height, and child blocks. layout is the closed set {sidebar-main-panel, tabs, adaptive}; layout=adaptive takes mobile/tablet/desktop sub-attrs from {tabs, rail, sidebar}. Unknown values degrade to sidebar-main-panel (lint L041)"
+purpose = "Root app container with layout mode, optional explicit height, and child blocks. layout is the closed set {sidebar-main-panel, tabs, adaptive, panels}; layout=adaptive takes mobile/tablet/desktop sub-attrs from {tabs, rail, sidebar, panels}. panels (0.27) is the CloudSurf app's grid: the sidebar is the Navbar rail, panel-slot children are navigator seats and work slots (Desks), preset children the named grid shapes; the work slots render inside one surfdoc-panels-work grid carrying the default preset's shape as --panels-columns/--panels-rows. Unknown values degrade to sidebar-main-panel (lint L041)"
 attributes = ["layout", "height", "mobile", "tablet", "desktop"]
 degradation = "sequential child blocks"
 enum_variant = "AppShell"
+
+[blocks.panel-slot]
+status = "implemented"
+category = "advanced"
+purpose = "One cell of a layout=panels app shell (0.27). role=navigator is a seat one navigator kind fills at a time (pinned=true keeps a second seat open beside it); role=work is a Desk whose tab-bar/tab-content strip is user-populated at runtime — the strip is authored, its tabs are not. kind= is the slot's identity (cloud, surfdocs, surfy, messages, tasks, desk, desk2 …); parks=true keeps the slot's state when hidden. Per size class the shell keeps every slot on desktop, the first unpinned seat plus one work slot on tablet, one work slot on mobile. classes/min-class gate as on sidebar. Lint L045 reports a work slot without a tab-bar and a seat without a kind"
+attributes = ["role", "kind", "pinned", "parks", "classes", "min-class"]
+degradation = "sequential child blocks"
+enum_variant = "PanelSlot"
+
+[blocks.preset]
+status = "implemented"
+category = "advanced"
+purpose = "A named grid shape the work slots of a layout=panels shell can take (0.27): columns= and rows= are whitespace-separated track fractions, spans= one col,row[,colSpan,rowSpan] cell per seated slot in slot order (absent = one cell per grid position, row-major), slots= the work-slot kinds seated (absent = authored order), default=true the shape a fresh arrangement opens on. Renders as an inert <template class=surfdoc-preset> record the player reads; a leaf. Lint L045 reports a preset seating an undeclared slot"
+attributes = ["name", "title", "icon", "columns", "rows", "spans", "slots", "default"]
+degradation = "omitted"
+enum_variant = "Preset"
 
 [blocks.sidebar]
 status = "implemented"

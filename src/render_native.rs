@@ -99,8 +99,20 @@
 //!   nested NativeBlock values. UniFFI supports recursive enums via boxing.
 //! - **`AppShell`**
 //!   Application shell with layout mode and nested children.
-//!   `layout` is one of: "sidebar", "split", "tabs".
+//!   `layout` is one of: "sidebar-main-panel", "tabs", "adaptive", "panels"
+//!   (the CloudSurf panel grid, schema v12).
 //!   - `adaptive`: Present only for `layout == "adaptive"` (schema v5).
+//! - **`PanelSlot`** (schema v12, the panels layout)
+//!   One cell of a `layout=panels` shell: `role` is "navigator" (a seat one
+//!   navigator kind fills at a time; `pinned` seats stay beside it) or
+//!   "work" (a Desk — its tab strip is runtime state). `kind` is the slot's
+//!   identity (`cloud`, `surfdocs`, `desk`, `desk2` …); `parks` says the
+//!   slot keeps its state when hidden. Recursive like `Sidebar`.
+//! - **`Preset`** (schema v12)
+//!   A named grid shape for the work slots: `columns` / `rows` are track
+//!   fractions, `spans` one `NativePresetSpan` cell per seated slot in
+//!   slot order, `slots` the slot kinds seated (empty = authored order),
+//!   `is_default` the shape a fresh arrangement opens on. A leaf.
 //! - **`Sidebar`**
 //!   Collapsible sidebar navigation panel.
 //!   `position` is one of: "left", "right".
@@ -462,7 +474,7 @@ fn style_properties(properties: &[crate::types::StyleProperty]) -> Vec<NativeSty
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// NativeBlock enum — 122 native variants (pinned cross-platform by the
+// NativeBlock enum — 124 native variants (pinned cross-platform by the
 // SurfDocKit DispatchCoverageTests / Android NativeBlockCoverageTest census)
 //
 // HARD CAP (measured 0.22.0, S8; cleared 0.23.0, S9 lane 0): uniffi 0.28.3
@@ -661,6 +673,26 @@ pub enum NativeBlock {
         layout: String,
         adaptive: Option<NativeAdaptiveLayout>,
         children: Vec<NativeBlock>,
+    },
+    /// ::panel-slot
+    PanelSlot {
+        role: String,
+        kind: String,
+        pinned: bool,
+        parks: bool,
+        gate: NativeClassGate,
+        children: Vec<NativeBlock>,
+    },
+    /// ::preset
+    Preset {
+        name: String,
+        title: Option<String>,
+        icon: Option<String>,
+        columns: Vec<f64>,
+        rows: Vec<f64>,
+        spans: Vec<NativePresetSpan>,
+        slots: Vec<String>,
+        is_default: bool,
     },
     /// ::sidebar
     Sidebar {
@@ -1539,6 +1571,17 @@ pub struct NativeAdaptiveLayout {
     pub desktop: String,
 }
 
+/// One cell of a `::preset` grid (schema v12): zero-based column and row,
+/// spans of at least 1. The n-th span seats the n-th work slot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativePresetSpan {
+    pub col: u32,
+    pub row: u32,
+    pub col_span: u32,
+    pub row_span: u32,
+}
+
 /// The class-conditional visibility of a chrome block (schema v5).
 /// `classes` empty means "every class"; `min_class` is `None` when
 /// unconstrained.
@@ -2311,7 +2354,12 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// gain `anchor` (the headline's trailing `{#slug}`, split off the text the
 /// way the web's `split_explicit_anchor` does); markdown bodies (`Markdown`,
 /// `Columns`) cross with `{#slug}` removed from their ATX headings.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 11;
+/// v12 (0.27.0) — the panels layout (CloudSurf on the web, TASK-994):
+/// `AppShell.layout` may be `"panels"` and an adaptive class may name it;
+/// two new variants `PanelSlot` (recursive) and `Preset` (leaf) with the
+/// record `NativePresetSpan`. `NativeBlock` is now a 125-variant enum
+/// (124 structural + `Markdown`).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 12;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -3119,6 +3167,53 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 desktop: a.desktop.as_str().to_string(),
             }),
             children: convert_children(children, depth + 1),
+        },
+
+        Block::PanelSlot {
+            role,
+            panel_kind,
+            pinned,
+            parks,
+            classes,
+            min_class,
+            children,
+            ..
+        } => NativeBlock::PanelSlot {
+            role: role.as_str().to_string(),
+            kind: panel_kind.clone(),
+            pinned: *pinned,
+            parks: *parks,
+            gate: class_gate(classes, min_class),
+            children: convert_children(children, depth + 1),
+        },
+
+        Block::Preset {
+            name,
+            title,
+            icon,
+            columns,
+            rows,
+            spans,
+            slots,
+            default,
+            ..
+        } => NativeBlock::Preset {
+            name: name.clone(),
+            title: title.clone(),
+            icon: icon.clone(),
+            columns: columns.clone(),
+            rows: rows.clone(),
+            spans: spans
+                .iter()
+                .map(|s| NativePresetSpan {
+                    col: s.col,
+                    row: s.row,
+                    col_span: s.col_span,
+                    row_span: s.row_span,
+                })
+                .collect(),
+            slots: slots.clone(),
+            is_default: *default,
         },
 
         Block::Sidebar {
@@ -4672,6 +4767,8 @@ pub fn block_tier(block: &Block) -> BlockTier {
 
         // ── Tier 3: app chrome ───────────────────────────────────────
         Block::AppShell { .. }
+        | Block::PanelSlot { .. }
+        | Block::Preset { .. }
         | Block::Sidebar { .. }
         | Block::Panel { .. }
         | Block::TabBar { .. }
@@ -7815,7 +7912,8 @@ mod tests {
         // twenty (the six web-only blocks and the fourteen that were
         // planned) — schema v10; every registered block crosses. 0.26:
         // hero/section `anchor` + heading anchors stripped — schema v11.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 11);
+        // 0.27: the panels layout — `PanelSlot` + `Preset` — schema v12.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 12);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 20
-registry_updated = "2026-09-04"
+total_rules = 21
+registry_updated = "2026-09-24"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -174,7 +174,14 @@ layer = "style"
 severity = "warning"
 fixable = false
 message = "Unknown {attr} value '{value}' on '::{block}' — degraded to '{fallback}' (expected one of: {expected})"
-description = "0.18 size-class axis: ::app-shell layout= is a three-value enum {sidebar-main-panel, tabs, adaptive} with mobile=/tablet=/desktop= sub-attrs drawn from {tabs, rail, sidebar}, and ::page layout= is the recognized set {default, hero, cards, split}. An out-of-vocabulary value never fails a render — it degrades to the default and is reported here"
+description = "0.18 size-class axis: ::app-shell layout= is a closed enum {sidebar-main-panel, tabs, adaptive, panels} (panels since 0.27) with mobile=/tablet=/desktop= sub-attrs drawn from {tabs, rail, sidebar, panels}, and ::page layout= is the recognized set {default, hero, cards, split}. An out-of-vocabulary value never fails a render — it degrades to the default and is reported here"
+
+[rules.L045]
+layer = "style"
+severity = "warning"
+fixable = false
+message = "'::panel-slot[role=work kind={kind}]' has no '::tab-bar' — a Desk needs its strip, even empty | '::panel-slot[role=navigator]' names no kind= | '::preset[name={name}]' seats slot '{slot}' but no '::panel-slot' in this shell declares it"
+description = "0.27 panels layout (CloudSurf on the web): inside an ::app-shell a work slot must carry a ::tab-bar (its strip is user-populated at runtime, but the strip itself is authored), a navigator seat must say which kind fills it, and a ::preset may only seat (slots=) kinds the shell declares. Never a failed render — the shell draws as authored and the hole is reported here. Not fixable — only the author knows the missing kind"
 
 [rules.L042]
 layer = "style"

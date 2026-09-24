@@ -43,7 +43,7 @@ may use them.
 
 ## Typed layouts
 
-`::app-shell[layout=]` is a closed three-value set:
+`::app-shell[layout=]` is a closed four-value set (four since 0.27):
 
 ::data
 | Value | Meaning |
@@ -51,11 +51,16 @@ may use them.
 | `sidebar-main-panel` | The classic three-column desktop shell (default) |
 | `tabs` | Tab-bar-first at every class |
 | `adaptive` | Per-class navigation, configured by sub-attrs |
+| `panels` | The CloudSurf app's grid (0.27): the sidebar as the Navbar rail, `::panel-slot` seats and Desks, `::preset` shapes |
 ::
 
 `layout=adaptive` takes `mobile=` / `tablet=` / `desktop=` sub-attrs drawn
-from `{tabs, rail, sidebar}`. Absent sub-attrs take the platform defaults:
-tabs on mobile, rail on tablet, sidebar on desktop.
+from `{tabs, rail, sidebar, panels}`. Absent sub-attrs take the platform
+defaults: tabs on mobile, rail on tablet, sidebar on desktop. The canonical
+CloudSurf shell is `::app-shell[layout=adaptive desktop=panels tablet=rail
+mobile=tabs]`: the resolver keeps every slot on desktop, the first unpinned
+navigator seat plus ONE work slot on tablet, and one work slot on mobile
+(the navigators are the generated tab bar's targets there).
 
 `::page[layout=]` is the recognized set `{default, hero, cards, split}`.
 

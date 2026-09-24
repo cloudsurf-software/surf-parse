@@ -3012,6 +3012,30 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-layout-sidebar-main-panel > .surfdoc-panel-right { grid-column: 3; grid-row: 1 / -1; }
 
 /* ============================================================
+   56a. PANELS LAYOUT (0.27 — the CloudSurf app's grid)
+   The shell is one grid: the Navbar rail (the sidebar, 44px), the
+   navigator seats (each a column, 280px, a pinned seat beside the
+   seat), and the work grid — every work slot inside ONE
+   surfdoc-panels-work box whose tracks come from the default
+   preset as --panels-columns / --panels-rows (the renderer writes
+   them; the player only ever rewrites them). Seated slots carry
+   their grid-column/grid-row inline; an unseated slot is [hidden].
+   Presets render as inert <template> records.
+   ============================================================ */
+.surfdoc .surfdoc-layout-panels { display: flex; flex-direction: row; align-items: stretch; }
+.surfdoc .surfdoc-layout-panels > .surfdoc-toolbar { position: absolute; top: 0; left: 0; right: 0; height: 44px; z-index: 2; }
+.surfdoc .surfdoc-layout-panels > .surfdoc-sidebar { flex: 0 0 auto; width: 44px; min-width: 44px; max-width: 44px; padding: 52px 0 8px; align-items: center; }
+.surfdoc .surfdoc-layout-panels > .surfdoc-sidebar .surfdoc-row-body, .surfdoc .surfdoc-layout-panels > .surfdoc-sidebar .surfdoc-toolbar { display: none; }
+.surfdoc .surfdoc-panel-slot { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--surface, #12121a); border: 1px solid var(--border, #30363d); border-radius: var(--ws-control-radius, 6px); }
+.surfdoc .surfdoc-layout-panels > .surfdoc-panel-slot-navigator { flex: 0 0 280px; width: 280px; margin: 52px 0 8px 8px; }
+.surfdoc .surfdoc-layout-panels > .surfdoc-panel-slot-navigator[data-pinned="true"] { flex-basis: 320px; width: 320px; }
+.surfdoc .surfdoc-panels-work { flex: 1 1 auto; display: grid; grid-template-columns: var(--panels-columns, 1fr); grid-template-rows: var(--panels-rows, 1fr); gap: 8px; padding: 52px 8px 8px 8px; min-width: 0; min-height: 0; }
+.surfdoc .surfdoc-panels-work > .surfdoc-panel-slot-work > .surfdoc-tab-bar { flex-shrink: 0; }
+.surfdoc .surfdoc-panels-work > .surfdoc-panel-slot-work > .surfdoc-tab-content { flex: 1 1 auto; display: block; }
+.surfdoc .surfdoc-panel-slot[hidden] { display: none; }
+.surfdoc .surfdoc-preset { display: none; }
+
+/* ============================================================
    57. SIDEBAR
    ============================================================ */
 
@@ -5076,3 +5100,22 @@ button.surfdoc-booking-day.is-sel { background: var(--accent); color: var(--acce
 .surfdoc-notes { margin: var(--ws-space-md) 0; padding: 10px 14px; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--font-size-caption); }
 .surfdoc-notes-label { margin-bottom: 4px; font-size: var(--font-size-micro); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
 .surfdoc-notes-body > :last-child { margin-bottom: 0; }
+
+/* ============================================================
+   81. PANELS LAYOUT — the per-class blocks (0.27, §56a's tail)
+   Placed after §80 so the WP-R1 icon-rail block stays the FIRST
+   1023px media query (tests/css_coverage.rs pins that order).
+   ============================================================ */
+@media (max-width: 1023px) {
+    /* Tablet: the rail, ONE seat and ONE work slot (the resolver already
+       dropped the rest); the seat narrows. */
+    .surfdoc .surfdoc-layout-panels > .surfdoc-panel-slot-navigator { flex-basis: 240px; width: 240px; }
+    .surfdoc .surfdoc-panels-work { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+}
+@media (max-width: 767px) {
+    /* Mobile: the generated tab bar is the Navbar (Section 74c), the one
+       work slot is the screen; the rail and the seats leave. */
+    .surfdoc .surfdoc-layout-panels > .surfdoc-sidebar, .surfdoc .surfdoc-layout-panels > .surfdoc-panel-slot-navigator { display: none; }
+    .surfdoc .surfdoc-panels-work { padding: 52px 0 64px 0; gap: 0; }
+    .surfdoc .surfdoc-panels-work > .surfdoc-panel-slot-work { border: none; border-radius: 0; }
+}

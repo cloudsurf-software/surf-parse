@@ -3,6 +3,30 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.27.0 — 2026-09-24 (native schema v12: the `panels` layout — CloudSurf on the web, lane G)
+
+- `::app-shell[layout=panels]` — the CloudSurf app's arrangement enters the grammar (`AppShellLayout::Panels`), and
+  `adaptive` accepts `panels` for any class (`AdaptiveMode::Panels`), so the canonical shell is
+  `::app-shell[layout=adaptive desktop=panels tablet=rail mobile=tabs]`. L041's vocabularies gain the token.
+- Two new blocks, registered first in `spec/blocks.toml` (122 → 124): `::panel-slot[role=navigator|work kind= pinned
+  parks classes= min-class=]` (a navigator seat or a work slot — a Desk whose `tab-bar` / `tab-content` strip is
+  authored empty and user-populated at runtime) and the leaf `::preset[name= title= icon= columns= rows= spans= slots=
+  default]` (a named grid shape; the ten Mac presets are ten lines). Everything else the layout needs is existing
+  vocabulary: `sidebar` (the Navbar rail), `toolbar` (the top bar), `tab-bar` / `tab-content`, `nav-tree`, `row`.
+- Per-size-class resolution (`resolve.rs`): a panels shell keeps every slot on desktop, the first unpinned navigator
+  seat plus ONE work slot on tablet, one work slot on mobile (the navigators become the generated tab bar's targets).
+- HTML + DOM twin: the work slots render inside ONE `surfdoc-panels-work` grid carrying the default preset's tracks as
+  `--panels-columns` / `--panels-rows` / `--panels-preset`; each seated slot carries `grid-column` / `grid-row` inline,
+  an unseated slot is `hidden`; slots carry `data-slot` / `data-role` / `data-kind` / `data-pinned` / `data-parks`;
+  presets render as inert `<template class="surfdoc-preset" data-…>` records; an `adaptive` shell that names
+  `panels` in any class also wears `surfdoc-layout-panels`, so the stylesheet keys on one class. The player reads
+  these, never re-derives them. Stylesheet §56a + §81.
+- Native: `NativeBlock::PanelSlot` (recursive) and `NativeBlock::Preset` (leaf, `is_default`), record
+  `NativePresetSpan`; `NATIVE_DOC_SCHEMA_VERSION` 11 → 12.
+- Lint L045 (`spec/rules.toml` 20 → 21): a work slot without a `::tab-bar`, a seat without `kind=`, a preset seating
+  an undeclared slot.
+- Corpus: `tests/corpus/tier7-panels.surf`, pinned at 390 / 834 / 1280 like `tier5-size-class` (F-6).
+
 ## 0.26.0 — 2026-09-23 (native schema v11: headline anchors — Khoury's on macOS, L0)
 
 - `NativeBlock::Hero` and `NativeBlock::SectionContainer` gain `anchor: Option<String>`: a headline's trailing

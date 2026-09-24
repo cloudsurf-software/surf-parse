@@ -158,6 +158,7 @@ fn child_slices(block: &Block) -> (&[Block], &[Block]) {
         | Block::Section { children, .. }
         | Block::App { children, .. }
         | Block::AppShell { children, .. }
+        | Block::PanelSlot { children, .. }
         | Block::Sidebar { children, .. }
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }

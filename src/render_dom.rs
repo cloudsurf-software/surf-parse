@@ -54,7 +54,8 @@ use crate::render_html::{
 };
 use crate::limits::ParseLimits;
 use crate::render_html::chart_type_str;
-use crate::types::{Block, FormFieldType, PerClass, RowState, SizeClass, SurfDoc, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
+use crate::types::{AdaptiveMode, AppShellLayout, Block, FormFieldType, PanelSlotRole, PerClass, RowState, SizeClass, SurfDoc, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
+use crate::render_html::{default_preset, fr_tracks, panels_grid_style, panels_slot_placement};
 
 /// Typed failure of the constructive DOM path.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -2463,10 +2464,20 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             let has_right_panel = children
                 .iter()
                 .any(|c| matches!(c, Block::Panel { position, .. } if position == "right"));
+            // 0.27: mirror of render_html's panels class rule.
+            let is_panels = *layout == AppShellLayout::Panels
+                || adaptive.is_some_and(|a| {
+                    [a.mobile, a.tablet, a.desktop].contains(&AdaptiveMode::Panels)
+                });
+            let panels_class = if is_panels && *layout != AppShellLayout::Panels {
+                " surfdoc-layout-panels"
+            } else {
+                ""
+            };
             dom.open("div", CloseStyle::Normal);
             dom.attr(
                 "class",
-                AttrVal::Markup(&format!("surfdoc-app-shell surfdoc-layout-{}", layout.as_str())),
+                AttrVal::Markup(&format!("surfdoc-app-shell surfdoc-layout-{}{}", layout.as_str(), panels_class)),
             );
             if let Some(a) = adaptive {
                 dom.attr("data-adaptive-mobile", AttrVal::Markup(a.mobile.as_str()));
@@ -2485,7 +2496,11 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     AttrVal::Markup(&format!("min-height:{h}px;max-height:{h}px")),
                 );
             }
-            build_chrome_children(dom, children)?;
+            if is_panels {
+                build_panels_children(dom, children)?;
+            } else {
+                build_chrome_children(dom, children)?;
+            }
             build_app_tabbar(dom, children)?;
             if has_right_panel {
                 dom.open("button", CloseStyle::Normal);
@@ -2503,6 +2518,34 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             // versioned runtime at P3/P4). Both backends emit markup + state
             // attributes only; no `<script>` follows the shell, so a
             // right-panel shell is constructively coverable.
+        }
+
+        // render_html.rs (PanelSlot, reached on its own: unplaced)
+        Block::PanelSlot { .. } => build_panel_slot(dom, block, None)?,
+
+        // render_html.rs (Preset: an inert <template> record)
+        Block::Preset { name, title, icon, columns, rows, spans, slots, default, .. } => {
+            let spans_src: Vec<String> = spans.iter().map(|s| s.to_attr_source()).collect();
+            dom.open("template", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-preset"));
+            dom.attr("data-preset", AttrVal::Markup(name));
+            dom.attr("data-slot-count", AttrVal::Markup(&spans.len().to_string()));
+            dom.attr("data-columns", AttrVal::Markup(&fr_tracks(columns)));
+            dom.attr("data-rows", AttrVal::Markup(&fr_tracks(rows)));
+            dom.attr("data-spans", AttrVal::Markup(&spans_src.join(" ")));
+            if let Some(t) = title {
+                dom.attr("data-title", AttrVal::Markup(t));
+            }
+            if let Some(i) = icon {
+                dom.attr("data-icon", AttrVal::Markup(i));
+            }
+            if !slots.is_empty() {
+                dom.attr("data-slots", AttrVal::Markup(&slots.join(" ")));
+            }
+            if *default {
+                dom.attr("data-default", AttrVal::Markup("true"));
+            }
+            dom.close();
         }
 
         // render_html.rs:5538 (Sidebar)
@@ -4153,6 +4196,7 @@ fn contains_split_pane(block: &Block) -> bool {
         Block::SplitPane { .. } => true,
         Block::Section { children, .. }
         | Block::AppShell { children, .. }
+        | Block::PanelSlot { children, .. }
         | Block::Sidebar { children, .. }
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }
@@ -4237,6 +4281,66 @@ fn build_chrome_children<S: DomSink>(
             _ => build_block(dom, child)?,
         }
     }
+    Ok(())
+}
+
+/// Mirror of `render_html::render_panels_children` (0.27): the work slots
+/// gathered into one `surfdoc-panels-work` grid AFTER the other children.
+fn build_panels_children<S: DomSink>(
+    dom: &mut Dom<'_, S>,
+    children: &[Block],
+) -> Result<(), RenderDomError> {
+    let preset = default_preset(children);
+    let mut work: Vec<(&Block, Option<String>)> = Vec::new();
+    for child in children {
+        match child {
+            Block::PanelSlot { role: PanelSlotRole::Work, .. } => {
+                let placement = panels_slot_placement(preset, work.len());
+                work.push((child, placement));
+            }
+            _ => build_block(dom, child)?,
+        }
+    }
+    if !work.is_empty() {
+        dom.open("div", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-panels-work"));
+        dom.attr("style", AttrVal::Markup(&panels_grid_style(preset)));
+        for (slot, placement) in work {
+            build_panel_slot(dom, slot, placement)?;
+        }
+        dom.close();
+    }
+    Ok(())
+}
+
+/// Mirror of `render_html::render_panel_slot`.
+fn build_panel_slot<S: DomSink>(
+    dom: &mut Dom<'_, S>,
+    block: &Block,
+    placement: Option<String>,
+) -> Result<(), RenderDomError> {
+    let Block::PanelSlot { role, panel_kind: kind, pinned, parks, classes, min_class, children, .. } = block else {
+        return Ok(());
+    };
+    let is_work = *role == PanelSlotRole::Work;
+    dom.open("section", CloseStyle::Normal);
+    dom.attr(
+        "class",
+        AttrVal::Markup(&format!("surfdoc-panel-slot surfdoc-panel-slot-{}", role.as_str())),
+    );
+    dom.attr("data-slot", AttrVal::Markup(kind));
+    dom.attr("data-role", AttrVal::Markup(role.as_str()));
+    dom.attr("data-kind", AttrVal::Markup(kind));
+    dom.attr("data-pinned", AttrVal::Markup(&pinned.to_string()));
+    dom.attr("data-parks", AttrVal::Markup(&parks.to_string()));
+    emit_size_class_attrs(dom, classes, min_class);
+    match (&placement, is_work) {
+        (Some(p), _) => dom.attr("style", AttrVal::Markup(p)),
+        (None, true) => dom.bool_attr("hidden"),
+        (None, false) => {}
+    }
+    build_chrome_children(dom, children)?;
+    dom.close();
     Ok(())
 }
 
@@ -4737,6 +4841,7 @@ fn find_script_emitter(blocks: &[Block]) -> Option<&'static str> {
             Block::Page { children, .. }
             | Block::Section { children, .. }
             | Block::AppShell { children, .. }
+            | Block::PanelSlot { children, .. }
             | Block::Sidebar { children, .. }
             | Block::Panel { children, .. }
             | Block::TabContent { children, .. }

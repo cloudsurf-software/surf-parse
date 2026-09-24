@@ -224,7 +224,97 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(DeprecatedDesktopOnly),
         Box::new(DuplicateBlockId),
         Box::new(DataSourceWithoutCounts),
+        Box::new(PanelsLayoutShape),
     ]
+}
+
+// ------------------------------------------------------------------
+// L045 — the panels layout's shape (0.27)
+// ------------------------------------------------------------------
+
+/// Tree-walking: inside every `::app-shell`, a `::panel-slot[role=work]`
+/// must carry a `::tab-bar` (a Desk without a strip is a hole the player
+/// cannot fill), a navigator slot must name its `kind=`, and a `::preset`
+/// may only seat (`slots=`) kinds the shell declares. Never a failed
+/// render: the renderer draws the shell as authored.
+struct PanelsLayoutShape;
+
+impl PanelsLayoutShape {
+    fn walk(blocks: &[Block], out: &mut Vec<Diagnostic>) {
+        for b in blocks {
+            if let Block::AppShell { children, span, .. } = b {
+                Self::check_shell(children, *span, out);
+            }
+            if let Some(children) = container_children(b) {
+                Self::walk(children, out);
+            }
+        }
+    }
+
+    fn check_shell(children: &[Block], shell_span: Span, out: &mut Vec<Diagnostic>) {
+        let declared: Vec<&str> = children
+            .iter()
+            .filter_map(|c| match c {
+                Block::PanelSlot { panel_kind, .. } if !panel_kind.is_empty() => Some(panel_kind.as_str()),
+                _ => None,
+            })
+            .collect();
+        for c in children {
+            match c {
+                Block::PanelSlot { role, panel_kind: kind, children, span, .. } => {
+                    if *role == crate::types::PanelSlotRole::Work
+                        && !children.iter().any(|k| matches!(k, Block::TabBar { .. }))
+                    {
+                        out.push(diag(
+                            "L045",
+                            format!(
+                                "'::panel-slot[role=work kind={kind}]' has no '::tab-bar' — a Desk \
+                                 needs its strip, even empty"
+                            ),
+                            Some(*span),
+                        ));
+                    }
+                    if *role == crate::types::PanelSlotRole::Navigator && kind.is_empty() {
+                        out.push(diag(
+                            "L045",
+                            "'::panel-slot[role=navigator]' names no kind= — a seat must say \
+                             which navigator fills it"
+                                .to_string(),
+                            Some(*span),
+                        ));
+                    }
+                }
+                Block::Preset { name, slots, span, .. } => {
+                    for s in slots {
+                        if !declared.contains(&s.as_str()) {
+                            out.push(diag(
+                                "L045",
+                                format!(
+                                    "'::preset[name={name}]' seats slot '{s}' but no \
+                                     '::panel-slot' in this shell declares kind={s}"
+                                ),
+                                Some(*span),
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let _ = shell_span;
+    }
+}
+
+impl LintRule for PanelsLayoutShape {
+    fn id(&self) -> &'static str {
+        "L045"
+    }
+
+    fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        Self::walk(&doc.blocks, &mut out);
+        out
+    }
 }
 
 // ------------------------------------------------------------------
@@ -387,8 +477,8 @@ struct UnknownLayoutValue;
 
 /// One attribute whose value is checked against a closed vocabulary.
 fn layout_vocab(block: &str, attr: &str) -> Option<(&'static [&'static str], &'static str)> {
-    const SHELL: &[&str] = &["sidebar-main-panel", "tabs", "adaptive"];
-    const MODES: &[&str] = &["tabs", "rail", "sidebar"];
+    const SHELL: &[&str] = &["sidebar-main-panel", "tabs", "adaptive", "panels"];
+    const MODES: &[&str] = &["tabs", "rail", "sidebar", "panels"];
     const PAGES: &[&str] = &["default", "hero", "cards", "split"];
     match (block, attr) {
         ("app-shell", "layout") => Some((SHELL, "sidebar-main-panel")),
@@ -1676,6 +1766,7 @@ fn container_children(b: &Block) -> Option<&[Block]> {
         | Block::Slide { children, .. }
         | Block::App { children, .. }
         | Block::AppShell { children, .. }
+        | Block::PanelSlot { children, .. }
         | Block::Sidebar { children, .. }
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }

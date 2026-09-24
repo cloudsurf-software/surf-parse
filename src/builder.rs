@@ -2979,6 +2979,35 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
         }
 
+        Block::PanelSlot { role, panel_kind: kind, pinned, parks, classes, min_class, children, .. } => {
+            let mut attrs_parts = vec![format!("role={}", role.as_str())];
+            if !kind.is_empty() { attrs_parts.push(format!("kind={kind}")); }
+            if *pinned { attrs_parts.push("pinned=true".to_string()); }
+            if *parks { attrs_parts.push("parks=true".to_string()); }
+            attrs_parts.extend(class_conditional_attrs(classes, min_class, false));
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
+            let inner = serialize_children(children, depth + 1);
+            if inner.is_empty() {
+                format!("{fence}panel-slot{attrs_str}\n{fence}")
+            } else {
+                format!("{fence}panel-slot{attrs_str}\n{inner}\n{fence}")
+            }
+        }
+
+        Block::Preset { name, title, icon, columns, rows, spans, slots, default, .. } => {
+            let mut attrs_parts = vec![format!("name={name}")];
+            if let Some(t) = title { attrs_parts.push(format!("title=\"{}\"", escape_attr(t))); }
+            if let Some(i) = icon { attrs_parts.push(format!("icon={i}")); }
+            let frs = |v: &[f64]| v.iter().map(|f| format!("{f}")).collect::<Vec<_>>().join(" ");
+            attrs_parts.push(format!("columns=\"{}\"", frs(columns)));
+            attrs_parts.push(format!("rows=\"{}\"", frs(rows)));
+            let spans_src: Vec<String> = spans.iter().map(|s| s.to_attr_source()).collect();
+            attrs_parts.push(format!("spans=\"{}\"", spans_src.join(" ")));
+            if !slots.is_empty() { attrs_parts.push(format!("slots=\"{}\"", slots.join(" "))); }
+            if *default { attrs_parts.push("default=true".to_string()); }
+            format!("{fence}preset[{}]\n{fence}", attrs_parts.join(" "))
+        }
+
         Block::Sidebar { position, collapsible, width, classes, min_class, children, .. } => {
             let mut attrs_parts = vec![format!("position={position}")];
             if *collapsible { attrs_parts.push("collapsible=true".to_string()); }

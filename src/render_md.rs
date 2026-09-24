@@ -1154,6 +1154,14 @@ pub(crate) fn render_block(block: &Block) -> String {
             parts.join("\n\n")
         }
 
+        Block::PanelSlot { children, .. } => {
+            let parts: Vec<String> = children.iter().map(render_block).collect();
+            parts.join("\n\n")
+        }
+
+        // A preset is a shape, not content: nothing to degrade to.
+        Block::Preset { .. } => String::new(),
+
         Block::Sidebar { children, .. } => {
             let parts: Vec<String> = children.iter().map(render_block).collect();
             parts.join("\n\n")

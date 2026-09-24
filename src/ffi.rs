@@ -190,10 +190,10 @@ mod tests {
 
     /// The schema number is what tells a client the new variants are present.
     #[test]
-    fn native_doc_schema_version_is_eleven() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 11);
+    fn native_doc_schema_version_is_twelve() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 12);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 11);
+        assert_eq!(doc.schema_version, 12);
     }
 
     /// v11: a section headline's `{#slug}` crosses as `anchor`, never as text.

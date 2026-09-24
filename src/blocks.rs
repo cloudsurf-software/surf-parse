@@ -12,7 +12,7 @@ use crate::types::{
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
     FormField, FormFieldType, GalleryItem, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
     LogoItem, RelatedItem, TimelineEntry,
-    AdaptiveLayout, AdaptiveMode, AppShellLayout,
+    AdaptiveLayout, AdaptiveMode, AppShellLayout, PanelSlotRole, PresetSpan,
     ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
     RowAction, RowState, SchemaField, SegmentItem, SizeClass, PAGE_LAYOUTS,
     SlideLayout, SmokeCheck, SocialLink, SortSpec, Span, StatItem, StepItem,
@@ -145,6 +145,8 @@ pub fn resolve_block(block: Block) -> Block {
         "infocard" | "info-card" => parse_infocard(attrs, content, *span),
         // Interactive / application blocks
         "app-shell" => parse_app_shell(attrs, content, *span),
+        "panel-slot" => parse_panel_slot(attrs, content, *span),
+        "preset" => parse_preset(attrs, *span),
         "sidebar" => parse_sidebar(attrs, content, *span),
         "panel" => parse_panel(attrs, content, *span),
         "tab-bar" => parse_tab_bar(attrs, content, *span),
@@ -5175,6 +5177,94 @@ fn parse_class_conditional(
         .as_deref()
         .and_then(SizeClass::parse);
     (classes, min_class)
+}
+
+/// `::panel-slot[role=navigator|work kind=<panel kind> pinned parks
+/// classes= min-class=]` (0.27, the panels layout). `kind` is the slot's
+/// identity; absent it is `desk` for a work slot and empty for a seat
+/// (lint L045 reports the empty seat).
+fn parse_panel_slot(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let role = attr_string(attrs, "role")
+        .as_deref()
+        .and_then(PanelSlotRole::parse)
+        .unwrap_or(PanelSlotRole::DEFAULT);
+    let panel_kind = attr_string(attrs, "kind")
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty())
+        .unwrap_or_else(|| match role {
+            PanelSlotRole::Work => "desk".to_string(),
+            PanelSlotRole::Navigator => String::new(),
+        });
+    let pinned = attr_bool(attrs, "pinned");
+    let parks = attr_bool(attrs, "parks");
+    let (classes, min_class) = parse_class_conditional(attrs, None);
+    let children = parse_page_children_in(content, span);
+    Block::PanelSlot {
+        role,
+        panel_kind,
+        pinned,
+        parks,
+        classes,
+        min_class,
+        children,
+        span,
+    }
+}
+
+/// Whitespace-separated fractions (`columns="0.5 0.5"`); a token that is
+/// not a finite non-negative number is dropped, never a failed parse.
+fn attr_fractions(attrs: &Attrs, key: &str) -> Vec<f64> {
+    attr_string(attrs, key)
+        .map(|v| {
+            v.split_whitespace()
+                .filter_map(|t| t.parse::<f64>().ok())
+                .filter(|f| f.is_finite() && *f >= 0.0)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `::preset[name= title= icon= columns= rows= spans= slots= default]`
+/// (0.27): a leaf naming one grid shape. A preset without `columns=` /
+/// `rows=` is a one-cell grid; a preset without `spans=` seats one slot
+/// per cell in row-major order.
+fn parse_preset(attrs: &Attrs, span: Span) -> Block {
+    let name = attr_string(attrs, "name").unwrap_or_default().trim().to_string();
+    let title = attr_string(attrs, "title");
+    let icon = attr_string(attrs, "icon");
+    let mut columns = attr_fractions(attrs, "columns");
+    let mut rows = attr_fractions(attrs, "rows");
+    if columns.is_empty() {
+        columns.push(1.0);
+    }
+    if rows.is_empty() {
+        rows.push(1.0);
+    }
+    let mut spans: Vec<PresetSpan> = attr_string(attrs, "spans")
+        .map(|v| v.split_whitespace().filter_map(PresetSpan::parse).collect())
+        .unwrap_or_default();
+    if spans.is_empty() {
+        for r in 0..rows.len() as u32 {
+            for c in 0..columns.len() as u32 {
+                spans.push(PresetSpan { col: c, row: r, col_span: 1, row_span: 1 });
+            }
+        }
+    }
+    let slots: Vec<String> = attr_string(attrs, "slots")
+        .map(|v| v.split_whitespace().map(str::to_string).collect())
+        .unwrap_or_default();
+    let default = attr_bool(attrs, "default");
+    Block::Preset {
+        name,
+        title,
+        icon,
+        columns,
+        rows,
+        spans,
+        slots,
+        default,
+        span,
+    }
 }
 
 fn parse_sidebar(attrs: &Attrs, content: &str, span: Span) -> Block {

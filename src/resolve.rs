@@ -19,7 +19,8 @@
 //! semantic owner for native targets and any future consolidation.
 
 use crate::types::{
-    Block, PerClass, SizeClass, SIZE_CLASS_DESKTOP_MIN, SIZE_CLASS_TABLET_MIN,
+    AdaptiveMode, AppShellLayout, Block, PanelSlotRole, PerClass, SizeClass,
+    SIZE_CLASS_DESKTOP_MIN, SIZE_CLASS_TABLET_MIN,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -647,6 +648,81 @@ fn project_block(block: &Block, class: SizeClass) -> Option<Block> {
             tiles: *tiles,
             span: *span,
         },
+        Block::PanelSlot {
+            role,
+            panel_kind,
+            pinned,
+            parks,
+            classes,
+            min_class,
+            children,
+            span,
+        } => {
+            if !gate_admits(classes, min_class, class) {
+                return None;
+            }
+            Block::PanelSlot {
+                role: *role,
+                panel_kind: panel_kind.clone(),
+                pinned: *pinned,
+                parks: *parks,
+                classes: classes.clone(),
+                min_class: *min_class,
+                children: recurse(children),
+                span: *span,
+            }
+        }
+        // A panels shell (0.27) resolves its SLOT SET per class: desktop
+        // keeps every slot; tablet keeps the rail, the first (unpinned)
+        // navigator seat and ONE work slot; mobile keeps the rail (it
+        // renders as the generated tab bar) and one work slot — the
+        // navigators are the tab bar's targets there, not cells.
+        Block::AppShell {
+            layout,
+            adaptive,
+            height,
+            children,
+            span,
+        } if *layout == AppShellLayout::Panels
+            || adaptive.is_some_and(|a| {
+                [a.mobile, a.tablet, a.desktop].contains(&AdaptiveMode::Panels)
+            }) =>
+        {
+            let mut seat_kept = false;
+            let mut work_kept = false;
+            let projected = children
+                .iter()
+                .filter(|c| match (class, c) {
+                    (SizeClass::Desktop, _) => true,
+                    (_, Block::PanelSlot { role: PanelSlotRole::Work, .. }) => {
+                        if work_kept {
+                            false
+                        } else {
+                            work_kept = true;
+                            true
+                        }
+                    }
+                    (SizeClass::Tablet, Block::PanelSlot { role: PanelSlotRole::Navigator, pinned, .. }) => {
+                        if *pinned || seat_kept {
+                            false
+                        } else {
+                            seat_kept = true;
+                            true
+                        }
+                    }
+                    (SizeClass::Mobile, Block::PanelSlot { role: PanelSlotRole::Navigator, .. }) => false,
+                    _ => true,
+                })
+                .filter_map(|c| project_block(c, class))
+                .collect();
+            Block::AppShell {
+                layout: *layout,
+                adaptive: *adaptive,
+                height: *height,
+                children: projected,
+                span: *span,
+            }
+        }
         // Containers with no size-class attributes of their own: recurse so
         // gated descendants are still resolved.
         Block::AppShell {

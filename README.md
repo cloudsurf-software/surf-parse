@@ -16,11 +16,12 @@ let config = surf_parse::PageConfig::default();
 let html = result.doc.to_html_page(&config);
 ```
 
-## Block Types (122 registered · 122 implemented)
+## Block Types (124 registered · 124 implemented)
 
-The registry (`spec/blocks.toml`) is the authority: 122 directives, every one
-implemented since 0.25.0 (121 `Block` variants — `::split-pane` and `::pane`
-share one). The implemented variants:
+The registry (`spec/blocks.toml`) is the authority: 124 directives, every one
+implemented since 0.25.0 (123 `Block` variants — `::split-pane` and `::pane`
+share one; `::panel-slot` and `::preset` joined in 0.27.0 with the `panels`
+app-shell layout). The implemented variants:
 
 **Core**: Callout, Code, Data, Decision, Details, Diagram, Figure, Footnote, Metric, Notes, Quote, Related, Summary, Tasks, Turn
 **Citations**: Cite, Bibliography

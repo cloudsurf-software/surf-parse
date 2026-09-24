@@ -714,6 +714,8 @@ fn render_block(block: &Block) -> String {
         | Block::Row { .. }
         | Block::InfoCard { .. }
         | Block::AppShell { .. }
+        | Block::PanelSlot { .. }
+        | Block::Preset { .. }
         | Block::Sidebar { .. }
         | Block::Panel { .. }
         | Block::TabBar { .. }

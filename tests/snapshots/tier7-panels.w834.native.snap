@@ -1,0 +1,552 @@
+[
+  {
+    "type": "summary",
+    "content": "The 0.27 panels layout: the CloudSurf app's arrangement as SurfDoc source —\nthe Navbar rail, a navigator seat plus a pinned Surfy seat, four Desks and\nthe ten presets. Rendered at 390 / 834 / 1280 to pin the per-class slot set."
+  },
+  {
+    "type": "app_shell",
+    "layout": "adaptive",
+    "adaptive": {
+      "mobile": "tabs",
+      "tablet": "rail",
+      "desktop": "panels"
+    },
+    "children": [
+      {
+        "type": "toolbar",
+        "title": "CloudSurf",
+        "title_source": null,
+        "items": [
+          {
+            "kind": "button",
+            "label": "Search",
+            "action": {
+              "verb": "invoke",
+              "target": "openSearch",
+              "payload": null,
+              "raw": "openSearch"
+            },
+            "icon": "search",
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
+          },
+          {
+            "kind": "separator",
+            "label": null,
+            "action": null,
+            "icon": null,
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
+          },
+          {
+            "kind": "button",
+            "label": "New",
+            "action": {
+              "verb": "invoke",
+              "target": "openCreate",
+              "payload": null,
+              "raw": "openCreate"
+            },
+            "icon": "plus",
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
+          }
+        ]
+      },
+      {
+        "type": "sidebar",
+        "position": "left",
+        "collapsible": false,
+        "width": {
+          "mobile": 44,
+          "tablet": 44,
+          "desktop": 44
+        },
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "row",
+            "icon": "cloud",
+            "title": "Cloud",
+            "description": "",
+            "href": "#",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "doc",
+            "title": "SurfDocs",
+            "description": "",
+            "href": "#",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "sparkles",
+            "title": "Surfy",
+            "description": "",
+            "href": "#",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "message",
+            "title": "Messages",
+            "description": "",
+            "href": "#",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "checklist",
+            "title": "Tasks",
+            "description": "",
+            "href": "#",
+            "state": "default",
+            "actions": []
+          }
+        ]
+      },
+      {
+        "type": "panel_slot",
+        "role": "navigator",
+        "kind": "surfdocs",
+        "pinned": false,
+        "parks": true,
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "nav_tree",
+            "source": "docs.recent",
+            "on_select": {
+              "verb": "invoke",
+              "target": "open_doc",
+              "payload": null,
+              "raw": "open_doc"
+            },
+            "on_rename": null,
+            "on_delete": null
+          }
+        ]
+      },
+      {
+        "type": "panel_slot",
+        "role": "work",
+        "kind": "desk",
+        "pinned": false,
+        "parks": false,
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "tab_bar",
+            "active": null,
+            "items": []
+          },
+          {
+            "type": "tab_content",
+            "tab": "desk",
+            "width": null,
+            "align": null,
+            "gate": {
+              "classes": [],
+              "min_class": null
+            },
+            "children": []
+          }
+        ]
+      },
+      {
+        "type": "preset",
+        "name": "single",
+        "title": "Single",
+        "icon": "rectangle",
+        "columns": [
+          1.0
+        ],
+        "rows": [
+          1.0
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "twoColumns",
+        "title": "Two Columns",
+        "icon": "rectangle.split.2x1",
+        "columns": [
+          0.5,
+          0.5
+        ],
+        "rows": [
+          1.0
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "mainPlusSidebar",
+        "title": "Main + Sidebar",
+        "icon": "sidebar.leading",
+        "columns": [
+          0.3333,
+          0.6667
+        ],
+        "rows": [
+          1.0
+        ],
+        "spans": [
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "topBottom",
+        "title": "Top + Bottom",
+        "icon": "rectangle.split.1x2",
+        "columns": [
+          1.0
+        ],
+        "rows": [
+          0.62,
+          0.38
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 0,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "threeColumns",
+        "title": "Three Columns",
+        "icon": "rectangle.split.3x1",
+        "columns": [
+          0.3333,
+          0.3333,
+          0.3333
+        ],
+        "rows": [
+          1.0
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 2,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "mainPlusTwoStacked",
+        "title": "Main + Two Stacked",
+        "icon": "rectangle.lefthalf.inset.filled",
+        "columns": [
+          0.6667,
+          0.3333
+        ],
+        "rows": [
+          0.5,
+          0.5
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 2
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "twoByTwo",
+        "title": "2 × 2",
+        "icon": "rectangle.split.2x2",
+        "columns": [
+          0.5,
+          0.5
+        ],
+        "rows": [
+          0.5,
+          0.5
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 0,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": true
+      },
+      {
+        "type": "preset",
+        "name": "twoMainsPlusTwoStacked",
+        "title": "Two Mains + Two Stacked",
+        "icon": "rectangle.split.3x1.fill",
+        "columns": [
+          0.375,
+          0.375,
+          0.25
+        ],
+        "rows": [
+          0.5,
+          0.5
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 2
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 2
+          },
+          {
+            "col": 2,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 2,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "mainPlusTwoStacks",
+        "title": "Main + Two Stacks",
+        "icon": "rectangle.leadingthird.inset.filled",
+        "columns": [
+          0.4,
+          0.3,
+          0.3
+        ],
+        "rows": [
+          0.5,
+          0.5
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 2
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 2,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 2,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      },
+      {
+        "type": "preset",
+        "name": "twoByThree",
+        "title": "2 × 3",
+        "icon": "rectangle.split.3x3",
+        "columns": [
+          0.3333,
+          0.3333,
+          0.3333
+        ],
+        "rows": [
+          0.5,
+          0.5
+        ],
+        "spans": [
+          {
+            "col": 0,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 2,
+            "row": 0,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 0,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 1,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          },
+          {
+            "col": 2,
+            "row": 1,
+            "col_span": 1,
+            "row_span": 1
+          }
+        ],
+        "slots": [],
+        "is_default": false
+      }
+    ]
+  }
+]

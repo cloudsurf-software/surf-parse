@@ -369,6 +369,11 @@ pub enum AppShellLayout {
     /// Per-size-class navigation, configured by the `mobile=`/`tablet=`/
     /// `desktop=` sub-attrs (see [`AdaptiveLayout`]).
     Adaptive,
+    /// The CloudSurf app's panel grid (0.27): a Navbar rail, a navigator
+    /// seat and a preset-shaped grid of work slots, authored with
+    /// `::panel-slot` and `::preset` (see [`Block::PanelSlot`],
+    /// [`Block::Preset`]).
+    Panels,
 }
 
 impl AppShellLayout {
@@ -378,6 +383,7 @@ impl AppShellLayout {
             AppShellLayout::SidebarMainPanel => "sidebar-main-panel",
             AppShellLayout::Tabs => "tabs",
             AppShellLayout::Adaptive => "adaptive",
+            AppShellLayout::Panels => "panels",
         }
     }
 
@@ -387,6 +393,7 @@ impl AppShellLayout {
             "sidebar-main-panel" => Some(AppShellLayout::SidebarMainPanel),
             "tabs" => Some(AppShellLayout::Tabs),
             "adaptive" => Some(AppShellLayout::Adaptive),
+            "panels" => Some(AppShellLayout::Panels),
             _ => None,
         }
     }
@@ -395,7 +402,7 @@ impl AppShellLayout {
     pub const DEFAULT: AppShellLayout = AppShellLayout::SidebarMainPanel;
 
     /// Every ratified token, for lint messages and the spec registry.
-    pub const TOKENS: [&'static str; 3] = ["sidebar-main-panel", "tabs", "adaptive"];
+    pub const TOKENS: [&'static str; 4] = ["sidebar-main-panel", "tabs", "adaptive", "panels"];
 }
 
 /// The navigation affordance an `layout=adaptive` shell uses in one size
@@ -409,6 +416,9 @@ pub enum AdaptiveMode {
     Rail,
     /// Full sidebar.
     Sidebar,
+    /// The panel grid (0.27) — legal for `desktop=` (and any class an
+    /// author wants it in); the rail and the tabs are its narrower forms.
+    Panels,
 }
 
 impl AdaptiveMode {
@@ -417,6 +427,7 @@ impl AdaptiveMode {
             AdaptiveMode::Tabs => "tabs",
             AdaptiveMode::Rail => "rail",
             AdaptiveMode::Sidebar => "sidebar",
+            AdaptiveMode::Panels => "panels",
         }
     }
 
@@ -425,12 +436,86 @@ impl AdaptiveMode {
             "tabs" => Some(AdaptiveMode::Tabs),
             "rail" => Some(AdaptiveMode::Rail),
             "sidebar" => Some(AdaptiveMode::Sidebar),
+            "panels" => Some(AdaptiveMode::Panels),
             _ => None,
         }
     }
 
     /// Every ratified token, for lint messages and the spec registry.
-    pub const TOKENS: [&'static str; 3] = ["tabs", "rail", "sidebar"];
+    pub const TOKENS: [&'static str; 4] = ["tabs", "rail", "sidebar", "panels"];
+}
+
+/// The role of a `::panel-slot` in a `layout=panels` shell (0.27).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PanelSlotRole {
+    /// A navigator seat: the slot shows ONE of the navigator kinds (which
+    /// one is runtime state); `pinned` seats stay beside the seat.
+    Navigator,
+    /// A work cell — a Desk: its `tab-bar` / `tab-content` strip is
+    /// user-populated at runtime; the preset shapes the grid the work
+    /// slots fill, in authored order.
+    Work,
+}
+
+impl PanelSlotRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PanelSlotRole::Navigator => "navigator",
+            PanelSlotRole::Work => "work",
+        }
+    }
+
+    pub fn parse(token: &str) -> Option<PanelSlotRole> {
+        match token.trim().to_ascii_lowercase().as_str() {
+            "navigator" => Some(PanelSlotRole::Navigator),
+            "work" => Some(PanelSlotRole::Work),
+            _ => None,
+        }
+    }
+
+    /// The role an unknown or absent token degrades to.
+    pub const DEFAULT: PanelSlotRole = PanelSlotRole::Work;
+
+    /// Every ratified token, for lint messages and the spec registry.
+    pub const TOKENS: [&'static str; 2] = ["navigator", "work"];
+}
+
+/// One cell of a `::preset` grid (0.27): `col,row[,col_span,row_span]`,
+/// zero-based, spans default to 1. The n-th span is the cell the n-th
+/// work slot fills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PresetSpan {
+    pub col: u32,
+    pub row: u32,
+    pub col_span: u32,
+    pub row_span: u32,
+}
+
+impl PresetSpan {
+    /// Parse one `c,r` / `c,r,cs,rs` token; `None` for anything else.
+    pub fn parse(token: &str) -> Option<PresetSpan> {
+        let parts: Vec<u32> = token
+            .split(',')
+            .map(|p| p.trim().parse::<u32>().ok())
+            .collect::<Option<Vec<u32>>>()?;
+        match parts.as_slice() {
+            [c, r] => Some(PresetSpan { col: *c, row: *r, col_span: 1, row_span: 1 }),
+            [c, r, cs, rs] if *cs >= 1 && *rs >= 1 => {
+                Some(PresetSpan { col: *c, row: *r, col_span: *cs, row_span: *rs })
+            }
+            _ => None,
+        }
+    }
+
+    /// The authored form back: `c,r` when both spans are 1, else all four.
+    pub fn to_attr_source(&self) -> String {
+        if self.col_span == 1 && self.row_span == 1 {
+            format!("{},{}", self.col, self.row)
+        } else {
+            format!("{},{},{},{}", self.col, self.row, self.col_span, self.row_span)
+        }
+    }
 }
 
 /// The resolved `mobile=`/`tablet=`/`desktop=` triple of an
@@ -1422,6 +1507,50 @@ pub enum Block {
         children: Vec<Block>,
         span: Span,
     },
+    /// A cell of a `layout=panels` shell (0.27): a navigator seat or a
+    /// work slot (a Desk). `::panel-slot[role=work kind=desk]`.
+    PanelSlot {
+        role: PanelSlotRole,
+        /// The panel kind that fills the slot (`cloud`, `surfdocs`, `desk`,
+        /// `desk2` …) — the slot's identity; a preset's `slots=` names it.
+        /// Authored as `kind=`; the field is `panel_kind` because `kind` is
+        /// the `Block` enum's serde tag.
+        panel_kind: String,
+        /// A navigator seat that stays open beside the seat (the Mac's
+        /// pinned second navigator). Work slots ignore it.
+        pinned: bool,
+        /// The slot parks (keeps its state) when hidden rather than closing.
+        parks: bool,
+        /// `classes=` — the size classes this slot is shown in.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        classes: Option<Vec<SizeClass>>,
+        /// `min-class=` — the smallest size class this slot appears in.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_class: Option<SizeClass>,
+        children: Vec<Block>,
+        span: Span,
+    },
+    /// A named grid shape the work slots of a `layout=panels` shell can
+    /// take (0.27): `::preset[name=twoByTwo title="2 × 2" columns="0.5 0.5"
+    /// rows="0.5 0.5" spans="0,0 1,0 0,1 1,1"]`. Leaf; the ten Mac presets
+    /// are ten lines.
+    Preset {
+        name: String,
+        title: Option<String>,
+        icon: Option<String>,
+        /// Column fractions, left to right (they need not sum to 1).
+        columns: Vec<f64>,
+        /// Row fractions, top to bottom.
+        rows: Vec<f64>,
+        /// One cell per work slot the preset seats, in slot order.
+        spans: Vec<PresetSpan>,
+        /// The work slot kinds the cells seat, in order; empty = the
+        /// shell's work slots in authored order.
+        slots: Vec<String>,
+        /// `default=true` — the shape a fresh arrangement opens on.
+        default: bool,
+        span: Span,
+    },
     /// Collapsible side panel.
     Sidebar {
         position: String,
@@ -1882,6 +2011,8 @@ impl Block {
             | Block::Row { span, .. }
             | Block::InfoCard { span, .. }
             | Block::AppShell { span, .. }
+            | Block::PanelSlot { span, .. }
+            | Block::Preset { span, .. }
             | Block::Sidebar { span, .. }
             | Block::Panel { span, .. }
             | Block::TabBar { span, .. }

@@ -2295,6 +2295,7 @@ fn contains_split_pane(block: &Block) -> bool {
         Block::SplitPane { .. } => true,
         Block::Section { children, .. }
         | Block::AppShell { children, .. }
+        | Block::PanelSlot { children, .. }
         | Block::Sidebar { children, .. }
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }
@@ -2302,6 +2303,120 @@ fn contains_split_pane(block: &Block) -> bool {
         | Block::Modal { children, .. } => children.iter().any(contains_split_pane),
         _ => false,
     }
+}
+
+/// The preset a `layout=panels` shell opens on: the one marked
+/// `default=true`, else the first `::preset` child; `None` when the shell
+/// authors no preset (the work slots then stack in one column).
+pub(crate) fn default_preset(children: &[Block]) -> Option<&Block> {
+    children
+        .iter()
+        .find(|c| matches!(c, Block::Preset { default: true, .. }))
+        .or_else(|| children.iter().find(|c| matches!(c, Block::Preset { .. })))
+}
+
+/// The custom properties the work grid of a panels shell carries: the
+/// default preset's shape as `--panels-columns` / `--panels-rows`
+/// (`grid-template-*` track lists — fractions become `fr`), plus
+/// `--panels-preset` naming it. The player reads these, never re-derives
+/// the shape (the breakpoint law's spirit: one resolved answer).
+pub(crate) fn panels_grid_style(preset: Option<&Block>) -> String {
+    let Some(Block::Preset { name, columns, rows, .. }) = preset else {
+        return "--panels-preset:none;--panels-columns:1fr;--panels-rows:1fr".to_string();
+    };
+    format!(
+        "--panels-preset:{};--panels-columns:{};--panels-rows:{}",
+        escape_html(name),
+        fr_tracks(columns),
+        fr_tracks(rows)
+    )
+}
+
+/// `0.5 0.5` → `0.5fr 0.5fr`; a fraction prints as the shortest round-trip
+/// decimal (`1` stays `1`).
+pub(crate) fn fr_tracks(fractions: &[f64]) -> String {
+    fractions
+        .iter()
+        .map(|f| format!("{f}fr"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The `grid-column` / `grid-row` placement of the n-th work slot under
+/// `preset` (`None` past the preset's cells: the slot is authored but not
+/// seated by this shape — `hidden` by the player until a bigger preset).
+/// A shell with no preset stacks its work slots in one column.
+pub(crate) fn panels_slot_placement(preset: Option<&Block>, index: usize) -> Option<String> {
+    let Some(Block::Preset { spans, .. }) = preset else {
+        return Some(format!("grid-column:1 / span 1;grid-row:{} / span 1", index + 1));
+    };
+    let s = spans.get(index)?;
+    Some(format!(
+        "grid-column:{} / span {};grid-row:{} / span {}",
+        s.col + 1,
+        s.col_span,
+        s.row + 1,
+        s.row_span
+    ))
+}
+
+/// Render the children of a `layout=panels` shell (0.27): the rail, the
+/// toolbar and the navigator seats in authored order, the presets as inert
+/// `<template>` records, and EVERY work slot inside ONE
+/// `surfdoc-panels-work` grid carrying the default preset's shape. Slot
+/// order inside the grid is authored order; each seated slot carries its
+/// cell placement inline, an unseated slot is `hidden`.
+fn render_panels_children(children: &[Block]) -> String {
+    let preset = default_preset(children);
+    let mut html = String::new();
+    let mut work = String::new();
+    let mut work_index = 0usize;
+    for child in children {
+        match child {
+            Block::PanelSlot { role: crate::types::PanelSlotRole::Work, .. } => {
+                work.push_str(&render_panel_slot(child, panels_slot_placement(preset, work_index)));
+                work_index += 1;
+            }
+            _ => html.push_str(&render_block(child)),
+        }
+    }
+    if work_index > 0 {
+        html.push_str(&format!(
+            "<div class=\"surfdoc-panels-work\" style=\"{}\">",
+            panels_grid_style(preset)
+        ));
+        html.push_str(&work);
+        html.push_str("</div>");
+    }
+    html
+}
+
+/// One `::panel-slot`. `placement` is the work grid cell (None = a
+/// navigator seat, or a work slot the default preset does not seat).
+fn render_panel_slot(block: &Block, placement: Option<String>) -> String {
+    let Block::PanelSlot { role, panel_kind: kind, pinned, parks, classes, min_class, children, .. } = block else {
+        return String::new();
+    };
+    let is_work = *role == crate::types::PanelSlotRole::Work;
+    let mut html = format!(
+        "<section class=\"surfdoc-panel-slot surfdoc-panel-slot-{}\" data-slot=\"{}\" data-role=\"{}\" data-kind=\"{}\" data-pinned=\"{}\" data-parks=\"{}\"",
+        role.as_str(),
+        escape_html(kind),
+        role.as_str(),
+        escape_html(kind),
+        pinned,
+        parks,
+    );
+    html.push_str(&size_class_attrs(classes, min_class));
+    match (&placement, is_work) {
+        (Some(p), _) => html.push_str(&format!(" style=\"{p}\"")),
+        (None, true) => html.push_str(" hidden"),
+        (None, false) => {}
+    }
+    html.push('>');
+    html.push_str(&render_chrome_children(children));
+    html.push_str("</section>");
+    html
 }
 
 /// Render the children of a chrome container (app-shell, sidebar,
@@ -6064,11 +6179,28 @@ fn render_block_inner(block: &Block) -> String {
                 ),
                 None => String::new(),
             };
+            // 0.27: a panels shell (by layout, or by any adaptive class
+            // naming `panels`) groups its work slots into one grid — and an
+            // adaptive shell that names panels ALSO wears the panels layout
+            // class, so the stylesheet's §56a/§81 rules key on one class.
+            let is_panels = *layout == crate::types::AppShellLayout::Panels
+                || adaptive.is_some_and(|a| {
+                    [a.mobile, a.tablet, a.desktop].contains(&crate::types::AdaptiveMode::Panels)
+                });
+            let panels_class = if is_panels && *layout != crate::types::AppShellLayout::Panels {
+                " surfdoc-layout-panels"
+            } else {
+                ""
+            };
             let mut html = format!(
-                "<div class=\"surfdoc-app-shell surfdoc-layout-{}\"{}{}{}{}>",
-                layout.as_str(), adaptive_attr, state_attr, thread_attr, style,
+                "<div class=\"surfdoc-app-shell surfdoc-layout-{}{}\"{}{}{}{}>",
+                layout.as_str(), panels_class, adaptive_attr, state_attr, thread_attr, style,
             );
-            html.push_str(&render_chrome_children(children));
+            if is_panels {
+                html.push_str(&render_panels_children(children));
+            } else {
+                html.push_str(&render_chrome_children(children));
+            }
             // Ruling R-A (0.14): ONE responsive shell — the small-screen
             // tab-bar is generated from the sidebar's nav rows, not
             // hand-authored. Hidden above 767px by CSS.
@@ -6089,6 +6221,36 @@ fn render_block_inner(block: &Block) -> String {
             // data-panel-open on the root, aria-hidden on the panel,
             // aria-expanded on the FAB and any [data-action=toggleSurfy]
             // button. JS-off degradation: the drawer stays closed.
+            html
+        }
+
+        // 0.27: a slot reached on its own (outside `render_panels_children`)
+        // renders unplaced — a navigator seat, or a work slot with no grid.
+        Block::PanelSlot { .. } => render_panel_slot(block, None),
+
+        Block::Preset { name, title, icon, columns, rows, spans, slots, default, .. } => {
+            let spans_src: Vec<String> = spans.iter().map(|s| s.to_attr_source()).collect();
+            let mut html = format!(
+                "<template class=\"surfdoc-preset\" data-preset=\"{}\" data-slot-count=\"{}\" data-columns=\"{}\" data-rows=\"{}\" data-spans=\"{}\"",
+                escape_html(name),
+                spans.len(),
+                fr_tracks(columns),
+                fr_tracks(rows),
+                escape_html(&spans_src.join(" ")),
+            );
+            if let Some(t) = title {
+                html.push_str(&format!(" data-title=\"{}\"", escape_html(t)));
+            }
+            if let Some(i) = icon {
+                html.push_str(&format!(" data-icon=\"{}\"", escape_html(i)));
+            }
+            if !slots.is_empty() {
+                html.push_str(&format!(" data-slots=\"{}\"", escape_html(&slots.join(" "))));
+            }
+            if *default {
+                html.push_str(" data-default=\"true\"");
+            }
+            html.push_str("></template>");
             html
         }
 

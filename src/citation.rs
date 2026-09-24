@@ -748,6 +748,7 @@ fn children_of(b: &Block) -> Option<&[Block]> {
         | Block::Slide { children, .. }
         | Block::App { children, .. }
         | Block::AppShell { children, .. }
+        | Block::PanelSlot { children, .. }
         | Block::Sidebar { children, .. }
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }

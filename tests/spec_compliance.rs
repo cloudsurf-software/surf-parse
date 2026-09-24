@@ -40,6 +40,8 @@ const ENUM_VARIANTS: &[&str] = &[
     // The fourteen planned blocks, implemented in 0.25.0 (sessions 11 + 12)
     "Related", "Turn", "Timeline", "Output", "AiGenerated", "Alternatives", "AiContext",
     "Countdown", "Css", "Footnote", "Kernel", "LogoCloud", "Subscribe", "Notes",
+    // The panels layout, 0.27.0 (CloudSurf on the web, TASK-994)
+    "PanelSlot", "Preset",
 ];
 
 #[derive(Debug, Deserialize)]
