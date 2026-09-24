@@ -588,6 +588,7 @@ pub enum NativeBlock {
     /// ::hero
     Hero {
         headline: Option<String>,
+        anchor: Option<String>,
         subtitle: Option<String>,
         badge: Option<String>,
         align: String,
@@ -647,6 +648,7 @@ pub enum NativeBlock {
     SectionContainer {
         bg: Option<String>,
         headline: Option<String>,
+        anchor: Option<String>,
         subtitle: Option<String>,
         children: Vec<NativeBlock>,
     },
@@ -2305,7 +2307,11 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 ///    `for=` crosses as `for_id` (a keyword on both sides of the FFI).
 /// 5. `NativeBlock` is now a 123-variant enum (122 structural + `Markdown`);
 ///    only `Unknown` and `Deck` still convert to a `Markdown` string.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 10;
+/// v11 (0.26.0) — Khoury's on macOS, L0: `Hero` and `SectionContainer`
+/// gain `anchor` (the headline's trailing `{#slug}`, split off the text the
+/// way the web's `split_explicit_anchor` does); markdown bodies (`Markdown`,
+/// `Columns`) cross with `{#slug}` removed from their ATX headings.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 11;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -2385,6 +2391,58 @@ fn convert_children(children: &[Block], depth: u32) -> Vec<NativeBlock> {
         .collect()
 }
 
+/// Split a hero/section headline's trailing explicit anchor (`Title {#slug}`)
+/// off the text — the web does it at render (`split_explicit_anchor`), so a
+/// native renderer must never see the `{#…}` (schema v11). The AST keeps the
+/// author's line so the fixed-point round trip is unchanged.
+fn split_headline_anchor(headline: Option<&str>) -> (Option<String>, Option<String>) {
+    match headline {
+        None => (None, None),
+        Some(h) => match crate::render_html::split_explicit_anchor(h) {
+            Some((text, slug)) => (Some(text.to_string()), Some(slug.to_string())),
+            None => (Some(h.to_string()), None),
+        },
+    }
+}
+
+/// Remove a trailing explicit anchor (`## Title {#slug}`) from every ATX
+/// heading line of a markdown body, outside fenced code (schema v11). A body
+/// with no such heading comes back byte-identical.
+pub(crate) fn strip_heading_anchors(content: &str) -> String {
+    if !content.contains("{#") {
+        return content.to_string();
+    }
+    let mut out = String::with_capacity(content.len());
+    let mut fence: Option<&str> = None;
+    for (i, line) in content.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let t = line.trim_start();
+        if let Some(f) = fence {
+            if t.starts_with(f) {
+                fence = None;
+            }
+            out.push_str(line);
+            continue;
+        }
+        if t.starts_with("```") || t.starts_with("~~~") {
+            fence = Some(&t[..3]);
+            out.push_str(line);
+            continue;
+        }
+        let hashes = t.bytes().take_while(|b| *b == b'#').count();
+        if (1..=6).contains(&hashes) && t[hashes..].starts_with(' ') {
+            if let Some((text, _)) = crate::render_html::split_explicit_anchor(line) {
+                out.push_str(text);
+                continue;
+            }
+        }
+        out.push_str(line);
+    }
+    out
+}
+
 /// Convert a single block, but allow a `Block::Markdown` to expand into
 /// multiple native blocks when its content embeds one or more GFM pipe tables
 /// (markdown text → DataTable → markdown text …). Every other block converts
@@ -2407,6 +2465,7 @@ fn convert_block_flat(block: &Block, depth: u32) -> Vec<NativeBlock> {
 /// line, or EOF. Ragged rows are padded/truncated to the header column count.
 /// Escaped `\|` inside a cell is treated as a literal pipe, not a separator.
 pub(crate) fn expand_markdown_tables(content: &str) -> Vec<NativeBlock> {
+    let content = &strip_heading_anchors(content);
     let lines: Vec<&str> = content.split('\n').collect();
 
     // Fast path: no GFM table present → return the content verbatim, byte-for-
@@ -2583,7 +2642,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         // ── Native variants: direct conversion ──────────────────────
 
         Block::Markdown { content, .. } => NativeBlock::Markdown {
-            content: content.clone(),
+            content: strip_heading_anchors(content),
         },
 
         Block::Callout {
@@ -2808,7 +2867,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             columns: columns
                 .iter()
                 .map(|c| NativeColumnContent {
-                    content: c.content.clone(),
+                    content: strip_heading_anchors(&c.content),
                 })
                 .collect(),
         },
@@ -2880,8 +2939,11 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             buttons,
             content,
             ..
-        } => NativeBlock::Hero {
-            headline: headline.clone(),
+        } => {
+            let (headline, anchor) = split_headline_anchor(headline.as_deref());
+            NativeBlock::Hero {
+            headline,
+            anchor,
             subtitle: subtitle.clone(),
             badge: badge.clone(),
             align: align.clone(),
@@ -2895,7 +2957,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 })
                 .collect(),
             content: content.clone(),
-        },
+        }
+        }
 
         Block::Features { cards, cols, .. } => NativeBlock::Features {
             cols: cols.map(NativePerClassU32::from),
@@ -3029,9 +3092,11 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 let md = render_md::render_block(block);
                 NativeBlock::Markdown { content: md }
             } else {
+                let (headline, anchor) = split_headline_anchor(headline.as_deref());
                 NativeBlock::SectionContainer {
                     bg: bg.clone(),
-                    headline: headline.clone(),
+                    headline,
+                    anchor,
                     subtitle: subtitle.clone(),
                     children: convert_children(children, depth + 1),
                 }
@@ -6754,6 +6819,7 @@ mod tests {
             convert_block(&block, 0),
             NativeBlock::Hero {
                 headline: Some("Welcome".to_string()),
+                anchor: None,
                 subtitle: Some("To SurfDoc".to_string()),
                 badge: Some("New".to_string()),
                 align: "center".to_string(),
@@ -7376,6 +7442,7 @@ mod tests {
             NativeBlock::SectionContainer {
                 bg: Some("muted".to_string()),
                 headline: Some("Features".to_string()),
+                anchor: None,
                 subtitle: Some("What we offer".to_string()),
                 children: vec![
                     NativeBlock::Markdown {
@@ -7406,6 +7473,7 @@ mod tests {
             NativeBlock::SectionContainer {
                 bg: None,
                 headline: None,
+                anchor: None,
                 subtitle: None,
                 children: vec![],
             }
@@ -7745,8 +7813,9 @@ mod tests {
         // with measured use (the manifest's children) — schema v8. 0.24: the
         // ten infra blocks of the app format — schema v9. 0.25: the last
         // twenty (the six web-only blocks and the fourteen that were
-        // planned) — schema v10; every registered block crosses.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 10);
+        // planned) — schema v10; every registered block crosses. 0.26:
+        // hero/section `anchor` + heading anchors stripped — schema v11.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 11);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the
@@ -7799,5 +7868,79 @@ mod tests {
             }
             other => panic!("expected SectionContainer, got {other:?}"),
         }
+    }
+
+    // ── schema v11: headline anchors split, heading anchors stripped ──
+
+    fn native_of(src: &str) -> Vec<NativeBlock> {
+        to_native_blocks(&crate::parse(src).doc)
+    }
+
+    #[test]
+    fn v11_hero_headline_anchor_is_split_off() {
+        let native = native_of("::hero\n# Home of the *fresh-baked* pita. {#top}\nSub.\n::\n");
+        match &native[0] {
+            NativeBlock::Hero { headline, anchor, .. } => {
+                assert_eq!(headline.as_deref(), Some("Home of the *fresh-baked* pita."));
+                assert_eq!(anchor.as_deref(), Some("top"));
+            }
+            other => panic!("expected Hero, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn v11_section_headline_anchor_is_split_off() {
+        let native = native_of("::section[bg=favorites]\n## Start with the favorites. {#favorites}\nThe plates.\n\nBody.\n::\n");
+        match &native[0] {
+            NativeBlock::SectionContainer { headline, anchor, bg, .. } => {
+                assert_eq!(headline.as_deref(), Some("Start with the favorites."));
+                assert_eq!(anchor.as_deref(), Some("favorites"));
+                assert_eq!(bg.as_deref(), Some("favorites"));
+            }
+            other => panic!("expected SectionContainer, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn v11_headline_without_anchor_is_untouched() {
+        let native = native_of("::section\n## Join the family.\n::\n");
+        match &native[0] {
+            NativeBlock::SectionContainer { headline, anchor, .. } => {
+                assert_eq!(headline.as_deref(), Some("Join the family."));
+                assert_eq!(anchor, &None);
+            }
+            other => panic!("expected SectionContainer, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn v11_markdown_heading_anchors_are_stripped_outside_fences() {
+        let md = "## Visit us {#visit}\n\nText {#not-a-heading}\n\n```\n## kept {#x}\n```\n### Deep {#deep}";
+        assert_eq!(
+            strip_heading_anchors(md),
+            "## Visit us\n\nText {#not-a-heading}\n\n```\n## kept {#x}\n```\n### Deep"
+        );
+        // No anchor → byte-identical.
+        let plain = "# Title\n\nBody {with braces}";
+        assert_eq!(strip_heading_anchors(plain), plain);
+        // A malformed slug is not an anchor.
+        assert_eq!(strip_heading_anchors("## A {#bad slug}"), "## A {#bad slug}");
+    }
+
+    #[test]
+    fn v11_markdown_and_columns_cross_without_heading_anchors() {
+        let native = native_of("## Pull up a chair. {#visit}\n\nCome by.\n\n::columns\n:::column\n### Hummus {#hummus}\nSilky.\n:::\n::\n");
+        let md = native.iter().find_map(|b| match b {
+            NativeBlock::Markdown { content } => Some(content.clone()),
+            _ => None,
+        });
+        assert_eq!(md.as_deref().map(|c| c.contains("{#")), Some(false));
+        let cols = native.iter().find_map(|b| match b {
+            NativeBlock::Columns { columns } => Some(columns.clone()),
+            _ => None,
+        });
+        let cols = cols.expect("columns");
+        assert!(cols.iter().all(|c| !c.content.contains("{#")), "{cols:?}");
+        assert!(cols[0].content.contains("### Hummus"));
     }
 }

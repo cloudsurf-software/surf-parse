@@ -3,6 +3,15 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.26.0 — 2026-09-23 (native schema v11: headline anchors — Khoury's on macOS, L0)
+
+- `NativeBlock::Hero` and `NativeBlock::SectionContainer` gain `anchor: Option<String>`: a headline's trailing
+  explicit anchor (`## Title {#slug}`) is split off the text the way the web's `split_explicit_anchor` does, so a
+  native renderer never draws `{#slug}`. The AST keeps the author's line (the fixed-point round trip is unchanged).
+- Markdown bodies (`NativeBlock::Markdown`, `NativeColumnContent`) cross with `{#slug}` removed from their ATX
+  headings, outside fenced code; a body with no such heading crosses byte-identical.
+- `NATIVE_DOC_SCHEMA_VERSION` 10 → 11.
+
 ## 0.25.0 — 2026-09-22 (native schema v10: the last twenty — every registered block is implemented)
 
 ### Added

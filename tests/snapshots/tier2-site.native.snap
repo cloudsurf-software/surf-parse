@@ -22,6 +22,7 @@
       {
         "type": "hero",
         "headline": null,
+        "anchor": null,
         "subtitle": null,
         "badge": null,
         "align": "center",

@@ -190,10 +190,24 @@ mod tests {
 
     /// The schema number is what tells a client the new variants are present.
     #[test]
-    fn native_doc_schema_version_is_ten() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 10);
+    fn native_doc_schema_version_is_eleven() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 11);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 10);
+        assert_eq!(doc.schema_version, 11);
+    }
+
+    /// v11: a section headline's `{#slug}` crosses as `anchor`, never as text.
+    #[test]
+    fn section_anchor_crosses_the_ffi() {
+        let doc = parse_to_native("::section[bg=story]\n## Three generations. {#story}\n\nBody.\n::\n".into())
+            .expect("parse");
+        match &doc.blocks[0] {
+            NativeBlock::SectionContainer { headline, anchor, .. } => {
+                assert_eq!(headline.as_deref(), Some("Three generations."));
+                assert_eq!(anchor.as_deref(), Some("story"));
+            }
+            other => panic!("expected SectionContainer, got {other:?}"),
+        }
     }
 
     /// v6 addressing: `id=`/`label=` reach the FFI as a span-indexed list.

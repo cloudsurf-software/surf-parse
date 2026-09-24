@@ -465,6 +465,7 @@ mod native_props {
                 headline: native_headline,
                 subtitle: native_subtitle,
                 children,
+                ..
             } = &native[0]
             {
                 prop_assert_eq!(native_bg, &bg);

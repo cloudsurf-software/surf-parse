@@ -3,6 +3,7 @@
     "type": "section_container",
     "bg": null,
     "headline": null,
+    "anchor": null,
     "subtitle": null,
     "children": [
       {
