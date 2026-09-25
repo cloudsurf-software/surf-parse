@@ -137,6 +137,27 @@ pub fn resolve_size_class(width: u32) -> String {
 }
 
 /// Shared parse + fatal-diagnostic routing for the FFI entry points.
+// ═══════════════════════════════════════════════════════════════════════
+// Block edits by id (0.28.0) — `crate::edit` over the FFI
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Every block of `source` with its `id=`, route, depth and span, as a JSON
+/// array of `BlockRef` — what a kit shows beside a rendered page and what a
+/// native editor addresses an edit with.
+#[uniffi::export]
+pub fn surfdoc_list_blocks(source: String) -> String {
+    crate::edit::list_blocks_json(&source)
+}
+
+/// Apply ONE edit (a JSON `EditOp`: `replace` · `insert_after` · `remove` ·
+/// `move` · `set_attr` · `set_site_key` · `set_text` · `stamp_ids`) to
+/// `source` and return the new source. An unknown id, route or op is an
+/// error — never a silent no-op.
+#[uniffi::export]
+pub fn surfdoc_apply_edit(source: String, op_json: String) -> Result<String, SurfDocError> {
+    crate::edit::apply_json(&source, &op_json).map_err(|e| SurfDocError::Parse { msg: e.to_string() })
+}
+
 fn parse_checked(source: &str) -> Result<crate::types::SurfDoc, SurfDocError> {
     let result = crate::parse(source);
 

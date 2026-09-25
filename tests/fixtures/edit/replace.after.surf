@@ -1,0 +1,44 @@
+::site
+name: Bens Construction Co
+description: Every tool, accounted for.
+accent: #f97316
+theme: light
+::
+
+::nav[id=nav cta-label="Get a quote" cta-href="/contact"]
+- [Home](/)
+- [About](/about)
+::
+
+::footer[id=footer brand="Bens Construction Co" tagline="Tools, tracked."]
+© 2026 Bens Construction Co
+::
+
+::page[route="/" title="Home"]
+::hero[align=center badge="2026" id=hero]
+# Every tool, accounted for
+The list the whole crew trusts.
+::
+
+A loose paragraph between blocks stays loose.
+
+::features[id=features columns=3]
+- **Fast** — a tool is checked out in seconds
+- **Clear** — one list for the whole crew
+- **Honest** — what is missing shows up red
+::
+
+::cta[id=cta label="Book a walkthrough" href="/contact"]
+::
+
+::page[route="/about" title="About"]
+::hero[id=hero]
+# About Bens
+Family-run since 1998.
+::
+
+::section[id=story]
+## The story
+One truck, one list, no lost drills.
+::
+::

@@ -21,6 +21,7 @@ pub(crate) mod chart;
 pub mod citation;
 pub(crate) mod diagram;
 pub mod diagram_scene;
+pub mod edit;
 pub mod error;
 pub mod icons;
 mod icons_vendored;
@@ -75,6 +76,7 @@ pub use citation::{
     parse_author, parse_authors, reference_list, reference_list_keyed, Author, CiteContext,
     CiteItem, CiteRef, Reference, RefType,
 };
+pub use edit::{apply as apply_edit, apply_json as apply_edit_json, list_blocks, list_blocks_json, stamp_ids, BlockRef, EditError, EditOp};
 pub use error::*;
 pub use limits::{LimitExceeded, ParseLimits};
 pub use lint::{

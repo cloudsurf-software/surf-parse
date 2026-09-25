@@ -1,0 +1,24 @@
+::site
+name: Imported
+::
+
+::nav[id=b-nav-1]
+- [Home](/)
+::
+
+::page[route="/"]
+::hero[id=b-hero-1]
+# Imported by hand
+::
+
+::features[columns=2 id=b-features-1]
+- a
+- b
+::
+
+::hero[id=second]
+# Two heroes
+::
+
+::cta[label=Go href=/ id=b-cta-1]
+::

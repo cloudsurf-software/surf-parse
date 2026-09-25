@@ -3,6 +3,21 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.28.0 — 2026-09-24 (block edits by id — the site is a versioned SurfDoc, TASK-1015 lane P)
+
+- `surf_parse::edit` — the editing API the 0.18.1 block addressing was built for: `replace_block` · `insert_after` ·
+  `remove_block` · `move_block` · `set_attr` · `set_site_key` (the `::site` body's `accent:` / `name:` …) · `set_text`
+  (a block's first text line, heading prefix kept) · `stamp_ids` (every unlabelled directive gets a stable
+  `b-<kind>-<n>` once; `::site` and `::page` never) · `list_blocks` (every block with its id, route, depth and span).
+  Pure functions over the source through `block_meta`'s spans: one block moves, everything else stays byte-identical,
+  an unknown id / route / op is an `EditError`, never a silent no-op. Ids resolve WITHIN a page (L043's law): every
+  verb takes an optional `route`; an id on two pages without one is `AmbiguousId`.
+- `EditOp` / `apply` / `apply_json` — one edit as data, the shape the FFI, the wasm module and a JSON tool carry.
+- FFI: `surfdoc_list_blocks(source)` and `surfdoc_apply_edit(source, op_json)`; wasm: `list_blocks` and `apply_edit`
+  (`{"ok":true,"source"}` / `{"ok":false,"error"}`).
+- Corpus: `tests/edit_fixtures.rs` — one `(before, op, after)` triple per verb under `tests/fixtures/edit/`, pinned
+  byte-for-byte. Native schema unchanged (v12).
+
 ## 0.27.0 — 2026-09-24 (native schema v12: the `panels` layout — CloudSurf on the web, lane G)
 
 - `::app-shell[layout=panels]` — the CloudSurf app's arrangement enters the grammar (`AppShellLayout::Panels`), and

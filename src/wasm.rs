@@ -136,3 +136,21 @@ pub fn parse_diagnostics(source: &str) -> String {
 
     serde_json::Value::Array(diags).to_string()
 }
+
+/// Every block of `source` with its `id=`, route, depth and span — a JSON
+/// array of `BlockRef` (the 0.28.0 block-edit surface).
+#[wasm_bindgen]
+pub fn list_blocks(source: &str) -> String {
+    crate::edit::list_blocks_json(source)
+}
+
+/// Apply ONE JSON `EditOp` to `source` (0.28.0). Returns
+/// `{"ok":true,"source":"…"}` or `{"ok":false,"error":"…"}` — a refused edit
+/// leaves the caller's source untouched.
+#[wasm_bindgen]
+pub fn apply_edit(source: &str, op_json: &str) -> String {
+    match crate::edit::apply_json(source, op_json) {
+        Ok(out) => serde_json::json!({ "ok": true, "source": out }).to_string(),
+        Err(e) => serde_json::json!({ "ok": false, "error": e.to_string() }).to_string(),
+    }
+}
