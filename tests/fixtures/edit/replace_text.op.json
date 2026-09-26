@@ -1,0 +1,7 @@
+{
+  "op": "replace_text",
+  "route": "/",
+  "id": "hero",
+  "find": "Every tool, on the truck",
+  "replace": "Every tool, accounted for"
+}

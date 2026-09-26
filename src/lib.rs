@@ -76,7 +76,11 @@ pub use citation::{
     parse_author, parse_authors, reference_list, reference_list_keyed, Author, CiteContext,
     CiteItem, CiteRef, Reference, RefType,
 };
-pub use edit::{apply as apply_edit, apply_json as apply_edit_json, list_blocks, list_blocks_json, stamp_ids, BlockRef, EditError, EditOp};
+pub use edit::{
+    apply as apply_edit, apply_json as apply_edit_json, block_count, block_text, find_text, find_text_json, list_blocks,
+    list_blocks_json, replace_text, resolve as resolve_text, stamp_ids, visible_text, BlockRef, EditError, EditOp, Resolved,
+    TextHit, TextReplaced,
+};
 pub use error::*;
 pub use limits::{LimitExceeded, ParseLimits};
 pub use lint::{

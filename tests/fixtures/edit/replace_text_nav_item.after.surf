@@ -1,0 +1,60 @@
+::site
+name: Bens Construction Co
+accent: #f97316
+::
+
+::nav[id=nav]
+- [Home](/)
+- [Our story](/about)
+::
+
+::footer[id=footer tagline="Tools, tracked."]
+© 2026 Bens Construction Co · [Learn more](/about)
+::
+
+::page[route="/" title="Home"]
+::hero[id=hero]
+# Every tool, on the truck
+We track what we own.
+[Learn more](/about){primary}
+[Get a quote](/contact)
+::
+
+A loose paragraph between blocks stays loose.
+
+::features[id=features columns=3]
+### Fast
+A tool is checked out in seconds. [Learn more](/features)
+### Clear
+One list for the whole crew.
+### Honest
+What is missing shows up **red**.
+::
+
+::faq[id=faq]
+### Do you deliver?
+Yes — same day within the county.
+### Can I rent?
+Weekly and monthly rates.
+::
+::
+
+::page[route="/about" title="About"]
+::hero[id=hero]
+# About Bens {#about}
+Family-run since 1998, it’s a **Bens** tradition.
+::
+
+::section[id=story]
+## The story
+One truck, one list, no lost drills.
+
+| Year | Trucks |
+|------|--------|
+| 1998 | 1 |
+| 2026 | 12 |
+::
+
+::cta[id=cta label="Get a quote" href="/contact"]
+::
+::

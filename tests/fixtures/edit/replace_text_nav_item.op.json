@@ -1,0 +1,6 @@
+{
+  "op": "replace_text",
+  "id": "nav",
+  "find": "About",
+  "replace": "Our story"
+}

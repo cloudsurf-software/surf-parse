@@ -150,12 +150,22 @@ pub fn surfdoc_list_blocks(source: String) -> String {
 }
 
 /// Apply ONE edit (a JSON `EditOp`: `replace` · `insert_after` · `remove` ·
-/// `move` · `set_attr` · `set_site_key` · `set_text` · `stamp_ids`) to
+/// `move` · `set_attr` · `set_site_key` · `set_text` · `replace_text` · `stamp_ids`) to
 /// `source` and return the new source. An unknown id, route or op is an
 /// error — never a silent no-op.
 #[uniffi::export]
 pub fn surfdoc_apply_edit(source: String, op_json: String) -> Result<String, SurfDocError> {
     crate::edit::apply_json(&source, &op_json).map_err(|e| SurfDocError::Parse { msg: e.to_string() })
+}
+
+/// Where a phrase the person quoted occurs (0.29.0): every hit with its
+/// block, slot and whether it is verbatim, plus the ONE ambiguity policy's
+/// verdict against `current_route` — JSON
+/// `{"hits":[…],"policy":"exact|normalized|current_route|ambiguous|none","pick":hit|null}`.
+/// What a native client resolves a composer pill with BEFORE it sends.
+#[uniffi::export]
+pub fn surfdoc_find_text(source: String, query: String, current_route: Option<String>) -> String {
+    crate::edit::find_text_json(&source, &query, current_route.as_deref())
 }
 
 fn parse_checked(source: &str) -> Result<crate::types::SurfDoc, SurfDocError> {

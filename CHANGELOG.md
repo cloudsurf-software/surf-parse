@@ -3,6 +3,35 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.29.0 — 2026-09-26 (text-anchored edits — the block is found before the model runs, TASK-1040 lane P)
+
+- `surf_parse::edit::find_text(source, query, route?)` — every place a quoted phrase occurs, in document order, as a
+  `TextHit { id, kind, route, slot, line, col, len, start_offset, end_offset, exact, snippet }`: the block it sits in
+  (`id: None`, kind `markdown` for loose text under a page), the SLOT inside the block (`headline` · `subtitle` ·
+  `body(n)` · `item(n)` · `attr(key)` · `cell(r,c)`), and whether the bytes there are the phrase verbatim. The
+  normaliser is a table of seven rules, one test each: case · whitespace runs · curly quotes · `*` and `` ` ``
+  transparent (a span that would cut an emphasis run is widened over it) · the query's trailing punctuation · an
+  ellipsis in the middle · a link's `(href)` and a trailing `{…}` invisible. Ids, routes, hrefs, colours and layout
+  tokens are never text. With a `route`, that page's blocks plus the site-wide ones are searched.
+- `resolve(hits, current_route) -> Resolved` — the ONE ambiguity policy every caller runs: exactly one verbatim hit →
+  `Exact`; none verbatim and exactly one normalised → `Normalized`; several and exactly one on the current route →
+  `CurrentRoute`; still several → `Ambiguous(candidates)`, never a guess; none → `None`. `find_text_json` carries
+  `{hits, policy, pick}` for the FFI (`surfdoc_find_text`), the wasm module (`find_text`) and a server tool.
+- `replace_text(source, route?, id?, find, replace) -> TextReplaced { source, hit, before, after }` and the
+  `EditOp` `replace_text` (`find` · `replace`) — the phrase is replaced INSIDE its line so a bullet, `[label](href)`,
+  a heading prefix, `{#anchor}`, the `[attrs]` line and the value side of `key: value` survive; the scope is the block
+  `id`, else the page `route` (loose Markdown reachable), else the document; within it the phrase must occur once
+  (verbatim first, then normalised) or the edit is refused with `AmbiguousText { candidates }` / `TextNotFound`.
+  `set_text` stays as sugar for a block's first line; its doc steers a phrase at `replace_text`.
+- `list_blocks` — every `BlockRef` gains `text` (the block's first visible text, markup stripped, ≤ 120 chars; a
+  `::site`'s name, a `::page`'s title, a `::cta`'s label) and `count` (list items · heading-started cards, questions,
+  steps · table rows · child blocks). JSON grows only; a 0.28.0 listing still decodes. `visible_text(line)` is public.
+- `find` (every id verb): a site-wide block (`nav`, `footer`) is found whatever `route` is passed; an id that appears
+  twice on ONE page is `DuplicateId`, never silently the first.
+- Corpus: `tests/fixtures/edit/text.surf` + eight pinned `replace_text` cases (a nav item · a second card's title · a
+  FAQ answer · a button label · a headline with an anchor · a loose paragraph · an attribute value · a table cell),
+  the listing `text.blocks.json`, and `replace_text` in the per-verb loop over `site.surf`. Native schema unchanged (v12).
+
 ## 0.28.0 — 2026-09-24 (block edits by id — the site is a versioned SurfDoc, TASK-1015 lane P)
 
 - `surf_parse::edit` — the editing API the 0.18.1 block addressing was built for: `replace_block` · `insert_after` ·

@@ -1,0 +1,7 @@
+{
+  "op": "replace_text",
+  "route": "/",
+  "id": "faq",
+  "find": "same day within the county",
+  "replace": "next day, county-wide"
+}

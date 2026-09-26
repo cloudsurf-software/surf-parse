@@ -1,0 +1,7 @@
+{
+  "op": "replace_text",
+  "route": "/",
+  "id": "hero",
+  "find": "Learn more",
+  "replace": "See the work"
+}

@@ -147,6 +147,14 @@ pub fn list_blocks(source: &str) -> String {
 /// Apply ONE JSON `EditOp` to `source` (0.28.0). Returns
 /// `{"ok":true,"source":"…"}` or `{"ok":false,"error":"…"}` — a refused edit
 /// leaves the caller's source untouched.
+/// Where a phrase occurs (0.29.0) and what the ONE ambiguity policy picks
+/// against `current_route` — JSON `{"hits":[…],"policy":"…","pick":hit|null}`;
+/// the web's resolver over the source it already holds.
+#[wasm_bindgen]
+pub fn find_text(source: &str, query: &str, current_route: Option<String>) -> String {
+    crate::edit::find_text_json(source, query, current_route.as_deref())
+}
+
 #[wasm_bindgen]
 pub fn apply_edit(source: &str, op_json: &str) -> String {
     match crate::edit::apply_json(source, op_json) {

@@ -1,0 +1,7 @@
+{
+  "op": "replace_text",
+  "route": "/about",
+  "id": "story",
+  "find": "Trucks",
+  "replace": "Fleet"
+}

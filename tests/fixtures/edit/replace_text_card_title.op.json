@@ -1,0 +1,7 @@
+{
+  "op": "replace_text",
+  "route": "/",
+  "id": "features",
+  "find": "Clear",
+  "replace": "Crystal clear"
+}
