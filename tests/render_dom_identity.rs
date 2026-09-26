@@ -644,3 +644,51 @@ fn identity_markdown_pipe_table_over_the_preview_cap() {
         );
     }
 }
+
+// -- (d) 0.29.0: the twins the strategy docs need (TASK-1039 lane R) ------
+
+/// The four markdown constructs that declined the most documents in the
+/// 2026-09-25 sweep: a rule, a blockquote, strikethrough, task-list markers.
+#[test]
+fn identity_markdown_constructs_fixture() {
+    assert_identity("dom-markdown-constructs.surf");
+}
+
+/// Every newly covered block kind: its registry snippet and every corpus
+/// example render byte-identical to the string renderer, and pass the gate.
+#[test]
+fn identity_newly_covered_kinds() {
+    use surf_parse::spec_registry::{examples_for, SNIPPETS};
+    let kinds = [
+        "tasks", "action-items", "decision", "steps", "quote", "cta", "columns", "stats", "testimonial", "faq", "details",
+        "comparison", "route", "slide", "deck", "logo",
+    ];
+    let mut checked = 0usize;
+    for kind in kinds {
+        let mut sources: Vec<String> = SNIPPETS.iter().filter(|(k, _)| *k == kind).map(|(_, s)| s.to_string()).collect();
+        sources.extend(examples_for(kind).into_iter().map(|e| e.source));
+        // A kind with neither a snippet nor a corpus example (`deck` — the
+        // slides path owns it; `action-items` — an alias of `tasks`) has
+        // nothing to pin here; the sweep example still gates it.
+        for src in sources {
+            let doc = surf_parse::parse(&src).doc;
+            if let Err(e) = check_coverage(&doc) {
+                panic!("{kind}: expected coverage, got decline: {e}\n{src}");
+            }
+            let dom_html = render_fragment_string(&doc).expect("native sink renders");
+            assert_eq!(dom_html, doc.to_html_fragment(), "{kind}: DOM serialization drifted from render_html\n{src}");
+            checked += 1;
+        }
+    }
+    assert!(checked >= 14, "{checked} sources checked");
+}
+
+/// An unknown directive renders as the sanitized-markdown note, byte-identical.
+#[test]
+fn identity_unknown_block_and_cta_group() {
+    let src = "::team\n## Who\n- Brady\n::\n\n::cta[label=\"Start\" href=\"/start\" primary=true]\n::cta[label=\"Docs\" href=\"/docs\"]\n\nAfter the buttons.\n";
+    let doc = surf_parse::parse(src).doc;
+    check_coverage(&doc).expect("covered");
+    assert_eq!(render_fragment_string(&doc).expect("renders"), doc.to_html_fragment());
+    assert!(doc.to_html_fragment().contains("surfdoc-cta-group"), "two CTAs group");
+}

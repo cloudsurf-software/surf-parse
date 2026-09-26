@@ -1,0 +1,28 @@
+---
+title: "Markdown constructs the DOM path draws"
+type: doc
+---
+
+# A plan mirror's markdown
+
+Before the rule.
+
+---
+
+> A blockquote with **strong** words and a [link](https://surf.space).
+>
+> Two paragraphs inside.
+
+After the quote, some ~~struck~~ text and *emphasis*.
+
+- [ ] an open task
+- [x] a done task
+- a plain item
+
+| lane | what |
+|---|---|
+| L0 | every visit |
+
+***
+
+Last line.

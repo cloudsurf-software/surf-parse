@@ -175,6 +175,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     // 0.19.2: the `::data` preview-contract fixture (30 body rows + a
     // `total:` summary) — a well-formed document, so it parses clean.
     ("data-preview.surf", &[]),
+    // 0.29.0: the markdown constructs the DOM path draws (a rule, a
+    // blockquote, strikethrough, task-list markers) — well-formed.
+    ("dom-markdown-constructs.surf", &[]),
     ("fragment-site.surf", &[]),
     // 0.11 nesting fix: `::section` containing a balanced `::callout` is a
     // real container (surplus-closer rule), so the file parses clean — the
