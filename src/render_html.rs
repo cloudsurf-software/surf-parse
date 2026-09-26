@@ -7178,7 +7178,7 @@ fn constraint_str(c: &crate::types::FieldConstraint) -> String {
     }
 }
 
-fn http_method_str(m: crate::types::HttpMethod) -> &'static str {
+pub(crate) fn http_method_str(m: crate::types::HttpMethod) -> &'static str {
     use crate::types::HttpMethod;
     match m {
         HttpMethod::Get => "GET",
@@ -7328,7 +7328,7 @@ pub(crate) fn callout_icon_svg(ct: CalloutType) -> &'static str {
     }
 }
 
-fn decision_status_str(ds: DecisionStatus) -> &'static str {
+pub(crate) fn decision_status_str(ds: DecisionStatus) -> &'static str {
     match ds {
         DecisionStatus::Proposed => "proposed",
         DecisionStatus::Accepted => "accepted",
@@ -7337,7 +7337,7 @@ fn decision_status_str(ds: DecisionStatus) -> &'static str {
     }
 }
 
-fn capitalize(s: &str) -> String {
+pub(crate) fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
     match chars.next() {
         None => String::new(),

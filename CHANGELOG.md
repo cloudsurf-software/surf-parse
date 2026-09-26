@@ -1,3 +1,14 @@
+## 0.29.0 — the DOM twins the strategy docs need (TASK-1039 lane R)
+
+The constructive DOM renderer (`render_dom`, feature `dom` — the web player's zero-sink path) learns the blocks and markdown constructs the strategy corpus declines on. Measured before this train (mini-m4-pro, 2026-09-25): 48/124 registry kinds, 2,208/5,140 docs rendered; the declines were `markdown:rule` (1,400 docs), `::tasks` (594), `markdown:blockquote` (477), `markdown:tasklist` (143), `markdown:strikethrough` (72), `::decision` (30), unknown blocks (19), `::steps` (14).
+
+- Markdown: `> blockquote`, `---` rules, `~~strikethrough~~`, `- [ ]` task-list markers (the sanitized HTML path drops the `<input>` and keeps the newline; the twin does the same).
+- Blocks: `::tasks` / `::action-items`, `::decision`, `::steps`, an unknown directive (`surfdoc-unknown`), `::quote`, `::cta` (with `to_html_fragment`'s consecutive-CTA grouping mirrored in `render_blocks_dom`), `::columns`, `::stats`, `::testimonial`, `::faq`, `::details`, `::comparison`, `::route`, `::slide` (inline), `::deck` (renders nothing inline), `::logo`.
+- `examples/dom_coverage_sweep.rs` (feature `dom`): the registry and a directory of `.surf` files through the coverage gate, with the decline histogram — the measurement this train answers.
+- `tests/render_dom_identity.rs`: every newly covered kind's snippet and corpus examples render byte-identical to `to_html_fragment`; a markdown-constructs fixture pins the four markdown twins.
+
+Still declined by design: raw HTML in markdown (a sink), `::css`, script-emitting blocks (store · booking · gallery · tab-bar), charts and diagrams (pre-serialized SVG), and the remaining registry kinds (`::nav`, `::footer`, `::toc`, the infra cards …) — the next train.
+
 # Changelog
 
 All notable changes to surf-parse. The crate is consumed by git tag; each

@@ -1250,7 +1250,22 @@ fn build_md_events<S: DomSink>(
                 dom.text_raw("\n");
                 at_newline = true;
             }
-            Event::Start(Tag::BlockQuote(_)) => return unimpl("markdown:blockquote"),
+            // 0.29.0 (TASK-1039 lane R): `<blockquote>` — pulldown writes the
+            // opener on its own line (`\n<blockquote>\n` unless already at a
+            // newline) and `</blockquote>\n`; ammonia drops the alert class.
+            Event::Start(Tag::BlockQuote(_)) => {
+                if !at_newline {
+                    dom.text_raw("\n");
+                }
+                dom.open("blockquote", CloseStyle::Normal);
+                dom.text_raw("\n");
+                at_newline = true;
+            }
+            Event::End(TagEnd::BlockQuote(_)) => {
+                dom.close();
+                dom.text_raw("\n");
+                at_newline = true;
+            }
 
             // Fenced/indented code block. `pulldown_cmark::html` writes the
             // fence info as `class="language-…"`, but the `ammonia::clean`
@@ -1372,7 +1387,15 @@ fn build_md_events<S: DomSink>(
                 dom.close();
                 at_newline = false;
             }
-            Event::Start(Tag::Strikethrough) => return unimpl("markdown:strikethrough"),
+            // 0.29.0: `<del>` (ammonia keeps it; no attributes).
+            Event::Start(Tag::Strikethrough) => {
+                dom.open("del", CloseStyle::Normal);
+                at_newline = false;
+            }
+            Event::End(TagEnd::Strikethrough) => {
+                dom.close();
+                at_newline = false;
+            }
             Event::Start(Tag::FootnoteDefinition(_)) | Event::FootnoteReference(_) => {
                 return unimpl("markdown:footnote")
             }
@@ -1391,8 +1414,25 @@ fn build_md_events<S: DomSink>(
             Event::Html(_) | Event::InlineHtml(_) | Event::Start(Tag::HtmlBlock) => {
                 return unimpl("markdown:raw-html")
             }
-            Event::Rule => return unimpl("markdown:rule"),
-            Event::TaskListMarker(_) => return unimpl("markdown:tasklist"),
+            // 0.29.0: a thematic break — pulldown's `<hr />\n` (on its own
+            // line) re-serializes through ammonia as the void `<hr>`.
+            Event::Rule => {
+                if !at_newline {
+                    dom.text_raw("\n");
+                }
+                dom.open("hr", CloseStyle::Void);
+                dom.close();
+                dom.text_raw("\n");
+                at_newline = true;
+            }
+            // 0.29.0: a task list marker — pulldown writes an `<input
+            // disabled type=checkbox>` followed by a newline; `input` is not in
+            // ammonia's allowlist, so the sanitized bytes keep ONLY the newline
+            // (the check state is lost on the HTML path too — the byte twin).
+            Event::TaskListMarker(_) => {
+                dom.text_raw("\n");
+                at_newline = true;
+            }
             other => return Err(RenderDomError::Unimplemented(format!(
                 "markdown:{}",
                 md_event_name(other)
@@ -3875,6 +3915,427 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.close();
         }
 
+
+        // ── 0.29.0 (TASK-1039 lane R): the blocks the strategy docs use.
+        // Each arm mirrors its `render_html` twin byte for byte (the identity
+        // corpus pins them; `tests/render_dom_identity.rs`). ──
+
+        Block::Tasks { items, .. } => {
+            dom.open("ul", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-tasks"));
+            for item in items {
+                dom.open("li", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup(if item.done { "surfdoc-task is-done" } else { "surfdoc-task" }));
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-check"));
+                if item.done {
+                    dom.text_raw("\u{2713}");
+                }
+                dom.close();
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-task-text"));
+                build_phrasing(dom, &item.text)?;
+                dom.close();
+                if let Some(a) = &item.assignee {
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-assignee"));
+                    dom.text_markup(&format!("@{a}"));
+                    dom.close();
+                }
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Decision { status, date, deciders, content, .. } => {
+            let status_str = render_html::decision_status_str(*status);
+            dom.open("article", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup(&format!("surfdoc-decision surfdoc-decision-{status_str}")));
+            dom.attr("role", AttrVal::Markup("note"));
+            dom.attr("aria-label", AttrVal::Markup(&format!("Decision: {status_str}")));
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-decision-header"));
+            dom.open("span", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup(&format!("surfdoc-decision-status surfdoc-decision-status--{status_str}")));
+            dom.text_markup(&render_html::capitalize(status_str));
+            dom.close();
+            if let Some(d) = date {
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-decision-date"));
+                dom.text_markup(d);
+                dom.close();
+            }
+            dom.close();
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-decision-body"));
+            build_inline_markdown(dom, content)?;
+            dom.close();
+            if !deciders.is_empty() {
+                dom.open("footer", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-decision-meta"));
+                dom.text_markup(&format!("Deciders: {}", deciders.join(", ")));
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Steps { steps, .. } => {
+            dom.open("ol", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-steps"));
+            for (i, step) in steps.iter().enumerate() {
+                dom.open("li", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-step"));
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-step-number"));
+                dom.text_raw(&(i + 1).to_string());
+                dom.close();
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-step-content"));
+                // A classed heading: never a prose heading (no anchor wiring).
+                dom.open("h3", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-step-title"));
+                build_phrasing(dom, &step.title)?;
+                if let Some(t) = &step.time {
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-step-time"));
+                    dom.text_markup(t);
+                    dom.close();
+                }
+                dom.close();
+                if !step.body.is_empty() {
+                    build_wrapped_phrasing_or_blocks(dom, Some("surfdoc-step-body"), &step.body)?;
+                }
+                dom.close();
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Unknown { name, content, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-unknown"));
+            dom.attr("role", AttrVal::Markup("note"));
+            dom.attr("data-name", AttrVal::Markup(name));
+            build_markdown(dom, content)?;
+            dom.close();
+        }
+
+        Block::Quote { content, attribution, cite, .. } => {
+            dom.open("blockquote", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-quote"));
+            dom.open("p", CloseStyle::Normal);
+            build_phrasing(dom, content)?;
+            dom.close();
+            if let Some(attr) = attribution {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-quote-by"));
+                dom.text_markup(attr);
+                if let Some(c) = cite {
+                    dom.text_raw(", ");
+                    dom.open("cite", CloseStyle::Normal);
+                    dom.text_markup(c);
+                    dom.close();
+                }
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Cta { label, href, primary, icon, .. } => {
+            dom.open("a", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup(if *primary { "surfdoc-cta surfdoc-cta-primary" } else { "surfdoc-cta surfdoc-cta-secondary" }));
+            dom.attr("href", AttrVal::Markup(href));
+            if let Some(svg) = icon.as_deref().and_then(crate::icons::get_icon) {
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-icon"));
+                build_static(dom, svg)?;
+                dom.close();
+                dom.text_raw(" ");
+            }
+            dom.text_markup(label);
+            dom.close();
+        }
+
+        Block::Columns { columns, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-columns"));
+            dom.attr("role", AttrVal::Markup("group"));
+            dom.attr("data-cols", AttrVal::Markup(&columns.len().to_string()));
+            for col in columns {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-column"));
+                build_markdown(dom, &col.content)?;
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Stats { items, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-stats"));
+            for item in items {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-stat"));
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-stat-value"));
+                if let Some(c) = &item.color {
+                    dom.attr("style", AttrVal::Markup(&format!("color:{c}")));
+                }
+                dom.text_markup(&item.value);
+                dom.close();
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-stat-label"));
+                dom.text_markup(&item.label);
+                dom.close();
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Testimonial { content, author, role, company, .. } => {
+            dom.open("figure", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-testimonial"));
+            dom.attr("role", AttrVal::Markup("figure"));
+            match author {
+                Some(a) => dom.attr("aria-label", AttrVal::Markup(&format!("Testimonial from {a}"))),
+                None => dom.attr("aria-label", AttrVal::Markup("Testimonial")),
+            }
+            dom.open("blockquote", CloseStyle::Normal);
+            dom.text_raw("\u{201C}");
+            build_phrasing(dom, content)?;
+            dom.text_raw("\u{201D}");
+            dom.close();
+            if author.is_some() || role.is_some() || company.is_some() {
+                dom.open("figcaption", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-testimonial-by"));
+                if let Some(a) = author {
+                    let initials: String = a
+                        .split_whitespace()
+                        .filter_map(|w| w.chars().next())
+                        .take(2)
+                        .collect::<String>()
+                        .to_uppercase();
+                    if !initials.is_empty() {
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-testimonial-avatar"));
+                        dom.attr("aria-hidden", AttrVal::Markup("true"));
+                        dom.text_markup(&initials);
+                        dom.close();
+                    }
+                }
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-testimonial-meta"));
+                if let Some(a) = author {
+                    dom.open("strong", CloseStyle::Normal);
+                    dom.text_markup(a);
+                    dom.close();
+                }
+                let details: Vec<&str> = [role.as_deref(), company.as_deref()].iter().filter_map(|v| *v).collect();
+                if !details.is_empty() {
+                    dom.open("br", CloseStyle::Void);
+                    dom.close();
+                    dom.open("span", CloseStyle::Normal);
+                    dom.text_markup(&details.join(", "));
+                    dom.close();
+                }
+                dom.close();
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Faq { items, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-faq"));
+            for item in items {
+                dom.open("details", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-faq-item"));
+                dom.open("summary", CloseStyle::Normal);
+                dom.text_markup(&item.question);
+                dom.close();
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-faq-answer"));
+                dom.text_markup(&item.answer);
+                dom.close();
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::Details { title, open, content, .. } => {
+            dom.open("details", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-details"));
+            if *open {
+                dom.bool_attr("open");
+            }
+            dom.open("summary", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-details-summary"));
+            dom.text_markup(title.as_deref().unwrap_or("Details"));
+            dom.close();
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-details-body"));
+            build_markdown(dom, content)?;
+            dom.close();
+            dom.close();
+        }
+
+        Block::Comparison { headers, rows, highlight, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-table-wrap"));
+            dom.open("table", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-comparison"));
+            dom.open("thead", CloseStyle::Normal);
+            dom.open("tr", CloseStyle::Normal);
+            for h in headers {
+                dom.open("th", CloseStyle::Normal);
+                if highlight.as_deref() == Some(h.as_str()) {
+                    dom.attr("class", AttrVal::Markup("surfdoc-comparison-highlight"));
+                }
+                build_cell_markdown(dom, h)?;
+                dom.close();
+            }
+            dom.close();
+            dom.close();
+            dom.open("tbody", CloseStyle::Normal);
+            for row in rows {
+                dom.open("tr", CloseStyle::Normal);
+                for (i, cell) in row.iter().enumerate() {
+                    dom.open("td", CloseStyle::Normal);
+                    if headers.get(i).and_then(|h| highlight.as_ref().map(|hi| h == hi)).unwrap_or(false) {
+                        dom.attr("class", AttrVal::Markup("surfdoc-comparison-highlight"));
+                    }
+                    match cell.trim().to_lowercase().as_str() {
+                        "yes" | "true" | "✓" | "✔" => {
+                            dom.open("span", CloseStyle::Normal);
+                            dom.attr("class", AttrVal::Markup("surfdoc-check"));
+                            dom.text_raw("\u{2713}");
+                            dom.close();
+                        }
+                        "no" | "false" | "✗" | "✘" | "-" | "—" => {
+                            dom.open("span", CloseStyle::Normal);
+                            dom.attr("class", AttrVal::Markup("surfdoc-dash"));
+                            dom.text_raw("\u{2014}");
+                            dom.close();
+                        }
+                        _ => build_cell_markdown(dom, cell)?,
+                    }
+                    dom.close();
+                }
+                dom.close();
+            }
+            dom.close();
+            dom.close();
+            dom.close();
+        }
+
+        Block::Route { method, path, auth, returns, body, handler, content, .. } => {
+            let method_str = render_html::http_method_str(*method);
+            let method_class = format!("surfdoc-route-method surfdoc-method-{}", method_str.to_lowercase());
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-infra-card surfdoc-route"));
+            if let Some(code) = handler {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-route-head"));
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup(&method_class));
+                dom.text_raw(method_str);
+                dom.close();
+                dom.text_raw(" ");
+                dom.open("code", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-route-path"));
+                dom.text_markup(path);
+                dom.close();
+                if let Some(a) = auth {
+                    dom.text_raw(" ");
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-route-auth"));
+                    dom.text_markup(&format!("[auth: {a}]"));
+                    dom.close();
+                }
+                dom.close();
+                dom.open("pre", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-code"));
+                dom.open("code", CloseStyle::Normal);
+                dom.text_markup(code);
+                dom.close();
+                dom.close();
+            } else {
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup(&method_class));
+                dom.text_raw(method_str);
+                dom.close();
+                dom.text_raw(" ");
+                dom.open("code", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-route-path"));
+                dom.text_markup(path);
+                dom.close();
+                let has_details = auth.is_some() || returns.is_some() || body.is_some() || !content.is_empty();
+                if has_details {
+                    dom.open("ul", CloseStyle::Normal);
+                    if let Some(a) = auth {
+                        dom.open("li", CloseStyle::Normal);
+                        dom.text_markup(&format!("auth: {a}"));
+                        dom.close();
+                    }
+                    if let Some(r) = returns {
+                        dom.open("li", CloseStyle::Normal);
+                        dom.text_raw("returns: ");
+                        dom.open("code", CloseStyle::Normal);
+                        dom.text_markup(r);
+                        dom.close();
+                        dom.close();
+                    }
+                    if let Some(b) = body {
+                        dom.open("li", CloseStyle::Normal);
+                        dom.text_raw("body: ");
+                        dom.open("code", CloseStyle::Normal);
+                        dom.text_markup(b);
+                        dom.close();
+                        dom.close();
+                    }
+                    if !content.is_empty() {
+                        dom.open("li", CloseStyle::Normal);
+                        dom.text_markup(content);
+                        dom.close();
+                    }
+                    dom.close();
+                }
+            }
+            dom.close();
+        }
+
+        Block::Slide { kicker, children, .. } => {
+            dom.open("section", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-slide"));
+            if let Some(k) = kicker {
+                dom.open("p", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-kicker"));
+                dom.text_markup(k);
+                dom.close();
+            }
+            for child in children {
+                build_block(dom, child)?;
+            }
+            dom.close();
+        }
+
+        // A deck's own block renders nothing inline (the deck renderer is the
+        // slides path); the string twin is the empty string.
+        Block::Deck { .. } => {}
+
+        Block::Logo { src, alt, size, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-logo"));
+            dom.open("img", CloseStyle::Void);
+            dom.attr("src", AttrVal::Markup(src));
+            dom.attr("alt", AttrVal::Markup(alt.as_deref().unwrap_or("")));
+            if let Some(s) = size {
+                dom.attr("style", AttrVal::Markup(&format!("max-width:{s}px")));
+            }
+            dom.close();
+            dom.close();
+        }
+
         other => return unimpl(block_kind(other)),
     }
     Ok(())
@@ -4782,11 +5243,33 @@ pub fn render_blocks_dom<S: DomSink>(
         return Ok(());
     }
     let mut dom = Dom::new(sink, root.clone());
-    for (i, block) in blocks.iter().enumerate() {
-        if i > 0 {
+    // `to_html_fragment` groups a RUN of consecutive `::cta` blocks in one
+    // `surfdoc-cta-group` div (its parts joined by newline text) — mirrored
+    // here (0.29.0), so a page with two buttons renders byte-identical.
+    let mut i = 0usize;
+    let mut first = true;
+    while i < blocks.len() {
+        if !first {
             dom.text_raw("\n");
         }
-        build_block(&mut dom, block)?;
+        first = false;
+        if matches!(blocks[i], Block::Cta { .. }) {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-cta-group"));
+            let mut inner_first = true;
+            while i < blocks.len() && matches!(blocks[i], Block::Cta { .. }) {
+                if !inner_first {
+                    dom.text_raw("\n");
+                }
+                inner_first = false;
+                build_block(&mut dom, &blocks[i])?;
+                i += 1;
+            }
+            dom.close();
+            continue;
+        }
+        build_block(&mut dom, &blocks[i])?;
+        i += 1;
     }
     dom.flush_pending();
     Ok(())
@@ -4846,6 +5329,7 @@ fn find_script_emitter(blocks: &[Block]) -> Option<&'static str> {
             | Block::Panel { children, .. }
             | Block::TabContent { children, .. }
             | Block::Drawer { children, .. }
+            | Block::Slide { children, .. }
             | Block::Modal { children, .. } => {
                 if let Some(kind) = find_script_emitter(children) {
                     return Some(kind);
