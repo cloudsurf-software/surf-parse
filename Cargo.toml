@@ -1,6 +1,6 @@
 [package]
 name = "surf-parse"
-version = "0.31.0"
+version = "0.31.1"
 edition = "2024"
 license = "MIT"
 authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
@@ -28,6 +28,11 @@ required-features = ["cli"]
 [[example]]
 name = "dom_coverage_sweep"
 required-features = ["dom"]
+
+# The eyes-on loop for the page profiles (2026-09-28): one .surf → a PDF through the route's Letter config.
+[[example]]
+name = "render_pdf"
+required-features = ["pdf"]
 
 [features]
 default = ["terminal", "slides"]

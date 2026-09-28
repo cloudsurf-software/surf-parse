@@ -106,3 +106,52 @@ fn a_two_page_resume_stays_two_pages_and_the_generic_layout_is_untouched() {
     assert_eq!(cfg.paper_size, PaperSize::A4, "the route's default survives");
     assert_eq!(page_count(&plain.doc, &cfg).unwrap(), 1);
 }
+
+// ── 0.31.1 (2026-09-28): the paper the config asks for, and the resume's spacing ──
+
+/// The generic template no longer pins `paper: "a4"`, so the PDF config's page override (the
+/// route's Letter, or the doc's own `paper:`) is the paper the compile lays out — every generic
+/// doc came out A4 on the web (MediaBox 595 × 842) while the pages JSON said Letter.
+#[test]
+fn a_generic_doc_lays_out_on_the_papers_the_config_asks_for() {
+    let letter_from_route = surf_parse::parse("---\ntitle: Plain\n---\n\n# Plain\n\nA paragraph of words on the route's paper.\n");
+    let cfg = letter_from_route.doc.pdf_config(route_default());
+    assert_eq!(cfg.paper_size, PaperSize::Letter);
+    let pages = to_pages(&letter_from_route.doc, &cfg).expect("pages");
+    let (w, h) = view_box(&pages[0]);
+    assert!((w - 612.0).abs() < 0.01 && (h - 792.0).abs() < 0.01, "the route's Letter, not the template's A4: {w} × {h}");
+
+    let a4_from_the_doc = surf_parse::parse("---\ntitle: Plain\npaper: a4\n---\n\n# Plain\n\nWords on the doc's own paper.\n");
+    let cfg = a4_from_the_doc.doc.pdf_config(route_default());
+    assert_eq!(cfg.paper_size, PaperSize::A4, "the doc's own paper wins over the route");
+    let pages = to_pages(&a4_from_the_doc.doc, &cfg).expect("pages");
+    let (w, h) = view_box(&pages[0]);
+    assert!((w - 595.28).abs() < 0.1 && (h - 841.89).abs() < 0.1, "A4 in points: {w} × {h}");
+}
+
+/// The resume's gaps are spacer blocks the template and the generator write (a block's weak
+/// spacing collapsed in 0.31.0: sections butted, entries touched), at the V8 numbers plus the
+/// two line edges; the pitch is the V8 line height.
+#[test]
+fn the_resume_spacing_is_written_as_spacers_at_the_v8_numbers() {
+    let parsed = surf_parse::parse(V7);
+    let typst = surf_parse::render_typst::to_typst(&parsed.doc);
+    assert!(typst.contains("#gap(13.2pt)\n#resume-section(["), "a section gap before every section but the first: {typst}");
+    assert!(typst.contains("#gap(12.2pt)\n#resume-entry(["), "an entry gap between entries");
+    assert!(typst.contains("#gap(9.5pt)\n#resume-cert(["), "a credential gap");
+    assert!(typst.contains("#gap(10.6pt)\n#resume-skill(["), "a skill-group gap");
+    assert!(typst.contains("#resume-head(") && typst.contains("])\n#gap(10.4pt)\n"), "the head's gap");
+    let template = include_str!("../assets/resume.typ");
+    assert!(template.contains("#set par(justify: false, leading: 0.575em, spacing: 10.5pt)"), "the V8 pitch");
+    assert!(template.contains("#set block(above: 0pt, below: 0pt)"), "no weak block spacing anywhere");
+    assert!(!template.contains("weak: true") && !template.contains("#v("), "no weak spacing, no v(): {template}");
+    assert!(!template.contains("paper:"), "the paper comes from the config, never the template");
+    let n = page_count(&parsed.doc, &parsed.doc.pdf_config(route_default())).expect("compiles");
+    assert_eq!(n, 1, "the V7 resume still lays out on ONE page at the V8 spacing");
+}
+
+fn view_box(svg: &str) -> (f64, f64) {
+    let vb = svg.split("viewBox=\"").nth(1).and_then(|r| r.split('"').next()).expect("a viewBox");
+    let nums: Vec<f64> = vb.split(' ').map(|n| n.parse().unwrap()).collect();
+    (nums[2], nums[3])
+}

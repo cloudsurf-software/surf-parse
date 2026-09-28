@@ -1,8 +1,10 @@
 // SurfDoc Typst Template — base page setup, colors, and reusable functions.
 // This file is embedded via include_str!() and prepended to generated Typst markup.
 
+// The paper is NOT set here: the PDF config's `#set page(paper: …)` override precedes this template and must
+// win (a doc's `paper: letter` and the route's Letter came out A4 until 2026-09-28); with no override Typst's
+// own default (A4) applies, as before.
 #set page(
-  paper: "a4",
   margin: (top: 2.5cm, bottom: 2.5cm, left: 2cm, right: 2cm),
   header: context {
     if counter(page).get().first() > 1 [

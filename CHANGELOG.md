@@ -3,6 +3,24 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.31.1 — 2026-09-28 (the resume's spacing at the V8 numbers; the paper the config asks for)
+
+- **The resume profile's spacing.** Brady's side-by-side (05:06): the engine's page was tighter than the V8
+  reference at every seam — the line pitch, the gap before a section title, between entries, in the head. Two
+  causes: `leading: 0.5em` (a 1.23 pitch against the V8's 1.3) and a block's weak `above`/`below` spacing, which
+  collapsed against its neighbour so sections butted and entries touched. Now every gap is a `gap(h)` SPACER
+  BLOCK the template or the generator writes (no weak spacing, no `v()`), sized as the V8 gap plus 0.287 em of the
+  line above and of the line below (Typst measures a line to its baseline, Chrome to the bottom of its line box):
+  13.2 pt between sections, 12.2 between entries, 9.5 between credentials, 10.6 between skill groups, 10.4 after
+  the head rule, 8.8 after a section rule; leading 0.575 em = the 1.3 pitch over Inter's cap height; paragraph
+  spacing 10.5 pt, list items 6.6 pt. Ashley's V7 fixture still lays out on one page.
+- **The paper the config asks for.** `assets/surfdoc.typ` no longer pins `paper: "a4"`: the PDF config's
+  `#set page(paper: …)` override precedes the template and now wins, so a generic doc lays out on the route's
+  Letter or its own `paper:` (every generic doc came out A4 on the web while the pages JSON said Letter).
+  `assets/resume.typ` states margins only, for the same reason.
+- `examples/render_pdf.rs` (`--features pdf`): one `.surf` → a PDF + its Typst source, the eyes-on loop for the
+  profiles. Tests: the generic paper (the route's Letter · the doc's A4), the spacing pin.
+
 ## 0.31.0 — 2026-09-28 (page profiles — the resume, the doc's own paper, one compile for the PDF and its pages; TASK-1074 lane R)
 
 - **The RESUME page profile.** `profile: resume` in front matter, or a `template: resume/…` / `cv/…` (the resume doc

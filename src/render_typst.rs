@@ -135,10 +135,42 @@ impl ResumeSection {
         self.lines += lines.max(1);
         self.parts.push(typst);
     }
+    /// The parts joined with a STRONG gap before each entry · credential ·
+    /// skill group (the V8 numbers: 6.5 · 4 · 5 pt) — a block's weak `below`
+    /// collapses against its neighbour, so the template sets none and the
+    /// generator writes the spacing; a loose paragraph keeps its own break.
     fn body(&self) -> String {
-        self.parts.join("\n")
+        let mut out = String::new();
+        for (i, part) in self.parts.iter().enumerate() {
+            if i > 0 {
+                out.push_str(item_gap(part));
+            }
+            out.push_str(part);
+            if !part.ends_with('\n') {
+                out.push('\n');
+            }
+        }
+        out
     }
 }
+
+/// The spacer written BEFORE a section part, by what it is (pure, pinned): the V8
+/// gap (6.5 · 4 · 5 pt) plus 0.287 em of the line above and of the line below —
+/// Typst measures a line to its baseline, Chrome to the bottom of its line box.
+fn item_gap(part: &str) -> &'static str {
+    if part.starts_with("#resume-entry(") {
+        "#gap(12.2pt)\n"
+    } else if part.starts_with("#resume-cert(") {
+        "#gap(9.5pt)\n"
+    } else if part.starts_with("#resume-skill(") {
+        "#gap(10.6pt)\n"
+    } else {
+        "\n"
+    }
+}
+
+/// The spacer between two resume sections: the V8 `section { margin-bottom: 8pt }` plus the two line edges.
+const SECTION_GAP: &str = "#gap(13.2pt)\n";
 
 /// A resume head: the name, the headline, the contact line.
 #[derive(Default)]
@@ -448,7 +480,7 @@ fn render_resume(doc: &SurfDoc) -> String {
         .map(|s| format!("[{}]", resume_contact(s)))
         .unwrap_or_else(|| "none".to_string());
     out.push_str(&format!(
-        "#resume-head([{}], {}, {})\n\n",
+        "#resume-head([{}], {}, {})\n#gap(10.4pt)\n",
         md_to_typst_inline(&name),
         headline_arg,
         contact_arg
@@ -467,6 +499,9 @@ fn render_resume(doc: &SurfDoc) -> String {
         None
     };
     for (i, sec) in sections.iter().enumerate() {
+        if i > 0 {
+            out.push_str(SECTION_GAP);
+        }
         if pair_at == Some(i) {
             let right = &sections[i + 1];
             out.push_str(&format!(
