@@ -20,6 +20,14 @@ use typst_as_lib::TypstEngine;
 static LIBERATION_SANS_REGULAR: &[u8] =
     include_bytes!("../assets/fonts/LiberationSans-Regular.ttf");
 static LIBERATION_SANS_BOLD: &[u8] = include_bytes!("../assets/fonts/LiberationSans-Bold.ttf");
+/// Inter (SIL OFL 1.1, `assets/fonts/inter/OFL.txt`) — the resume profile's
+/// face (surf-parse 0.31.0): the four weights the V7 resume uses. Static
+/// instances, not the variable font (Typst selects by weight from static
+/// faces). The generic layout keeps Liberation Sans.
+static INTER_REGULAR: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Regular.otf");
+static INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Medium.otf");
+static INTER_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/inter/Inter-SemiBold.otf");
+static INTER_BOLD: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Bold.otf");
 static LIBERATION_SANS_ITALIC: &[u8] =
     include_bytes!("../assets/fonts/LiberationSans-Italic.ttf");
 static LIBERATION_SANS_BOLD_ITALIC: &[u8] =
@@ -59,6 +67,17 @@ impl PaperSize {
         }
     }
 
+    /// A front-matter `paper:` value: `letter` · `us-letter` · `a4` · `legal`
+    /// · `us-legal`, any case; anything else is `None`.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "letter" | "us-letter" | "usletter" => Some(Self::Letter),
+            "a4" => Some(Self::A4),
+            "legal" | "us-legal" | "uslegal" => Some(Self::Legal),
+            _ => None,
+        }
+    }
+
     /// Typst paper name, if standard.
     fn typst_name(&self) -> Option<&'static str> {
         match self {
@@ -86,6 +105,52 @@ impl Default for Margins {
             right: 1.0,
             bottom: 1.0,
             left: 1.0,
+        }
+    }
+}
+
+impl Margins {
+    /// All four sides the same, in inches.
+    pub const fn uniform(v: f64) -> Self {
+        Self { top: v, right: v, bottom: v, left: v }
+    }
+
+    /// The RESUME profile's margins (the measured V7 build): 0.42 / 0.65 /
+    /// 0.3 / 0.65 in.
+    pub const RESUME: Self = Self { top: 0.42, right: 0.65, bottom: 0.3, left: 0.65 };
+
+    /// A front-matter `margins:` value in CSS order — 1, 2 or 4 lengths, each
+    /// `<number>in` · `<number>cm` · `<number>mm` · `<number>pt` (a bare
+    /// number is inches). `"0.42in 0.65in 0.3in 0.65in"`, `"2cm"`,
+    /// `"1in 0.75in"`. Anything else (3 values, a bad unit, a negative) is
+    /// `None` — never a guess.
+    pub fn parse(s: &str) -> Option<Self> {
+        fn inches(tok: &str) -> Option<f64> {
+            let t = tok.trim().to_ascii_lowercase();
+            let (num, scale) = if let Some(n) = t.strip_suffix("in") {
+                (n, 1.0)
+            } else if let Some(n) = t.strip_suffix("cm") {
+                (n, 1.0 / 2.54)
+            } else if let Some(n) = t.strip_suffix("mm") {
+                (n, 1.0 / 25.4)
+            } else if let Some(n) = t.strip_suffix("pt") {
+                (n, 1.0 / 72.0)
+            } else {
+                (t.as_str(), 1.0)
+            };
+            let v: f64 = num.trim().parse().ok()?;
+            (v.is_finite() && v >= 0.0).then_some(v * scale)
+        }
+        let parts: Vec<f64> = s
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|t| !t.is_empty())
+            .map(inches)
+            .collect::<Option<Vec<f64>>>()?;
+        match parts.as_slice() {
+            [a] => Some(Self::uniform(*a)),
+            [v, h] => Some(Self { top: *v, right: *h, bottom: *v, left: *h }),
+            [t, r, b, l] => Some(Self { top: *t, right: *r, bottom: *b, left: *l }),
+            _ => None,
         }
     }
 }
@@ -127,6 +192,32 @@ impl Default for PdfConfig {
             source_path: None,
             images: HashMap::new(),
         }
+    }
+}
+
+impl PdfConfig {
+    /// The config a DOCUMENT asks for (surf-parse 0.31.0, the page profiles):
+    /// start from `base` (the caller's route defaults — Letter, the title, the
+    /// images), let the PRINT PROFILE set its paper and margins (the resume =
+    /// Letter, [`Margins::RESUME`]), then let the doc's own front matter win
+    /// (`paper:` through [`PaperSize::parse`], `margins:` through
+    /// [`Margins::parse`]; an unparsable value is ignored, never an error).
+    /// Every route that renders a doc should build its config here, so the
+    /// preview and the export agree with the document.
+    pub fn for_doc(doc: &SurfDoc, base: PdfConfig) -> PdfConfig {
+        let mut cfg = base;
+        let fm = doc.front_matter.as_ref();
+        if render_typst::is_resume(doc) {
+            cfg.paper_size = PaperSize::Letter;
+            cfg.margins = Margins::RESUME;
+        }
+        if let Some(p) = fm.and_then(|f| f.paper()).and_then(|p| PaperSize::parse(&p)) {
+            cfg.paper_size = p;
+        }
+        if let Some(m) = fm.and_then(|f| f.margins()).and_then(|m| Margins::parse(&m)) {
+            cfg.margins = m;
+        }
+        cfg
     }
 }
 
@@ -180,6 +271,51 @@ pub enum PdfError {
 ///
 /// Returns [`PdfError`] if Typst compilation or PDF rendering fails.
 pub fn to_pdf(doc: &SurfDoc, config: &PdfConfig) -> Result<Vec<u8>, PdfError> {
+    let compiled = compile(doc, config)?;
+    let pdf_options = typst_pdf::PdfOptions::default();
+    typst_pdf::pdf(&compiled, &pdf_options).map_err(|e| PdfError::PdfRendering(format!("{e:?}")))
+}
+
+/// Render a `SurfDoc` to one SVG per page — the SAME compile [`to_pdf`] runs
+/// (surf-parse 0.31.0, the page stacks): a preview built from these pages is
+/// byte-for-byte the document the PDF carries. Each string is a complete
+/// `<svg …>` with the page's `viewBox` in points (Letter = `0 0 612 792`).
+///
+/// # Errors
+///
+/// Returns [`PdfError`] if Typst compilation fails.
+pub fn to_pages(doc: &SurfDoc, config: &PdfConfig) -> Result<Vec<String>, PdfError> {
+    let compiled = compile(doc, config)?;
+    Ok(compiled.pages.iter().map(typst_svg::svg).collect())
+}
+
+/// The PDF bytes AND the page SVGs from ONE compile — what a server that
+/// serves both (the download and the page stack) caches (surf-parse 0.31.0).
+///
+/// # Errors
+///
+/// Returns [`PdfError`] if Typst compilation or the PDF export fails.
+pub fn to_pdf_and_pages(doc: &SurfDoc, config: &PdfConfig) -> Result<(Vec<u8>, Vec<String>), PdfError> {
+    let compiled = compile(doc, config)?;
+    let pdf_options = typst_pdf::PdfOptions::default();
+    let pdf = typst_pdf::pdf(&compiled, &pdf_options).map_err(|e| PdfError::PdfRendering(format!("{e:?}")))?;
+    let pages = compiled.pages.iter().map(typst_svg::svg).collect();
+    Ok((pdf, pages))
+}
+
+/// The page count a document lays out to — one compile, no export.
+///
+/// # Errors
+///
+/// Returns [`PdfError`] if Typst compilation fails.
+pub fn page_count(doc: &SurfDoc, config: &PdfConfig) -> Result<usize, PdfError> {
+    Ok(compile(doc, config)?.pages.len())
+}
+
+/// The one compile behind [`to_pdf`], [`to_pages`] and [`page_count`]:
+/// images mapped to virtual files, the markup rendered, the engine built, the
+/// degrade-don't-die retry.
+fn compile(doc: &SurfDoc, config: &PdfConfig) -> Result<typst::layout::PagedDocument, PdfError> {
     // Map resolvable images to virtual engine files. Deterministic: sorted by
     // src, so the same doc + map always yields the same virtual paths.
     let mut srcs: Vec<&String> = config.images.keys().collect();
@@ -198,25 +334,25 @@ pub fn to_pdf(doc: &SurfDoc, config: &PdfConfig) -> Result<Vec<u8>, PdfError> {
         binaries.push((vpath, bytes.clone()));
     }
 
-    match compile_pdf(doc, config, &virtual_map, &binaries) {
-        Ok(bytes) => Ok(bytes),
+    match compile_once(doc, config, &virtual_map, &binaries) {
+        Ok(compiled) => Ok(compiled),
         // Degrade-don't-die: if compilation failed WITH images registered,
         // retry once with all images as placeholders before giving up.
         Err(PdfError::Compilation(first)) if !virtual_map.is_empty() => {
-            compile_pdf(doc, config, &HashMap::new(), &[]).map_err(|_| PdfError::Compilation(first))
+            compile_once(doc, config, &HashMap::new(), &[]).map_err(|_| PdfError::Compilation(first))
         }
         Err(e) => Err(e),
     }
 }
 
 /// One compile pass: render Typst markup under the given ambient image map,
-/// register `binaries` with the engine, compile, and export PDF bytes.
-fn compile_pdf(
+/// register `binaries` with the engine, compile to a paged document.
+fn compile_once(
     doc: &SurfDoc,
     config: &PdfConfig,
     virtual_map: &HashMap<String, String>,
     binaries: &[(String, Vec<u8>)],
-) -> Result<Vec<u8>, PdfError> {
+) -> Result<typst::layout::PagedDocument, PdfError> {
     // Generate Typst markup from the SurfDoc block tree, with the src →
     // virtual-path map ambient so image emissions resolve (CiteScope pattern).
     let mut typst_source = {
@@ -242,6 +378,10 @@ fn compile_pdf(
             LIBERATION_SANS_BOLD,
             LIBERATION_SANS_ITALIC,
             LIBERATION_SANS_BOLD_ITALIC,
+            INTER_REGULAR,
+            INTER_MEDIUM,
+            INTER_SEMIBOLD,
+            INTER_BOLD,
         ])
         .search_fonts_with(
             TypstKitFontOptions::new().include_system_fonts(false),
@@ -256,16 +396,9 @@ fn compile_pdf(
     // Compile to a paged document
     let result = engine.compile::<typst::layout::PagedDocument>();
 
-    let compiled = result
+    result
         .output
-        .map_err(|e| PdfError::Compilation(format!("{e:?}")))?;
-
-    // Render to PDF bytes
-    let pdf_options = typst_pdf::PdfOptions::default();
-    let pdf_bytes = typst_pdf::pdf(&compiled, &pdf_options)
-        .map_err(|e| PdfError::PdfRendering(format!("{e:?}")))?;
-
-    Ok(pdf_bytes)
+        .map_err(|e| PdfError::Compilation(format!("{e:?}")))
 }
 
 /// Magic-byte sniff → the virtual-file extension Typst needs to pick a
@@ -380,6 +513,57 @@ mod tests {
         0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xC9, 0xFE, 0x92,
         0xEF, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
+
+    #[test]
+    fn margins_parse_css_order_and_units() {
+        let m = Margins::parse("0.42in 0.65in 0.3in 0.65in").expect("four");
+        assert_eq!((m.top, m.right, m.bottom, m.left), (0.42, 0.65, 0.3, 0.65));
+        let m = Margins::parse("1in 0.75in").expect("two");
+        assert_eq!((m.top, m.right, m.bottom, m.left), (1.0, 0.75, 1.0, 0.75));
+        let m = Margins::parse("2.54cm").expect("one, cm");
+        assert!((m.top - 1.0).abs() < 1e-9 && (m.left - 1.0).abs() < 1e-9);
+        let m = Margins::parse("72pt, 25.4mm").expect("pt + mm, comma");
+        assert!((m.top - 1.0).abs() < 1e-9 && (m.right - 1.0).abs() < 1e-9);
+        assert!(Margins::parse("1in 2in 3in").is_none(), "three values are not CSS");
+        assert!(Margins::parse("-1in").is_none(), "negative");
+        assert!(Margins::parse("wide").is_none(), "words");
+        assert!(Margins::parse("").is_none(), "blank");
+    }
+
+    #[test]
+    fn paper_parse_names() {
+        assert_eq!(PaperSize::parse("Letter"), Some(PaperSize::Letter));
+        assert_eq!(PaperSize::parse("us-letter"), Some(PaperSize::Letter));
+        assert_eq!(PaperSize::parse("A4"), Some(PaperSize::A4));
+        assert_eq!(PaperSize::parse("legal"), Some(PaperSize::Legal));
+        assert_eq!(PaperSize::parse("tabloid"), None);
+    }
+
+    #[test]
+    fn for_doc_profile_then_front_matter_over_the_route() {
+        let route = PdfConfig { paper_size: PaperSize::Letter, title: Some("t".into()), ..Default::default() };
+        // A plain doc keeps the route's paper and margins.
+        let plain = crate::parse("---\ntitle: x\n---\n\n# x\n").doc;
+        let c = PdfConfig::for_doc(&plain, route.clone());
+        assert_eq!(c.paper_size, PaperSize::Letter);
+        assert_eq!(c.margins, Margins::uniform(1.0));
+        assert_eq!(c.title.as_deref(), Some("t"), "the route's title survives");
+        // The resume template implies the resume profile: Letter + the V7 margins.
+        let resume = crate::parse("---\ntitle: x\ntemplate: resume/v1-classic\n---\n\n# x\n").doc;
+        let c = PdfConfig::for_doc(&resume, PdfConfig::default());
+        assert_eq!(c.paper_size, PaperSize::Letter);
+        assert_eq!(c.margins, Margins::RESUME);
+        // The doc's own front matter wins over the profile.
+        let a4 = crate::parse("---\ntitle: x\nprofile: resume\npaper: a4\nmargins: \"2cm\"\n---\n\n# x\n").doc;
+        let c = PdfConfig::for_doc(&a4, route.clone());
+        assert_eq!(c.paper_size, PaperSize::A4);
+        assert!((c.margins.top - 2.0 / 2.54).abs() < 1e-9);
+        // An unparsable value is ignored, never an error.
+        let bad = crate::parse("---\ntitle: x\npaper: tabloid\nmargins: wide\n---\n\n# x\n").doc;
+        let c = PdfConfig::for_doc(&bad, route);
+        assert_eq!(c.paper_size, PaperSize::Letter);
+        assert_eq!(c.margins, Margins::uniform(1.0));
+    }
 
     #[test]
     fn pdf_config_defaults_are_sensible() {

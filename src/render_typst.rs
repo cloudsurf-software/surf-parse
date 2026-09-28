@@ -11,6 +11,10 @@ use crate::types::*;
 
 /// Base Typst template with page setup, colors, and reusable components.
 pub(crate) const SURFDOC_TEMPLATE: &str = include_str!("../assets/surfdoc.typ");
+/// The RESUME page profile's template (surf-parse 0.31.0, TASK-1074 lane R):
+/// `assets/resume.typ` — Letter, the V7 margins, Inter, the head rule, the
+/// section rule, unbreakable entries, the two-column bottom.
+pub(crate) const RESUME_TEMPLATE: &str = include_str!("../assets/resume.typ");
 
 // ───────────────────────────────────────────────────────────────────────────
 // Ambient image context (thread-local, mirrors citation::install_context)
@@ -67,6 +71,12 @@ pub fn to_typst(doc: &SurfDoc) -> String {
     let _cite_scope =
         crate::citation::install_context(crate::citation::build_context(&doc.blocks, format));
 
+    // The PRINT profile a doc asks for by front matter (`profile: resume`,
+    // or the resume template) comes first — a doc type is not a page layout.
+    if is_resume(doc) {
+        return render_resume(doc);
+    }
+
     // Document-type render profile (Chunk 1) selects an academic template for
     // papers/reports; everything else uses the generic SurfDoc layout.
     match crate::types::render_profile(doc_type, format) {
@@ -74,6 +84,407 @@ pub fn to_typst(doc: &SurfDoc) -> String {
         RenderProfile::Report(f) => render_report(doc, f),
         _ => render_generic(doc),
     }
+}
+
+/// Whether the doc asks for the resume page profile (`profile: resume`, or a
+/// `template: resume/…` / `cv/…` front matter — see
+/// [`FrontMatter::print_profile`]).
+pub fn is_resume(doc: &SurfDoc) -> bool {
+    doc.front_matter
+        .as_ref()
+        .and_then(|fm| fm.print_profile())
+        .as_deref()
+        == Some("resume")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// The RESUME profile (surf-parse 0.31.0, TASK-1074 lane R).
+//
+// The document's shape, as the resume doc template writes it and as a hand
+// written resume reads: the head (the first `#` = the name; the next two
+// paragraphs = the headline and the contact line), then `##` sections. Inside
+// a section: `::summary` → the paragraph; `::steps` → ENTRIES (the step's
+// `### Role — Org {time="dates"}`, its first non-bullet line the muted
+// where-line, its `- ` lines the bullets); `::data` → credentials (the first
+// cell bold, the rest a muted sub-line); `::features` → skill groups
+// ("Group: a · b · c"); `::stats` dropped (print has no KPI tiles); a quote or
+// callout → a plain paragraph; any other block → the generic mapping. The LAST
+// TWO sections sit side by side when both are short. Nothing here can fail a
+// render: an unrecognised shape degrades to text.
+// ───────────────────────────────────────────────────────────────────────────
+
+struct ResumeSection {
+    title: String,
+    parts: Vec<String>,
+    /// A rough line count — the two-column rule's measure.
+    lines: usize,
+}
+
+impl ResumeSection {
+    fn new(title: &str) -> Self {
+        Self {
+            title: title.trim().to_string(),
+            parts: Vec::new(),
+            lines: 0,
+        }
+    }
+    fn push(&mut self, typst: String, lines: usize) {
+        if typst.trim().is_empty() {
+            return;
+        }
+        self.lines += lines.max(1);
+        self.parts.push(typst);
+    }
+    fn body(&self) -> String {
+        self.parts.join("\n")
+    }
+}
+
+/// A resume head: the name, the headline, the contact line.
+#[derive(Default)]
+struct ResumeHead {
+    name: Option<String>,
+    headline: Option<String>,
+    contact: Option<String>,
+    /// Paragraphs past the contact line, kept as a preface.
+    rest: Vec<String>,
+}
+
+/// Split a loose-markdown run into `(heading, body)` chunks at `## ` lines;
+/// the chunk before the first `## ` carries `None`.
+fn split_resume_chunks(content: &str) -> Vec<(Option<String>, String)> {
+    let mut out: Vec<(Option<String>, String)> = Vec::new();
+    let mut cur: (Option<String>, Vec<&str>) = (None, Vec::new());
+    for line in content.lines() {
+        let t = line.trim_end();
+        if let Some(h) = t.strip_prefix("## ") {
+            let (title, body) =
+                std::mem::replace(&mut cur, (Some(h.trim().to_string()), Vec::new()));
+            out.push((title, body.join("\n")));
+        } else {
+            cur.1.push(t);
+        }
+    }
+    out.push((cur.0, cur.1.join("\n")));
+    out
+}
+
+/// The head from the first chunk: `# Name`, then the headline paragraph, then
+/// the contact paragraph; later paragraphs are a preface.
+fn parse_resume_head(body: &str) -> ResumeHead {
+    let mut head = ResumeHead::default();
+    let mut paragraphs: Vec<String> = Vec::new();
+    let mut cur: Vec<&str> = Vec::new();
+    for line in body.lines() {
+        let t = line.trim();
+        if let Some(n) = t.strip_prefix("# ") {
+            if head.name.is_none() {
+                head.name = Some(n.trim().to_string());
+                continue;
+            }
+        }
+        if t.is_empty() {
+            if !cur.is_empty() {
+                paragraphs.push(cur.join(" "));
+                cur.clear();
+            }
+        } else {
+            cur.push(t);
+        }
+    }
+    if !cur.is_empty() {
+        paragraphs.push(cur.join(" "));
+    }
+    let mut it = paragraphs.into_iter();
+    head.headline = it.next();
+    head.contact = it.next();
+    head.rest = it.collect();
+    head
+}
+
+/// The contact line: `a · b · c` (or `a | b`) → the parts joined by the grey
+/// separator; a markdown link survives as a link.
+fn resume_contact(line: &str) -> String {
+    let parts: Vec<&str> = if line.contains('·') {
+        line.split('·').collect()
+    } else if line.contains(" | ") {
+        line.split(" | ").collect()
+    } else {
+        vec![line]
+    };
+    parts
+        .iter()
+        .map(|p| md_to_typst_inline(p.trim()))
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("#resume-sep;")
+}
+
+/// `Role — Org` (an em dash, an en dash, ` - `, ` at ` or `, ` as the seam)
+/// → the two.
+fn split_role_org(title: &str) -> (String, Option<String>) {
+    for sep in [" — ", " – ", " - ", " at ", ", "] {
+        if let Some((role, org)) = title.split_once(sep) {
+            if !role.trim().is_empty() && !org.trim().is_empty() {
+                return (role.trim().to_string(), Some(org.trim().to_string()));
+            }
+        }
+    }
+    (title.trim().to_string(), None)
+}
+
+/// A `::steps` step as an entry: the first non-bullet lines are the where-line,
+/// the `- ` lines the bullets, anything after them a closing paragraph.
+fn resume_entry(step: &StepItem) -> (String, usize) {
+    let (role, org) = split_role_org(&step.title);
+    let mut where_lines: Vec<&str> = Vec::new();
+    let mut bullets: Vec<&str> = Vec::new();
+    let mut tail: Vec<&str> = Vec::new();
+    for line in step.body.lines() {
+        let t = line.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if let Some(b) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
+            bullets.push(b.trim());
+        } else if bullets.is_empty() {
+            where_lines.push(t);
+        } else {
+            tail.push(t);
+        }
+    }
+    let where_arg = if where_lines.is_empty() {
+        "none".to_string()
+    } else {
+        format!("[{}]", md_to_typst_inline(&where_lines.join(" ")))
+    };
+    let org_arg = org
+        .as_deref()
+        .map(|o| format!("[{}]", md_to_typst_inline(o)))
+        .unwrap_or_else(|| "none".to_string());
+    let when_arg = step
+        .time
+        .as_deref()
+        .map(|w| format!("[{}]", escape_typst(w)))
+        .unwrap_or_else(|| "none".to_string());
+    let mut body = String::new();
+    for b in &bullets {
+        body.push_str("- ");
+        body.push_str(&md_to_typst_inline(b));
+        body.push('\n');
+    }
+    for t in &tail {
+        body.push_str(&md_to_typst_inline(t));
+        body.push_str("\n\n");
+    }
+    let typst = format!(
+        "#resume-entry([{}], {}, {}, {})[\n{}]\n",
+        md_to_typst_inline(&role),
+        org_arg,
+        when_arg,
+        where_arg,
+        body
+    );
+    // Two lines for the head + the where-line, one per bullet, one per tail line.
+    (typst, 2 + bullets.len() + tail.len())
+}
+
+/// A `::data` row as a credential: the first cell bold, the others a muted
+/// sub-line joined with ` · `. A row whose first cell is empty is skipped.
+fn resume_cert(row: &[String]) -> Option<(String, usize)> {
+    let main = row.first().map(|s| s.trim()).filter(|s| !s.is_empty())?;
+    let sub: Vec<String> = row
+        .iter()
+        .skip(1)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(md_to_typst_inline)
+        .collect();
+    let sub_arg = if sub.is_empty() {
+        "none".to_string()
+    } else {
+        format!("[{}]", sub.join(" · "))
+    };
+    Some((
+        format!("#resume-cert([{}], {})\n", md_to_typst_inline(main), sub_arg),
+        1 + usize::from(!sub.is_empty()),
+    ))
+}
+
+/// A `::features` card as a skill group: "Title: body".
+fn resume_skill(card: &FeatureCard) -> (String, usize) {
+    let items = if card.body.trim().is_empty() {
+        String::new()
+    } else {
+        md_to_typst_inline(card.body.trim())
+    };
+    (
+        format!(
+            "#resume-skill([{}], [{}])\n",
+            md_to_typst_inline(card.title.trim()),
+            items
+        ),
+        1 + card.body.len() / 90,
+    )
+}
+
+/// Loose markdown inside a section: paragraphs and bullets as they are.
+fn resume_markdown(body: &str) -> (String, usize) {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return (String::new(), 0);
+    }
+    (
+        md_to_typst(trimmed),
+        trimmed.lines().filter(|l| !l.trim().is_empty()).count(),
+    )
+}
+
+/// Resume → Typst: the head, then the sections; the last two side by side
+/// when both are short. Uses [`RESUME_TEMPLATE`]; the page's paper and
+/// margins are re-stated by the PDF config (the doc's front matter wins).
+fn render_resume(doc: &SurfDoc) -> String {
+    let mut out = String::with_capacity(8192);
+    out.push_str(RESUME_TEMPLATE);
+    out.push_str("\n\n");
+
+    let mut head: Option<ResumeHead> = None;
+    let mut sections: Vec<ResumeSection> = Vec::new();
+    let mut preface: Vec<String> = Vec::new();
+
+    // A typed block before any `##` opens a section named for its kind.
+    fn target<'a>(sections: &'a mut Vec<ResumeSection>, fallback: &str) -> &'a mut ResumeSection {
+        if sections.is_empty() {
+            sections.push(ResumeSection::new(fallback));
+        }
+        sections.last_mut().expect("just pushed")
+    }
+
+    for block in &doc.blocks {
+        match block {
+            Block::Markdown { content, .. } => {
+                for (heading, body) in split_resume_chunks(content) {
+                    match heading {
+                        Some(h) => {
+                            sections.push(ResumeSection::new(&h));
+                            let (t, n) = resume_markdown(&body);
+                            sections.last_mut().expect("pushed").push(t, n);
+                        }
+                        None if head.is_none() && sections.is_empty() => {
+                            let h = parse_resume_head(&body);
+                            for p in &h.rest {
+                                preface.push(md_to_typst(p));
+                            }
+                            head = Some(h);
+                        }
+                        None if sections.is_empty() => {
+                            let (t, _) = resume_markdown(&body);
+                            if !t.trim().is_empty() {
+                                preface.push(t);
+                            }
+                        }
+                        None => {
+                            let (t, n) = resume_markdown(&body);
+                            sections.last_mut().expect("non-empty").push(t, n);
+                        }
+                    }
+                }
+            }
+            Block::Summary { content, .. } => {
+                let (t, n) = resume_markdown(content);
+                target(&mut sections, "Summary").push(t, n);
+            }
+            Block::Steps { steps, .. } => {
+                let sec = target(&mut sections, "Experience");
+                for step in steps {
+                    let (t, n) = resume_entry(step);
+                    sec.push(t, n);
+                }
+            }
+            Block::Data { rows, .. } => {
+                let sec = target(&mut sections, "Education");
+                for row in rows {
+                    if let Some((t, n)) = resume_cert(row) {
+                        sec.push(t, n);
+                    }
+                }
+            }
+            Block::Features { cards, .. } => {
+                let sec = target(&mut sections, "Skills");
+                for card in cards {
+                    let (t, n) = resume_skill(card);
+                    sec.push(t, n);
+                }
+            }
+            Block::Stats { .. } => {}
+            Block::Quote { content, .. } | Block::Callout { content, .. } => {
+                let (t, n) = resume_markdown(content);
+                target(&mut sections, "Summary").push(t, n);
+            }
+            other => {
+                let mut tmp = String::new();
+                render_block(other, &mut tmp);
+                let n = tmp.lines().count();
+                target(&mut sections, "Notes").push(tmp, n);
+            }
+        }
+    }
+
+    // The head — the front-matter title when the body has no `#`.
+    let h = head.unwrap_or_default();
+    let name = h
+        .name
+        .clone()
+        .or_else(|| doc.front_matter.as_ref().and_then(|fm| fm.title.clone()))
+        .unwrap_or_else(|| "Resume".to_string());
+    let headline_arg = h
+        .headline
+        .as_deref()
+        .map(|s| format!("[{}]", md_to_typst_inline(s)))
+        .unwrap_or_else(|| "none".to_string());
+    let contact_arg = h
+        .contact
+        .as_deref()
+        .map(|s| format!("[{}]", resume_contact(s)))
+        .unwrap_or_else(|| "none".to_string());
+    out.push_str(&format!(
+        "#resume-head([{}], {}, {})\n\n",
+        md_to_typst_inline(&name),
+        headline_arg,
+        contact_arg
+    ));
+    for p in &preface {
+        out.push_str(p);
+        out.push_str("\n\n");
+    }
+
+    // The sections: the last two side by side when both are short.
+    const SHORT: usize = 14;
+    let n = sections.len();
+    let pair_at = if n >= 3 && sections[n - 1].lines <= SHORT && sections[n - 2].lines <= SHORT {
+        Some(n - 2)
+    } else {
+        None
+    };
+    for (i, sec) in sections.iter().enumerate() {
+        if pair_at == Some(i) {
+            let right = &sections[i + 1];
+            out.push_str(&format!(
+                "#resume-cols(\n  resume-section([{}])[\n{}],\n  resume-section([{}])[\n{}],\n)\n\n",
+                escape_typst(&sec.title),
+                sec.body(),
+                escape_typst(&right.title),
+                right.body()
+            ));
+            break;
+        }
+        out.push_str(&format!(
+            "#resume-section([{}])[\n{}]\n\n",
+            escape_typst(&sec.title),
+            sec.body()
+        ));
+    }
+    out
 }
 
 /// Generic SurfDoc → Typst layout (the original, unchanged path).

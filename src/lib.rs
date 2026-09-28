@@ -106,7 +106,7 @@ pub use slots::{resolve_slot_markers, IMG_SLOT_PLACEHOLDER_URI};
 pub use render_slides::{DeckConfig, SlideEntry, extract_deck, render_deck_html};
 
 #[cfg(feature = "pdf")]
-pub use render_pdf::{collect_image_srcs, PdfConfig, PdfError};
+pub use render_pdf::{collect_image_srcs, page_count, to_pages, to_pdf_and_pages, Margins, PaperSize, PdfConfig, PdfError};
 
 impl SurfDoc {
     /// Render this document as standard CommonMark markdown (no `::` markers).
@@ -164,6 +164,25 @@ impl SurfDoc {
         config: &render_pdf::PdfConfig,
     ) -> Result<Vec<u8>, render_pdf::PdfError> {
         render_pdf::to_pdf(self, config)
+    }
+
+    /// Render this document to one SVG per page — the same compile as
+    /// [`to_pdf`](Self::to_pdf), so a preview built from these is the PDF
+    /// (surf-parse 0.31.0). Requires the `pdf` feature.
+    #[cfg(feature = "pdf")]
+    pub fn to_pages(
+        &self,
+        config: &render_pdf::PdfConfig,
+    ) -> Result<Vec<String>, render_pdf::PdfError> {
+        render_pdf::to_pages(self, config)
+    }
+
+    /// The PDF config this document asks for over a caller's defaults — the
+    /// print profile's paper and margins, then the front matter's `paper:` /
+    /// `margins:` (surf-parse 0.31.0). Requires the `pdf` feature.
+    #[cfg(feature = "pdf")]
+    pub fn pdf_config(&self, base: render_pdf::PdfConfig) -> render_pdf::PdfConfig {
+        render_pdf::PdfConfig::for_doc(self, base)
     }
 
     /// Render this document as Typst markup text.

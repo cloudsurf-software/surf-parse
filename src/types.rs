@@ -76,6 +76,45 @@ pub struct FrontMatter {
     pub extra: HashMap<String, serde_yaml::Value>,
 }
 
+impl FrontMatter {
+    /// A trimmed string value from the open `extra` map, `None` when absent,
+    /// not a string, or blank.
+    fn extra_str(&self, key: &str) -> Option<String> {
+        self.extra
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// The PRINT PROFILE a document asks for (surf-parse 0.31.0, the page
+    /// profiles): `profile: resume` names it outright; a `template:` of
+    /// `resume` / `resume/…` / `cv` / `cv/…` (the resume doc template stamps
+    /// `template: resume/v1-classic`) implies it. Lower-cased. `None` = the
+    /// generic layout. Read from `extra`, so the exported front-matter shape
+    /// (uniffi · wasm) is unchanged.
+    pub fn print_profile(&self) -> Option<String> {
+        if let Some(p) = self.extra_str("profile") {
+            return Some(p.to_ascii_lowercase());
+        }
+        let t = self.extra_str("template")?.to_ascii_lowercase();
+        let stem = t.split('/').next().unwrap_or("");
+        matches!(stem, "resume" | "cv").then(|| "resume".to_string())
+    }
+
+    /// Front-matter `paper:` (`letter` · `a4` · `legal`, any case), lower-cased.
+    pub fn paper(&self) -> Option<String> {
+        self.extra_str("paper").map(|s| s.to_ascii_lowercase())
+    }
+
+    /// Front-matter `margins:` — CSS order, 1 / 2 / 4 values, `in` or `cm`
+    /// (e.g. `"0.42in 0.65in 0.3in 0.65in"`, `"2cm"`). Raw; parsed by the PDF
+    /// renderer's `Margins::parse`.
+    pub fn margins(&self) -> Option<String> {
+        self.extra_str("margins")
+    }
+}
+
 /// A cross-reference to another document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Related {

@@ -3,6 +3,34 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.31.0 — 2026-09-28 (page profiles — the resume, the doc's own paper, one compile for the PDF and its pages; TASK-1074 lane R)
+
+- **The RESUME page profile.** `profile: resume` in front matter, or a `template: resume/…` / `cv/…` (the resume doc
+  template stamps `template: resume/v1-classic`), selects `assets/resume.typ` instead of the generic layout:
+  US Letter, margins 0.42 / 0.65 / 0.3 / 0.65 in, Inter 9.75 pt / 1.3, no running head or page counter; the head
+  (the first `#` = the name, the next two paragraphs the headline and the contact line joined by grey `·`) closed by
+  a 2 pt rule; `##` sections as 8.5 pt uppercase spaced titles over a 1 pt rule; `::steps` steps as ENTRIES (role
+  bold, ` — org` medium, the `time=` right-aligned in lining figures, the first non-bullet line the muted where-line,
+  the `- ` lines the bullets) that never split across pages; `::data` rows as credentials (the first cell bold, the
+  rest a muted sub-line); `::features` cards as skill groups ("Group: a · b · c"); `::stats` dropped in print; a
+  quote or callout as a paragraph; any other block through the generic mapping; the LAST TWO sections side by side
+  when both are short. `render_typst::is_resume(&doc)` says which path a doc takes. The numbers are the measured V7
+  resume build (headless Chrome) this profile reproduces; the fixture `tests/fixtures/resume-ashley-yeghiayan-v7.surf`
+  lays out on ONE page (pinned).
+- **Inter bundled** (SIL OFL 1.1, `assets/fonts/inter/`): Regular · Medium · SemiBold · Bold static faces registered
+  beside Liberation Sans for the `pdf` feature (+2.5 MB in the native crate; the wasm build is untouched). The
+  generic layout keeps Liberation Sans.
+- **The document decides its paper.** Front matter `paper: letter | a4 | legal` (`FrontMatter::paper`,
+  `PaperSize::parse`) and `margins: "<t> <r> <b> <l>"` in CSS 1/2/4-value order with `in` · `cm` · `mm` · `pt`
+  (`FrontMatter::margins`, `Margins::parse` — a bad value is ignored, never an error). `PdfConfig::for_doc(&doc, base)`
+  / `SurfDoc::pdf_config(base)`: the caller's defaults, then the profile's paper and margins (`Margins::RESUME`), then
+  the doc's own. Both keys ride the open `extra` map — the exported front-matter shape (uniffi · wasm) is unchanged.
+- **One compile, two outputs.** `to_pdf_and_pages(&doc, &config) -> (Vec<u8>, Vec<String>)` (what a server caches), `to_pages(&doc, &config) -> Vec<String>` (one `<svg>` per page, the page's `viewBox`
+  in points — Letter = `0 0 612 792`) and `page_count` share the compile `to_pdf` runs (`typst-svg 0.14` joins the
+  `pdf` feature), so a preview built from the pages is byte-for-byte the document the PDF carries.
+- Unchanged: the generic and academic layouts, `PdfConfig`'s fields and defaults (A4, 1 in), the image degrade-don't-die
+  retry, every other feature.
+
 ## 0.30.0 — 2026-09-26 (text-anchored edits — the block is found before the model runs, TASK-1040 lane P)
 
 - `surf_parse::edit::find_text(source, query, route?)` — every place a quoted phrase occurs, in document order, as a

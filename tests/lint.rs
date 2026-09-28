@@ -195,6 +195,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     // 0.25.0: the fourteen planned blocks' identity fixtures — well-formed.
     ("planned-blocks.surf", &[]),
     ("planned-css.surf", &[]),
+    // 0.31.0: Ashley's V7 resume on the resume template (the page-profile
+    // fixture) — a well-formed document.
+    ("resume-ashley-yeghiayan-v7.surf", &[]),
     // 0.21.0: the ::hours + ::marquee fixture — a well-formed page.
     ("site-blocks.surf", &[]),
     ("single.surf", &[]),
