@@ -1,0 +1,30 @@
+---
+title: "Corpus — Tier 8: carousel and steps"
+type: document
+---
+
+# Carousel and steps
+
+The Elevate pair (0.32.0): a scroll-snap carousel of slides with a dot nav,
+and a form whose field groups are steps revealed one at a time.
+
+::carousel[id="benefits" aspect="square"]
+:::slide[image="/assets/img/hydra-1.webp" alt="Vacuum extractor tip"]
+### Deep-Cleanse
+Vacuum-extracts blackheads & debris in minutes.
+:::
+:::slide
+### Instant Hydration
+Antioxidant-rich serums leave a dewy glow.
+:::
+::
+
+::form[submit="Get Pricing" steps=true]
+:::step[title="What are you interested in?"]
+- Interest (select: Botox | Filler) *
+:::
+:::step[title="About you"]
+- Full name (text) *
+- E-mail (email) *
+:::
+::

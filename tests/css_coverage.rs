@@ -152,6 +152,27 @@ fn every_emitted_class_has_a_css_rule() {
     );
 }
 
+/// 0.32.0: the stepped form's classes (radios, step fieldsets, the nav
+/// labels, the progress line) only render under `steps=true`, which the
+/// one-snippet-per-kind table's `::form` does not set — pin them here.
+#[test]
+fn stepped_form_classes_have_css_rules() {
+    let css = surf_parse::SURFDOC_CSS;
+    let src = "::form[steps=true honeypot]\n:::step[title=\"One\"]\n- A (text)\n:::\n:::step[title=\"Two\"]\n- B (text)\n:::\n:::step\n- C (text)\n:::\n::";
+    let html = surf_parse::parse(src).doc.to_html();
+    let mut seen = 0;
+    for tokens in class_attributes(&html) {
+        for token in tokens.iter().filter(|t| t.starts_with("surfdoc-form-step") || t.starts_with("surfdoc-form-progress")) {
+            seen += 1;
+            assert!(
+                css_has_rule(css, token) || ALLOWLIST.contains(&token.as_str()),
+                "stepped-form class .{token} has no rule in assets/surfdoc.css"
+            );
+        }
+    }
+    assert!(seen >= 7, "the stepped classes rendered: {html}");
+}
+
 /// Toolbar overflow pin (R5): a crowded toolbar must scroll or wrap
 /// instead of clipping — the app-shell sets overflow:hidden and the grid
 /// track can shrink below the bar's natural width. The guard requires the

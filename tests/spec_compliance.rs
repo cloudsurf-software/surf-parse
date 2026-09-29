@@ -42,6 +42,8 @@ const ENUM_VARIANTS: &[&str] = &[
     "Countdown", "Css", "Footnote", "Kernel", "LogoCloud", "Subscribe", "Notes",
     // The panels layout, 0.27.0 (CloudSurf on the web, TASK-994)
     "PanelSlot", "Preset",
+    // The Elevate lane C, 0.32.0
+    "Carousel",
 ];
 
 #[derive(Debug, Deserialize)]

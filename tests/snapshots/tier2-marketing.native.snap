@@ -109,7 +109,8 @@
         "options": []
       }
     ],
-    "submit_label": "Send"
+    "submit_label": "Send",
+    "steps": false
   },
   {
     "type": "gallery",

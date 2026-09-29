@@ -112,6 +112,8 @@ fn synth_form(fields: Vec<FormField>, submit_label: Option<&str>) -> Block {
         action: None,
         method: None,
         honeypot: false,
+        steps: false,
+        id: None,
         span: Span::SYNTHETIC,
     }
 }
@@ -381,6 +383,7 @@ mod native_props {
             if let surf_parse::render_native::NativeBlock::Form {
                 fields: native_fields,
                 submit_label: native_submit,
+                ..
             } = &native[0]
             {
                 prop_assert_eq!(native_fields.len(), fields.len());

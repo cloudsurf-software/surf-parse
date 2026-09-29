@@ -1,0 +1,60 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# Carousel and steps\n\nThe Elevate pair (0.32.0): a scroll-snap carousel of slides with a dot nav,\nand a form whose field groups are steps revealed one at a time."
+  },
+  {
+    "type": "carousel",
+    "slides": [
+      {
+        "title": "Deep-Cleanse",
+        "body": "Vacuum-extracts blackheads & debris in minutes.",
+        "image": "/assets/img/hydra-1.webp",
+        "alt": "Vacuum extractor tip"
+      },
+      {
+        "title": "Instant Hydration",
+        "body": "Antioxidant-rich serums leave a dewy glow.",
+        "image": null,
+        "alt": null
+      }
+    ]
+  },
+  {
+    "type": "form",
+    "fields": [
+      {
+        "label": "Interest",
+        "name": "interest",
+        "field_type": "select",
+        "required": true,
+        "placeholder": null,
+        "options": [
+          "Botox",
+          "Filler"
+        ],
+        "group": "What are you interested in?"
+      },
+      {
+        "label": "Full name",
+        "name": "full_name",
+        "field_type": "text",
+        "required": true,
+        "placeholder": null,
+        "options": [],
+        "group": "About you"
+      },
+      {
+        "label": "E-mail",
+        "name": "e_mail",
+        "field_type": "email",
+        "required": true,
+        "placeholder": null,
+        "options": [],
+        "group": "About you"
+      }
+    ],
+    "submit_label": "Get Pricing",
+    "steps": true
+  }
+]

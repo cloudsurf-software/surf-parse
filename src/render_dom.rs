@@ -138,6 +138,9 @@ pub fn attr_allowed(name: &str) -> bool {
             // (render_html.rs:2726). Nothing else was widened — every name
             // here is emitted by an arm in this file.
             | "max" | "min" | "scope"
+            // 0.32.0 `::form[steps=true]`: the step radios' `checked` and the
+            // Previous / Next labels' `for` (render_html::stepped_form_html).
+            | "checked" | "for"
             // SVG presentation attributes used by the vendored icon set and
             // static widget markup.
             | "viewBox" | "xmlns" | "fill" | "stroke" | "stroke-width" | "stroke-linecap"
@@ -1494,6 +1497,125 @@ fn emit_cols_attrs<S: DomSink>(dom: &mut Dom<'_, S>, c: &PerClass<u32>) {
     }
 }
 
+/// Mirror of `render_html::render_form_field_html` — the byte-identity suite
+/// pins the two together. Shared by the plain and the stepped form arms.
+fn build_form_field<S: DomSink>(dom: &mut Dom<'_, S>, field: &crate::types::FormField) {
+    if field.field_type == FormFieldType::Hidden {
+        dom.open("input", CloseStyle::SelfClose);
+        dom.attr("type", AttrVal::Markup("hidden"));
+        dom.attr("name", AttrVal::Markup(&field.name));
+        dom.attr(
+            "value",
+            AttrVal::Markup(field.placeholder.as_deref().unwrap_or("")),
+        );
+        dom.close();
+        return;
+    }
+    dom.open("div", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-form-field"));
+    dom.open("label", CloseStyle::Normal);
+    dom.text_markup(&field.label);
+    if field.required {
+        dom.text_raw(" ");
+        dom.open("span", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("required"));
+        dom.text_raw("*");
+        dom.close();
+    }
+    dom.close();
+    match field.field_type {
+        FormFieldType::Textarea => {
+            let ph = field.placeholder.as_deref().unwrap_or("");
+            dom.open("textarea", CloseStyle::Normal);
+            dom.attr("name", AttrVal::Markup(&field.name));
+            dom.attr("placeholder", AttrVal::Markup(ph));
+            dom.attr("rows", AttrVal::Markup("4"));
+            if field.required {
+                dom.bool_attr("required");
+            }
+            dom.close();
+        }
+        FormFieldType::Select => {
+            dom.open("select", CloseStyle::Normal);
+            dom.attr("name", AttrVal::Markup(&field.name));
+            if field.required {
+                dom.bool_attr("required");
+            }
+            dom.open("option", CloseStyle::Normal);
+            dom.attr("value", AttrVal::Markup(""));
+            dom.text_raw("Select...");
+            dom.close();
+            for opt in &field.options {
+                dom.open("option", CloseStyle::Normal);
+                dom.attr("value", AttrVal::Markup(opt));
+                dom.text_markup(opt);
+                dom.close();
+            }
+            dom.close();
+        }
+        FormFieldType::Radio if !field.options.is_empty() => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-form-options"));
+            for opt in &field.options {
+                dom.open("label", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-form-option"));
+                dom.open("input", CloseStyle::SelfClose);
+                dom.attr("type", AttrVal::Markup("radio"));
+                dom.attr("name", AttrVal::Markup(&field.name));
+                dom.attr("value", AttrVal::Markup(opt));
+                if field.required {
+                    dom.bool_attr("required");
+                }
+                dom.close();
+                dom.text_markup(opt);
+                dom.close();
+            }
+            dom.close();
+        }
+        FormFieldType::Checkbox
+        | FormFieldType::Radio
+        | FormFieldType::Toggle
+        | FormFieldType::File => {
+            let (input_type, role) = match field.field_type {
+                FormFieldType::Radio => ("radio", None),
+                FormFieldType::File => ("file", None),
+                FormFieldType::Toggle => ("checkbox", Some("switch")),
+                _ => ("checkbox", None),
+            };
+            dom.open("input", CloseStyle::SelfClose);
+            dom.attr("type", AttrVal::Markup(input_type));
+            dom.attr("name", AttrVal::Markup(&field.name));
+            if let Some(r) = role {
+                dom.attr("role", AttrVal::Markup(r));
+            }
+            if field.required {
+                dom.bool_attr("required");
+            }
+            dom.close();
+        }
+        _ => {
+            let input_type = match field.field_type {
+                FormFieldType::Email => "email",
+                FormFieldType::Tel => "tel",
+                FormFieldType::Date => "date",
+                FormFieldType::Number => "number",
+                FormFieldType::Password => "password",
+                _ => "text",
+            };
+            let ph = field.placeholder.as_deref().unwrap_or("");
+            dom.open("input", CloseStyle::SelfClose);
+            dom.attr("type", AttrVal::Markup(input_type));
+            dom.attr("name", AttrVal::Markup(&field.name));
+            dom.attr("placeholder", AttrVal::Markup(ph));
+            if field.required {
+                dom.bool_attr("required");
+            }
+            dom.close();
+        }
+    }
+    dom.close();
+}
+
 fn block_kind(b: &Block) -> String {
     serde_json::to_value(b)
         .ok()
@@ -1593,6 +1715,87 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.close();
         }
 
+        // Twin of render_html::stepped_form_html (0.32.0).
+        Block::Form { fields, submit_label, action, method, honeypot, steps: true, id, .. }
+            if !fields.is_empty() =>
+        {
+            let btn_label = submit_label.as_deref().unwrap_or("Submit");
+            dom.open("form", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-form"));
+            if let Some(a) = action {
+                let m = method.as_deref().unwrap_or("post");
+                dom.attr("method", AttrVal::Markup(m));
+                dom.attr("action", AttrVal::Markup(a));
+            }
+            dom.attr("data-steps", AttrVal::Markup("true"));
+            if let Some(i) = id {
+                dom.attr("id", AttrVal::Markup(i));
+            }
+            let prefix = render_html::form_step_prefix(id.as_deref());
+            let runs = render_html::form_step_runs(fields);
+            let total = runs.len();
+            for n in 1..=total {
+                dom.open("input", CloseStyle::SelfClose);
+                dom.attr("type", AttrVal::Markup("radio"));
+                dom.attr("name", AttrVal::Markup("_step"));
+                dom.attr("value", AttrVal::Markup(&n.to_string()));
+                dom.attr("id", AttrVal::Markup(&format!("{prefix}-step-{n}")));
+                dom.attr("class", AttrVal::Markup("surfdoc-form-step-radio"));
+                if n == 1 {
+                    dom.bool_attr("checked");
+                }
+                dom.close();
+            }
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-form-progress"));
+            dom.attr("style", AttrVal::Markup(&format!("--surfdoc-steps:{total}")));
+            dom.attr("aria-hidden", AttrVal::Markup("true"));
+            dom.open("span", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-form-progress-bar"));
+            dom.close();
+            dom.close();
+            if *honeypot {
+                build_static(dom, render_html::FORM_HONEYPOT_HTML)?;
+            }
+            for (i, (title, run)) in runs.iter().enumerate() {
+                let n = i + 1;
+                dom.open("fieldset", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-form-step"));
+                dom.attr("data-step", AttrVal::Markup(&n.to_string()));
+                dom.open("legend", CloseStyle::Normal);
+                dom.text_markup(&render_html::form_step_legend(n, total, *title));
+                dom.close();
+                for field in *run {
+                    build_form_field(dom, field);
+                }
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-form-step-nav"));
+                if n > 1 {
+                    dom.open("label", CloseStyle::Normal);
+                    dom.attr("for", AttrVal::Markup(&format!("{prefix}-step-{}", n - 1)));
+                    dom.attr("class", AttrVal::Markup("surfdoc-form-step-prev"));
+                    dom.text_raw("Previous");
+                    dom.close();
+                }
+                if n < total {
+                    dom.open("label", CloseStyle::Normal);
+                    dom.attr("for", AttrVal::Markup(&format!("{prefix}-step-{}", n + 1)));
+                    dom.attr("class", AttrVal::Markup("surfdoc-form-step-next"));
+                    dom.text_raw("Next");
+                    dom.close();
+                } else {
+                    dom.open("button", CloseStyle::Normal);
+                    dom.attr("type", AttrVal::Markup("submit"));
+                    dom.attr("class", AttrVal::Markup("surfdoc-form-submit"));
+                    dom.text_markup(btn_label);
+                    dom.close();
+                }
+                dom.close();
+                dom.close();
+            }
+            dom.close();
+        }
+
         Block::Form { fields, submit_label, action, method, honeypot, .. } => {
             let btn_label = submit_label.as_deref().unwrap_or("Submit");
             dom.open("form", CloseStyle::Normal);
@@ -1623,122 +1826,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     }
                     open_group = group;
                 }
-                // Mirror of `render_html::render_form_field_html` — the
-                // byte-identity suite pins the two together.
-                if field.field_type == FormFieldType::Hidden {
-                    dom.open("input", CloseStyle::SelfClose);
-                    dom.attr("type", AttrVal::Markup("hidden"));
-                    dom.attr("name", AttrVal::Markup(&field.name));
-                    dom.attr(
-                        "value",
-                        AttrVal::Markup(field.placeholder.as_deref().unwrap_or("")),
-                    );
-                    dom.close();
-                    continue;
-                }
-                dom.open("div", CloseStyle::Normal);
-                dom.attr("class", AttrVal::Markup("surfdoc-form-field"));
-                dom.open("label", CloseStyle::Normal);
-                dom.text_markup(&field.label);
-                if field.required {
-                    dom.text_raw(" ");
-                    dom.open("span", CloseStyle::Normal);
-                    dom.attr("class", AttrVal::Markup("required"));
-                    dom.text_raw("*");
-                    dom.close();
-                }
-                dom.close();
-                match field.field_type {
-                    FormFieldType::Textarea => {
-                        let ph = field.placeholder.as_deref().unwrap_or("");
-                        dom.open("textarea", CloseStyle::Normal);
-                        dom.attr("name", AttrVal::Markup(&field.name));
-                        dom.attr("placeholder", AttrVal::Markup(ph));
-                        dom.attr("rows", AttrVal::Markup("4"));
-                        if field.required {
-                            dom.bool_attr("required");
-                        }
-                        dom.close();
-                    }
-                    FormFieldType::Select => {
-                        dom.open("select", CloseStyle::Normal);
-                        dom.attr("name", AttrVal::Markup(&field.name));
-                        if field.required {
-                            dom.bool_attr("required");
-                        }
-                        dom.open("option", CloseStyle::Normal);
-                        dom.attr("value", AttrVal::Markup(""));
-                        dom.text_raw("Select...");
-                        dom.close();
-                        for opt in &field.options {
-                            dom.open("option", CloseStyle::Normal);
-                            dom.attr("value", AttrVal::Markup(opt));
-                            dom.text_markup(opt);
-                            dom.close();
-                        }
-                        dom.close();
-                    }
-                    FormFieldType::Radio if !field.options.is_empty() => {
-                        dom.open("div", CloseStyle::Normal);
-                        dom.attr("class", AttrVal::Markup("surfdoc-form-options"));
-                        for opt in &field.options {
-                            dom.open("label", CloseStyle::Normal);
-                            dom.attr("class", AttrVal::Markup("surfdoc-form-option"));
-                            dom.open("input", CloseStyle::SelfClose);
-                            dom.attr("type", AttrVal::Markup("radio"));
-                            dom.attr("name", AttrVal::Markup(&field.name));
-                            dom.attr("value", AttrVal::Markup(opt));
-                            if field.required {
-                                dom.bool_attr("required");
-                            }
-                            dom.close();
-                            dom.text_markup(opt);
-                            dom.close();
-                        }
-                        dom.close();
-                    }
-                    FormFieldType::Checkbox
-                    | FormFieldType::Radio
-                    | FormFieldType::Toggle
-                    | FormFieldType::File => {
-                        let (input_type, role) = match field.field_type {
-                            FormFieldType::Radio => ("radio", None),
-                            FormFieldType::File => ("file", None),
-                            FormFieldType::Toggle => ("checkbox", Some("switch")),
-                            _ => ("checkbox", None),
-                        };
-                        dom.open("input", CloseStyle::SelfClose);
-                        dom.attr("type", AttrVal::Markup(input_type));
-                        dom.attr("name", AttrVal::Markup(&field.name));
-                        if let Some(r) = role {
-                            dom.attr("role", AttrVal::Markup(r));
-                        }
-                        if field.required {
-                            dom.bool_attr("required");
-                        }
-                        dom.close();
-                    }
-                    _ => {
-                        let input_type = match field.field_type {
-                            FormFieldType::Email => "email",
-                            FormFieldType::Tel => "tel",
-                            FormFieldType::Date => "date",
-                            FormFieldType::Number => "number",
-                            FormFieldType::Password => "password",
-                            _ => "text",
-                        };
-                        let ph = field.placeholder.as_deref().unwrap_or("");
-                        dom.open("input", CloseStyle::SelfClose);
-                        dom.attr("type", AttrVal::Markup(input_type));
-                        dom.attr("name", AttrVal::Markup(&field.name));
-                        dom.attr("placeholder", AttrVal::Markup(ph));
-                        if field.required {
-                            dom.bool_attr("required");
-                        }
-                        dom.close();
-                    }
-                }
-                dom.close();
+                build_form_field(dom, field);
             }
             if open_group.is_some() {
                 dom.close();
@@ -1854,6 +1942,57 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     dom.text_markup("·");
                     dom.close();
                 }
+            }
+            dom.close();
+            dom.close();
+        }
+
+        // Twin of render_html::carousel_html (0.32.0): the scroll-snap track
+        // of slide articles, then the dot nav of in-page anchors. No script.
+        Block::Carousel { slides, id, aspect, .. } => {
+            let id = id.as_deref().unwrap_or(render_html::CAROUSEL_DEFAULT_ID);
+            dom.open("section", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-carousel"));
+            dom.attr("id", AttrVal::Markup(id));
+            if let Some(a) = aspect {
+                dom.attr("data-aspect", AttrVal::Markup(a));
+            }
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-carousel-track"));
+            for (i, slide) in slides.iter().enumerate() {
+                dom.open("article", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-carousel-slide"));
+                dom.attr("id", AttrVal::Markup(&format!("{id}-slide-{}", i + 1)));
+                if let Some(src) = &slide.image {
+                    dom.open("figure", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-carousel-media"));
+                    dom.open("img", CloseStyle::SelfCloseSpace);
+                    dom.attr("src", AttrVal::Markup(src));
+                    dom.attr("alt", AttrVal::Markup(slide.alt.as_deref().unwrap_or("")));
+                    dom.attr("loading", AttrVal::Markup("lazy"));
+                    dom.close();
+                    dom.close();
+                }
+                if let Some(title) = &slide.title {
+                    dom.open("h3", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-carousel-title"));
+                    build_phrasing(dom, title)?;
+                    dom.close();
+                }
+                if !slide.body.is_empty() {
+                    build_wrapped_phrasing_or_blocks(dom, Some("surfdoc-carousel-body"), &slide.body)?;
+                }
+                dom.close();
+            }
+            dom.close();
+            dom.open("nav", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-carousel-dots"));
+            dom.attr("aria-label", AttrVal::Markup("Slides"));
+            for n in 1..=slides.len() {
+                dom.open("a", CloseStyle::Normal);
+                dom.attr("href", AttrVal::Markup(&format!("#{id}-slide-{n}")));
+                dom.attr("aria-label", AttrVal::Markup(&format!("Slide {n}")));
+                dom.close();
             }
             dom.close();
             dom.close();

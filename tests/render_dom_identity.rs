@@ -92,6 +92,14 @@ fn identity_site_blocks_hours_and_marquee() {
     assert_identity("site-blocks.surf");
 }
 
+/// 0.32.0 Elevate pair: the `::carousel` track + dot nav and the
+/// `::form[steps=true]` radios / step fieldsets / Previous-Next labels, with
+/// authored text that must escape identically in both backends.
+#[test]
+fn identity_carousel_and_stepped_form() {
+    assert_identity("carousel-steps.surf");
+}
+
 /// 0.25.0: thirteen of the fourteen blocks that were planned until sessions
 /// 11 + 12 — every arm in render_dom.rs is a byte twin of its render_html
 /// arm, escaping included (an angle bracket in an output body, a quote in a

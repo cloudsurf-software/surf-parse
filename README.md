@@ -16,17 +16,17 @@ let config = surf_parse::PageConfig::default();
 let html = result.doc.to_html_page(&config);
 ```
 
-## Block Types (124 registered · 124 implemented)
+## Block Types (125 registered · 125 implemented)
 
-The registry (`spec/blocks.toml`) is the authority: 124 directives, every one
-implemented since 0.25.0 (123 `Block` variants — `::split-pane` and `::pane`
+The registry (`spec/blocks.toml`) is the authority: 125 directives, every one
+implemented since 0.25.0 (124 `Block` variants — `::split-pane` and `::pane`
 share one; `::panel-slot` and `::preset` joined in 0.27.0 with the `panels`
 app-shell layout). The implemented variants:
 
 **Core**: Callout, Code, Data, Decision, Details, Diagram, Figure, Footnote, Metric, Notes, Quote, Related, Summary, Tasks, Turn
 **Citations**: Cite, Bibliography
 **Layout**: Columns, Divider, Section, Tabs
-**Web**: Banner, BeforeAfter, Comparison, Countdown, Cta, Embed, Faq, Features, Footer, Form, Gallery, Gate, Hero, HeroImage, Hours, Logo, LogoCloud, Marquee, Nav, Pipeline, PostGrid, PricingTable, ProductCard, ProductGrid, Site, Page, Stats, Steps, Style, Subscribe, Testimonial, Toc
+**Web**: Banner, BeforeAfter, Carousel, Comparison, Countdown, Cta, Embed, Faq, Features, Footer, Form, Gallery, Gate, Hero, HeroImage, Hours, Logo, LogoCloud, Marquee, Nav, Pipeline, PostGrid, PricingTable, ProductCard, ProductGrid, Site, Page, Stats, Steps, Style, Subscribe, Testimonial, Toc
 **Data / annotations**: Alternatives, Timeline, Output, Kernel, AiGenerated, AiContext, Css
 **App Description**: Action, Board, Booking, ChatInput, Dashboard, Feed, FilterBar, List, Search, Store
 **Compound Widgets**: Chart, Editor, SplitPane

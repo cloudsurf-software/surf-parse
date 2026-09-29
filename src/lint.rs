@@ -171,7 +171,8 @@ pub fn blocks_with_typed_label() -> &'static BTreeSet<String> {
 }
 
 /// Parser-accepted names that are deliberately NOT in `spec/blocks.toml`:
-/// sub-directives (`column`) and aliases/renderer families the parser resolves
+/// sub-directives (`column`; `step` inside `::form`, `slide` inside
+/// `::carousel` — 0.32.0) and aliases/renderer families the parser resolves
 /// (`action-items` → tasks, `deck`/`slide`, `deploy_urls`, `info-card`,
 /// `reference-def` → cite, `references` → bibliography,
 /// `speaker-notes`/`presenter-notes` → notes).
@@ -189,6 +190,7 @@ pub const EXTRA_KNOWN_BLOCK_NAMES: &[&str] = &[
     "references",
     "slide",
     "speaker-notes",
+    "step",
 ];
 
 // ------------------------------------------------------------------

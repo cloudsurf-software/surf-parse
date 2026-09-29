@@ -478,6 +478,8 @@ impl SurfDocBuilder {
             action: None,
             method: None,
             honeypot: false,
+            steps: false,
+            id: None,
             span: Span::SYNTHETIC,
         });
         self
@@ -1556,6 +1558,8 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             action,
             method,
             honeypot,
+            steps,
+            id,
             ..
         } => {
             let mut attr_parts = Vec::new();
@@ -1570,6 +1574,12 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
             if *honeypot {
                 attr_parts.push("honeypot".to_string());
+            }
+            if *steps {
+                attr_parts.push("steps=true".to_string());
+            }
+            if let Some(i) = id {
+                attr_parts.push(format!("id=\"{}\"", escape_attr(i)));
             }
             let attrs = if attr_parts.is_empty() {
                 String::new()
@@ -1853,6 +1863,50 @@ fn serialize_block(block: &Block, depth: usize) -> String {
         Block::Marquee { items, .. } => {
             let content_lines: Vec<String> = items.iter().map(|i| format!("- {i}")).collect();
             format!("{fence}marquee\n{}\n{fence}", content_lines.join("\n"))
+        }
+
+        // Always the explicit `:::slide` form: a heading-only carousel
+        // re-parses to the same slides either way.
+        Block::Carousel { slides, id, aspect, .. } => {
+            let mut attr_parts = Vec::new();
+            if let Some(i) = id {
+                attr_parts.push(format!("id=\"{}\"", escape_attr(i)));
+            }
+            if let Some(a) = aspect {
+                attr_parts.push(format!("aspect=\"{}\"", escape_attr(a)));
+            }
+            let attrs = if attr_parts.is_empty() {
+                String::new()
+            } else {
+                format!("[{}]", attr_parts.join(" "))
+            };
+            let mut content_lines = Vec::new();
+            for slide in slides {
+                let mut slide_attrs = Vec::new();
+                if let Some(src) = &slide.image {
+                    slide_attrs.push(format!("image=\"{}\"", escape_attr(src)));
+                }
+                if let Some(alt) = &slide.alt {
+                    slide_attrs.push(format!("alt=\"{}\"", escape_attr(alt)));
+                }
+                if slide_attrs.is_empty() {
+                    content_lines.push(format!("{fence_in}slide"));
+                } else {
+                    content_lines.push(format!("{fence_in}slide[{}]", slide_attrs.join(" ")));
+                }
+                if let Some(title) = &slide.title {
+                    content_lines.push(format!("### {title}"));
+                }
+                if !slide.body.is_empty() {
+                    content_lines.push(slide.body.clone());
+                }
+                content_lines.push(fence_in.clone());
+            }
+            if content_lines.is_empty() {
+                format!("{fence}carousel{attrs}\n{fence}")
+            } else {
+                format!("{fence}carousel{attrs}\n{}\n{fence}", content_lines.join("\n"))
+            }
         }
 
         Block::ProductGrid { groups, tiles, .. } => {

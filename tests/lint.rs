@@ -172,6 +172,8 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
         "basic.surf",
         &[Severity::Warning, Severity::Warning, Severity::Warning],
     ),
+    // 0.32.0: the ::carousel + ::form[steps=true] fixture — well-formed.
+    ("carousel-steps.surf", &[]),
     // 0.19.2: the `::data` preview-contract fixture (30 body rows + a
     // `total:` summary) — a well-formed document, so it parses clean.
     ("data-preview.surf", &[]),
@@ -550,6 +552,23 @@ fn site_blocks_hours_and_marquee_lint_clean_of_l020() {
         );
     }
     let src = "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\nMonday: 11am - 9pm\n::\n\n::marquee\n- Fresh daily\n::\n";
+    let report = surf_parse::check(src);
+    let codes: Vec<&str> = report
+        .diagnostics
+        .iter()
+        .filter_map(|d| d.code.as_deref())
+        .filter(|c| c.starts_with("L02"))
+        .collect();
+    assert!(codes.is_empty(), "unexpected lint codes: {codes:?}");
+}
+
+/// 0.32.0: `::carousel` is registered, and `::form`'s `steps=` / `id=` and
+/// the carousel's `id=` / `aspect=` are declared, so the L02x family stays
+/// quiet for the Elevate pair.
+#[test]
+fn carousel_and_stepped_form_lint_clean_of_l02x() {
+    assert!(surf_parse::lint::known_block_names().contains("carousel"));
+    let src = "::carousel[id=\"benefits\" aspect=\"square\"]\n:::slide[image=\"/a.webp\" alt=\"A\"]\n### One\nBody\n:::\n::\n\n::form[submit=\"Go\" steps=true id=\"q\"]\n:::step[title=\"First\"]\n- Name (text) *\n:::\n::\n";
     let report = surf_parse::check(src);
     let codes: Vec<&str> = report
         .diagnostics

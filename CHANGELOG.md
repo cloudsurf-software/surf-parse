@@ -3,6 +3,45 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.32.0 — 2026-09-29 (::carousel and ::form steps=true — the Elevate lanes C and Q; TASK-1115 · TASK-1112 under TASK-1110)
+
+- **`::carousel`** (lane C). `Block::Carousel { slides, id, aspect, span }` with `CarouselSlide { title, body, image,
+  alt }`. Two grammars: `:::slide[image="…" alt="…"]` children closed by `:::` (the first `### ` / `## ` line in a
+  slide is its title, the rest its markdown body), or no `:::slide` child at all — every `### ` heading starts a
+  slide, the way `::features` cards are written. In both, a bare `![alt](src)` body line is the slide's image when
+  `image=` named none; a script scheme (`javascript:` · `data:` · `vbscript:`) in either becomes `#`. `aspect=`
+  (`square` · `wide` · `tall`) rides as `data-aspect`. HTML: `section.surfdoc-carousel#{id} > div.surfdoc-carousel-track`
+  of `article.surfdoc-carousel-slide#{id}-slide-{n}` (figure + img when there is an image, h3 title, body), then
+  `nav.surfdoc-carousel-dots[aria-label=Slides]` with one `<a href="#{id}-slide-{n}" aria-label="Slide n">` per
+  slide. NO script: the base sheet makes the track a scroll-snap row (`scroll-snap-type: x mandatory`, smooth,
+  touch momentum, no scrollbar, each slide `flex: 0 0 min(100%, 320px)`), the dots are accent-coloured anchors, and
+  `prefers-reduced-motion` turns the smooth scroll off. The id defaults to `carousel` — a pure renderer keeps no
+  per-page counter, so a page with two carousels gives each an `id=`. Markdown: the slides in order as heading,
+  image and body; terminal: the markdown degradation; the serializer writes the explicit `:::slide` form (a
+  heading-only carousel lands on it at the first pass).
+- **`::form[steps=true]`** (lane Q). `:::step[title="…"]` children are form groups (the `group:` fieldset
+  mechanism — `group:` lines keep working, and under `steps=true` a `group:` line is a step too; an untitled step
+  is named `Step n`). `Block::Form` gains `steps: bool` and `id: Option<String>` (serde-defaulted). With
+  `steps=true` the form is a CSS-only stepped form: the tag keeps `class="surfdoc-form"` verbatim with
+  `data-steps="true"` (and `id=` when authored) AFTER it; right after the opening tag one `_step` radio per step
+  (`id="{prefix}-step-{n}"`, prefix = the form's `id=` else `form`, the first `checked`), a progress line
+  (`--surfdoc-steps` inline), then each step as `fieldset.surfdoc-form-step[data-step=n]` with the legend
+  `Step n of N · {title}` and a footer of `<label for>` Previous (not on the first) / Next (not on the last)
+  buttons; the submit button only in the last step's footer. The base sheet shows the fieldset whose `data-step`
+  matches the checked radio (`:nth-of-type(k):checked ~ …` written out for twelve steps, no `:has()`), keeps the
+  radios visually hidden but focusable (the arrow keys page the steps), and styles the labels as the submit
+  button's twins. A form without `steps=true` renders byte-for-byte as before, `:::step` children included (plain
+  fieldsets). `_step` is a new control field a host's form ingest should drop, like `_honey`. A required field on
+  a hidden step still blocks the final submit — without script the browser cannot reveal it.
+- **Native schema v13.** `NativeBlock::Carousel { slides: Vec<NativeCarouselSlide> }` (Site tier; a client with no
+  scroll-snap renders the slides as stacked cards) and `NativeBlock::Form` gains `steps`. `NativeBlock` is a
+  126-variant enum.
+- Both constructive DOM twins are byte-identical to `render_html` (the allowlist gains `checked` and `for`); the
+  registry has 125 blocks (`carousel`; `form` declares `steps` and `id`); `step` joins the lint's sub-directive
+  names; a fixture (`tests/fixtures/carousel-steps.surf`) and a corpus tier (`tier8-carousel-steps`, both
+  snapshots). Breaking for struct-literal `Block::Form { … }` and `NativeBlock::Form { … }` construction (add
+  `steps: false, id: None` / `steps: false`) and for exhaustive matches on `Block` / `NativeBlock`.
+
 ## 0.31.1 — 2026-09-28 (the resume's spacing at the V8 numbers; the paper the config asks for)
 
 - **The resume profile's spacing.** Brady's side-by-side (05:06): the engine's page was tighter than the V8

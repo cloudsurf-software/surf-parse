@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 124
-registry_updated = "2026-09-24"
+total_blocks = 125
+registry_updated = "2026-09-29"
 
 [blocks.ai-context]
 status = "implemented"
@@ -177,8 +177,8 @@ enum_variant = "Footnote"
 [blocks.form]
 status = "implemented"
 category = "web"
-purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden); a `group: Label` line opens a fieldset"
-attributes = ["submit", "action", "method", "honeypot"]
+purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden); a `group: Label` line or a `:::step[title=…]` child opens a fieldset; steps=true (0.32.0) makes every fieldset one step of a CSS-only stepped form"
+attributes = ["submit", "action", "method", "honeypot", "steps", "id"]
 degradation = "labeled list"
 enum_variant = "Form"
 
@@ -1031,3 +1031,14 @@ purpose = "Looping ticker band of short items, emitted twice so a CSS translate 
 attributes = []
 degradation = "comma-joined line"
 enum_variant = "Marquee"
+
+# ----- Site block added in 0.32.0 (the Elevate lane C) -----
+# A scroll-snap track and a dot nav of in-page anchors. No script.
+
+[blocks.carousel]
+status = "implemented"
+category = "site"
+purpose = "Horizontal scroll-snap carousel — `:::slide[image= alt=]` children (or one slide per `### ` heading), each a title, a markdown body and an optional image, with a dot nav of in-page anchors; no script"
+attributes = ["id", "aspect"]
+degradation = "the slides in order as heading, image and body"
+enum_variant = "Carousel"

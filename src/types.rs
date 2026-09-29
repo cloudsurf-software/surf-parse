@@ -970,6 +970,16 @@ pub enum Block {
         method: Option<String>,
         /// Emit a hidden `_honey` honeypot field for spam mitigation.
         honeypot: bool,
+        /// `steps=true` (0.32.0): a STEPPED form — every field group (a
+        /// `:::step[title=…]` child or a `group:` line) is one step, revealed
+        /// one at a time by CSS alone (a hidden `_step` radio per step and
+        /// Previous / Next labels). `false` renders exactly as before.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        steps: bool,
+        /// `id=` (0.32.0): the form's anchor id, and the prefix of the step
+        /// radios' ids (`{id}-step-{n}`; `form-step-{n}` without one).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
         span: Span,
     },
     /// Centered call-to-action band: heading + subtext + optional buttons.
@@ -1001,6 +1011,19 @@ pub enum Block {
     /// Looping ticker band of short items (a decorative marquee).
     Marquee {
         items: Vec<String>,
+        span: Span,
+    },
+    /// Horizontal scroll-snap carousel of slides (0.32.0). No script: the
+    /// track scrolls natively and the dots are in-page anchors.
+    Carousel {
+        slides: Vec<CarouselSlide>,
+        /// Anchor id of the section and the prefix of every slide id
+        /// (`{id}-slide-{n}`). Defaults to `carousel` at render time, so a
+        /// page with two carousels gives each an `id=`.
+        id: Option<String>,
+        /// `aspect=` hint for the slide images (`square`, `wide`, `tall`),
+        /// emitted as `data-aspect`; never interpreted by the parser.
+        aspect: Option<String>,
         span: Span,
     },
     /// Grid of product link-cards, optionally split into labelled groups.
@@ -1995,6 +2018,7 @@ impl Block {
             | Block::Banner { span, .. }
             | Block::Hours { span, .. }
             | Block::Marquee { span, .. }
+            | Block::Carousel { span, .. }
             | Block::ProductGrid { span, .. }
             | Block::PostGrid { span, .. }
             | Block::Gate { span, .. }
@@ -2634,6 +2658,19 @@ pub struct PostItem {
     pub image: Option<String>,
     /// Open in a new tab (renders `target="_blank" rel="noopener"`).
     pub external: bool,
+}
+
+/// One slide of a `Carousel` block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CarouselSlide {
+    /// The slide's `### ` heading, when it has one.
+    pub title: Option<String>,
+    /// Markdown body (the lines under the heading).
+    pub body: String,
+    /// Image URL (`image=` on `:::slide`, or an `![alt](src)` body line).
+    pub image: Option<String>,
+    /// Image alt text.
+    pub alt: Option<String>,
 }
 
 /// A card within a `Features` block.

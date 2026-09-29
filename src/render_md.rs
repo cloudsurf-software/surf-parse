@@ -620,6 +620,26 @@ pub(crate) fn render_block(block: &Block) -> String {
         // Degradation: one comma-joined line — the loop is decoration.
         Block::Marquee { items, .. } => items.join(", "),
 
+        // A carousel reads as its slides in order: heading, image, body.
+        Block::Carousel { slides, .. } => {
+            let mut lines = Vec::new();
+            for slide in slides {
+                if let Some(title) = &slide.title {
+                    lines.push(format!("### {title}"));
+                    lines.push(String::new());
+                }
+                if let Some(src) = &slide.image {
+                    lines.push(format!("![{}]({src})", slide.alt.as_deref().unwrap_or("")));
+                    lines.push(String::new());
+                }
+                if !slide.body.is_empty() {
+                    lines.push(slide.body.clone());
+                    lines.push(String::new());
+                }
+            }
+            lines.join("\n").trim().to_string()
+        }
+
         Block::ProductGrid { groups, .. } => {
             let mut lines = Vec::new();
             for group in groups {
@@ -1562,6 +1582,21 @@ mod tests {
             blocks,
             source: String::new(),
         }
+    }
+
+    #[test]
+    fn md_carousel_reads_as_its_slides_in_order() {
+        let doc = crate::parse("::carousel\n:::slide[image=\"/a.webp\" alt=\"A\"]\n### One\nBody one.\n:::\n:::slide\n### Two\nBody two.\n:::\n::\n").doc;
+        let md = to_markdown(&doc);
+        assert!(md.contains("### One\n\n![A](/a.webp)\n\nBody one.\n\n### Two\n\nBody two."), "{md}");
+    }
+
+    #[test]
+    fn md_stepped_form_degrades_to_the_plain_form() {
+        let doc = crate::parse("::form[steps=true submit=\"Go\"]\n:::step[title=\"First\"]\n- Name (text) *\n:::\n::\n").doc;
+        let md = to_markdown(&doc);
+        assert!(md.contains("**Form**\n- Name *"), "{md}");
+        assert!(md.contains("[Go]"));
     }
 
     #[test]

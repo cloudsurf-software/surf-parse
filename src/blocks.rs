@@ -6,7 +6,7 @@
 use crate::citation::{parse_authors, Reference, RefType};
 use crate::types::{
     AttrValue, Attrs, AuthProvider, BeforeAfterItem, BindingEvent, Block, BookingDay,
-    BookingService, CalloutType, ChartData, ChartSeries, ChartType, ChatMessage, ChatReaction,
+    BookingService, CalloutType, CarouselSlide, ChartData, ChartSeries, ChartType, ChatMessage, ChatReaction,
     Format, StoreItem,
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
@@ -69,6 +69,7 @@ pub fn resolve_block(block: Block) -> Block {
         "banner" => parse_banner(attrs, content, *span),
         "hours" => parse_hours(attrs, content, *span),
         "marquee" => parse_marquee(content, *span),
+        "carousel" => parse_carousel(attrs, content, *span),
         // The fourteen planned blocks (0.25.0, sessions 11 + 12)
         "related" => parse_related(content, *span),
         "turn" => parse_turn(attrs, content, *span),
@@ -1513,12 +1514,36 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
     let action = attr_string(attrs, "action");
     let method = attr_string(attrs, "method");
     let honeypot = attr_bool(attrs, "honeypot");
+    let steps = attr_string(attrs, "steps").is_some_and(|v| v.eq_ignore_ascii_case("true"));
+    let id = attr_string(attrs, "id").filter(|s| !s.trim().is_empty());
     let mut fields = Vec::new();
     let mut current_group: Option<String> = None;
+    let mut step_count = 0usize;
 
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
+            continue;
+        }
+
+        // 0.32.0: a `:::step[title=…]` child opens a group exactly like a
+        // `group:` line (an untitled step is named `Step n`); its `:::`
+        // closer ends it. Outside `steps=true` a step is simply a fieldset.
+        if let Some((name, rest)) = nested_directive(trimmed) {
+            if name == "step" {
+                step_count += 1;
+                let title = crate::attrs::parse_attrs(rest)
+                    .ok()
+                    .and_then(|a| attr_string(&a, "title"))
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or_else(|| format!("Step {step_count}"));
+                current_group = Some(title);
+            }
+            continue;
+        }
+        if is_nested_closer(trimmed) {
+            current_group = None;
             continue;
         }
 
@@ -1601,8 +1626,33 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
         action,
         method,
         honeypot,
+        steps,
+        id,
         span,
     }
+}
+
+/// A nested child opener inside a block body: a run of three or more colons,
+/// then a directive name, then (optionally) its `[attrs]`. Returns the name
+/// and the rest of the line after it.
+fn nested_directive(trimmed: &str) -> Option<(&str, &str)> {
+    let colons = trimmed.len() - trimmed.trim_start_matches(':').len();
+    if colons < 3 {
+        return None;
+    }
+    let after = trimmed[colons..].trim_start();
+    let name_len = after
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .unwrap_or(after.len());
+    if name_len == 0 {
+        return None;
+    }
+    Some((&after[..name_len], &after[name_len..]))
+}
+
+/// A nested child closer: a line of three or more colons and nothing else.
+fn is_nested_closer(trimmed: &str) -> bool {
+    trimmed.len() >= 3 && trimmed.chars().all(|c| c == ':')
 }
 
 fn parse_gallery(attrs: &Attrs, content: &str, span: Span) -> Block {
@@ -2269,6 +2319,131 @@ fn parse_marquee(content: &str, span: Span) -> Block {
         .filter(|l| !l.is_empty())
         .collect();
     Block::Marquee { items, span }
+}
+
+/// Parse a `::carousel` block (0.32.0). Two grammars:
+///
+/// - `:::slide[image=… alt=…]` children, each closed by `:::`; inside a
+///   slide the first `### ` / `## ` line is its title and the rest its body.
+/// - No `:::slide` child at all: every `### ` (or `## `) heading starts a
+///   slide, the way `::features` cards are written.
+///
+/// In both, an `![alt](src)` line in a slide body is the slide's image when
+/// `image=` did not name one (the line leaves the body).
+fn parse_carousel(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let id = attr_string(attrs, "id").filter(|s| !s.trim().is_empty());
+    let aspect = attr_string(attrs, "aspect").filter(|s| !s.trim().is_empty());
+    let explicit = content
+        .lines()
+        .any(|l| matches!(nested_directive(l.trim()), Some(("slide", _))));
+
+    let mut slides = Vec::new();
+    if explicit {
+        // (image, alt, lines) of the slide being read.
+        let mut open: Option<(Option<String>, Option<String>, Vec<&str>)> = None;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if let Some(("slide", rest)) = nested_directive(trimmed) {
+                if let Some((image, alt, lines)) = open.take() {
+                    slides.push(carousel_slide(image, alt, &lines));
+                }
+                let a = crate::attrs::parse_attrs(rest).unwrap_or_default();
+                open = Some((
+                    attr_string(&a, "image")
+                        .or_else(|| attr_string(&a, "src"))
+                        .filter(|s| !s.trim().is_empty())
+                        .map(|s| sanitize_href(&s)),
+                    attr_string(&a, "alt"),
+                    Vec::new(),
+                ));
+            } else if is_nested_closer(trimmed) {
+                if let Some((image, alt, lines)) = open.take() {
+                    slides.push(carousel_slide(image, alt, &lines));
+                }
+            } else if let Some((_, _, lines)) = open.as_mut() {
+                lines.push(line);
+            }
+        }
+        if let Some((image, alt, lines)) = open.take() {
+            slides.push(carousel_slide(image, alt, &lines));
+        }
+    } else {
+        let mut current: Vec<&str> = Vec::new();
+        for line in content.lines() {
+            let trimmed = line.trim();
+            let heading = trimmed.starts_with("### ") || trimmed.starts_with("## ");
+            if heading && current.iter().any(|l| !l.trim().is_empty()) {
+                slides.push(carousel_slide(None, None, &current));
+                current.clear();
+            }
+            current.push(line);
+        }
+        if current.iter().any(|l| !l.trim().is_empty()) {
+            slides.push(carousel_slide(None, None, &current));
+        }
+    }
+
+    Block::Carousel {
+        slides,
+        id,
+        aspect,
+        span,
+    }
+}
+
+/// One carousel slide from its body lines: the first heading line is the
+/// title, the first bare `![alt](src)` line is the image
+/// unless the opener named one, the rest is the markdown body.
+fn carousel_slide(
+    image: Option<String>,
+    alt: Option<String>,
+    lines: &[&str],
+) -> CarouselSlide {
+    let mut title: Option<String> = None;
+    let mut image = image;
+    let mut alt = alt;
+    let mut body: Vec<&str> = Vec::new();
+    for &line in lines {
+        let trimmed = line.trim();
+        if title.is_none()
+            && body.iter().all(|l| l.trim().is_empty())
+            && let Some(rest) = trimmed
+                .strip_prefix("### ")
+                .or_else(|| trimmed.strip_prefix("## "))
+        {
+            title = Some(rest.trim().to_string());
+            body.clear();
+            continue;
+        }
+        if image.is_none()
+            && let Some((a, src)) = bare_image_line(trimmed)
+        {
+            image = Some(sanitize_href(&src));
+            if alt.is_none() && !a.is_empty() {
+                alt = Some(a);
+            }
+            continue;
+        }
+        body.push(line);
+    }
+    CarouselSlide {
+        title,
+        body: body.join("\n").trim().to_string(),
+        image,
+        alt: alt.filter(|a| !a.is_empty()),
+    }
+}
+
+/// `![alt](src)` alone on a line → `(alt, src)`.
+fn bare_image_line(trimmed: &str) -> Option<(String, String)> {
+    let rest = trimmed.strip_prefix("![")?;
+    let close = rest.find("](")?;
+    let after = &rest[close + 2..];
+    let src = after.strip_suffix(')')?;
+    if src.is_empty() || src.contains(char::is_whitespace) {
+        return None;
+    }
+    Some((rest[..close].to_string(), src.to_string()))
 }
 
 // ------------------------------------------------------------------
@@ -9065,6 +9240,131 @@ Saturday 7am-4pm, Sunday 8am-2pm.
         match block {
             Block::Marquee { items, .. } => assert_eq!(items, vec!["Fresh <daily> & local"]),
             other => panic!("Expected Marquee, got {other:?}"),
+        }
+    }
+
+    // -- Carousel (0.32.0) ---------------------------------------
+
+    #[test]
+    fn parse_carousel_slide_children() {
+        let src = "::carousel[id=\"benefits\" aspect=\"square\"]\n:::slide[image=\"/assets/img/hydra-1.webp\" alt=\"Vacuum extractor tip\"]\n### Deep-Cleanse\nVacuum-extracts blackheads & debris in minutes.\n:::\n:::slide\n### Instant Hydration\nAntioxidant-rich serums leave a dewy glow.\n:::\n::\n";
+        let doc = crate::parse(src).doc;
+        assert_eq!(doc.blocks.len(), 1, "{:?}", doc.blocks);
+        match &doc.blocks[0] {
+            Block::Carousel { slides, id, aspect, .. } => {
+                assert_eq!(id.as_deref(), Some("benefits"));
+                assert_eq!(aspect.as_deref(), Some("square"));
+                assert_eq!(slides.len(), 2);
+                assert_eq!(slides[0].title.as_deref(), Some("Deep-Cleanse"));
+                assert_eq!(slides[0].body, "Vacuum-extracts blackheads & debris in minutes.");
+                assert_eq!(slides[0].image.as_deref(), Some("/assets/img/hydra-1.webp"));
+                assert_eq!(slides[0].alt.as_deref(), Some("Vacuum extractor tip"));
+                assert_eq!(slides[1].title.as_deref(), Some("Instant Hydration"));
+                assert_eq!(slides[1].image, None);
+                assert_eq!(slides[1].alt, None);
+            }
+            other => panic!("Expected Carousel, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_carousel_headings_form_like_features() {
+        let content = "### Deep-Cleanse\n![Tip](/img/a.webp)\nVacuum-extracts debris.\n\n### Hydration\nA dewy **glow**.\n\nSecond paragraph.";
+        match resolve_block(unknown("carousel", Attrs::new(), content)) {
+            Block::Carousel { slides, id, aspect, .. } => {
+                assert_eq!(id, None);
+                assert_eq!(aspect, None);
+                assert_eq!(slides.len(), 2);
+                assert_eq!(slides[0].title.as_deref(), Some("Deep-Cleanse"));
+                assert_eq!(slides[0].image.as_deref(), Some("/img/a.webp"));
+                assert_eq!(slides[0].alt.as_deref(), Some("Tip"));
+                assert_eq!(slides[0].body, "Vacuum-extracts debris.");
+                assert_eq!(slides[1].body, "A dewy **glow**.\n\nSecond paragraph.");
+            }
+            other => panic!("Expected Carousel, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_carousel_slide_attr_image_wins_and_script_schemes_are_dropped() {
+        let content = ":::slide[image=\"javascript:alert(1)\"]\n### A\n:::\n:::slide[image=\"/a.webp\"]\n![Other](/b.webp)\nBody\n:::";
+        match resolve_block(unknown("carousel", Attrs::new(), content)) {
+            Block::Carousel { slides, .. } => {
+                assert_eq!(slides[0].image.as_deref(), Some("#"));
+                assert_eq!(slides[1].image.as_deref(), Some("/a.webp"));
+                // The attr named the image, so the markdown image stays body.
+                assert_eq!(slides[1].body, "![Other](/b.webp)\nBody");
+            }
+            other => panic!("Expected Carousel, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_carousel_untitled_and_empty() {
+        match resolve_block(unknown("carousel", Attrs::new(), "Just a line.")) {
+            Block::Carousel { slides, .. } => {
+                assert_eq!(slides.len(), 1);
+                assert_eq!(slides[0].title, None);
+                assert_eq!(slides[0].body, "Just a line.");
+            }
+            other => panic!("Expected Carousel, got {other:?}"),
+        }
+        match resolve_block(unknown("carousel", Attrs::new(), "")) {
+            Block::Carousel { slides, .. } => assert!(slides.is_empty()),
+            other => panic!("Expected Carousel, got {other:?}"),
+        }
+    }
+
+    // -- Form steps (0.32.0) -------------------------------------
+
+    #[test]
+    fn parse_form_step_children_become_groups() {
+        let src = "::form[submit=\"Get Pricing\" steps=true id=\"pricing\"]\n:::step[title=\"What are you interested in?\"]\n- Interest (select: Botox | Filler) *\n:::\n:::step[title=\"About you\"]\n- Full name (text) *\n- E-mail (email) *\n:::\n::\n";
+        let doc = crate::parse(src).doc;
+        assert_eq!(doc.blocks.len(), 1, "{:?}", doc.blocks);
+        match &doc.blocks[0] {
+            Block::Form { fields, steps, id, submit_label, .. } => {
+                assert!(*steps);
+                assert_eq!(id.as_deref(), Some("pricing"));
+                assert_eq!(submit_label.as_deref(), Some("Get Pricing"));
+                assert_eq!(fields.len(), 3);
+                assert_eq!(fields[0].group.as_deref(), Some("What are you interested in?"));
+                assert_eq!(fields[0].options, vec!["Botox", "Filler"]);
+                assert_eq!(fields[1].group.as_deref(), Some("About you"));
+                assert_eq!(fields[2].group.as_deref(), Some("About you"));
+                assert_eq!(fields[2].field_type, FormFieldType::Email);
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_form_untitled_step_and_group_lines_still_work() {
+        let content = ":::step\n- A (text)\n:::\n- Loose (text)\ngroup: Later\n- B (text)";
+        let mut attrs = Attrs::new();
+        attrs.insert("steps".into(), AttrValue::String("true".into()));
+        match resolve_block(unknown("form", attrs, content)) {
+            Block::Form { fields, steps, .. } => {
+                assert!(steps);
+                assert_eq!(fields[0].group.as_deref(), Some("Step 1"));
+                // The `:::` closer ends the step.
+                assert_eq!(fields[1].group, None);
+                assert_eq!(fields[2].group.as_deref(), Some("Later"));
+            }
+            other => panic!("Expected Form, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_form_without_steps_is_unchanged() {
+        let content = "group: Contact\n- Name (text) *";
+        match resolve_block(unknown("form", Attrs::new(), content)) {
+            Block::Form { fields, steps, id, .. } => {
+                assert!(!steps);
+                assert_eq!(id, None);
+                assert_eq!(fields[0].group.as_deref(), Some("Contact"));
+            }
+            other => panic!("Expected Form, got {other:?}"),
         }
     }
 

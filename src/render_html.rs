@@ -6,7 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
-use crate::types::{Block, CalloutType, ChartType, DecisionStatus, Format, FormField, FormFieldType, HoursRow, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
+use crate::types::{Block, CalloutType, CarouselSlide, ChartType, DecisionStatus, Format, FormField, FormFieldType, HoursRow, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -3189,6 +3189,162 @@ fn marquee_html(items: &[String]) -> String {
     out
 }
 
+/// The id a `::carousel` renders under when the author gave none. A pure
+/// renderer keeps no per-page counter, so a page with two carousels gives
+/// each an `id=`.
+pub(crate) const CAROUSEL_DEFAULT_ID: &str = "carousel";
+
+/// Render a `::carousel` (0.32.0): a scroll-snap track of slide articles and
+/// a dot nav of in-page anchors. No script — the track scrolls natively, a
+/// dot jumps to its slide's id. `render_dom` builds the byte-identical twin.
+fn carousel_html(slides: &[CarouselSlide], id: Option<&str>, aspect: Option<&str>) -> String {
+    let id = id.unwrap_or(CAROUSEL_DEFAULT_ID);
+    let id_esc = escape_html(id);
+    let aspect_attr = aspect
+        .map(|a| format!(" data-aspect=\"{}\"", escape_html(a)))
+        .unwrap_or_default();
+    let mut out = format!(
+        "<section class=\"surfdoc-carousel\" id=\"{id_esc}\"{aspect_attr}><div class=\"surfdoc-carousel-track\">"
+    );
+    for (i, slide) in slides.iter().enumerate() {
+        let n = i + 1;
+        out.push_str(&format!(
+            "<article class=\"surfdoc-carousel-slide\" id=\"{id_esc}-slide-{n}\">"
+        ));
+        if let Some(src) = &slide.image {
+            out.push_str(&format!(
+                "<figure class=\"surfdoc-carousel-media\"><img src=\"{}\" alt=\"{}\" loading=\"lazy\" /></figure>",
+                escape_html(src),
+                escape_html(slide.alt.as_deref().unwrap_or("")),
+            ));
+        }
+        if let Some(title) = &slide.title {
+            out.push_str(&format!(
+                "<h3 class=\"surfdoc-carousel-title\">{}</h3>",
+                render_inline_markdown_phrasing(title)
+            ));
+        }
+        if !slide.body.is_empty() {
+            out.push_str(&render_wrapped_phrasing_or_blocks(Some("surfdoc-carousel-body"), &slide.body));
+        }
+        out.push_str("</article>");
+    }
+    out.push_str("</div><nav class=\"surfdoc-carousel-dots\" aria-label=\"Slides\">");
+    for n in 1..=slides.len() {
+        out.push_str(&format!(
+            "<a href=\"#{id_esc}-slide-{n}\" aria-label=\"Slide {n}\"></a>"
+        ));
+    }
+    out.push_str("</nav></section>");
+    out
+}
+
+/// The steps of a `steps=true` form: each run of consecutive fields that
+/// share a `group` value (a `:::step` child or a `group:` line; a run of
+/// ungrouped fields too) is one step, in order. Shared with `render_dom`.
+pub(crate) fn form_step_runs(fields: &[FormField]) -> Vec<(Option<&str>, &[FormField])> {
+    let mut runs: Vec<(Option<&str>, &[FormField])> = Vec::new();
+    let mut start = 0;
+    for i in 1..=fields.len() {
+        if i == fields.len() || fields[i].group != fields[start].group {
+            runs.push((fields[start].group.as_deref(), &fields[start..i]));
+            start = i;
+        }
+    }
+    runs
+}
+
+/// The legend of step `n` of `total`: `Step n of N · {title}`, or just
+/// `Step n of N` for an untitled step (an ungrouped run, or the `Step n` name
+/// an untitled `:::step` is given). Unescaped — each renderer escapes it.
+pub(crate) fn form_step_legend(n: usize, total: usize, title: Option<&str>) -> String {
+    match title {
+        Some(t) if t != format!("Step {n}") => format!("Step {n} of {total} \u{b7} {t}"),
+        _ => format!("Step {n} of {total}"),
+    }
+}
+
+/// The id prefix of a stepped form's radios: the form's `id=`, else `form`.
+pub(crate) fn form_step_prefix(id: Option<&str>) -> &str {
+    id.unwrap_or("form")
+}
+
+/// Render a `steps=true` form (0.32.0), CSS-only: one visually hidden
+/// `_step` radio per step right after the opening tag (the base sheet shows
+/// the fieldset whose `data-step` matches the checked radio), each step a
+/// `<fieldset class="surfdoc-form-step">` with a "Step n of N" legend and a
+/// Previous / Next label footer, the submit button in the last step's footer.
+/// The form keeps `class="surfdoc-form"` verbatim — hosts rewrite that tag —
+/// and carries the marker as `data-steps="true"`.
+fn stepped_form_html(
+    fields: &[FormField],
+    submit_label: Option<&str>,
+    action: Option<&str>,
+    method: Option<&str>,
+    honeypot: bool,
+    id: Option<&str>,
+) -> String {
+    let btn_label = submit_label.unwrap_or("Submit");
+    let target_attrs = match action {
+        Some(a) => format!(
+            " method=\"{}\" action=\"{}\"",
+            escape_html(method.unwrap_or("post")),
+            escape_html(a)
+        ),
+        None => String::new(),
+    };
+    let id_attr = id
+        .map(|i| format!(" id=\"{}\"", escape_html(i)))
+        .unwrap_or_default();
+    let prefix = escape_html(form_step_prefix(id));
+    let runs = form_step_runs(fields);
+    let total = runs.len();
+    let mut html = format!("<form class=\"surfdoc-form\"{target_attrs} data-steps=\"true\"{id_attr}>");
+    for n in 1..=total {
+        let checked = if n == 1 { " checked" } else { "" };
+        html.push_str(&format!(
+            "<input type=\"radio\" name=\"_step\" value=\"{n}\" id=\"{prefix}-step-{n}\" class=\"surfdoc-form-step-radio\"{checked}/>"
+        ));
+    }
+    html.push_str(&format!(
+        "<div class=\"surfdoc-form-progress\" style=\"--surfdoc-steps:{total}\" aria-hidden=\"true\"><span class=\"surfdoc-form-progress-bar\"></span></div>"
+    ));
+    if honeypot {
+        html.push_str(FORM_HONEYPOT_HTML);
+    }
+    for (i, (title, run)) in runs.iter().enumerate() {
+        let n = i + 1;
+        html.push_str(&format!(
+            "<fieldset class=\"surfdoc-form-step\" data-step=\"{n}\"><legend>{}</legend>",
+            escape_html(&form_step_legend(n, total, *title)),
+        ));
+        for field in *run {
+            render_form_field_html(&mut html, field);
+        }
+        html.push_str("<div class=\"surfdoc-form-step-nav\">");
+        if n > 1 {
+            html.push_str(&format!(
+                "<label for=\"{prefix}-step-{}\" class=\"surfdoc-form-step-prev\">Previous</label>",
+                n - 1
+            ));
+        }
+        if n < total {
+            html.push_str(&format!(
+                "<label for=\"{prefix}-step-{}\" class=\"surfdoc-form-step-next\">Next</label>",
+                n + 1
+            ));
+        } else {
+            html.push_str(&format!(
+                "<button type=\"submit\" class=\"surfdoc-form-submit\">{}</button>",
+                escape_html(btn_label),
+            ));
+        }
+        html.push_str("</div></fieldset>");
+    }
+    html.push_str("</form>");
+    html
+}
+
 // ------------------------------------------------------------------
 // The fourteen planned blocks (0.25.0): the small rules both the string
 // renderer and the constructive DOM twin (render_dom.rs) read, so the two
@@ -4080,6 +4236,17 @@ fn render_block_inner(block: &Block) -> String {
         }
 
         Block::Form {
+            fields, submit_label, action, method, honeypot, steps: true, id, ..
+        } if !fields.is_empty() => stepped_form_html(
+            fields,
+            submit_label.as_deref(),
+            action.as_deref(),
+            method.as_deref(),
+            *honeypot,
+            id.as_deref(),
+        ),
+
+        Block::Form {
             fields, submit_label, action, method, honeypot, ..
         } => {
             let btn_label = submit_label.as_deref().unwrap_or("Submit");
@@ -4165,6 +4332,10 @@ fn render_block_inner(block: &Block) -> String {
         } => hours_html(title.as_deref(), timezone.as_deref(), rows, None),
 
         Block::Marquee { items, .. } => marquee_html(items),
+
+        Block::Carousel { slides, id, aspect, .. } => {
+            carousel_html(slides, id.as_deref(), aspect.as_deref())
+        }
 
         Block::ProductGrid { groups, tiles: true, .. } => {
             // apple.com-style promo tiles: a full-bleed (site-capped) 2-up band;
@@ -9212,6 +9383,8 @@ mod tests {
             action: Some("/contact".into()),
             method: Some("post".into()),
             honeypot: true,
+            steps: false,
+            id: None,
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -9229,6 +9402,8 @@ mod tests {
             action: None,
             method: None,
             honeypot: false,
+            steps: false,
+            id: None,
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -9562,6 +9737,106 @@ mod tests {
             4,
             "one separator per item, both halves"
         );
+    }
+
+    // -- ::carousel (0.32.0) ----------------------------------------
+
+    #[test]
+    fn html_carousel_structure_slides_and_dots() {
+        let src = "::carousel[id=\"benefits\" aspect=\"square\"]\n:::slide[image=\"/img/a.webp\" alt=\"Tip & trick\"]\n### Deep-Cleanse\nVacuum-extracts **debris**.\n:::\n:::slide\n### Hydration\nA dewy glow.\n:::\n::";
+        let html = to_html(&crate::parse(src).doc);
+        // `id=` is also the block's address, so data-block-id leads the tag.
+        assert!(html.contains(" class=\"surfdoc-carousel\" id=\"benefits\" data-aspect=\"square\">"), "{html}");
+        assert!(html.contains("<div class=\"surfdoc-carousel-track\"><article class=\"surfdoc-carousel-slide\" id=\"benefits-slide-1\">"));
+        assert!(html.contains("<figure class=\"surfdoc-carousel-media\"><img src=\"/img/a.webp\" alt=\"Tip &amp; trick\" loading=\"lazy\" /></figure>"));
+        assert!(html.contains("<h3 class=\"surfdoc-carousel-title\">Deep-Cleanse</h3>"));
+        assert!(html.contains("<strong>debris</strong>"));
+        assert!(html.contains("id=\"benefits-slide-2\""));
+        assert_eq!(html.matches("<article class=\"surfdoc-carousel-slide\"").count(), 2);
+        assert!(html.contains("<nav class=\"surfdoc-carousel-dots\" aria-label=\"Slides\"><a href=\"#benefits-slide-1\" aria-label=\"Slide 1\"></a><a href=\"#benefits-slide-2\" aria-label=\"Slide 2\"></a></nav></section>"));
+        assert_eq!(html.matches("aria-label=\"Slide ").count(), 2);
+        assert!(!html.contains("<script"), "the carousel needs no script");
+    }
+
+    #[test]
+    fn html_carousel_default_id_and_no_image() {
+        let html = to_html(&crate::parse("::carousel\n### One\nBody\n### Two\n::").doc);
+        assert!(html.contains("<section class=\"surfdoc-carousel\" id=\"carousel\">"), "{html}");
+        assert!(html.contains("href=\"#carousel-slide-2\""));
+        assert!(!html.contains("surfdoc-carousel-media"));
+    }
+
+    #[test]
+    fn css_carousel_scroll_snap_and_reduced_motion_shipped() {
+        assert!(SURFDOC_CSS.contains("scroll-snap-type: x mandatory"));
+        assert!(SURFDOC_CSS.contains("scroll-snap-align: start"));
+        assert!(SURFDOC_CSS.contains("flex: 0 0 min(100%, 320px)"));
+        assert!(SURFDOC_CSS.contains(".surfdoc-carousel-track { scroll-behavior: auto; }"));
+    }
+
+    // -- ::form[steps=true] (0.32.0) --------------------------------
+
+    const STEPPED_FORM: &str = "::form[submit=\"Get Pricing\" steps=true]\n:::step[title=\"What are you interested in?\"]\n- Interest (select: Botox | Filler) *\n:::\n:::step[title=\"About you\"]\n- Full name (text) *\n- E-mail (email) *\n:::\n::";
+
+    #[test]
+    fn html_stepped_form_radios_legends_and_nav() {
+        let html = to_html(&crate::parse(STEPPED_FORM).doc);
+        // The class stays exactly `surfdoc-form` — hosts rewrite that tag.
+        assert!(html.contains("<form class=\"surfdoc-form\" data-steps=\"true\">"), "{html}");
+        assert!(html.contains("<input type=\"radio\" name=\"_step\" value=\"1\" id=\"form-step-1\" class=\"surfdoc-form-step-radio\" checked/>"));
+        assert!(html.contains("<input type=\"radio\" name=\"_step\" value=\"2\" id=\"form-step-2\" class=\"surfdoc-form-step-radio\"/>"));
+        assert_eq!(html.matches("class=\"surfdoc-form-step-radio\"").count(), 2);
+        assert!(html.contains("<fieldset class=\"surfdoc-form-step\" data-step=\"1\"><legend>Step 1 of 2 \u{b7} What are you interested in?</legend>"));
+        assert!(html.contains("<legend>Step 2 of 2 \u{b7} About you</legend>"));
+        assert!(html.contains("<label for=\"form-step-2\" class=\"surfdoc-form-step-next\">Next</label>"));
+        assert!(html.contains("<label for=\"form-step-1\" class=\"surfdoc-form-step-prev\">Previous</label>"));
+        assert_eq!(html.matches("surfdoc-form-step-prev").count(), 1, "no Previous on the first step");
+        assert_eq!(html.matches("surfdoc-form-step-next").count(), 1, "no Next on the last step");
+        // The one submit button sits in the last step's footer.
+        assert_eq!(html.matches("<button type=\"submit\"").count(), 1);
+        let last = html.find("data-step=\"2\"").unwrap();
+        assert!(html[last..].contains("<button type=\"submit\" class=\"surfdoc-form-submit\">Get Pricing</button></div></fieldset></form>"));
+        assert!(html.contains("style=\"--surfdoc-steps:2\""));
+    }
+
+    #[test]
+    fn html_stepped_form_id_prefix_action_and_honeypot_order() {
+        let src = "::form[steps=true id=\"quote\" action=\"/f\" honeypot]\ngroup: One\n- A (text)\ngroup: Two\n- B (text)\n::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(html.contains(" class=\"surfdoc-form\" method=\"post\" action=\"/f\" data-steps=\"true\" id=\"quote\">"), "{html}");
+        assert!(html.contains("id=\"quote-step-1\""));
+        assert!(html.contains("<label for=\"quote-step-2\" class=\"surfdoc-form-step-next\">"));
+        // The radios come first, so radio k is the k-th input child
+        // (the CSS nth-of-type rules depend on it).
+        let radio = html.find("surfdoc-form-step-radio").unwrap();
+        let honey = html.find("_honey").unwrap();
+        assert!(radio < honey);
+        // A `group:` line is a step when steps=true.
+        assert!(html.contains("<legend>Step 1 of 2 \u{b7} One</legend>"));
+    }
+
+    #[test]
+    fn html_form_step_children_without_steps_render_as_plain_fieldsets() {
+        let src = "::form\n:::step[title=\"About you\"]\n- Name (text)\n:::\n::";
+        let html = to_html(&crate::parse(src).doc);
+        assert!(html.contains("<form class=\"surfdoc-form\"><fieldset class=\"surfdoc-form-group\"><legend>About you</legend>"), "{html}");
+        assert!(!html.contains("data-steps"));
+        assert!(!html.contains("_step"));
+    }
+
+    #[test]
+    fn html_form_without_steps_is_byte_identical_to_the_group_form() {
+        let a = to_html(&crate::parse("::form[submit=\"Send\"]\ngroup: Contact\n- Name (text) *\n::").doc);
+        assert!(a.contains("<form class=\"surfdoc-form\"><fieldset class=\"surfdoc-form-group\"><legend>Contact</legend><div class=\"surfdoc-form-field\"><label>Name <span class=\"required\">*</span></label><input type=\"text\" name=\"name\" placeholder=\"\" required/></div></fieldset><button type=\"submit\" class=\"surfdoc-form-submit\">Send</button></form>"), "{a}");
+    }
+
+    #[test]
+    fn css_stepped_form_rules_shipped() {
+        assert!(SURFDOC_CSS.contains(".surfdoc-form[data-steps] > .surfdoc-form-step { display: none;"));
+        for k in 1..=12 {
+            let sel = format!(".surfdoc-form-step-radio:nth-of-type({k}):checked ~ .surfdoc-form-step[data-step=\"{k}\"]");
+            assert!(SURFDOC_CSS.contains(&sel), "missing {sel}");
+        }
     }
 
     #[test]

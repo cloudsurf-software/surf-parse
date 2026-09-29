@@ -331,6 +331,29 @@ fn site_blocks_hours_and_marquee_round_trip() {
     }
 }
 
+/// 0.32.0: `::carousel` serializes onto the explicit `:::slide` form (a
+/// heading-only carousel lands on it too), and `::form[steps=true]` keeps
+/// `steps=` and `id=` with its steps as `group:` lines. Fixed point on the
+/// FIRST pass, HTML included — nested one level deep as well.
+#[test]
+fn carousel_and_stepped_form_round_trip() {
+    for src in [
+        "::carousel[id=\"benefits\" aspect=\"square\"]\n:::slide[image=\"/img/a.webp\" alt=\"Tip \\\"quoted\\\"\"]\n### Deep-Cleanse\nVacuum-extracts debris.\n:::\n:::slide\n### Hydration\nA dewy glow.\n\nMore.\n:::\n::\n",
+        "::carousel\n### One\n![Alt](/one.webp)\nBody one.\n### Two\nBody two.\n::\n",
+        "::form[submit=\"Get Pricing\" steps=true id=\"pricing\"]\n:::step[title=\"Interest\"]\n- Interest (select: Botox | Filler) *\n:::\n:::step\n- Full name (text) *\n:::\n::\n",
+        "::section\n## Benefits\n:::carousel[id=\"b\"]\n::::slide[image=\"/a.webp\"]\n### A\nBody\n::::\n:::\n::\n",
+    ] {
+        let first = surf_parse::builder::to_surf_source(&surf_parse::parse(src).doc);
+        let second = surf_parse::builder::to_surf_source(&surf_parse::parse(&first).doc);
+        assert_eq!(first, second, "not a fixed point for:\n{src}first pass:\n{first}");
+        let html0 = surf_parse::render_html::to_html(&surf_parse::parse(src).doc);
+        let html1 = surf_parse::render_html::to_html(&surf_parse::parse(&first).doc);
+        let html2 = surf_parse::render_html::to_html(&surf_parse::parse(&second).doc);
+        assert_eq!(html0, html1, "the serializer changed the render:\n{src}first pass:\n{first}");
+        assert_eq!(html1, html2, "render drifted across the round trip:\n{src}");
+    }
+}
+
 /// 0.25.0: the fourteen blocks that were planned until sessions 11 + 12.
 /// Each source is the corpus's own authored shape; the serializer writes the
 /// canonical spelling (`related` normalises a sentence relation onto the

@@ -1,0 +1,29 @@
+---
+title: Carousel and steps
+---
+
+# Carousel and steps
+
+The 0.32.0 pair: a scroll-snap carousel with a dot nav, and a stepped form
+revealed one step at a time by CSS alone.
+
+::carousel[id="benefits" aspect="square"]
+:::slide[image="/assets/img/hydra-1.webp" alt="Vacuum extractor tip & serum"]
+### Deep-Cleanse
+Vacuum-extracts blackheads & debris in <minutes>.
+:::
+:::slide
+### Instant *Hydration*
+Antioxidant-rich serums leave a "dewy" glow.
+:::
+::
+
+::form[submit="Get Pricing" steps=true id="pricing"]
+:::step[title="What are you interested in?"]
+- Interest (select: Botox | Filler) *
+:::
+:::step[title="About <you> & yours"]
+- Full name (text) *
+- E-mail (email) *
+:::
+::

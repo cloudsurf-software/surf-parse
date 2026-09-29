@@ -30,12 +30,13 @@ pub const CORPUS: &[(&str, &str)] = &[
     ("tier5-size-class", include_str!("../tests/corpus/tier5-size-class.surf")),
     ("tier6-the-last-twenty", include_str!("../tests/corpus/tier6-the-last-twenty.surf")),
     ("tier7-panels", include_str!("../tests/corpus/tier7-panels.surf")),
+    ("tier8-carousel-steps", include_str!("../tests/corpus/tier8-carousel-steps.surf")),
 ];
 
 /// One minimal source document per implemented registry kind — the
 /// coverage suite's table, exported (0.27) so every block has an example
-/// (spec/blocks.toml, status = "implemented"; registry currently has 124
-/// implemented of 124 total). When a kind is added to the registry, the
+/// (spec/blocks.toml, status = "implemented"; registry currently has 125
+/// implemented of 125 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 pub const SNIPPETS: &[(&str, &str)] = &[
     ("banner", "::banner[id=contact]\n# Talk to us\nWe reply within one business day.\n[Book a call](/book)\n::"),
@@ -62,6 +63,8 @@ pub const SNIPPETS: &[(&str, &str)] = &[
     ("hero-image", "::hero-image[src=/img/hero.png alt=\"Hero\"]\n::"),
     ("hours", "::hours[title=\"Hours\" timezone=\"America/Los_Angeles\"]\n- Monday: 11am - 9pm\n- Sunday: Closed\n::"),
     ("marquee", "::marquee\n- Fresh daily\n- Open late\n::"),
+    // 0.32.0: the Elevate lane C.
+    ("carousel", "::carousel[id=benefits aspect=square]\n:::slide[image=\"/img/a.webp\" alt=\"Tip\"]\n### Deep-Cleanse\nVacuum-extracts debris.\n:::\n:::slide\n### Hydration\nA dewy glow.\n:::\n::"),
     // 0.25.0: the fourteen blocks that were planned until sessions 11 + 12.
     ("related", "::related\n- [Architecture Plan](plans/plan.md) \u{2014} produces\n- consumes: research/FINDINGS.md\n::"),
     ("turn", "::turn[participant=claude time=2026-02-10T04:01Z role=ai model=opus]\nYes \u{2014} file before launch.\n::"),
@@ -295,7 +298,7 @@ mod tests {
     #[test]
     fn the_typed_registry_matches_the_toml() {
         let rows = registry();
-        assert_eq!(rows.len(), 124);
+        assert_eq!(rows.len(), 125);
         let slot = rows.iter().find(|r| r.name == "panel-slot").expect("panel-slot");
         assert_eq!(slot.status, "implemented");
         assert_eq!(slot.enum_variant.as_deref(), Some("PanelSlot"));

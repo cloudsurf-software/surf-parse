@@ -225,7 +225,8 @@ fn lint_l045_names_the_holes() {
 #[test]
 fn native_crosses_as_panel_slot_and_preset() {
     use surf_parse::render_native::{to_native_blocks, NativeBlock, NATIVE_DOC_SCHEMA_VERSION};
-    assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 12);
+    // v12 introduced the panels variants; 0.32.0 moved the schema to v13.
+    assert!(NATIVE_DOC_SCHEMA_VERSION >= 12);
     let doc = surf_parse::parse(SHELL).doc;
     let native = to_native_blocks(&doc);
     let NativeBlock::AppShell { layout, adaptive, children } = &native[0] else { panic!("{native:?}") };

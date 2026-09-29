@@ -89,6 +89,8 @@
 //! - **`Form`**
 //!   Form with typed input fields for native rendering.
 //!   No action URL — the native app controls form submission.
+//!   `steps` (v13, 0.32.0): `::form[steps=true]` — each field group is one
+//!   step; a client may page through them, or show the grouped form whole.
 //! - **`Gallery`**
 //!   Image gallery with grid layout and optional category filtering.
 //!   - `columns`: Per-size-class column count (schema v5); a document that authored
@@ -393,6 +395,11 @@
 //!   block carries no clock — the client stamps "open now" itself. v10.
 //! - **`Marquee`**
 //!   `::marquee` — `items` = the ticker's lines. v10.
+//! - **`Carousel`**
+//!   `::carousel` — `slides` = [`NativeCarouselSlide`] (title, markdown
+//!   body, image, alt) in order. The web scrolls them in a scroll-snap
+//!   track; a native client with no scroll-snap renders them as STACKED
+//!   CARDS. v13.
 //! - **`Smoke`**
 //!   `::smoke` — `script=`; `checks` = the `METHOD /path -> STATUS` body
 //!   lines ([`NativeSmokeCheck`]). v10.
@@ -648,6 +655,7 @@ pub enum NativeBlock {
     Form {
         fields: Vec<NativeFormField>,
         submit_label: String,
+        steps: bool,
     },
 
     /// ::gallery
@@ -1289,6 +1297,9 @@ pub enum NativeBlock {
     /// ::marquee
     Marquee { items: Vec<String> },
 
+    /// ::carousel
+    Carousel { slides: Vec<NativeCarouselSlide> },
+
     /// ::smoke
     Smoke {
         script: Option<String>,
@@ -1866,6 +1877,21 @@ pub struct NativeEnvEntry {
     pub default_value: Option<String>,
 }
 
+/// One slide of a native `Carousel` — `types::CarouselSlide` across the FFI.
+/// New in schema v13.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeCarouselSlide {
+    /// The slide's heading, when it has one.
+    pub title: Option<String>,
+    /// Markdown body.
+    pub body: String,
+    /// Image URL.
+    pub image: Option<String>,
+    /// Image alt text.
+    pub alt: Option<String>,
+}
+
 /// One weekday row of a native `Hours` — `types::HoursRow` across the FFI.
 /// New in schema v10.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2359,7 +2385,13 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// two new variants `PanelSlot` (recursive) and `Preset` (leaf) with the
 /// record `NativePresetSpan`. `NativeBlock` is now a 125-variant enum
 /// (124 structural + `Markdown`).
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 12;
+///
+/// v13 (0.32.0) — the Elevate lanes C and Q: a new variant `Carousel` with
+/// the record `NativeCarouselSlide` (Site tier; a native client renders the
+/// slides as stacked cards), and `Form` gains `steps` (`::form[steps=true]`;
+/// each field group is one step). `NativeBlock` is now a 126-variant enum
+/// (125 structural + `Markdown`).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 13;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -3105,12 +3137,14 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         Block::Form {
             fields,
             submit_label,
+            steps,
             ..
         } => NativeBlock::Form {
             fields: convert_form_fields(fields),
             submit_label: submit_label
                 .clone()
                 .unwrap_or_else(|| "Submit".to_string()),
+            steps: *steps,
         },
 
         Block::Gallery {
@@ -4289,6 +4323,17 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
         },
 
         Block::Marquee { items, .. } => NativeBlock::Marquee { items: items.clone() },
+        Block::Carousel { slides, .. } => NativeBlock::Carousel {
+            slides: slides
+                .iter()
+                .map(|s| NativeCarouselSlide {
+                    title: s.title.clone(),
+                    body: s.body.clone(),
+                    image: s.image.clone(),
+                    alt: s.alt.clone(),
+                })
+                .collect(),
+        },
 
         Block::Smoke { script, checks, .. } => NativeBlock::Smoke {
             script: script.clone(),
@@ -4761,6 +4806,8 @@ pub fn block_tier(block: &Block) -> BlockTier {
         // Schema v10: the 0.21.0 site pair and the three marketing leaves.
         | Block::Hours { .. }
         | Block::Marquee { .. }
+        // Schema v13 (0.32.0): the scroll-snap carousel.
+        | Block::Carousel { .. }
         | Block::Countdown { .. }
         | Block::LogoCloud { .. }
         | Block::Subscribe { .. } => BlockTier::Site,
@@ -5892,6 +5939,47 @@ mod tests {
                 assert_eq!(rows[1].text, "Closed");
             }
             other => panic!("expected Hours, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn carousel_converts_to_slides_in_the_site_tier() {
+        let src = "::carousel[id=\"b\"]\n:::slide[image=\"/a.webp\" alt=\"A\"]\n### One\nBody **one**.\n:::\n:::slide\n### Two\n:::\n::\n";
+        match convert_first(src) {
+            NativeBlock::Carousel { slides } => {
+                assert_eq!(
+                    slides,
+                    vec![
+                        NativeCarouselSlide {
+                            title: Some("One".into()),
+                            body: "Body **one**.".into(),
+                            image: Some("/a.webp".into()),
+                            alt: Some("A".into()),
+                        },
+                        NativeCarouselSlide { title: Some("Two".into()), body: String::new(), image: None, alt: None },
+                    ]
+                );
+            }
+            other => panic!("expected Carousel, got {other:?}"),
+        }
+        let doc = crate::parse(src).doc;
+        assert_eq!(block_tier(&doc.blocks[0]), BlockTier::Site);
+    }
+
+    #[test]
+    fn stepped_form_crosses_with_steps_and_its_groups() {
+        let src = "::form[steps=true]\n:::step[title=\"First\"]\n- A (text)\n:::\n:::step[title=\"Second\"]\n- B (email)\n:::\n::\n";
+        match convert_first(src) {
+            NativeBlock::Form { fields, steps, .. } => {
+                assert!(steps);
+                assert_eq!(fields[0].group.as_deref(), Some("First"));
+                assert_eq!(fields[1].group.as_deref(), Some("Second"));
+            }
+            other => panic!("expected Form, got {other:?}"),
+        }
+        match convert_first("::form\n- A (text)\n::\n") {
+            NativeBlock::Form { steps, .. } => assert!(!steps),
+            other => panic!("expected Form, got {other:?}"),
         }
     }
 
@@ -7336,6 +7424,8 @@ mod tests {
             ],
             submit_label: Some("Send".to_string()),
             action: None, method: None, honeypot: false,
+            steps: false,
+            id: None,
             span: syn(),
         };
         assert_eq!(
@@ -7362,6 +7452,7 @@ mod tests {
                     },
                 ],
                 submit_label: "Send".to_string(),
+                steps: false,
             }
         );
     }
@@ -7372,13 +7463,17 @@ mod tests {
             fields: vec![],
             submit_label: None,
             action: None, method: None, honeypot: false,
+            steps: false,
+            id: None,
             span: syn(),
         };
         match convert_block(&block, 0) {
             NativeBlock::Form {
                 submit_label,
                 fields,
+                steps,
             } => {
+                assert!(!steps);
                 assert_eq!(submit_label, "Submit");
                 assert!(fields.is_empty());
             }
@@ -7415,6 +7510,8 @@ mod tests {
                 }],
                 submit_label: None,
                 action: None, method: None, honeypot: false,
+                steps: false,
+                id: None,
                 span: syn(),
             };
             match convert_block(&block, 0) {
@@ -7440,6 +7537,8 @@ mod tests {
             }],
             submit_label: Some("Go".to_string()),
             action: None, method: None, honeypot: false,
+            steps: false,
+            id: None,
             span: syn(),
         };
         match convert_block(&block, 0) {
@@ -7739,6 +7838,8 @@ mod tests {
                     }],
                     submit_label: Some("Subscribe".to_string()),
                     action: None, method: None, honeypot: false,
+                    steps: false,
+                    id: None,
                     span: syn(),
                 },
                 Block::Gallery {
@@ -7913,7 +8014,7 @@ mod tests {
         // planned) — schema v10; every registered block crosses. 0.26:
         // hero/section `anchor` + heading anchors stripped — schema v11.
         // 0.27: the panels layout — `PanelSlot` + `Preset` — schema v12.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 12);
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 13);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the
