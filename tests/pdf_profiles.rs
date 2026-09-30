@@ -195,7 +195,7 @@ fn brand_rides_in_every_pages_footer() {
     // The footer is page furniture: the page count does not move.
     assert_eq!(page_count(&doc, &branded).unwrap(), page_count(&doc, &plain).unwrap());
     // The PDF carries the link annotation on every page (Typst writes /URI uncompressed).
-    let pdf = surf_parse::to_pdf(&doc, &branded).expect("compiles");
+    let pdf = surf_parse::render_pdf::to_pdf(&doc, &branded).expect("compiles");
     let uris = pdf.windows(b"https://cloudsurf.com".len()).filter(|w| *w == b"https://cloudsurf.com").count();
     assert!(uris >= page_count(&doc, &branded).unwrap(), "one link per page: {uris} URIs");
 }
