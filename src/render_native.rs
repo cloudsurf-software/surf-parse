@@ -91,6 +91,8 @@
 //!   No action URL — the native app controls form submission.
 //!   `steps` (v13, 0.32.0): `::form[steps=true]` — each field group is one
 //!   step; a client may page through them, or show the grouped form whole.
+//!   `model` (v14, 0.33.0): the record a `::form[model=…]` writes (one row
+//!   to `/_api/{model}`); a field's `constraints` are its model spellings.
 //! - **`Gallery`**
 //!   Image gallery with grid layout and optional category filtering.
 //!   - `columns`: Per-size-class column count (schema v5); a document that authored
@@ -292,13 +294,15 @@
 //!   `action=` (via [`parse_native_action`]), `- id "Label"` segments.
 //! - **`Route`**
 //!   `::route` — `method=` uppercased, `path=`, the `auth:`/`returns:`/
-//!   `body:` lines, `handler` = fenced source, `content` = the rest.
+//!   `body:` lines, `handler` = fenced source, `content` = the rest;
+//!   `filter` / `sort` (v14, 0.33.0) = the list-query knobs, verbatim.
 //! - **`Action`**
 //!   `::action` — `method=` uppercased, `target=`, `label=`, `confirm=`;
 //!   `fields` map exactly as `::form`'s `- Label (type)` lines.
 //! - **`Model`**
 //!   `::model` — `name=` and the `- field: type [constraints]` lines
-//!   (see [`NativeModelField`]).
+//!   (see [`NativeModelField`]); `owner` (v14, 0.33.0) = `viewer` /
+//!   `workspace` / `public`, and a field's `computed` = its `= expr` text.
 //! - **`App`**
 //!   `::app` — `name=`/`binary=`/`region=`/`port=`/`platform=`/`auth=`,
 //!   `content` = raw body, `children` = the parsed child blocks.
@@ -400,6 +404,24 @@
 //!   body, image, alt) in order. The web scrolls them in a scroll-snap
 //!   track; a native client with no scroll-snap renders them as STACKED
 //!   CARDS. v13.
+//! - **`Picker`**
+//!   `::picker` — `bind` (the `record.field` written), `tiers`, `layout`
+//!   (`wheel` / `grid` / `list`), `emoji`; `rows` = [`NativePickerRow`]
+//!   (core, graded choices, optional info). v14.
+//! - **`When`**
+//!   `::when` — the predicate (`bind` + `op` + `value`, or `expr`) and the
+//!   `children` shown only while it holds. The client evaluates it against
+//!   the record state the platform supplies. v14.
+//! - **`Compute`**
+//!   `::compute` — `name`, `expr` (verbatim, never evaluated here) and
+//!   `source`, the rows it derives from. v14.
+//! - **`Flow`**
+//!   `::flow` — `model`, `submit_label` and `steps` = [`NativeFlowStep`]
+//!   (title, repeat, child blocks, fields): a stepped entry that writes one
+//!   row of `model`. v14.
+//! - **`Schedule`**
+//!   `::schedule` — `bind` (the field holding the time of day), `tz`,
+//!   `title`, `body`, `link`: a reminder the platform delivers. v14.
 //! - **`Smoke`**
 //!   `::smoke` — `script=`; `checks` = the `METHOD /path -> STATUS` body
 //!   lines ([`NativeSmokeCheck`]). v10.
@@ -656,6 +678,8 @@ pub enum NativeBlock {
         fields: Vec<NativeFormField>,
         submit_label: String,
         steps: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
     },
 
     /// ::gallery
@@ -1102,6 +1126,10 @@ pub enum NativeBlock {
         body: Option<String>,
         handler: Option<String>,
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        filter: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sort: Option<String>,
     },
 
     /// ::action
@@ -1116,6 +1144,8 @@ pub enum NativeBlock {
     /// ::model
     Model {
         name: String,
+        #[serde(default = "crate::types::default_model_owner")]
+        owner: String,
         fields: Vec<NativeModelField>,
     },
 
@@ -1194,6 +1224,47 @@ pub enum NativeBlock {
         source: String,
         target: String,
         events: Vec<NativeBindingEvent>,
+    },
+
+    /// ::picker (v14)
+    Picker {
+        bind: String,
+        tiers: u32,
+        layout: String,
+        emoji: bool,
+        rows: Vec<NativePickerRow>,
+    },
+
+    /// ::when (v14)
+    When {
+        bind: Option<String>,
+        op: Option<String>,
+        value: Option<String>,
+        expr: Option<String>,
+        children: Vec<NativeBlock>,
+    },
+
+    /// ::compute (v14)
+    Compute {
+        name: String,
+        expr: String,
+        source: Option<String>,
+    },
+
+    /// ::flow (v14)
+    Flow {
+        model: Option<String>,
+        submit_label: String,
+        steps: Vec<NativeFlowStep>,
+    },
+
+    /// ::schedule (v14)
+    Schedule {
+        bind: String,
+        tz: String,
+        title: Option<String>,
+        body: Option<String>,
+        link: Option<String>,
     },
 
     /// ::build
@@ -1537,6 +1608,10 @@ pub struct NativeFormField {
     /// sharing a value belong to one group; `None` is an ungrouped field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// The model constraint spellings a model-bound field carries (v14):
+    /// `min=1`, `labels="a|b"` … Empty for every other form.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constraints: Vec<String>,
 }
 
 /// A single image item in a native gallery.
@@ -1766,8 +1841,40 @@ pub struct NativeModelField {
     pub field_type: String,
     /// The spec spellings of the bracketed constraints, in authored order:
     /// `primary`, `auto`, `required`, `optional`, `unique`, `index`,
-    /// `max=255`, `min=1`, `default=now()`.
+    /// `max=255`, `min=1`, `default=now()`; v14 adds `sentences=1..4`,
+    /// `prompt="…"`, `labels="a|b"`, `levels="2|4"`, `pattern="…"`.
     pub constraints: Vec<String>,
+    /// The `= expr` of a computed field, verbatim (v14).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub computed: Option<String>,
+}
+
+/// One option row of a native `Picker` — `types::PickerRow` across the FFI.
+/// New in schema v14.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativePickerRow {
+    /// The core option.
+    pub core: String,
+    /// The graded choices, mildest first.
+    pub choices: Vec<String>,
+    /// The optional definition / example text, verbatim.
+    pub info: Option<String>,
+}
+
+/// One step of a native `Flow` — `types::FlowStep` across the FFI.
+/// New in schema v14.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeFlowStep {
+    /// The step's title (`None` reads as `Step n`).
+    pub title: Option<String>,
+    /// Whether the step may be answered more than once.
+    pub repeat: bool,
+    /// The step's nested blocks, shown before its fields.
+    pub children: Vec<NativeBlock>,
+    /// The step's fields.
+    pub fields: Vec<NativeFormField>,
 }
 
 /// One bookable service within a native `Booking` — a
@@ -2391,7 +2498,14 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// slides as stacked cards), and `Form` gains `steps` (`::form[steps=true]`;
 /// each field group is one step). `NativeBlock` is now a 126-variant enum
 /// (125 structural + `Markdown`).
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 13;
+///
+/// v14 (0.33.0) — the backends grammar: five new variants `Picker`, `When`,
+/// `Compute`, `Flow`, `Schedule` with the records `NativePickerRow` and
+/// `NativeFlowStep` (app-chrome tier); `Model` gains `owner`,
+/// `NativeModelField` gains `computed`, `Route` gains `filter` / `sort`,
+/// `Form` gains `model` and `NativeFormField` gains `constraints`.
+/// `NativeBlock` is now a 131-variant enum (130 structural + `Markdown`).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 14;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -3138,6 +3252,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             fields,
             submit_label,
             steps,
+            model,
             ..
         } => NativeBlock::Form {
             fields: convert_form_fields(fields),
@@ -3145,6 +3260,7 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .clone()
                 .unwrap_or_else(|| "Submit".to_string()),
             steps: *steps,
+            model: model.clone(),
         },
 
         Block::Gallery {
@@ -3961,6 +4077,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             body,
             handler,
             content,
+            filter,
+            sort,
             ..
         } => NativeBlock::Route {
             method: http_method_str(*method),
@@ -3970,6 +4088,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             body: body.clone(),
             handler: handler.clone(),
             content: content.clone(),
+            filter: filter.clone(),
+            sort: sort.clone(),
         },
 
         Block::Action {
@@ -3987,16 +4107,69 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             confirm: confirm.clone(),
         },
 
-        Block::Model { name, fields, .. } => NativeBlock::Model {
+        Block::Model { name, owner, fields, .. } => NativeBlock::Model {
             name: name.clone(),
+            owner: owner.clone(),
             fields: fields
                 .iter()
                 .map(|f| NativeModelField {
                     name: f.name.clone(),
                     field_type: model_field_type_str(&f.field_type),
                     constraints: f.constraints.iter().map(field_constraint_str).collect(),
+                    computed: f.computed.clone(),
                 })
                 .collect(),
+        },
+
+        Block::Picker { bind, tiers, layout, emoji, rows, .. } => NativeBlock::Picker {
+            bind: bind.clone(),
+            tiers: u32::try_from(*tiers).unwrap_or(u32::MAX),
+            layout: layout.clone(),
+            emoji: *emoji,
+            rows: rows
+                .iter()
+                .map(|r| NativePickerRow {
+                    core: r.core.clone(),
+                    choices: r.choices.clone(),
+                    info: r.info.clone(),
+                })
+                .collect(),
+        },
+
+        Block::When { bind, op, value, expr, children, .. } => NativeBlock::When {
+            bind: bind.clone(),
+            op: op.clone(),
+            value: value.clone(),
+            expr: expr.clone(),
+            children: convert_children(children, depth + 1),
+        },
+
+        Block::Compute { name, expr, source, .. } => NativeBlock::Compute {
+            name: name.clone(),
+            expr: expr.clone(),
+            source: source.clone(),
+        },
+
+        Block::Flow { model, submit_label, steps, .. } => NativeBlock::Flow {
+            model: model.clone(),
+            submit_label: submit_label.clone().unwrap_or_else(|| "Save".to_string()),
+            steps: steps
+                .iter()
+                .map(|s| NativeFlowStep {
+                    title: s.title.clone(),
+                    repeat: s.repeat,
+                    children: convert_children(&s.children, depth + 1),
+                    fields: convert_form_fields(&s.fields),
+                })
+                .collect(),
+        },
+
+        Block::Schedule { bind, tz, title, body, link, .. } => NativeBlock::Schedule {
+            bind: bind.clone(),
+            tz: tz.clone(),
+            title: title.clone(),
+            body: body.clone(),
+            link: link.clone(),
         },
 
         Block::App {
@@ -4094,6 +4267,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                     name: f.name.clone(),
                     field_type: model_field_type_str(&f.field_type),
                     constraints: f.constraints.iter().map(field_constraint_str).collect(),
+                    // A `::schema` column has no computed form.
+                    computed: None,
                 })
                 .collect(),
         },
@@ -4638,6 +4813,7 @@ fn form_field_type_str(ft: FormFieldType) -> String {
         FormFieldType::Toggle => "toggle",
         FormFieldType::File => "file",
         FormFieldType::Hidden => "hidden",
+        FormFieldType::Range => "range",
     }
     .to_string()
 }
@@ -4655,6 +4831,7 @@ fn convert_form_fields(fields: &[crate::types::FormField]) -> Vec<NativeFormFiel
             placeholder: f.placeholder.clone(),
             options: f.options.clone(),
             group: f.group.clone(),
+            constraints: f.constraints.iter().map(field_constraint_str).collect(),
         })
         .collect()
 }
@@ -4871,6 +5048,12 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Editor { .. }
         | Block::InfraEnv { .. }
         | Block::Feed { .. }
+        // Schema v14 (0.33.0): the stateful app blocks of the backends grammar.
+        | Block::Picker { .. }
+        | Block::When { .. }
+        | Block::Compute { .. }
+        | Block::Flow { .. }
+        | Block::Schedule { .. }
         // Schema v10: the last manifest facts and the two utility blocks.
         | Block::Health { .. }
         | Block::Smoke { .. }
@@ -5327,7 +5510,9 @@ mod tests {
                       ```\n\
                       ::\n";
         match convert_first(source) {
-            NativeBlock::Route { method, path, auth, returns, body, handler, content } => {
+            NativeBlock::Route { method, path, auth, returns, body, handler, content, filter, sort } => {
+                assert_eq!(filter, None);
+                assert_eq!(sort, None);
                 assert_eq!(method, "POST", "method crosses uppercased");
                 assert_eq!(path, "/api/users");
                 assert_eq!(auth.as_deref(), Some("required"));
@@ -5372,8 +5557,9 @@ mod tests {
                       - team: ref(Team) [optional]\n\
                       ::\n";
         match convert_first(source) {
-            NativeBlock::Model { name, fields } => {
+            NativeBlock::Model { name, owner, fields } => {
                 assert_eq!(name, "User");
+                assert_eq!(owner, "viewer", "the default owner crosses");
                 assert_eq!(fields.len(), 4);
                 assert_eq!(
                     fields[0],
@@ -5381,6 +5567,7 @@ mod tests {
                         name: "id".into(),
                         field_type: "uuid".into(),
                         constraints: vec!["primary".into(), "auto".into()],
+                        computed: None,
                     }
                 );
                 assert_eq!(
@@ -5545,6 +5732,7 @@ mod tests {
                         name: "id".into(),
                         field_type: "uuid".into(),
                         constraints: vec!["primary".into(), "auto".into()],
+                        computed: None,
                     }
                 );
                 assert_eq!(fields[1].constraints, vec!["required".to_string(), "min=1".to_string()]);
@@ -7411,6 +7599,7 @@ mod tests {
                     placeholder: Some("Enter your name".to_string()),
                     options: vec![],
                     group: None,
+                    constraints: vec![],
                 },
                 FormField {
                     label: "Email".to_string(),
@@ -7420,12 +7609,14 @@ mod tests {
                     placeholder: None,
                     options: vec![],
                     group: None,
+                    constraints: vec![],
                 },
             ],
             submit_label: Some("Send".to_string()),
             action: None, method: None, honeypot: false,
             steps: false,
             id: None,
+            model: None,
             span: syn(),
         };
         assert_eq!(
@@ -7440,6 +7631,7 @@ mod tests {
                         placeholder: Some("Enter your name".to_string()),
                         options: vec![],
                         group: None,
+                        constraints: vec![],
                     },
                     NativeFormField {
                         label: "Email".to_string(),
@@ -7449,10 +7641,12 @@ mod tests {
                         placeholder: None,
                         options: vec![],
                         group: None,
+                        constraints: vec![],
                     },
                 ],
                 submit_label: "Send".to_string(),
                 steps: false,
+                model: None,
             }
         );
     }
@@ -7465,6 +7659,7 @@ mod tests {
             action: None, method: None, honeypot: false,
             steps: false,
             id: None,
+            model: None,
             span: syn(),
         };
         match convert_block(&block, 0) {
@@ -7472,8 +7667,10 @@ mod tests {
                 submit_label,
                 fields,
                 steps,
+                model,
             } => {
                 assert!(!steps);
+                assert_eq!(model, None);
                 assert_eq!(submit_label, "Submit");
                 assert!(fields.is_empty());
             }
@@ -7507,11 +7704,13 @@ mod tests {
                     placeholder: None,
                     options: vec![],
                     group: None,
+                    constraints: vec![],
                 }],
                 submit_label: None,
                 action: None, method: None, honeypot: false,
                 steps: false,
                 id: None,
+                model: None,
                 span: syn(),
             };
             match convert_block(&block, 0) {
@@ -7534,11 +7733,13 @@ mod tests {
                 placeholder: None,
                 options: vec!["US".to_string(), "CA".to_string(), "UK".to_string()],
                 group: None,
+                constraints: vec![],
             }],
             submit_label: Some("Go".to_string()),
             action: None, method: None, honeypot: false,
             steps: false,
             id: None,
+            model: None,
             span: syn(),
         };
         match convert_block(&block, 0) {
@@ -7835,11 +8036,13 @@ mod tests {
                         placeholder: None,
                         options: vec![],
                         group: None,
+                        constraints: vec![],
                     }],
                     submit_label: Some("Subscribe".to_string()),
                     action: None, method: None, honeypot: false,
                     steps: false,
                     id: None,
+                    model: None,
                     span: syn(),
                 },
                 Block::Gallery {
@@ -8014,7 +8217,8 @@ mod tests {
         // planned) — schema v10; every registered block crosses. 0.26:
         // hero/section `anchor` + heading anchors stripped — schema v11.
         // 0.27: the panels layout — `PanelSlot` + `Preset` — schema v12.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 13);
+        // 0.33.0: the backends grammar — schema v14.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 14);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

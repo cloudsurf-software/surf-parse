@@ -10,10 +10,10 @@ use crate::types::{
     Format, StoreItem,
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
-    FormField, FormFieldType, GalleryItem, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
+    FlowStep, FormField, FormFieldType, GalleryItem, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
     LogoItem, RelatedItem, TimelineEntry,
     AdaptiveLayout, AdaptiveMode, AppShellLayout, PanelSlotRole, PresetSpan,
-    ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
+    ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PickerRow, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
     RowAction, RowState, SchemaField, SegmentItem, SizeClass, PAGE_LAYOUTS,
     SlideLayout, SmokeCheck, SocialLink, SortSpec, Span, StatItem, StepItem,
     StyleProperty, TabBarItem, TabPanel, TaskItem, ToolbarItem, Trend, VolumeEntry,
@@ -137,6 +137,12 @@ pub fn resolve_block(block: Block) -> Block {
         "route" => parse_route(attrs, content, *span),
         "auth" => parse_auth(attrs, content, *span),
         "binding" => parse_binding(attrs, content, *span),
+        // Stateful app blocks (0.33.0, the backends grammar)
+        "picker" => parse_picker(attrs, content, *span),
+        "when" => parse_when(attrs, content, *span),
+        "compute" => parse_compute(attrs, content, *span),
+        "flow" => parse_flow(attrs, content, *span),
+        "schedule" => parse_schedule(attrs, content, *span),
         // App format blocks (schema, deps, config, deploy)
         "schema" => parse_schema(attrs, content, *span),
         "use" => parse_use(attrs, content, *span),
@@ -1457,6 +1463,7 @@ fn is_form_type_keyword(word: &str) -> bool {
             | "switch"
             | "file"
             | "hidden"
+            | "range"
     )
 }
 
@@ -1476,6 +1483,7 @@ fn form_field_type_from_name(name: &str) -> FormFieldType {
         "toggle" | "switch" => FormFieldType::Toggle,
         "file" => FormFieldType::File,
         "hidden" => FormFieldType::Hidden,
+        "range" => FormFieldType::Range,
         _ => FormFieldType::Text,
     }
 }
@@ -1516,6 +1524,9 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
     let honeypot = attr_bool(attrs, "honeypot");
     let steps = attr_string(attrs, "steps").is_some_and(|v| v.eq_ignore_ascii_case("true"));
     let id = attr_string(attrs, "id").filter(|s| !s.trim().is_empty());
+    let model = attr_string(attrs, "model")
+        .map(|m| m.trim().to_string())
+        .filter(|m| !m.is_empty());
     let mut fields = Vec::new();
     let mut current_group: Option<String> = None;
     let mut step_count = 0usize;
@@ -1561,6 +1572,18 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
             } else {
                 Some(name.to_string())
             };
+            continue;
+        }
+
+        // 0.33.0: a form bound to a model also reads the model's own field
+        // lines (`- intensity: range [min=1, max=10]`), so the form and the
+        // record it writes share one spelling. Tried first; a line that is
+        // not one falls through to the form grammar below.
+        if model.is_some()
+            && let Some(rest) = trimmed.strip_prefix("- ")
+            && let Some(field) = model_form_field(rest.trim(), current_group.clone())
+        {
+            fields.push(field);
             continue;
         }
 
@@ -1616,6 +1639,7 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
                 placeholder,
                 options,
                 group: current_group.clone(),
+                constraints: Vec::new(),
             });
         }
     }
@@ -1628,6 +1652,7 @@ fn parse_form(attrs: &Attrs, content: &str, span: Span) -> Block {
         honeypot,
         steps,
         id,
+        model,
         span,
     }
 }
@@ -3920,6 +3945,7 @@ fn parse_action(attrs: &Attrs, content: &str, span: Span) -> Block {
                 // Fieldsets are a `::form` feature; `::action` is a single
                 // inline control strip.
                 group: None,
+                constraints: Vec::new(),
             });
             has_parens.push(item_has_parens);
         }
@@ -4557,6 +4583,10 @@ fn parse_volumes(content: &str, span: Span) -> Block {
 /// `- assignee_id: ref(User) [optional]`
 fn parse_model(attrs: &Attrs, content: &str, span: Span) -> Block {
     let name = attr_string(attrs, "name").unwrap_or_default();
+    let owner = attr_string(attrs, "owner")
+        .map(|o| o.trim().to_string())
+        .filter(|o| !o.is_empty())
+        .unwrap_or_else(crate::types::default_model_owner);
     let mut fields = Vec::new();
 
     for line in content.lines() {
@@ -4565,33 +4595,170 @@ fn parse_model(attrs: &Attrs, content: &str, span: Span) -> Block {
             continue;
         }
         let rest = trimmed.trim_start_matches('-').trim();
-        // Split on first `:` to get name and type+constraints
-        let Some((field_name, remainder)) = rest.split_once(':') else {
-            continue;
-        };
-        let field_name = field_name.trim().to_string();
-        let remainder = remainder.trim();
-
-        // Extract constraints from [...]
-        let (type_part, constraints) = if let Some(bracket_start) = remainder.find('[') {
-            let type_str = remainder[..bracket_start].trim();
-            let bracket_end = remainder.rfind(']').unwrap_or(remainder.len());
-            let constraint_str = &remainder[bracket_start + 1..bracket_end];
-            (type_str, parse_field_constraints(constraint_str))
-        } else {
-            (remainder, Vec::new())
-        };
-
-        let field_type = parse_model_field_type(type_part);
-
-        fields.push(ModelField {
-            name: field_name,
-            field_type,
-            constraints,
-        });
+        if let Some(field) = parse_model_field_line(rest) {
+            fields.push(field);
+        }
     }
 
-    Block::Model { name, fields, span }
+    Block::Model { name, owner, fields, span }
+}
+
+/// One `::model` field line after its `- ` marker:
+/// `name: type [bare constraints] [= computed expression] [[constraints]]`.
+///
+/// - Bare words after the type (`uuid pk`) are constraints too.
+/// - `= expr` after the type (0.33.0) makes the field COMPUTED; the text is
+///   kept verbatim and never evaluated here.
+/// - The bracket list is split on commas outside double quotes, so a quoted
+///   `prompt="Why, today?"` stays one constraint.
+///
+/// Shared with the model-bound forms, which accept the same lines.
+fn parse_model_field_line(rest: &str) -> Option<ModelField> {
+    // Split on first `:` to get name and type+constraints
+    let (field_name, remainder) = rest.split_once(':')?;
+    let field_name = field_name.trim().to_string();
+    let remainder = remainder.trim();
+
+    // Extract constraints from the first top-level `[` to the last `]`.
+    let (head, mut constraints) = match top_level_find(remainder, '[') {
+        Some(bracket_start) => {
+            let bracket_end = remainder
+                .rfind(']')
+                .filter(|&e| e > bracket_start)
+                .unwrap_or(remainder.len());
+            (
+                remainder[..bracket_start].trim(),
+                parse_field_constraints(&remainder[bracket_start + 1..bracket_end]),
+            )
+        }
+        None => (remainder, Vec::new()),
+    };
+
+    // `type = expression` — a computed field.
+    let (mut type_part, computed) = match top_level_find(head, '=') {
+        Some(eq) => (
+            head[..eq].trim(),
+            Some(head[eq + 1..].trim().to_string()).filter(|e| !e.is_empty()),
+        ),
+        None => (head, None),
+    };
+
+    // Bare trailing constraint words (`uuid pk`), outside any parentheses.
+    let mut bare = Vec::new();
+    loop {
+        let t = type_part.trim_end();
+        let Some(idx) = t.rfind(char::is_whitespace) else { break };
+        let (before, word) = (&t[..idx], &t[idx + 1..]);
+        let depth = before.matches('(').count() as isize - before.matches(')').count() as isize;
+        match bare_constraint(word) {
+            Some(c) if depth == 0 => {
+                bare.insert(0, c);
+                type_part = before;
+            }
+            _ => break,
+        }
+    }
+    if !bare.is_empty() {
+        bare.append(&mut constraints);
+        constraints = bare;
+    }
+
+    Some(ModelField {
+        name: field_name,
+        field_type: parse_model_field_type(type_part),
+        constraints,
+        computed,
+    })
+}
+
+/// A constraint that may be written as a bare word after a field's type
+/// (`- id: uuid pk`) or inside its bracket list.
+fn bare_constraint(word: &str) -> Option<FieldConstraint> {
+    match word.to_ascii_lowercase().as_str() {
+        "primary" | "pk" => Some(FieldConstraint::Primary),
+        "auto" => Some(FieldConstraint::Auto),
+        "required" => Some(FieldConstraint::Required),
+        "optional" => Some(FieldConstraint::Optional),
+        "unique" => Some(FieldConstraint::Unique),
+        "index" | "indexed" => Some(FieldConstraint::Index),
+        _ => None,
+    }
+}
+
+/// The byte index of the first `needle` that sits outside parentheses and
+/// outside double quotes.
+fn top_level_find(s: &str, needle: char) -> Option<usize> {
+    let mut depth = 0isize;
+    let mut in_quote = false;
+    let mut prev_backslash = false;
+    for (i, c) in s.char_indices() {
+        if in_quote {
+            if c == '"' && !prev_backslash {
+                in_quote = false;
+            }
+            prev_backslash = c == '\\' && !prev_backslash;
+            continue;
+        }
+        match c {
+            '"' => in_quote = true,
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ if c == needle && depth <= 0 => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Split a constraint list on the commas that sit outside double quotes.
+fn split_constraints(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut in_quote = false;
+    let mut prev_backslash = false;
+    for (i, c) in s.char_indices() {
+        if in_quote {
+            if c == '"' && !prev_backslash {
+                in_quote = false;
+            }
+            prev_backslash = c == '\\' && !prev_backslash;
+            continue;
+        }
+        match c {
+            '"' => in_quote = true,
+            ',' => {
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&s[start..]);
+    parts
+}
+
+/// `"text"` → `Some(text)` with `\"` read as a quote; anything else → `None`.
+fn unquote_constraint(v: &str) -> Option<String> {
+    let inner = v.strip_prefix('"')?.strip_suffix('"')?;
+    Some(inner.replace("\\\"", "\""))
+}
+
+/// The recognised type words of a model field, for telling a model field
+/// line apart from a form field line inside a model-bound form.
+fn is_model_type_word(word: &str) -> bool {
+    let lower = word.to_ascii_lowercase();
+    if lower.starts_with("enum(") || lower.starts_with("ref(") || lower.starts_with("list(") {
+        return true;
+    }
+    matches!(
+        lower.as_str(),
+        "uuid" | "string" | "str" | "varchar" | "int" | "integer" | "i32" | "i64"
+            | "float" | "f32" | "f64" | "decimal" | "numeric" | "number"
+            | "bool" | "boolean" | "datetime" | "timestamp" | "timestamptz"
+            | "text" | "textarea" | "json" | "jsonb" | "money" | "currency" | "price"
+            | "image" | "photo" | "picture" | "img" | "email" | "email_address"
+            | "url" | "uri" | "link" | "href" | "date" | "range"
+    )
 }
 
 fn parse_model_field_type(s: &str) -> ModelFieldType {
@@ -4611,59 +4778,155 @@ fn parse_model_field_type(s: &str) -> ModelFieldType {
         return ModelFieldType::Ref(inner.trim().to_string());
     }
 
+    // 0.33.0: list(ModelName) — the rows of another model.
+    if lower.starts_with("list(") && s.ends_with(')') {
+        let inner = &s[5..s.len() - 1];
+        return ModelFieldType::List(inner.trim().to_string());
+    }
+
     match lower.as_str() {
         "uuid" => ModelFieldType::Uuid,
         "string" | "str" | "varchar" => ModelFieldType::String,
         "int" | "integer" | "i32" | "i64" => ModelFieldType::Int,
-        "float" | "f32" | "f64" | "decimal" | "numeric" => ModelFieldType::Float,
+        // `number` (0.33.0) is the everyday word for a float.
+        "float" | "f32" | "f64" | "decimal" | "numeric" | "number" => ModelFieldType::Float,
         "bool" | "boolean" => ModelFieldType::Bool,
         "datetime" | "timestamp" | "timestamptz" => ModelFieldType::Datetime,
-        "text" => ModelFieldType::Text,
+        // `textarea` (0.33.0) names the long-text input the field renders as.
+        "text" | "textarea" => ModelFieldType::Text,
         "json" | "jsonb" => ModelFieldType::Json,
         "money" | "currency" | "price" => ModelFieldType::Money,
         "image" | "photo" | "picture" | "img" => ModelFieldType::Image,
         "email" | "email_address" => ModelFieldType::Email,
         "url" | "uri" | "link" | "href" => ModelFieldType::Url,
+        "date" => ModelFieldType::Date,
+        "range" => ModelFieldType::Range,
         _ => ModelFieldType::String, // default fallback
     }
 }
 
 fn parse_field_constraints(s: &str) -> Vec<FieldConstraint> {
     let mut constraints = Vec::new();
-    for part in s.split(',') {
+    for part in split_constraints(s) {
         let part = part.trim();
         if part.is_empty() {
             continue;
         }
-        let lower = part.to_lowercase();
-        if lower == "primary" {
-            constraints.push(FieldConstraint::Primary);
-        } else if lower == "auto" {
-            constraints.push(FieldConstraint::Auto);
-        } else if lower == "required" {
-            constraints.push(FieldConstraint::Required);
-        } else if lower == "optional" {
-            constraints.push(FieldConstraint::Optional);
-        } else if lower == "unique" {
-            constraints.push(FieldConstraint::Unique);
-        } else if lower == "index" || lower == "indexed" {
-            constraints.push(FieldConstraint::Index);
-        } else if let Some(val) = lower.strip_prefix("max=") {
-            if let Ok(n) = val.parse::<u32>() {
-                constraints.push(FieldConstraint::Max(n));
+        let Some((key, raw)) = part.split_once('=') else {
+            if let Some(c) = bare_constraint(part) {
+                constraints.push(c);
             }
-        } else if let Some(val) = lower.strip_prefix("min=") {
-            if let Ok(n) = val.parse::<u32>() {
-                constraints.push(FieldConstraint::Min(n));
+            continue;
+        };
+        let key = key.trim().to_ascii_lowercase();
+        let raw = raw.trim();
+        // A quoted value is verbatim (case kept, `\"` a quote); an unquoted
+        // one is read as before.
+        let quoted = unquote_constraint(raw);
+        let text = quoted.clone().unwrap_or_else(|| raw.to_string());
+        match key.as_str() {
+            "max" => {
+                if let Ok(n) = text.trim().parse::<u32>() {
+                    constraints.push(FieldConstraint::Max(n));
+                }
             }
-        } else if let Some(val) = lower.strip_prefix("default=") {
-            constraints.push(FieldConstraint::Default(val.to_string()));
-        } else if part.starts_with("default=") {
-            // Preserve original case for default values
-            constraints.push(FieldConstraint::Default(part[8..].to_string()));
+            "min" => {
+                if let Ok(n) = text.trim().parse::<u32>() {
+                    constraints.push(FieldConstraint::Min(n));
+                }
+            }
+            // An unquoted default has always been read lower-cased; a quoted
+            // one keeps its case.
+            "default" => constraints.push(FieldConstraint::Default(
+                quoted.unwrap_or_else(|| raw.to_lowercase()),
+            )),
+            "sentences" => {
+                let text = text.trim();
+                let (lo, hi) = text.split_once("..").unwrap_or((text, text));
+                if let (Ok(lo), Ok(hi)) = (lo.trim().parse::<u32>(), hi.trim().parse::<u32>()) {
+                    constraints.push(FieldConstraint::Sentences(lo, hi));
+                }
+            }
+            "prompt" => constraints.push(FieldConstraint::Prompt(text)),
+            "pattern" => constraints.push(FieldConstraint::Pattern(text)),
+            "labels" => constraints.push(FieldConstraint::Labels(split_pipes(&text))),
+            "levels" => constraints.push(FieldConstraint::Levels(split_pipes(&text))),
+            _ => {}
         }
     }
     constraints
+}
+
+/// `a|b|c` → `["a", "b", "c"]`, trimmed, empties dropped.
+fn split_pipes(s: &str) -> Vec<String> {
+    s.split('|')
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+/// A model field line inside a model-bound form (`::form[model=…]` or a
+/// `::flow` step) as a form field: `- intensity: range [min=1, max=10]`.
+/// `None` when the line is not one (the left side is not a plain name, or
+/// the right side does not start with a model type word), so the form
+/// grammar can read it instead.
+fn model_form_field(rest: &str, group: Option<String>) -> Option<FormField> {
+    let (name, tail) = rest.split_once(':')?;
+    let name = name.trim();
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    let first = tail
+        .trim()
+        .split(|c: char| c.is_whitespace() || c == '[' || c == '=')
+        .next()?;
+    if !is_model_type_word(first) {
+        return None;
+    }
+    let mf = parse_model_field_line(rest)?;
+    let (field_type, options) = match &mf.field_type {
+        ModelFieldType::Range => (FormFieldType::Range, Vec::new()),
+        ModelFieldType::Text => (FormFieldType::Textarea, Vec::new()),
+        ModelFieldType::Int | ModelFieldType::Float | ModelFieldType::Money => {
+            (FormFieldType::Number, Vec::new())
+        }
+        ModelFieldType::Date | ModelFieldType::Datetime => (FormFieldType::Date, Vec::new()),
+        ModelFieldType::Bool => (FormFieldType::Toggle, Vec::new()),
+        ModelFieldType::Email => (FormFieldType::Email, Vec::new()),
+        ModelFieldType::Image => (FormFieldType::File, Vec::new()),
+        ModelFieldType::Enum(v) => (FormFieldType::Select, v.clone()),
+        _ => (FormFieldType::Text, Vec::new()),
+    };
+    let required = mf.constraints.contains(&FieldConstraint::Required);
+    let placeholder = mf.constraints.iter().find_map(|c| match c {
+        FieldConstraint::Prompt(p) => Some(p.clone()),
+        _ => None,
+    });
+    Some(FormField {
+        label: humanize_field_name(name),
+        name: name.to_string(),
+        field_type,
+        required,
+        placeholder,
+        options,
+        group,
+        constraints: mf
+            .constraints
+            .into_iter()
+            .filter(|c| *c != FieldConstraint::Required)
+            .collect(),
+    })
+}
+
+/// `reminder_time` → `Reminder time`: the visible label of a model field.
+pub(crate) fn humanize_field_name(name: &str) -> String {
+    let spaced = name.replace('_', " ");
+    let spaced = spaced.trim();
+    let mut chars = spaced.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
 }
 
 /// Parse `::route[method=GET path="/api/tasks"]`
@@ -4690,6 +4953,9 @@ fn parse_route(attrs: &Attrs, content: &str, span: Span) -> Block {
     let mut body = attr_string(attrs, "body");
     let mut handler = None;
     let mut extra_lines = Vec::new();
+    // 0.33.0: the runtime's list-query knobs, kept verbatim.
+    let filter = attr_string(attrs, "filter").filter(|f| !f.trim().is_empty());
+    let sort = attr_string(attrs, "sort").filter(|f| !f.trim().is_empty());
 
     // Detect fenced code block for handler extraction.
     let mut in_fence = false;
@@ -4738,6 +5004,8 @@ fn parse_route(attrs: &Attrs, content: &str, span: Span) -> Block {
         body,
         handler,
         content: extra_lines.join("\n"),
+        filter,
+        sort,
         span,
     }
 }
@@ -4821,6 +5089,265 @@ fn parse_binding(attrs: &Attrs, content: &str, span: Span) -> Block {
         events,
         span,
     }
+}
+
+// ------------------------------------------------------------------
+// Stateful app blocks (0.33.0, the backends grammar)
+// ------------------------------------------------------------------
+//
+// These describe state the platform runtime keeps — a choice written to a
+// record field, a section gated on a value, a derived number, a stepped
+// record entry, a reminder. surf-parse parses and renders them as inert
+// markup; it never evaluates an expression or schedules anything.
+
+/// A URL-ish attribute the runtime will follow: trimmed, and a script
+/// scheme (`javascript:`, `data:`, `vbscript:`) becomes `#`. Whitespace and
+/// control characters are ignored for the scheme test because browsers
+/// strip them from URLs (`java\tscript:` still runs).
+fn safe_url(raw: &str) -> String {
+    let squashed: String = raw
+        .chars()
+        .filter(|c| !c.is_whitespace() && !c.is_control())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if squashed.starts_with("javascript:") || squashed.starts_with("data:") || squashed.starts_with("vbscript:") {
+        return "#".to_string();
+    }
+    sanitize_href(raw)
+}
+
+/// A non-empty, trimmed string attribute.
+fn attr_text(attrs: &Attrs, key: &str) -> Option<String> {
+    attr_string(attrs, key)
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// Parse `::picker[bind=entry.core tiers=3 layout=wheel emoji=false]`.
+/// Each `- Core: a · b · c` line is one option row; an optional
+/// `| info="Definition | Example"` tail rides along verbatim.
+fn parse_picker(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let bind = attr_text(attrs, "bind").unwrap_or_default();
+    let layout = attr_text(attrs, "layout").unwrap_or_else(|| "wheel".to_string());
+    let emoji = match attrs.get("emoji") {
+        Some(AttrValue::Bool(b)) => *b,
+        Some(AttrValue::String(v)) => !matches!(v.trim().to_ascii_lowercase().as_str(), "false" | "no" | "off" | "0"),
+        Some(AttrValue::Number(n)) => *n != 0.0,
+        _ => true,
+    };
+    let mut rows = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) else {
+            continue;
+        };
+        if let Some(row) = parse_picker_row(rest.trim()) {
+            rows.push(row);
+        }
+    }
+    let widest = rows.iter().map(|r| r.choices.len()).max().unwrap_or(1).max(1);
+    let tiers = attr_usize(attrs, "tiers").filter(|t| *t > 0).unwrap_or(widest);
+    Block::Picker { bind, tiers, layout, emoji, rows, span }
+}
+
+/// One picker row: `Core: a · b · c | info="…"`. A row without a colon is
+/// its own core (`- Serenity · Joy` → core `Serenity`).
+fn parse_picker_row(rest: &str) -> Option<PickerRow> {
+    // The info tail starts at the first `|` whose remainder reads `info=`.
+    let mut info = None;
+    let mut body = rest;
+    for (i, c) in rest.char_indices() {
+        if c == '|' && rest[i + 1..].trim_start().starts_with("info=") {
+            let raw = rest[i + 1..].trim_start()["info=".len()..].trim();
+            info = Some(unquote_constraint(raw).unwrap_or_else(|| raw.to_string()))
+                .filter(|v| !v.is_empty());
+            body = rest[..i].trim();
+            break;
+        }
+    }
+    let split = |s: &str| -> Vec<String> {
+        s.split('\u{b7}')
+            .map(|c| c.trim().to_string())
+            .filter(|c| !c.is_empty())
+            .collect()
+    };
+    let (core, choices) = match body.split_once(':') {
+        Some((core, list)) => (core.trim().to_string(), split(list)),
+        None => {
+            let choices = split(body);
+            (choices.first()?.clone(), choices)
+        }
+    };
+    if core.is_empty() {
+        return None;
+    }
+    Some(PickerRow { core, choices, info })
+}
+
+/// Parse `::when[bind=day.score op="<=" value=-8]` (or `expr="…"`); the
+/// body is ordinary blocks, shown only while the predicate holds.
+fn parse_when(attrs: &Attrs, content: &str, span: Span) -> Block {
+    Block::When {
+        bind: attr_text(attrs, "bind"),
+        op: attr_text(attrs, "op"),
+        value: attr_string(attrs, "value").map(|v| v.trim().to_string()),
+        expr: attr_text(attrs, "expr"),
+        children: parse_page_children_in(content, span),
+        span,
+    }
+}
+
+/// Parse `::compute[name=daily_score expr="avg(entries.weighted)" source=/_api/Entry]`.
+fn parse_compute(attrs: &Attrs, _content: &str, span: Span) -> Block {
+    Block::Compute {
+        name: attr_text(attrs, "name").unwrap_or_default(),
+        expr: attr_text(attrs, "expr").unwrap_or_default(),
+        source: attr_text(attrs, "source").map(|s| safe_url(&s)),
+        span,
+    }
+}
+
+/// Parse `::schedule[bind=preference.reminder_time tz=viewer title=… body=… link=/log]`.
+fn parse_schedule(attrs: &Attrs, _content: &str, span: Span) -> Block {
+    Block::Schedule {
+        bind: attr_text(attrs, "bind").unwrap_or_default(),
+        tz: attr_text(attrs, "tz").unwrap_or_else(|| "viewer".to_string()),
+        title: attr_text(attrs, "title"),
+        body: attr_text(attrs, "body"),
+        link: attr_text(attrs, "link").map(|l| safe_url(&l)),
+        span,
+    }
+}
+
+/// Parse `::flow[model=Entry]` — `:::step[title="…" repeat=true]` children,
+/// each closed by its own `:::`. Inside a step, model field lines
+/// (`- intensity: range [min=1]`) and form field lines (`- Name (text)`)
+/// are the step's fields; everything else (deeper `::::picker` blocks,
+/// prose) is parsed as ordinary blocks. Lines outside any step form one
+/// untitled step so nothing authored is dropped.
+fn parse_flow(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let model = attr_text(attrs, "model");
+    let id = attr_text(attrs, "id");
+    let submit_label = attr_text(attrs, "submit");
+
+    let lines: Vec<&str> = content.lines().collect();
+    // (title, repeat, body lines) of the step being read, and its colon depth.
+    let mut open: Option<(Option<String>, bool, Vec<&str>, usize)> = None;
+    let mut loose: Vec<&str> = Vec::new();
+    let mut steps = Vec::new();
+
+    for line in &lines {
+        let trimmed = line.trim();
+        let colons = trimmed.len() - trimmed.trim_start_matches(':').len();
+        if let Some((_, _, body, depth)) = open.as_mut() {
+            if is_nested_closer(trimmed) && colons == *depth {
+                let (title, repeat, body, _) = open.take().expect("open step");
+                steps.push(flow_step(title, repeat, &body));
+            } else {
+                body.push(line);
+            }
+            continue;
+        }
+        if let Some(("step", rest)) = nested_directive(trimmed) {
+            let a = crate::attrs::parse_attrs(rest).unwrap_or_default();
+            let repeat = matches!(a.get("repeat"), Some(AttrValue::Bool(true)))
+                || attr_string(&a, "repeat").is_some_and(|v| v.eq_ignore_ascii_case("true"));
+            open = Some((attr_text(&a, "title"), repeat, Vec::new(), colons));
+            continue;
+        }
+        if is_nested_closer(trimmed) {
+            continue;
+        }
+        loose.push(line);
+    }
+    if let Some((title, repeat, body, _)) = open.take() {
+        steps.push(flow_step(title, repeat, &body));
+    }
+    if loose.iter().any(|l| !l.trim().is_empty()) {
+        steps.push(flow_step(None, false, &loose));
+    }
+
+    Block::Flow { model, id, submit_label, steps, span }
+}
+
+/// One flow step from its body lines: field lines become fields, nested
+/// containers and prose become child blocks.
+fn flow_step(title: Option<String>, repeat: bool, body: &[&str]) -> FlowStep {
+    let mut fields = Vec::new();
+    let mut block_lines: Vec<&str> = Vec::new();
+    let mut i = 0;
+    while i < body.len() {
+        let trimmed = body[i].trim();
+        if let Some((depth, _, _)) = crate::parse::opening_directive(trimmed)
+            && let Some((_, end)) = scan_container_close(body, i + 1, depth)
+        {
+            block_lines.extend_from_slice(&body[i..=end]);
+            i = end + 1;
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            let rest = rest.trim();
+            if let Some(field) = model_form_field(rest, None) {
+                fields.push(field);
+                i += 1;
+                continue;
+            }
+            if let Some(field) = form_syntax_field(rest) {
+                fields.push(field);
+                i += 1;
+                continue;
+            }
+        }
+        block_lines.push(body[i]);
+        i += 1;
+    }
+    let text = block_lines.join("\n");
+    let text = text.trim();
+    let children = if text.is_empty() {
+        Vec::new()
+    } else {
+        parse_page_children_at(text, None)
+    };
+    FlowStep { title, repeat, children, fields }
+}
+
+/// A `- Label (type …) *` form field line inside a flow step. Only the
+/// parenthesised form counts here (a bare `- tip` stays a list item), and
+/// only when its type word is a form type.
+fn form_syntax_field(rest: &str) -> Option<FormField> {
+    let paren_start = rest.find('(')?;
+    let label = rest[..paren_start].trim();
+    if label.is_empty() {
+        return None;
+    }
+    let after_paren = &rest[paren_start + 1..];
+    let paren_end = after_paren.find(')')?;
+    let type_str = &after_paren[..paren_end];
+    let word = type_str
+        .split(|c: char| c == ':' || c == ',')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if !is_form_type_keyword(&word) {
+        return None;
+    }
+    let (field_type, placeholder, options) = parse_form_field_spec(type_str);
+    let name = label
+        .to_lowercase()
+        .replace(|c: char| !c.is_alphanumeric(), "_")
+        .trim_matches('_')
+        .to_string();
+    Some(FormField {
+        label: label.to_string(),
+        name,
+        field_type,
+        required: rest.ends_with('*'),
+        placeholder,
+        options,
+        group: None,
+        constraints: Vec::new(),
+    })
 }
 
 // ------------------------------------------------------------------

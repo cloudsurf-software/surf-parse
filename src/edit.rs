@@ -193,7 +193,8 @@ fn children_of(block: &Block) -> &[Block] {
         | Block::AppShell { children, .. }
         | Block::Sidebar { children, .. }
         | Block::Drawer { children, .. }
-        | Block::Modal { children, .. } => children,
+        | Block::Modal { children, .. }
+        | Block::When { children, .. } => children,
         _ => &[],
     }
 }

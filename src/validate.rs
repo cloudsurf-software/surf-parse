@@ -544,6 +544,74 @@ fn validate_block(block: &Block, diagnostics: &mut Vec<Diagnostic>) {
             }
         }
 
+        // 0.33.0 stateful app blocks: the attributes without which the
+        // runtime has nothing to bind, derive or deliver.
+        Block::Picker { bind, rows, span, .. } => {
+            if bind.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Picker block is missing required attribute: bind".into(),
+                    span: Some(*span),
+                    code: Some("V350".into()),
+                    fix: None,
+                });
+            }
+            if rows.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Warning,
+                    message: "Picker block has no option rows".into(),
+                    span: Some(*span),
+                    code: Some("V351".into()),
+                    fix: None,
+                });
+            }
+        }
+
+        Block::Compute { name, expr, span, .. } => {
+            if name.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Compute block is missing required attribute: name".into(),
+                    span: Some(*span),
+                    code: Some("V352".into()),
+                    fix: None,
+                });
+            }
+            if expr.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Compute block is missing required attribute: expr".into(),
+                    span: Some(*span),
+                    code: Some("V353".into()),
+                    fix: None,
+                });
+            }
+        }
+
+        Block::Schedule { bind, span, .. } => {
+            if bind.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    message: "Schedule block is missing required attribute: bind".into(),
+                    span: Some(*span),
+                    code: Some("V354".into()),
+                    fix: None,
+                });
+            }
+        }
+
+        Block::Flow { steps, span, .. } => {
+            if steps.is_empty() {
+                diagnostics.push(Diagnostic {
+                    severity: Severity::Warning,
+                    message: "Flow block has no steps".into(),
+                    span: Some(*span),
+                    code: Some("V355".into()),
+                    fix: None,
+                });
+            }
+        }
+
         Block::Details { .. } => {}
         Block::Divider { .. } => {}
 
@@ -782,4 +850,20 @@ mod tests {
         assert_eq!(code_diags[0].severity, Severity::Warning);
     }
 
+
+    /// 0.33.0: each stateful block names the attribute it cannot work without.
+    #[test]
+    fn validate_backends_blocks_name_their_missing_attributes() {
+        let doc = crate::parse("::picker\n::\n\n::compute\n::\n\n::schedule\n::\n\n::flow[model=Entry]\n::\n").doc;
+        let codes: Vec<String> = validate(&doc).into_iter().filter_map(|d| d.code).collect();
+        for want in ["V350", "V351", "V352", "V353", "V354", "V355"] {
+            assert!(codes.iter().any(|c| c == want), "{want} missing: {codes:?}");
+        }
+        let ok = crate::parse(
+            "::picker[bind=entry.core]\n- Joy: Serenity\n::\n\n::compute[name=s expr=\"avg(x)\"]\n::\n\n::schedule[bind=p.t]\n::\n\n::flow[model=Entry]\n:::step\n- note: textarea\n:::\n::\n",
+        )
+        .doc;
+        let codes: Vec<String> = validate(&ok).into_iter().filter_map(|d| d.code).collect();
+        assert!(codes.iter().all(|c| !c.starts_with("V35")), "{codes:?}");
+    }
 }

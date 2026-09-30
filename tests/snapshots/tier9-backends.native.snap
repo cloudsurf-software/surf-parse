@@ -1,0 +1,153 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# The backends grammar\n\nThe stateful blocks a phone app needs (0.33.0): a record with an owner and a\ncomputed field, a list route, a tiered picker, a stepped flow, a model-bound\nform, a derived value, a conditional section and a reminder."
+  },
+  {
+    "type": "model",
+    "name": "Entry",
+    "owner": "viewer",
+    "fields": [
+      {
+        "name": "id",
+        "field_type": "uuid",
+        "constraints": [
+          "primary"
+        ]
+      },
+      {
+        "name": "core",
+        "field_type": "enum(Joy, Trust)",
+        "constraints": [
+          "required"
+        ]
+      },
+      {
+        "name": "level",
+        "field_type": "range",
+        "constraints": [
+          "min=1",
+          "max=10",
+          "labels=\"Barely felt it|All-consuming\""
+        ]
+      },
+      {
+        "name": "score",
+        "field_type": "float",
+        "constraints": [],
+        "computed": "round(avg(level), 1)"
+      }
+    ]
+  },
+  {
+    "type": "route",
+    "method": "GET",
+    "path": "/_api/Entry",
+    "auth": null,
+    "returns": "list(Entry)",
+    "body": null,
+    "handler": null,
+    "content": "",
+    "filter": "date",
+    "sort": "date"
+  },
+  {
+    "type": "flow",
+    "model": "Entry",
+    "submit_label": "Save",
+    "steps": [
+      {
+        "title": "Pick an emotion",
+        "repeat": false,
+        "children": [
+          {
+            "type": "picker",
+            "bind": "entry.core",
+            "tiers": 2,
+            "layout": "wheel",
+            "emoji": false,
+            "rows": [
+              {
+                "core": "Joy",
+                "choices": [
+                  "Serenity",
+                  "Joy"
+                ],
+                "info": "Content | Seeing a friend"
+              }
+            ]
+          }
+        ],
+        "fields": []
+      },
+      {
+        "title": "Why?",
+        "repeat": true,
+        "children": [],
+        "fields": [
+          {
+            "label": "Note",
+            "name": "note",
+            "field_type": "textarea",
+            "required": false,
+            "placeholder": "What caused it?",
+            "options": [],
+            "constraints": [
+              "max=500",
+              "sentences=1..4",
+              "prompt=\"What caused it?\""
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "form",
+    "fields": [
+      {
+        "label": "Level",
+        "name": "level",
+        "field_type": "range",
+        "required": false,
+        "placeholder": null,
+        "options": [],
+        "constraints": [
+          "min=1",
+          "max=10",
+          "levels=\"2|4|7|9\""
+        ]
+      }
+    ],
+    "submit_label": "Submit",
+    "steps": false,
+    "model": "Entry"
+  },
+  {
+    "type": "compute",
+    "name": "daily_score",
+    "expr": "avg(entries.level)",
+    "source": "/_api/Entry"
+  },
+  {
+    "type": "when",
+    "bind": "day.score",
+    "op": "<=",
+    "value": "-8",
+    "expr": null,
+    "children": [
+      {
+        "type": "markdown",
+        "content": "Reach out to someone you trust."
+      }
+    ]
+  },
+  {
+    "type": "schedule",
+    "bind": "preference.reminder_time",
+    "tz": "viewer",
+    "title": "MoodMap",
+    "body": "How are you feeling today?",
+    "link": "/log"
+  }
+]

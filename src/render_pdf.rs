@@ -458,7 +458,13 @@ pub fn collect_image_srcs(doc: &SurfDoc) -> Vec<String> {
                 | Block::Panel { children, .. }
                 | Block::TabContent { children, .. }
                 | Block::Drawer { children, .. }
-                | Block::Modal { children, .. } => walk(children, out, seen),
+                | Block::Modal { children, .. }
+                | Block::When { children, .. } => walk(children, out, seen),
+                Block::Flow { steps, .. } => {
+                    for step in steps {
+                        walk(&step.children, out, seen);
+                    }
+                }
                 _ => {}
             }
         }

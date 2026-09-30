@@ -1,0 +1,48 @@
+---
+title: "surf-parse 0.33.0: the backends grammar"
+type: doc
+status: active
+scope: public
+created: 2026-09-29
+version: 1
+tags: [surf-parse, backends, grammar, data-contract]
+description: "Every block, attribute and constraint the 0.33.0 backends grammar adds, and the exact HTML data contract the platform runtime reads. surf-parse describes; it never evaluates, queries, schedules or emits script."
+---
+
+# The backends grammar (0.33.0)
+
+**Model.** `::model[name=Entry owner=viewer]` — owner `viewer` (default) · `workspace` · `public`. Field line: `- name: type [bare words] [= expr] [[constraints]]`. New types `date`, `range`, `list(Model)`; `number` = `float`, `textarea` = `text`, `pk` = `primary`. New constraints `sentences=1..4`, `prompt="…"`, `labels="a|b"`, `levels="2|4|7|9"`, `pattern="…"` (verbatim). `= expr` makes the field computed (`ModelField.computed`, verbatim, never evaluated). Commas split constraints only outside quotes; a quoted value keeps its case, `\"` is a quote.
+
+**Route.** `filter=` and `sort=` are kept verbatim (detail rows `<li>filter: <code>…</code></li>`, then sort).
+
+**Blocks.**
+
+- `::picker[bind= tiers= layout= emoji=]` rows `- Core: a · b · c | info="…"` — tiers default = the widest row, layout `wheel` (default) · `grid` · `list`, emoji default `true`. A row without a colon is its own core.
+- `::when[bind= op= value=]` or `::when[expr=]` — body = any blocks.
+- `::compute[name= expr= source=]`.
+- `::flow[model= id= submit=]` with `:::step[title= repeat=true]` children: nested blocks render first, then field lines (model grammar or `- Label (type)`). Lines outside a step form one untitled step.
+- `::form[model=]` — reads model field lines beside the form grammar.
+- `::schedule[bind= tz= title= body= link=]` — tz default `viewer`.
+
+## HTML data contract
+
+Attribute values are HTML-escaped (`op="<="` serializes as `data-when-op="&lt;="`; `getAttribute` returns `<=`). `link=` and `source=` with a `javascript:` / `data:` / `vbscript:` scheme become `#`.
+
+- **when** `<section class="surfdoc-when" data-when-bind data-when-op data-when-value data-when-expr hidden>` + children + `</section>` — each data attribute only when authored, in that order.
+- **compute** `<output class="surfdoc-compute" data-compute-name data-compute-expr data-source></output>` (`data-source` only when authored).
+- **picker** `<fieldset class="surfdoc-picker" data-bind data-tiers data-layout data-emoji="true|false">`; per row `<div class="surfdoc-picker-row" data-core [data-info]>`; per choice (first `tiers`) `<label class="surfdoc-picker-choice"><input type="radio" name="{bind}" value="{choice}" data-tier="n"/>{choice}</label>`.
+- **flow** `<form class="surfdoc-form" method="post" action="/_api/{Model}" data-model="{Model}" data-steps="true" [id]>`, the `_step` radios (`id="{id or flow}-step-n"`), the progress line, then `<fieldset class="surfdoc-form-step" data-step="n" [data-repeat="true"]>` per step; submit (`Save`) in the last step. No `model=` → no method / action / data-model.
+- **form** `<form class="surfdoc-form" method="post" action="/_api/{Model}" data-model="{Model}">` (an authored `action=` wins; `/_api/` keeps only name characters of the model).
+- **range field** `<input type="range" name min max step="1" [data-labels="a|b"] [data-levels="2|4"] [required]/><output class="surfdoc-form-range-value"></output>` — min / max default 0 / 100.
+- **textarea field** `<textarea name placeholder="{prompt}" rows="4" [maxlength] [data-sentences="1..4"] [required]></textarea>`; a number gains `min` / `max`, a text input `maxlength` / `pattern`.
+- **schedule** `<span class="surfdoc-schedule" data-schedule-bind data-schedule-tz [data-schedule-title] [data-schedule-body] [data-schedule-link] hidden></span>`.
+- **model** unchanged table; a computed field adds ` <span class="surfdoc-model-computed">= {expr}</span>` after the type; constraints are escaped.
+- **action** (unchanged, for reference) `<form class="surfdoc-action" method="{m}" action="{target}" data-surf-method="{m}" data-surf-action="{target}" [data-surf-confirm]>` + the `::form` field markup + `<button type="submit" class="surfdoc-cta surfdoc-cta-primary">{label}</button></form>`; `m` lower-case, default `post`.
+
+## Native (schema v14)
+
+`NativeBlock::Picker` · `When` · `Compute` · `Flow` · `Schedule`, records `NativePickerRow`, `NativeFlowStep`; `Model.owner`, `NativeModelField.computed`, `Route.filter` / `sort`, `Form.model`, `NativeFormField.constraints`. The FFI fails open; `surfdoc_diagnostics(source)` returns `[{severity, code, message, line, column}]`.
+
+## Lint
+
+`L046` — unknown owner, `::when` without predicate or with an op outside `== != < <= > >= = in contains`, `::flow` without `model=`, unknown picker layout, a row wider than `tiers=`. Validate `V350`–`V355`: picker bind / rows, compute name / expr, schedule bind, flow steps.

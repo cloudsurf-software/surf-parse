@@ -10,7 +10,7 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 125
+total_blocks = 130
 registry_updated = "2026-09-29"
 
 [blocks.ai-context]
@@ -177,8 +177,8 @@ enum_variant = "Footnote"
 [blocks.form]
 status = "implemented"
 category = "web"
-purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden); a `group: Label` line or a `:::step[title=…]` child opens a fieldset; steps=true (0.32.0) makes every fieldset one step of a CSS-only stepped form"
-attributes = ["submit", "action", "method", "honeypot", "steps", "id"]
+purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden, range); a `group: Label` line or a `:::step[title=…]` child opens a fieldset; steps=true (0.32.0) makes every fieldset one step of a CSS-only stepped form; model= (0.33.0) posts one row to /_api/{model} and reads the model's own field lines"
+attributes = ["submit", "action", "method", "honeypot", "steps", "id", "model"]
 degradation = "labeled list"
 enum_variant = "Form"
 
@@ -667,8 +667,8 @@ enum_variant = "Volumes"
 [blocks.model]
 status = "implemented"
 category = "advanced"
-purpose = "Data model definition with typed fields and constraints"
-attributes = ["name"]
+purpose = "Data model definition with typed fields and constraints; owner= (0.33.0) says whose rows they are (viewer, workspace, public) and `- f: type = expr` declares a computed field"
+attributes = ["name", "owner"]
 degradation = "definition list of fields"
 enum_variant = "Model"
 
@@ -676,7 +676,7 @@ enum_variant = "Model"
 status = "implemented"
 category = "advanced"
 purpose = "API route/endpoint definition with method, auth, returns, and optional handler"
-attributes = ["method", "path", "auth", "returns", "body"]
+attributes = ["method", "path", "auth", "returns", "body", "filter", "sort"]
 degradation = "heading with method and path"
 enum_variant = "Route"
 
@@ -1042,3 +1042,47 @@ purpose = "Horizontal scroll-snap carousel — `:::slide[image= alt=]` children 
 attributes = ["id", "aspect"]
 degradation = "the slides in order as heading, image and body"
 enum_variant = "Carousel"
+
+# ----- Stateful app blocks added in 0.33.0 (the backends grammar) -----
+# Inert markup the platform runtime reads through data-* attributes; no
+# script, no evaluation inside surf-parse.
+
+[blocks.picker]
+status = "implemented"
+category = "advanced"
+purpose = "Tiered choice bound to a record field — each `- Core: a · b · c` row offers up to tiers= graded radio choices, with an optional `| info=\"…\"` tail"
+attributes = ["bind", "tiers", "layout", "emoji"]
+degradation = "bulleted rows of core and choices"
+enum_variant = "Picker"
+
+[blocks.when]
+status = "implemented"
+category = "advanced"
+purpose = "Section of blocks shown only while a predicate holds — bind= + op= + value=, or expr="
+attributes = ["bind", "op", "value", "expr"]
+degradation = "the predicate as a note, then the body"
+enum_variant = "When"
+
+[blocks.compute]
+status = "implemented"
+category = "advanced"
+purpose = "Named value the runtime derives from expr= over the rows at source= (kept verbatim, never evaluated by the parser)"
+attributes = ["name", "expr", "source"]
+degradation = "name = expression line"
+enum_variant = "Compute"
+
+[blocks.flow]
+status = "implemented"
+category = "advanced"
+purpose = "Stepped entry bound to a record — `:::step[title= repeat=]` children holding blocks and field lines, posting one row to /_api/{model}"
+attributes = ["model", "id", "submit"]
+degradation = "numbered steps with their fields"
+enum_variant = "Flow"
+
+[blocks.schedule]
+status = "implemented"
+category = "advanced"
+purpose = "Recurring reminder whose time of day lives in a record field (bind=), delivered by the platform in tz= with a title, body and link"
+attributes = ["bind", "tz", "title", "body", "link"]
+degradation = "reminder line"
+enum_variant = "Schedule"

@@ -5198,3 +5198,19 @@ button.surfdoc-booking-day.is-sel { background: var(--accent); color: var(--acce
     .surfdoc .surfdoc-panels-work { padding: 52px 0 64px 0; gap: 0; }
     .surfdoc .surfdoc-panels-work > .surfdoc-panel-slot-work { border: none; border-radius: 0; }
 }
+
+/* ── 0.33.0 stateful app blocks ─────────────────────────────────────────
+   Inert markup the platform runtime brings to life through data-*
+   attributes. Without the runtime a picker is a plain radio group, a
+   ::when section and a ::schedule stay hidden (the `hidden` attribute),
+   and a ::compute output is empty. No script is involved. */
+.surfdoc-picker { display: flex; flex-direction: column; gap: 10px; margin: var(--ws-space-md, 16px) 0; padding: 12px 14px; border: var(--ws-border-w) var(--ws-border-style) var(--border); border-radius: var(--ws-radius-card); }
+.surfdoc-picker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.surfdoc-picker-row::before { content: attr(data-core); min-width: 7em; font-weight: 600; color: var(--text); }
+.surfdoc-picker-choice { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); }
+.surfdoc-when[hidden], .surfdoc-schedule[hidden] { display: none; }
+.surfdoc-when { display: block; }
+.surfdoc-compute { font-variant-numeric: tabular-nums; font-weight: 600; }
+.surfdoc-form-range-value { margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.surfdoc-model-computed { font-size: var(--font-size-micro); color: var(--text-muted); }
+.surfdoc-form-step[data-repeat="true"] > legend::after { content: " \21BB"; color: var(--text-muted); }

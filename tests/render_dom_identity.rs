@@ -100,6 +100,28 @@ fn identity_carousel_and_stepped_form() {
     assert_identity("carousel-steps.surf");
 }
 
+/// 0.33.0 backends grammar: the MoodMap fixture — the model table (covered
+/// since 0.33.0), routes with filter / sort, the flow's stepped shell with a
+/// nested picker and a repeatable step, the model-bound form's range field,
+/// compute, when and schedule — renders constructively whole and byte-equal.
+#[test]
+fn identity_backends_moodmap() {
+    assert_identity("backends/moodmap-app.surf");
+}
+
+/// 0.33.0 hostile values through the backends blocks: quote-breaking text,
+/// script-scheme links and markup in picker choices escape identically in
+/// both backends.
+#[test]
+fn identity_backends_hostile_values() {
+    let src = "::schedule[bind=p.t link=\"javascript:alert(1)\" title=\"a\\\"><script>x</script>\"]\n::\n\n::picker[bind=\"a\\\" onclick=\\\"x\"]\n- Joy: <b>Serenity</b> & co | info=\"<img src=x>\"\n::\n\n::when[expr=\"a < b && c > \\\"d\\\"\"]\n**Hi** there & 1 < 2 > 0\n::\n\n::form[model=Entry]\n- note: textarea [prompt=\"Why \\\"now\\\"?\", max=5]\n- code: string [pattern=\"^<a>&$\"]\n::\n";
+    let doc = surf_parse::parse(src).doc;
+    let dom_html = render_fragment_string(&doc).expect("native sink renders");
+    assert_eq!(dom_html, doc.to_html_fragment());
+    assert!(check_coverage(&doc).is_ok());
+    assert!(!dom_html.contains("<script"), "{dom_html}");
+}
+
 /// 0.25.0: thirteen of the fourteen blocks that were planned until sessions
 /// 11 + 12 — every arm in render_dom.rs is a byte twin of its render_html
 /// arm, escaping included (an angle bracket in an output body, a quote in a

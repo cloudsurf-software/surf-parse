@@ -39,9 +39,12 @@ pub enum SurfDocError {
 
 /// Parse a `.surf` source string into a flat list of native blocks.
 ///
-/// Never panics. Fatal diagnostics are routed to `FrontmatterInvalid` when
-/// they reference YAML/front-matter; all other fatals become `Parse`.
-/// Non-fatal diagnostics are dropped at this layer.
+/// Never panics, and FAILS OPEN (0.33.0) exactly like the HTML renderer:
+/// the blocks come back whatever diagnostics the source earns — a broken
+/// front-matter line or a `::route` without `path=` still renders the
+/// body. A client that wants to say "rendered with N problems" reads them
+/// from [`surfdoc_diagnostics`]. The `SurfDocError` variants stay in the
+/// signature (and the enum) so existing bindings keep compiling.
 #[uniffi::export]
 pub fn parse_surfdoc(source: String) -> Result<Vec<NativeBlock>, SurfDocError> {
     let doc = parse_checked(&source)?;
@@ -168,33 +171,60 @@ pub fn surfdoc_find_text(source: String, query: String, current_route: Option<St
     crate::edit::find_text_json(&source, &query, current_route.as_deref())
 }
 
-fn parse_checked(source: &str) -> Result<crate::types::SurfDoc, SurfDocError> {
-    let result = crate::parse(source);
+/// Every diagnostic `source` earns — the parse, schema and lint layers
+/// (`crate::lint::check`) — as a JSON array of
+/// `{"severity","code","message","line","column"}` (1-based line and
+/// column, `null` when the diagnostic has no position; `code` `null` when
+/// it has none). What a kit draws its "rendered with N problems" banner
+/// from, over the blocks [`parse_to_native`] returned anyway (0.33.0).
+#[uniffi::export]
+pub fn surfdoc_diagnostics(source: String) -> String {
+    diagnostics_json(&source)
+}
 
-    let fatals: Vec<&crate::error::Diagnostic> = result
+fn diagnostics_json(source: &str) -> String {
+    // Spans index the CRLF-normalised text the parser saw.
+    let normalised = source.replace("\r\n", "\n");
+    let report = crate::lint::check(source);
+    let rows: Vec<serde_json::Value> = report
         .diagnostics
         .iter()
-        .filter(|d| d.severity == crate::error::Severity::Error)
+        .map(|d| {
+            let (line, column) = match d.span {
+                Some(span) if span.start_line > 0 => {
+                    let offset = span.start_offset.min(normalised.len());
+                    let line_start = normalised
+                        .get(..offset)
+                        .and_then(|head| head.rfind('\n'))
+                        .map_or(0, |i| i + 1);
+                    let column = normalised
+                        .get(line_start..offset)
+                        .map_or(0, |seg| seg.chars().count())
+                        + 1;
+                    (Some(span.start_line), Some(column))
+                }
+                _ => (None, None),
+            };
+            serde_json::json!({
+                "severity": d.severity,
+                "code": d.code,
+                "message": d.message,
+                "line": line,
+                "column": column,
+            })
+        })
         .collect();
+    serde_json::Value::Array(rows).to_string()
+}
 
-    if !fatals.is_empty() {
-        let msg = fatals
-            .iter()
-            .map(|d| d.message.clone())
-            .collect::<Vec<_>>()
-            .join("; ");
-        let is_frontmatter = fatals.iter().any(|d| {
-            let m = d.message.to_lowercase();
-            m.contains("front matter") || m.contains("frontmatter") || m.contains("yaml")
-        });
-        return Err(if is_frontmatter {
-            SurfDocError::FrontmatterInvalid { msg }
-        } else {
-            SurfDocError::Parse { msg }
-        });
-    }
-
-    Ok(result.doc)
+/// The FFI's one parse. Fails open (0.33.0): `crate::parse` always returns
+/// a best-effort document — error-severity diagnostics included — and the
+/// web renders that document, so the native path does too. Before 0.33.0 an
+/// error diagnostic (an unquoted colon in a front-matter value) refused the
+/// whole document here while the web showed it. The `Result` stays so the
+/// exported signatures do not change.
+fn parse_checked(source: &str) -> Result<crate::types::SurfDoc, SurfDocError> {
+    Ok(crate::parse(source).doc)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -220,11 +250,74 @@ mod tests {
     }
 
     /// The schema number is what tells a client the new variants are present.
+    /// (This pin still read 12 after 0.32.0 moved the schema to 13; the
+    /// uniffi feature is outside the default gates, so 0.33.0 moves it to the
+    /// current number.)
     #[test]
-    fn native_doc_schema_version_is_twelve() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 12);
+    fn native_doc_schema_version_is_fourteen() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 14);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 12);
+        assert_eq!(doc.schema_version, 14);
+    }
+
+    /// 0.33.0 fail-open: a front-matter value with an unquoted colon is
+    /// broken YAML (P002, an error) — the body still crosses the FFI, and the
+    /// diagnostics JSON names the problem with its position.
+    #[test]
+    fn broken_front_matter_still_renders_and_names_p002() {
+        let source = "---\ntitle: Plan\nupdated: 2026-09-29 10:30: late\n---\n\n# Body\n\nStill here.\n";
+        let blocks = parse_surfdoc(source.into()).expect("fails open");
+        assert!(
+            blocks.iter().any(|b| matches!(b, NativeBlock::Markdown { content } if content.contains("Still here"))),
+            "{blocks:?}"
+        );
+        let doc = parse_to_native(source.into()).expect("fails open");
+        assert!(!doc.blocks.is_empty());
+        let styled = parse_to_native_styled(source.into(), None, None, None).expect("fails open");
+        assert_eq!(styled.blocks.len(), doc.blocks.len());
+
+        let diags: serde_json::Value = serde_json::from_str(&surfdoc_diagnostics(source.into())).expect("json");
+        let p002 = diags
+            .as_array()
+            .expect("array")
+            .iter()
+            .find(|d| d["code"] == "P002")
+            .unwrap_or_else(|| panic!("P002 missing: {diags}"));
+        assert_eq!(p002["severity"], "error");
+        assert!(p002["message"].as_str().is_some_and(|m| !m.is_empty()));
+        assert!(p002["line"].as_u64().is_some_and(|l| l >= 1), "{p002}");
+        assert!(p002["column"].as_u64().is_some_and(|c| c >= 1), "{p002}");
+    }
+
+    /// A `::route` without `path=` (V310, an error) still crosses as a
+    /// Route, and the diagnostics JSON names V310 on the route's line.
+    #[test]
+    fn route_without_path_renders_and_names_v310() {
+        let source = "# API\n\n::route[method=GET]\nreturns: list(Entry)\n::\n";
+        let blocks = parse_surfdoc(source.into()).expect("fails open");
+        assert!(blocks.iter().any(|b| matches!(b, NativeBlock::Route { .. })), "{blocks:?}");
+        let diags: serde_json::Value = serde_json::from_str(&surfdoc_diagnostics(source.into())).expect("json");
+        let v310 = diags
+            .as_array()
+            .expect("array")
+            .iter()
+            .find(|d| d["code"] == "V310")
+            .unwrap_or_else(|| panic!("V310 missing: {diags}"));
+        assert_eq!(v310["severity"], "error");
+        assert_eq!(v310["line"], 3);
+        assert_eq!(v310["column"], 1);
+    }
+
+    /// A clean document earns an empty diagnostics array, not `null`.
+    #[test]
+    fn clean_document_has_no_error_diagnostics() {
+        let json = surfdoc_diagnostics("---\ntitle: Clean\ntype: doc\n---\n\n# Hi\n".into());
+        let diags: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert!(diags.is_array());
+        assert!(
+            diags.as_array().unwrap().iter().all(|d| d["severity"] != "error"),
+            "{diags}"
+        );
     }
 
     /// v11: a section headline's `{#slug}` crosses as `anchor`, never as text.

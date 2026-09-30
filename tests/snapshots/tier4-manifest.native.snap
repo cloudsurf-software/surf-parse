@@ -17,16 +17,21 @@
   {
     "type": "model",
     "name": "User",
+    "owner": "viewer",
     "fields": [
       {
         "name": "id",
-        "field_type": "string",
-        "constraints": []
+        "field_type": "uuid",
+        "constraints": [
+          "primary"
+        ]
       },
       {
         "name": "email",
         "field_type": "string",
-        "constraints": []
+        "constraints": [
+          "unique"
+        ]
       }
     ]
   },

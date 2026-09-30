@@ -1058,24 +1058,37 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.join("\n")
         }
 
-        Block::Model { name, fields, .. } => {
-            let mut lines = vec![format!("**Model: {name}**"), String::new()];
+        Block::Model { name, owner, fields, .. } => {
+            // The default owner stays unsaid, so a 0.32 model reads as before.
+            let owner_note = if owner == "viewer" { String::new() } else { format!(" (owner: {owner})") };
+            let mut lines = vec![format!("**Model: {name}**{owner_note}"), String::new()];
             lines.push("| Field | Type | Constraints |".to_string());
             lines.push("|-------|------|-------------|".to_string());
             for f in fields {
-                let type_str = model_field_type_md(&f.field_type);
+                let mut type_str = model_field_type_md(&f.field_type);
+                if let Some(expr) = &f.computed {
+                    type_str = format!("{type_str} = {expr}");
+                }
                 let constraints: Vec<String> = f.constraints.iter().map(|c| constraint_md(c)).collect();
-                lines.push(format!("| {} | {} | {} |", f.name, type_str, constraints.join(", ")));
+                // A `|` inside a cell (labels="a|b") would split the table row.
+                lines.push(format!(
+                    "| {} | {} | {} |",
+                    f.name,
+                    type_str.replace('|', "\\|"),
+                    constraints.join(", ").replace('|', "\\|")
+                ));
             }
             lines.join("\n")
         }
 
-        Block::Route { method, path, auth, returns, body, handler, content, .. } => {
+        Block::Route { method, path, auth, returns, body, handler, content, filter, sort, .. } => {
             let method_str = http_method_md(*method);
             let mut lines = vec![format!("**{method_str} `{path}`**")];
             if let Some(a) = auth { lines.push(format!("- auth: {a}")); }
             if let Some(r) = returns { lines.push(format!("- returns: `{r}`")); }
             if let Some(b) = body { lines.push(format!("- body: `{b}`")); }
+            if let Some(f) = filter { lines.push(format!("- filter: `{f}`")); }
+            if let Some(o) = sort { lines.push(format!("- sort: `{o}`")); }
             if let Some(h) = handler {
                 lines.push(String::new());
                 lines.push("```rust".to_string());
@@ -1102,6 +1115,70 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.push(format!("- target: `{target}`"));
             for e in events { lines.push(format!("- {}: {}", e.event, e.action)); }
             lines.join("\n")
+        }
+
+        // 0.33.0 stateful app blocks: plain text can hold no state, so each
+        // reads as what it asks for.
+        Block::Picker { bind, rows, .. } => {
+            let mut lines = vec![format!("**Choose** `{bind}`")];
+            for row in rows {
+                let info = row.info.as_deref().map(|i| format!(" \u{2014} {i}")).unwrap_or_default();
+                lines.push(format!("- **{}**: {}{info}", row.core, row.choices.join(" \u{b7} ")));
+            }
+            lines.join("\n")
+        }
+
+        Block::When { bind, op, value, expr, children, .. } => {
+            let predicate = match (expr, bind) {
+                (Some(e), _) => e.clone(),
+                (None, Some(b)) => [Some(b.as_str()), op.as_deref(), value.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                (None, None) => String::new(),
+            };
+            let mut lines = vec![format!("*Shown when `{predicate}`*"), String::new()];
+            for child in children {
+                lines.push(render_block(child));
+                lines.push(String::new());
+            }
+            lines.join("\n").trim().to_string()
+        }
+
+        Block::Compute { name, expr, source, .. } => {
+            let from = source.as_deref().map(|s| format!(" (from `{s}`)")).unwrap_or_default();
+            format!("**{name}** = `{expr}`{from}")
+        }
+
+        Block::Flow { model, steps, submit_label, .. } => {
+            let mut lines = vec![match model {
+                Some(m) => format!("**New {m}**"),
+                None => "**Flow**".to_string(),
+            }];
+            for (i, step) in steps.iter().enumerate() {
+                lines.push(String::new());
+                let title = step.title.clone().unwrap_or_else(|| format!("Step {}", i + 1));
+                lines.push(format!("**{}. {title}**", i + 1));
+                for child in &step.children {
+                    lines.push(render_block(child));
+                }
+                for field in &step.fields {
+                    let req = if field.required { " *" } else { "" };
+                    lines.push(format!("- {}{req}", field.label));
+                }
+            }
+            lines.push(format!("\n[{}]", submit_label.as_deref().unwrap_or("Save")));
+            lines.join("\n")
+        }
+
+        Block::Schedule { bind, tz, title, body, .. } => {
+            let what = [title.as_deref(), body.as_deref()]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" \u{2014} ");
+            format!("*Reminder: {what} (daily at `{bind}`, {tz} time)*")
         }
 
         Block::Schema { name, fields, .. } => {
@@ -1502,6 +1579,9 @@ pub(crate) fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
         ModelFieldType::Url => "url".to_string(),
         ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
         ModelFieldType::Ref(target) => format!("ref({target})"),
+        ModelFieldType::Date => "date".to_string(),
+        ModelFieldType::Range => "range".to_string(),
+        ModelFieldType::List(target) => format!("list({target})"),
     }
 }
 
@@ -1516,8 +1596,28 @@ pub(crate) fn constraint_md(c: &crate::types::FieldConstraint) -> String {
         FieldConstraint::Index => "index".to_string(),
         FieldConstraint::Max(n) => format!("max={n}"),
         FieldConstraint::Min(n) => format!("min={n}"),
-        FieldConstraint::Default(v) => format!("default={v}"),
+        // A default the unquoted reading would change (upper case, a comma,
+        // a bracket, a quote, edge spaces) is written quoted so it re-parses
+        // to itself.
+        FieldConstraint::Default(v) => {
+            let plain = !v.is_empty()
+                && *v == v.to_lowercase()
+                && v.trim() == v
+                && !v.contains([',', '[', ']', '"']);
+            if plain { format!("default={v}") } else { format!("default={}", quote_constraint(v)) }
+        }
+        FieldConstraint::Sentences(lo, hi) => format!("sentences={lo}..{hi}"),
+        FieldConstraint::Prompt(p) => format!("prompt={}", quote_constraint(p)),
+        FieldConstraint::Labels(l) => format!("labels={}", quote_constraint(&l.join("|"))),
+        FieldConstraint::Levels(l) => format!("levels={}", quote_constraint(&l.join("|"))),
+        FieldConstraint::Pattern(p) => format!("pattern={}", quote_constraint(p)),
     }
+}
+
+/// A constraint value in double quotes, an inner quote escaped as `\"` —
+/// the spelling `parse_field_constraints` reads back verbatim.
+pub(crate) fn quote_constraint(v: &str) -> String {
+    format!("\"{}\"", v.replace('"', "\\\""))
 }
 
 fn http_method_md(m: crate::types::HttpMethod) -> &'static str {

@@ -128,9 +128,9 @@ impl ParseLimits {
                     reached: *counted,
                 });
             }
-            let (a, b) = child_slices(block);
-            self.walk(a, depth + 1, counted)?;
-            self.walk(b, depth + 1, counted)?;
+            for slice in child_slices(block) {
+                self.walk(slice, depth + 1, counted)?;
+            }
         }
         Ok(())
     }
@@ -147,11 +147,10 @@ impl Default for ParseLimits {
 }
 
 /// The nested-block slices a container owns. Every `Vec<Block>` field in
-/// [`Block`] is represented here; [`Block::SplitPane`] is the only variant
-/// with two. Row/toolbar items are item structs, not blocks, so they carry
-/// no depth of their own.
-fn child_slices(block: &Block) -> (&[Block], &[Block]) {
-    const NONE: &[Block] = &[];
+/// [`Block`] is represented here; [`Block::SplitPane`] owns two and a
+/// [`Block::Flow`] one per step (0.33.0). Row/toolbar items are item
+/// structs, not blocks, so they carry no depth of their own.
+fn child_slices(block: &Block) -> Vec<&[Block]> {
     match block {
         Block::Page { children, .. }
         | Block::Slide { children, .. }
@@ -163,9 +162,11 @@ fn child_slices(block: &Block) -> (&[Block], &[Block]) {
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }
         | Block::Drawer { children, .. }
-        | Block::Modal { children, .. } => (children.as_slice(), NONE),
-        Block::SplitPane { left, right, .. } => (left.as_slice(), right.as_slice()),
-        _ => (NONE, NONE),
+        | Block::Modal { children, .. }
+        | Block::When { children, .. } => vec![children.as_slice()],
+        Block::SplitPane { left, right, .. } => vec![left.as_slice(), right.as_slice()],
+        Block::Flow { steps, .. } => steps.iter().map(|s| s.children.as_slice()).collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -176,8 +177,7 @@ fn child_slices(block: &Block) -> (&[Block], &[Block]) {
 pub fn measure_depth(blocks: &[Block]) -> usize {
     let mut deepest = 0usize;
     for block in blocks {
-        let (a, b) = child_slices(block);
-        let below = measure_depth(a).max(measure_depth(b));
+        let below = child_slices(block).into_iter().map(measure_depth).max().unwrap_or(0);
         deepest = deepest.max(1 + below);
     }
     deepest
@@ -189,8 +189,7 @@ pub fn measure_blocks(blocks: &[Block]) -> usize {
     let mut total = 0usize;
     for block in blocks {
         total += 1;
-        let (a, b) = child_slices(block);
-        total += measure_blocks(a) + measure_blocks(b);
+        total += child_slices(block).into_iter().map(measure_blocks).sum::<usize>();
     }
     total
 }

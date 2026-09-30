@@ -980,6 +980,12 @@ pub enum Block {
         /// radios' ids (`{id}-step-{n}`; `form-step-{n}` without one).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
+        /// `model=` (0.33.0): the record this form writes. With a model the
+        /// form posts one row to `/_api/{model}` (unless `action=` names
+        /// another target) instead of landing in the inbox, and its body may
+        /// use the model's own field lines (`- intensity: range [min=1]`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
         span: Span,
     },
     /// Centered call-to-action band: heading + subtext + optional buttons.
@@ -1436,6 +1442,11 @@ pub enum Block {
     /// Data model definition with typed fields and constraints.
     Model {
         name: String,
+        /// `owner=` (0.33.0): whose rows these are — `viewer` (each signed-in
+        /// person sees their own, the default), `workspace` (shared by the
+        /// workspace) or `public`. Kept verbatim; lint flags other words.
+        #[serde(default = "default_model_owner")]
+        owner: String,
         fields: Vec<ModelField>,
         span: Span,
     },
@@ -1448,6 +1459,13 @@ pub enum Block {
         body: Option<String>,
         handler: Option<String>,
         content: String,
+        /// `filter=` (0.33.0): the field(s) a caller may filter the rows by,
+        /// kept verbatim for the platform runtime.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        filter: Option<String>,
+        /// `sort=` (0.33.0): the field the rows are ordered by, verbatim.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sort: Option<String>,
         span: Span,
     },
     /// Authentication configuration.
@@ -1463,6 +1481,74 @@ pub enum Block {
         source: String,
         target: String,
         events: Vec<BindingEvent>,
+        span: Span,
+    },
+
+    // ----- Stateful app blocks (0.33.0, the backends grammar) -----
+    //
+    // surf-parse only describes these: it never evaluates an expression,
+    // runs a query or schedules anything. The platform runtime reads the
+    // parsed blocks (or the `data-*` attributes the HTML carries) and does
+    // the work, so a document stays inert text everywhere else.
+
+    /// `::picker` — a tiered choice bound to one record field: each body
+    /// row is a core option with up to `tiers` graded choices.
+    Picker {
+        /// `bind=`: the `record.field` a chosen value is written to.
+        bind: String,
+        /// `tiers=`: how many graded choices a row offers (default: the
+        /// widest row).
+        tiers: usize,
+        /// `layout=`: `wheel` (default), `grid` or `list`, kept verbatim.
+        layout: String,
+        /// `emoji=`: whether a client may decorate choices with emoji
+        /// (default `true`; `emoji=false` turns it off).
+        emoji: bool,
+        rows: Vec<PickerRow>,
+        span: Span,
+    },
+    /// `::when` — a section shown only while its predicate holds. The
+    /// predicate is either `bind=` + `op=` + `value=` or a whole `expr=`.
+    When {
+        bind: Option<String>,
+        op: Option<String>,
+        value: Option<String>,
+        expr: Option<String>,
+        children: Vec<Block>,
+        span: Span,
+    },
+    /// `::compute` — a named value the runtime derives from `expr=` over the
+    /// rows at `source=`. The expression is kept verbatim, never evaluated.
+    Compute {
+        name: String,
+        expr: String,
+        source: Option<String>,
+        span: Span,
+    },
+    /// `::flow` — a stepped form bound to a record: `:::step` children, each
+    /// with its own blocks and field lines, posting one row to
+    /// `/_api/{model}` from the last step.
+    Flow {
+        model: Option<String>,
+        /// `id=`: anchor id and prefix of the step radios (`flow` without one).
+        id: Option<String>,
+        /// `submit=`: the last step's button label (default `Save`).
+        submit_label: Option<String>,
+        steps: Vec<FlowStep>,
+        span: Span,
+    },
+    /// `::schedule` — a recurring reminder whose time of day lives in a
+    /// record field (`bind=`). The platform delivers it; the page only
+    /// carries the description.
+    Schedule {
+        bind: String,
+        /// `tz=`: `viewer` (the reader's own zone, the default) or an IANA
+        /// zone name, verbatim.
+        tz: String,
+        title: Option<String>,
+        body: Option<String>,
+        /// `link=`: where the reminder opens (script schemes become `#`).
+        link: Option<String>,
         span: Span,
     },
 
@@ -2067,6 +2153,11 @@ impl Block {
             | Block::Route { span, .. }
             | Block::Auth { span, .. }
             | Block::Binding { span, .. }
+            | Block::Picker { span, .. }
+            | Block::When { span, .. }
+            | Block::Compute { span, .. }
+            | Block::Flow { span, .. }
+            | Block::Schedule { span, .. }
             | Block::Schema { span, .. }
             | Block::Use { span, .. }
             | Block::AppEnv { span, .. }
@@ -2541,6 +2632,12 @@ pub struct FormField {
     /// construction site keeps working with `group: None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// The model constraints a field line carried (0.33.0): a form bound to
+    /// a model (`::form[model=…]`, `::flow`) reads `- intensity: range
+    /// [min=1, max=10]` lines, and these shape the rendered input (`min`,
+    /// `max`, `maxlength`, `data-labels` …). Empty for every other form.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constraints: Vec<FieldConstraint>,
 }
 
 /// Form field input types.
@@ -2568,6 +2665,9 @@ pub enum FormFieldType {
     /// Non-visual field carried with the submission; `placeholder` supplies
     /// the value (`- Source (hidden, "pricing-page")`).
     Hidden,
+    /// A slider over a bounded scale (0.33.0, a model `range` field): the
+    /// field's `min=` / `max=` / `labels=` / `levels=` constraints shape it.
+    Range,
 }
 
 /// A single item in a `Gallery` block.
@@ -2910,6 +3010,44 @@ pub struct ModelField {
     pub name: String,
     pub field_type: ModelFieldType,
     pub constraints: Vec<FieldConstraint>,
+    /// A COMPUTED field (0.33.0): `- score: number = <expr>` — the
+    /// expression text after `=`, verbatim. surf-parse never evaluates it;
+    /// the platform runtime derives the value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub computed: Option<String>,
+}
+
+/// The default `owner=` of a `::model` — each viewer owns their own rows.
+pub fn default_model_owner() -> String {
+    "viewer".to_string()
+}
+
+/// One option row of a `::picker`: `- Joy: Serenity · Joy · Ecstasy`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PickerRow {
+    /// The core option, left of the colon.
+    pub core: String,
+    /// The graded choices, split on `·`, mildest first.
+    pub choices: Vec<String>,
+    /// The optional `| info="…"` tail, verbatim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub info: Option<String>,
+}
+
+/// One `:::step` of a `::flow`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowStep {
+    /// `title=`; an untitled step reads as `Step n`.
+    pub title: Option<String>,
+    /// `repeat=true`: the step may be answered more than once (one entry per
+    /// pass, e.g. several emotions in one check-in).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub repeat: bool,
+    /// The step's nested blocks (a picker, a prompt paragraph …), rendered
+    /// first.
+    pub children: Vec<Block>,
+    /// The step's field lines, rendered after its blocks.
+    pub fields: Vec<FormField>,
 }
 
 /// Data types for model fields.
@@ -2936,6 +3074,13 @@ pub enum ModelFieldType {
     Enum(Vec<String>),
     /// Foreign key reference to another model.
     Ref(String),
+    /// A calendar date without a time (0.33.0).
+    Date,
+    /// A whole number on a bounded scale, entered with a slider (0.33.0);
+    /// `min=` / `max=` bound it, `labels=` / `levels=` describe it.
+    Range,
+    /// A list of rows of another model (0.33.0): `list(Emotion)`.
+    List(String),
 }
 
 /// Constraints on a model field.
@@ -2952,6 +3097,20 @@ pub enum FieldConstraint {
     Default(String),
     /// Database index hint for query performance.
     Index,
+    /// `sentences=1..4` (0.33.0): how many sentences a text answer should
+    /// run, as (min, max).
+    Sentences(u32, u32),
+    /// `prompt="…"` (0.33.0): the question a text field asks.
+    Prompt(String),
+    /// `labels="Barely felt it|All-consuming"` (0.33.0): the words at the
+    /// ends of a range, split on `|`.
+    Labels(Vec<String>),
+    /// `levels="2|4|7|9"` (0.33.0): the stops where a range's meaning
+    /// changes, split on `|`, verbatim.
+    Levels(Vec<String>),
+    /// `pattern="^\d\d:\d\d$"` (0.33.0): a regular expression the
+    /// value must match, verbatim (quotes stripped, never compiled here).
+    Pattern(String),
 }
 
 /// Authentication provider type.

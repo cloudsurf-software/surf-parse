@@ -114,6 +114,7 @@ fn synth_form(fields: Vec<FormField>, submit_label: Option<&str>) -> Block {
         honeypot: false,
         steps: false,
         id: None,
+        model: None,
         span: Span::SYNTHETIC,
     }
 }
@@ -171,6 +172,8 @@ fn arb_form_field_type() -> impl Strategy<Value = FormFieldType> {
         Just(FormFieldType::Toggle),
         Just(FormFieldType::File),
         Just(FormFieldType::Hidden),
+        // 0.33.0: the model-bound slider.
+        Just(FormFieldType::Range),
     ]
 }
 
@@ -194,6 +197,7 @@ fn arb_form_field() -> impl Strategy<Value = FormField> {
                 placeholder,
                 options,
                 group,
+                constraints: Vec::new(),
             },
         )
 }

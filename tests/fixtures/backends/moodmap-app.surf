@@ -1,0 +1,57 @@
+---
+title: "MoodMap — the backends grammar"
+type: app
+---
+
+# MoodMap
+
+A daily check-in: pick an emotion, say how strong it is and what caused it.
+Every stateful element of the 0.33.0 grammar appears here once.
+
+::model[name=Entry owner=viewer]
+- id: uuid pk
+- date: date [required]
+- entry: ref(Entry) [required]
+- core: enum(Joy,Trust) [required]
+- intensity: integer [required, min=1, max=10]
+- note: textarea [max=500, sentences=1..4, prompt="What caused you to feel this way?"]
+- level: range [min=1, max=10, labels="Barely felt it|All-consuming", levels="2|4|7|9"]
+- reminder_time: string [default="20:00", pattern="^\d\d:\d\d$"]
+- score: number = round(sum(emotions.weighted) / count(emotions), 2)
+- boolean_field: boolean [default=false]
+- emotions: list(Emotion)
+::
+
+::route[method=GET path=/_api/Entry returns=list(Entry) filter=date sort=date]
+::
+
+::route[method=GET path=/_api/Entry/month returns="aggregate(avg(score),max(score),min(score),count,streak(date) by month(date))"]
+::
+
+::flow[model=Entry]
+:::step[title="Pick an emotion"]
+Which feeling is closest?
+
+::::picker[bind=entry.core tiers=3 layout=wheel emoji=false]
+- Joy: Serenity · Joy · Ecstasy | info="Feeling content and at ease | Seeing an old friend"
+- Trust: Acceptance · Trust · Admiration
+::::
+:::
+:::step[title="What caused it?" repeat=true]
+- note: textarea [max=500, sentences=1..4, prompt="What caused you to feel this way?"]
+:::
+::
+
+::form[model=Entry]
+- level: range [min=1, max=10, labels="Barely felt it|All-consuming", levels="2|4|7|9"]
+::
+
+::compute[name=daily_score expr="avg(entries.weighted)" source=/_api/Entry]
+::
+
+::when[bind=day.score op="<=" value=-8]
+A hard day. Reach out to someone you trust.
+::
+
+::schedule[bind=preference.reminder_time tz=viewer title="MoodMap" body="How are you feeling today?" link=/log]
+::

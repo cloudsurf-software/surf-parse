@@ -31,12 +31,13 @@ pub const CORPUS: &[(&str, &str)] = &[
     ("tier6-the-last-twenty", include_str!("../tests/corpus/tier6-the-last-twenty.surf")),
     ("tier7-panels", include_str!("../tests/corpus/tier7-panels.surf")),
     ("tier8-carousel-steps", include_str!("../tests/corpus/tier8-carousel-steps.surf")),
+    ("tier9-backends", include_str!("../tests/corpus/tier9-backends.surf")),
 ];
 
 /// One minimal source document per implemented registry kind — the
 /// coverage suite's table, exported (0.27) so every block has an example
-/// (spec/blocks.toml, status = "implemented"; registry currently has 125
-/// implemented of 125 total). When a kind is added to the registry, the
+/// (spec/blocks.toml, status = "implemented"; registry currently has 130
+/// implemented of 130 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 pub const SNIPPETS: &[(&str, &str)] = &[
     ("banner", "::banner[id=contact]\n# Talk to us\nWe reply within one business day.\n[Book a call](/book)\n::"),
@@ -136,6 +137,12 @@ pub const SNIPPETS: &[(&str, &str)] = &[
     ("route", "::route[method=GET path=/api/users returns=list(User)]\n::"),
     ("auth", "::auth[provider=email]\n::"),
     ("binding", "::binding[source=users target=list]\n::"),
+    // 0.33.0: the backends grammar (the MoodMap shapes).
+    ("picker", "::picker[bind=entry.core tiers=3 layout=wheel emoji=false]\n- Joy: Serenity \u{b7} Joy \u{b7} Ecstasy | info=\"Feeling content and at ease | Seeing an old friend\"\n- Trust: Acceptance \u{b7} Trust \u{b7} Admiration\n::"),
+    ("when", "::when[bind=day.score op=\"<=\" value=-8]\nReach out to someone you trust today.\n::"),
+    ("compute", "::compute[name=daily_score expr=\"avg(entries.weighted)\" source=/_api/Entry]\n::"),
+    ("flow", "::flow[model=Entry]\n:::step[title=\"How strong is it?\"]\n- intensity: range [required, min=1, max=10, labels=\"Barely felt it|All-consuming\"]\n:::\n:::step[title=\"What caused it?\" repeat=true]\n- note: textarea [max=500, sentences=1..4, prompt=\"What caused you to feel this way?\"]\n:::\n::"),
+    ("schedule", "::schedule[bind=preference.reminder_time tz=viewer title=\"MoodMap\" body=\"How are you feeling today?\" link=/log]\n::"),
     ("schema", "::schema[name=User]\n- id: uuid pk\n::"),
     ("use", "::use\n- serde\n::"),
     ("app-env", "::app-env\nKEY: value\n::"),
@@ -298,7 +305,7 @@ mod tests {
     #[test]
     fn the_typed_registry_matches_the_toml() {
         let rows = registry();
-        assert_eq!(rows.len(), 125);
+        assert_eq!(rows.len(), 130);
         let slot = rows.iter().find(|r| r.name == "panel-slot").expect("panel-slot");
         assert_eq!(slot.status, "implemented");
         assert_eq!(slot.enum_variant.as_deref(), Some("PanelSlot"));

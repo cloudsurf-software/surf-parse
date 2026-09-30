@@ -16,10 +16,10 @@ let config = surf_parse::PageConfig::default();
 let html = result.doc.to_html_page(&config);
 ```
 
-## Block Types (125 registered · 125 implemented)
+## Block Types (130 registered · 130 implemented)
 
-The registry (`spec/blocks.toml`) is the authority: 125 directives, every one
-implemented since 0.25.0 (124 `Block` variants — `::split-pane` and `::pane`
+The registry (`spec/blocks.toml`) is the authority: 130 directives, every one
+implemented since 0.25.0 (129 `Block` variants — `::split-pane` and `::pane`
 share one; `::panel-slot` and `::preset` joined in 0.27.0 with the `panels`
 app-shell layout). The implemented variants:
 
@@ -32,6 +32,7 @@ app-shell layout). The implemented variants:
 **Compound Widgets**: Chart, Editor, SplitPane
 **Infrastructure Manifest**: App, Auth, Binding, Build, Cicd, Concurrency, Crates, Deploy, DeployUrls, Domains, Health, InfraDatabase, InfraEnv, Model, Route, Schema, Smoke, Use, Volumes
 **App Format**: AppDeploy, AppEnv
+**Stateful App (0.33.0)**: Compute, Flow, Picker, Schedule, When
 **Compact Display**: Badge, InfoCard, Row
 **App Shell / Interactive**: AppShell, BlockEditor, ChatInputSimple, ChatThread, ChipInput, CodeEditor, CommandPalette, Drawer, DropdownSelect, LogStream, Modal, NavTree, Panel, ProblemList, Progress, SegmentedControl, Sidebar, SuggestionChips, TabBar, TabContent, Terminal, Toolbar
 **Messages / Contacts**: RecipientPicker, Qr

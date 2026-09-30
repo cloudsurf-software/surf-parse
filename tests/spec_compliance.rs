@@ -44,6 +44,8 @@ const ENUM_VARIANTS: &[&str] = &[
     "PanelSlot", "Preset",
     // The Elevate lane C, 0.32.0
     "Carousel",
+    // The backends grammar, 0.33.0
+    "Picker", "When", "Compute", "Flow", "Schedule",
 ];
 
 #[derive(Debug, Deserialize)]

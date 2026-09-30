@@ -141,6 +141,10 @@ pub fn attr_allowed(name: &str) -> bool {
             // 0.32.0 `::form[steps=true]`: the step radios' `checked` and the
             // Previous / Next labels' `for` (render_html::stepped_form_html).
             | "checked" | "for"
+            // 0.33.0 model-bound fields: the range slider's `step`, a text
+            // answer's `maxlength` and a pattern-checked input's `pattern`
+            // (render_html::render_form_field_html / form_constraint_attrs).
+            | "step" | "maxlength" | "pattern"
             // SVG presentation attributes used by the vendored icon set and
             // static widget markup.
             | "viewBox" | "xmlns" | "fill" | "stroke" | "stroke-width" | "stroke-linecap"
@@ -1530,9 +1534,28 @@ fn build_form_field<S: DomSink>(dom: &mut Dom<'_, S>, field: &crate::types::Form
             dom.attr("name", AttrVal::Markup(&field.name));
             dom.attr("placeholder", AttrVal::Markup(ph));
             dom.attr("rows", AttrVal::Markup("4"));
+            build_constraint_attrs(dom, field);
             if field.required {
                 dom.bool_attr("required");
             }
+            dom.close();
+        }
+        // Twin of the 0.33.0 range arm: the slider, then its empty output.
+        FormFieldType::Range => {
+            let (min, max) = render_html::form_range_bounds(field);
+            dom.open("input", CloseStyle::SelfClose);
+            dom.attr("type", AttrVal::Markup("range"));
+            dom.attr("name", AttrVal::Markup(&field.name));
+            dom.attr("min", AttrVal::Markup(&min.to_string()));
+            dom.attr("max", AttrVal::Markup(&max.to_string()));
+            dom.attr("step", AttrVal::Markup("1"));
+            build_constraint_attrs(dom, field);
+            if field.required {
+                dom.bool_attr("required");
+            }
+            dom.close();
+            dom.open("output", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-form-range-value"));
             dom.close();
         }
         FormFieldType::Select => {
@@ -1607,6 +1630,7 @@ fn build_form_field<S: DomSink>(dom: &mut Dom<'_, S>, field: &crate::types::Form
             dom.attr("type", AttrVal::Markup(input_type));
             dom.attr("name", AttrVal::Markup(&field.name));
             dom.attr("placeholder", AttrVal::Markup(ph));
+            build_constraint_attrs(dom, field);
             if field.required {
                 dom.bool_attr("required");
             }
@@ -1614,6 +1638,123 @@ fn build_form_field<S: DomSink>(dom: &mut Dom<'_, S>, field: &crate::types::Form
         }
     }
     dom.close();
+}
+
+/// Twin of `render_html::constraint_attrs_html` (0.33.0).
+fn build_constraint_attrs<S: DomSink>(dom: &mut Dom<'_, S>, field: &crate::types::FormField) {
+    for (name, value) in render_html::form_constraint_attrs(field) {
+        dom.attr(name, AttrVal::Markup(&value));
+    }
+}
+
+/// Twin of `render_html::stepped_shell_html`: the CSS-only stepped shell
+/// shared by `::form[steps=true]` (0.32.0) and `::flow` (0.33.0). `inner`
+/// builds step `i`'s content between its legend and its footer.
+#[allow(clippy::too_many_arguments)]
+fn build_stepped_shell<S: DomSink, F>(
+    dom: &mut Dom<'_, S>,
+    target: Option<(String, String)>,
+    model: Option<&str>,
+    id: Option<&str>,
+    prefix: &str,
+    honeypot: bool,
+    steps: &[(Option<&str>, bool)],
+    btn_label: &str,
+    mut inner: F,
+) -> Result<(), RenderDomError>
+where
+    F: FnMut(&mut Dom<'_, S>, usize) -> Result<(), RenderDomError>,
+{
+    dom.open("form", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-form"));
+    if let Some((m, a)) = &target {
+        dom.attr("method", AttrVal::Markup(m));
+        dom.attr("action", AttrVal::Markup(a));
+    }
+    if let Some(m) = model {
+        dom.attr("data-model", AttrVal::Markup(m));
+    }
+    dom.attr("data-steps", AttrVal::Markup("true"));
+    if let Some(i) = id {
+        dom.attr("id", AttrVal::Markup(i));
+    }
+    let total = steps.len();
+    for n in 1..=total {
+        dom.open("input", CloseStyle::SelfClose);
+        dom.attr("type", AttrVal::Markup("radio"));
+        dom.attr("name", AttrVal::Markup("_step"));
+        dom.attr("value", AttrVal::Markup(&n.to_string()));
+        dom.attr("id", AttrVal::Markup(&format!("{prefix}-step-{n}")));
+        dom.attr("class", AttrVal::Markup("surfdoc-form-step-radio"));
+        if n == 1 {
+            dom.bool_attr("checked");
+        }
+        dom.close();
+    }
+    dom.open("div", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-form-progress"));
+    dom.attr("style", AttrVal::Markup(&format!("--surfdoc-steps:{total}")));
+    dom.attr("aria-hidden", AttrVal::Markup("true"));
+    dom.open("span", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-form-progress-bar"));
+    dom.close();
+    dom.close();
+    if honeypot {
+        build_static(dom, render_html::FORM_HONEYPOT_HTML)?;
+    }
+    for (i, (title, repeat)) in steps.iter().enumerate() {
+        let n = i + 1;
+        dom.open("fieldset", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-form-step"));
+        dom.attr("data-step", AttrVal::Markup(&n.to_string()));
+        if *repeat {
+            dom.attr("data-repeat", AttrVal::Markup("true"));
+        }
+        dom.open("legend", CloseStyle::Normal);
+        dom.text_markup(&render_html::form_step_legend(n, total, *title));
+        dom.close();
+        inner(dom, i)?;
+        dom.open("div", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-form-step-nav"));
+        if n > 1 {
+            dom.open("label", CloseStyle::Normal);
+            dom.attr("for", AttrVal::Markup(&format!("{prefix}-step-{}", n - 1)));
+            dom.attr("class", AttrVal::Markup("surfdoc-form-step-prev"));
+            dom.text_raw("Previous");
+            dom.close();
+        }
+        if n < total {
+            dom.open("label", CloseStyle::Normal);
+            dom.attr("for", AttrVal::Markup(&format!("{prefix}-step-{}", n + 1)));
+            dom.attr("class", AttrVal::Markup("surfdoc-form-step-next"));
+            dom.text_raw("Next");
+            dom.close();
+        } else {
+            build_submit_button(dom, btn_label);
+        }
+        dom.close();
+        dom.close();
+    }
+    if total == 0 {
+        build_submit_button(dom, btn_label);
+    }
+    dom.close();
+    Ok(())
+}
+
+fn build_submit_button<S: DomSink>(dom: &mut Dom<'_, S>, label: &str) {
+    dom.open("button", CloseStyle::Normal);
+    dom.attr("type", AttrVal::Markup("submit"));
+    dom.attr("class", AttrVal::Markup("surfdoc-form-submit"));
+    dom.text_markup(label);
+    dom.close();
+}
+
+/// `(name, value)` pairs as data attributes, in order (0.33.0 twins).
+fn build_data_attrs<S: DomSink>(dom: &mut Dom<'_, S>, attrs: &[(&'static str, &str)]) {
+    for (name, value) in attrs {
+        dom.attr(name, AttrVal::Markup(value));
+    }
 }
 
 fn block_kind(b: &Block) -> String {
@@ -1716,94 +1857,41 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         }
 
         // Twin of render_html::stepped_form_html (0.32.0).
-        Block::Form { fields, submit_label, action, method, honeypot, steps: true, id, .. }
+        Block::Form { fields, submit_label, action, method, honeypot, steps: true, id, model, .. }
             if !fields.is_empty() =>
         {
-            let btn_label = submit_label.as_deref().unwrap_or("Submit");
-            dom.open("form", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup("surfdoc-form"));
-            if let Some(a) = action {
-                let m = method.as_deref().unwrap_or("post");
-                dom.attr("method", AttrVal::Markup(m));
-                dom.attr("action", AttrVal::Markup(a));
-            }
-            dom.attr("data-steps", AttrVal::Markup("true"));
-            if let Some(i) = id {
-                dom.attr("id", AttrVal::Markup(i));
-            }
-            let prefix = render_html::form_step_prefix(id.as_deref());
             let runs = render_html::form_step_runs(fields);
-            let total = runs.len();
-            for n in 1..=total {
-                dom.open("input", CloseStyle::SelfClose);
-                dom.attr("type", AttrVal::Markup("radio"));
-                dom.attr("name", AttrVal::Markup("_step"));
-                dom.attr("value", AttrVal::Markup(&n.to_string()));
-                dom.attr("id", AttrVal::Markup(&format!("{prefix}-step-{n}")));
-                dom.attr("class", AttrVal::Markup("surfdoc-form-step-radio"));
-                if n == 1 {
-                    dom.bool_attr("checked");
-                }
-                dom.close();
-            }
-            dom.open("div", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup("surfdoc-form-progress"));
-            dom.attr("style", AttrVal::Markup(&format!("--surfdoc-steps:{total}")));
-            dom.attr("aria-hidden", AttrVal::Markup("true"));
-            dom.open("span", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup("surfdoc-form-progress-bar"));
-            dom.close();
-            dom.close();
-            if *honeypot {
-                build_static(dom, render_html::FORM_HONEYPOT_HTML)?;
-            }
-            for (i, (title, run)) in runs.iter().enumerate() {
-                let n = i + 1;
-                dom.open("fieldset", CloseStyle::Normal);
-                dom.attr("class", AttrVal::Markup("surfdoc-form-step"));
-                dom.attr("data-step", AttrVal::Markup(&n.to_string()));
-                dom.open("legend", CloseStyle::Normal);
-                dom.text_markup(&render_html::form_step_legend(n, total, *title));
-                dom.close();
-                for field in *run {
-                    build_form_field(dom, field);
-                }
-                dom.open("div", CloseStyle::Normal);
-                dom.attr("class", AttrVal::Markup("surfdoc-form-step-nav"));
-                if n > 1 {
-                    dom.open("label", CloseStyle::Normal);
-                    dom.attr("for", AttrVal::Markup(&format!("{prefix}-step-{}", n - 1)));
-                    dom.attr("class", AttrVal::Markup("surfdoc-form-step-prev"));
-                    dom.text_raw("Previous");
-                    dom.close();
-                }
-                if n < total {
-                    dom.open("label", CloseStyle::Normal);
-                    dom.attr("for", AttrVal::Markup(&format!("{prefix}-step-{}", n + 1)));
-                    dom.attr("class", AttrVal::Markup("surfdoc-form-step-next"));
-                    dom.text_raw("Next");
-                    dom.close();
-                } else {
-                    dom.open("button", CloseStyle::Normal);
-                    dom.attr("type", AttrVal::Markup("submit"));
-                    dom.attr("class", AttrVal::Markup("surfdoc-form-submit"));
-                    dom.text_markup(btn_label);
-                    dom.close();
-                }
-                dom.close();
-                dom.close();
-            }
-            dom.close();
+            let steps: Vec<(Option<&str>, bool)> = runs.iter().map(|(t, _)| (*t, false)).collect();
+            build_stepped_shell(
+                dom,
+                render_html::form_target(action.as_deref(), method.as_deref(), model.as_deref()),
+                model.as_deref(),
+                id.as_deref(),
+                render_html::form_step_prefix(id.as_deref()),
+                *honeypot,
+                &steps,
+                submit_label.as_deref().unwrap_or("Submit"),
+                |dom, i| {
+                    for field in runs[i].1 {
+                        build_form_field(dom, field);
+                    }
+                    Ok(())
+                },
+            )?;
         }
 
-        Block::Form { fields, submit_label, action, method, honeypot, .. } => {
+        Block::Form { fields, submit_label, action, method, honeypot, model, .. } => {
             let btn_label = submit_label.as_deref().unwrap_or("Submit");
             dom.open("form", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-form"));
-            if let Some(a) = action {
-                let m = method.as_deref().unwrap_or("post");
-                dom.attr("method", AttrVal::Markup(m));
-                dom.attr("action", AttrVal::Markup(a));
+            if let Some((m, a)) =
+                render_html::form_target(action.as_deref(), method.as_deref(), model.as_deref())
+            {
+                dom.attr("method", AttrVal::Markup(&m));
+                dom.attr("action", AttrVal::Markup(&a));
+            }
+            if let Some(m) = model {
+                dom.attr("data-model", AttrVal::Markup(m));
             }
             if *honeypot {
                 build_static(dom, render_html::FORM_HONEYPOT_HTML)?;
@@ -1994,6 +2082,153 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.attr("aria-label", AttrVal::Markup(&format!("Slide {n}")));
                 dom.close();
             }
+            dom.close();
+            dom.close();
+        }
+
+        // Twins of the 0.33.0 stateful app blocks (render_html: picker_html,
+        // the When / Compute / Schedule arms, flow_html).
+        Block::Picker { bind, tiers, layout, emoji, rows, .. } => {
+            dom.open("fieldset", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-picker"));
+            dom.attr("data-bind", AttrVal::Markup(bind));
+            dom.attr("data-tiers", AttrVal::Markup(&tiers.to_string()));
+            dom.attr("data-layout", AttrVal::Markup(layout));
+            dom.attr("data-emoji", AttrVal::Markup(if *emoji { "true" } else { "false" }));
+            for row in rows {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-picker-row"));
+                dom.attr("data-core", AttrVal::Markup(&row.core));
+                if let Some(info) = &row.info {
+                    dom.attr("data-info", AttrVal::Markup(info));
+                }
+                for (i, choice) in row.choices.iter().take(*tiers).enumerate() {
+                    dom.open("label", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-picker-choice"));
+                    dom.open("input", CloseStyle::SelfClose);
+                    dom.attr("type", AttrVal::Markup("radio"));
+                    dom.attr("name", AttrVal::Markup(bind));
+                    dom.attr("value", AttrVal::Markup(choice));
+                    dom.attr("data-tier", AttrVal::Markup(&(i + 1).to_string()));
+                    dom.close();
+                    dom.text_markup(choice);
+                    dom.close();
+                }
+                dom.close();
+            }
+            dom.close();
+        }
+
+        Block::When { bind, op, value, expr, children, .. } => {
+            dom.open("section", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-when"));
+            let attrs = render_html::when_attrs(bind.as_deref(), op.as_deref(), value.as_deref(), expr.as_deref());
+            build_data_attrs(dom, &attrs);
+            dom.bool_attr("hidden");
+            for child in children {
+                build_block(dom, child)?;
+            }
+            dom.close();
+        }
+
+        Block::Compute { name, expr, source, .. } => {
+            dom.open("output", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-compute"));
+            dom.attr("data-compute-name", AttrVal::Markup(name));
+            dom.attr("data-compute-expr", AttrVal::Markup(expr));
+            if let Some(src) = source {
+                dom.attr("data-source", AttrVal::Markup(src));
+            }
+            dom.close();
+        }
+
+        Block::Flow { model, id, submit_label, steps, .. } => {
+            let shape: Vec<(Option<&str>, bool)> =
+                steps.iter().map(|s| (s.title.as_deref(), s.repeat)).collect();
+            build_stepped_shell(
+                dom,
+                render_html::form_target(None, None, model.as_deref()),
+                model.as_deref(),
+                id.as_deref(),
+                id.as_deref().unwrap_or(render_html::FLOW_DEFAULT_PREFIX),
+                false,
+                &shape,
+                submit_label.as_deref().unwrap_or("Save"),
+                |dom, i| {
+                    for child in &steps[i].children {
+                        build_block(dom, child)?;
+                    }
+                    for field in &steps[i].fields {
+                        build_form_field(dom, field);
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+
+        Block::Schedule { bind, tz, title, body, link, .. } => {
+            dom.open("span", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-schedule"));
+            let attrs = render_html::schedule_attrs(bind, tz, title.as_deref(), body.as_deref(), link.as_deref());
+            build_data_attrs(dom, &attrs);
+            dom.bool_attr("hidden");
+            dom.close();
+        }
+
+        // Twin of render_html's Model arm (covered since 0.33.0 so a backends
+        // document renders constructively whole).
+        Block::Model { name, fields, .. } => {
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-infra-card surfdoc-model"));
+            dom.open("strong", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-infra-label"));
+            dom.text_markup(&format!("Model: {name}"));
+            dom.close();
+            dom.open("table", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-model-table"));
+            dom.open("thead", CloseStyle::Normal);
+            dom.open("tr", CloseStyle::Normal);
+            for h in ["Field", "Type", "Constraints"] {
+                dom.open("th", CloseStyle::Normal);
+                dom.text_raw(h);
+                dom.close();
+            }
+            dom.close();
+            dom.close();
+            dom.open("tbody", CloseStyle::Normal);
+            for f in fields {
+                dom.open("tr", CloseStyle::Normal);
+                dom.open("td", CloseStyle::Normal);
+                dom.open("code", CloseStyle::Normal);
+                dom.text_markup(&f.name);
+                dom.close();
+                dom.close();
+                dom.open("td", CloseStyle::Normal);
+                dom.open("code", CloseStyle::Normal);
+                dom.text_markup(&crate::render_md::model_field_type_md(&f.field_type));
+                dom.close();
+                if let Some(e) = &f.computed {
+                    dom.text_raw(" ");
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-model-computed"));
+                    dom.text_markup(&format!("= {e}"));
+                    dom.close();
+                }
+                dom.close();
+                dom.open("td", CloseStyle::Normal);
+                if !f.constraints.is_empty() {
+                    let spelled: Vec<String> =
+                        f.constraints.iter().map(crate::render_md::constraint_md).collect();
+                    dom.text_raw(" ");
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-model-constraints"));
+                    dom.text_markup(&format!("[{}]", spelled.join(", ")));
+                    dom.close();
+                }
+                dom.close();
+                dom.close();
+            }
+            dom.close();
             dom.close();
             dom.close();
         }
@@ -4367,7 +4602,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.close();
         }
 
-        Block::Route { method, path, auth, returns, body, handler, content, .. } => {
+        Block::Route { method, path, auth, returns, body, handler, content, filter, sort, .. } => {
             let method_str = render_html::http_method_str(*method);
             let method_class = format!("surfdoc-route-method surfdoc-method-{}", method_str.to_lowercase());
             dom.open("div", CloseStyle::Normal);
@@ -4408,7 +4643,12 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.attr("class", AttrVal::Markup("surfdoc-route-path"));
                 dom.text_markup(path);
                 dom.close();
-                let has_details = auth.is_some() || returns.is_some() || body.is_some() || !content.is_empty();
+                let has_details = auth.is_some()
+                    || returns.is_some()
+                    || body.is_some()
+                    || filter.is_some()
+                    || sort.is_some()
+                    || !content.is_empty();
                 if has_details {
                     dom.open("ul", CloseStyle::Normal);
                     if let Some(a) = auth {
@@ -4431,6 +4671,16 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                         dom.text_markup(b);
                         dom.close();
                         dom.close();
+                    }
+                    for (label, v) in [("filter: ", filter), ("sort: ", sort)] {
+                        if let Some(v) = v {
+                            dom.open("li", CloseStyle::Normal);
+                            dom.text_raw(label);
+                            dom.open("code", CloseStyle::Normal);
+                            dom.text_markup(v);
+                            dom.close();
+                            dom.close();
+                        }
                     }
                     if !content.is_empty() {
                         dom.open("li", CloseStyle::Normal);
@@ -5480,6 +5730,19 @@ fn find_script_emitter(blocks: &[Block]) -> Option<&'static str> {
                     return Some(kind);
                 }
             }
+            // 0.33.0: a ::when body and a ::flow step hold ordinary blocks.
+            Block::When { children, .. } => {
+                if let Some(kind) = find_script_emitter(children) {
+                    return Some(kind);
+                }
+            }
+            Block::Flow { steps, .. } => {
+                for step in steps {
+                    if let Some(kind) = find_script_emitter(&step.children) {
+                        return Some(kind);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -6317,9 +6580,22 @@ mod tests {
                 "{name} is allowlisted but no arm emits it"
             );
         }
+        // 0.33.0: `step`, `pattern` and `maxlength` joined for the
+        // model-bound form fields (a range slider's step, a checked input's
+        // pattern, a text answer's length cap). Before 0.33.0 `step` and
+        // `pattern` sat on the not-widened list below; they moved because an
+        // arm now emits them, and this proof fails if that arm goes.
+        let fields = render_str(
+            "::form[model=Entry]\n- level: range [min=1, max=10]\n- note: textarea [max=500]\n- reminder_time: string [pattern=\"^\\d\\d:\\d\\d$\"]\n::\n",
+        );
+        for name in ["step", "pattern", "maxlength"] {
+            assert!(attr_allowed(name), "{name} must be allowlisted");
+            assert!(fields.contains(&format!(" {name}=\"")), "{name} is allowlisted but no arm emits it: {fields}");
+        }
+
         // Neighbours that were NOT widened.
         for name in [
-            "onerror", "onclick", "srcdoc", "sandbox", "form", "list", "step", "pattern",
+            "onerror", "onclick", "srcdoc", "sandbox", "form", "list",
             "content", "http-equiv", "integrity", "nonce", "allow", "referrerpolicy",
         ] {
             assert!(!attr_allowed(name), "{name} must stay off the allowlist");

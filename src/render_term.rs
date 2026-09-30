@@ -707,6 +707,11 @@ fn render_block(block: &Block) -> String {
         | Block::Route { .. }
         | Block::Auth { .. }
         | Block::Binding { .. }
+        | Block::Picker { .. }
+        | Block::When { .. }
+        | Block::Compute { .. }
+        | Block::Flow { .. }
+        | Block::Schedule { .. }
         | Block::Schema { .. }
         | Block::Use { .. }
         | Block::AppEnv { .. }

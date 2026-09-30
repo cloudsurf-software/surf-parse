@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 21
-registry_updated = "2026-09-24"
+total_rules = 22
+registry_updated = "2026-09-29"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -182,6 +182,13 @@ severity = "warning"
 fixable = false
 message = "'::panel-slot[role=work kind={kind}]' has no '::tab-bar' — a Desk needs its strip, even empty | '::panel-slot[role=navigator]' names no kind= | '::preset[name={name}]' seats slot '{slot}' but no '::panel-slot' in this shell declares it"
 description = "0.27 panels layout (CloudSurf on the web): inside an ::app-shell a work slot must carry a ::tab-bar (its strip is user-populated at runtime, but the strip itself is authored), a navigator seat must say which kind fills it, and a ::preset may only seat (slots=) kinds the shell declares. Never a failed render — the shell draws as authored and the hole is reported here. Not fixable — only the author knows the missing kind"
+
+[rules.L046]
+layer = "style"
+severity = "warning"
+fixable = false
+message = "'::model[name={name}]' owner='{owner}' is not one of viewer, workspace, public | '::when' has no predicate — give it bind= (with op= and value=) or expr= | '::when' op='{op}' is not one of == != < <= > >= = in contains | '::flow' names no model= — it has no record to write | '::picker[bind={bind}]' layout='{layout}' is not one of wheel, grid, list | '::picker[bind={bind}]' row '{core}' has {n} choices but tiers={tiers} shows only the first {tiers}"
+description = "0.33.0 backends grammar: the words the platform runtime acts on must be ones it knows — a model's owner, a ::when predicate (bind=/op=/value= or expr=) and its operator, the record a ::flow writes, a picker's layout and how many tiered choices a row may offer. Never a failed render — the page draws as authored and the hole is reported here. Not fixable — only the author knows the intended owner, predicate or model"
 
 [rules.L042]
 layer = "style"

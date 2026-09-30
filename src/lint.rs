@@ -171,8 +171,8 @@ pub fn blocks_with_typed_label() -> &'static BTreeSet<String> {
 }
 
 /// Parser-accepted names that are deliberately NOT in `spec/blocks.toml`:
-/// sub-directives (`column`; `step` inside `::form`, `slide` inside
-/// `::carousel` — 0.32.0) and aliases/renderer families the parser resolves
+/// sub-directives (`column`; `step` inside `::form` and `::flow`, `slide`
+/// inside `::carousel` — 0.32.0 / 0.33.0) and aliases/renderer families the parser resolves
 /// (`action-items` → tasks, `deck`/`slide`, `deploy_urls`, `info-card`,
 /// `reference-def` → cite, `references` → bibliography,
 /// `speaker-notes`/`presenter-notes` → notes).
@@ -227,7 +227,108 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(DuplicateBlockId),
         Box::new(DataSourceWithoutCounts),
         Box::new(PanelsLayoutShape),
+        Box::new(BackendsShape),
     ]
+}
+
+// ------------------------------------------------------------------
+// L046 — the backends grammar's shape (0.33.0)
+// ------------------------------------------------------------------
+
+/// Tree-walking: the words the platform runtime acts on must be ones it
+/// knows. A `::model` owner outside `viewer` / `workspace` / `public`, a
+/// `::when` with no predicate (neither `bind=` nor `expr=`) or an operator
+/// it cannot apply, a `::flow` that names no `model=` (it has nowhere to
+/// write), a `::picker` layout outside `wheel` / `grid` / `list`, and a
+/// picker row with more choices than `tiers=` shows. Never a failed render:
+/// the page draws as authored and the hole is reported here.
+struct BackendsShape;
+
+/// The `op=` values a `::when` predicate may use.
+pub const WHEN_OPS: &[&str] = &["==", "!=", "<", "<=", ">", ">=", "=", "in", "contains"];
+
+impl BackendsShape {
+    fn walk(blocks: &[Block], out: &mut Vec<Diagnostic>) {
+        for b in blocks {
+            match b {
+                Block::Model { name, owner, span, .. }
+                    if !matches!(owner.as_str(), "viewer" | "workspace" | "public") =>
+                {
+                    out.push(diag(
+                        "L046",
+                        format!("'::model[name={name}]' owner='{owner}' is not one of viewer, workspace, public"),
+                        Some(*span),
+                    ));
+                }
+                Block::When { bind, op, expr, span, .. } => {
+                    if bind.is_none() && expr.is_none() {
+                        out.push(diag(
+                            "L046",
+                            "'::when' has no predicate — give it bind= (with op= and value=) or expr=".to_string(),
+                            Some(*span),
+                        ));
+                    }
+                    if let Some(op) = op
+                        && !WHEN_OPS.contains(&op.as_str())
+                    {
+                        out.push(diag(
+                            "L046",
+                            format!("'::when' op='{op}' is not one of {}", WHEN_OPS.join(" ")),
+                            Some(*span),
+                        ));
+                    }
+                }
+                Block::Flow { model: None, span, .. } => {
+                    out.push(diag(
+                        "L046",
+                        "'::flow' names no model= — it has no record to write".to_string(),
+                        Some(*span),
+                    ));
+                }
+                Block::Picker { bind, layout, tiers, rows, span, .. } => {
+                    if !matches!(layout.as_str(), "wheel" | "grid" | "list") {
+                        out.push(diag(
+                            "L046",
+                            format!("'::picker[bind={bind}]' layout='{layout}' is not one of wheel, grid, list"),
+                            Some(*span),
+                        ));
+                    }
+                    for row in rows.iter().filter(|r| r.choices.len() > *tiers) {
+                        out.push(diag(
+                            "L046",
+                            format!(
+                                "'::picker[bind={bind}]' row '{}' has {} choices but tiers={tiers} shows only the first {tiers}",
+                                row.core,
+                                row.choices.len()
+                            ),
+                            Some(*span),
+                        ));
+                    }
+                }
+                _ => {}
+            }
+            if let Some(children) = container_children(b) {
+                Self::walk(children, out);
+            }
+            if let Block::Flow { steps, .. } = b {
+                for step in steps {
+                    Self::walk(&step.children, out);
+                }
+            }
+        }
+    }
+}
+
+impl LintRule for BackendsShape {
+    fn id(&self) -> &'static str {
+        "L046"
+    }
+
+    fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        Self::walk(&doc.blocks, &mut out);
+        out
+    }
 }
 
 // ------------------------------------------------------------------
@@ -1773,7 +1874,8 @@ fn container_children(b: &Block) -> Option<&[Block]> {
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }
         | Block::Drawer { children, .. }
-        | Block::Modal { children, .. } => Some(children),
+        | Block::Modal { children, .. }
+        | Block::When { children, .. } => Some(children),
         _ => None,
     }
 }

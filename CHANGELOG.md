@@ -3,6 +3,66 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.33.0 — 2026-09-29 (the backends grammar — the stateful blocks a phone app needs; native schema v14; the FFI fails open; TASK-1176 under TASK-1174)
+
+surf-parse describes these blocks and never runs them: no expression is evaluated, no query run, nothing
+scheduled, no script emitted. The platform runtime reads the parsed blocks (or the `data-*` attributes the HTML
+carries) and does the work. The grammar and the exact HTML data contract are in `docs/backends-grammar-0.33.0.surf`.
+
+- **`::model`.** `owner=` (`viewer` default · `workspace` · `public`; `Block::Model` gains `owner: String`, serde
+  default `viewer`). New types `date` (`ModelFieldType::Date`), `range` (`Range`) and `list(Model)` (`List`);
+  `number` is `float`, `textarea` is `text`. New constraints `sentences=1..4` (`Sentences(min, max)`),
+  `prompt="…"` (`Prompt`), `labels="a|b"` (`Labels`), `levels="2|4|7|9"` (`Levels`), `pattern="…"` (`Pattern`,
+  verbatim). `pk` is `primary`, and bare constraint words may follow the type (`- id: uuid pk` — before 0.33.0 that
+  line read as a `string` with no constraints). A COMPUTED field: `- score: number = <expr>` — `ModelField` gains
+  `computed: Option<String>`, the expression text verbatim. The bracket list now splits on commas OUTSIDE double
+  quotes and a quoted value is verbatim (case kept, `\"` a quote); an unquoted `default=` is still read
+  lower-cased. The model table escapes its constraint cell (a prompt or pattern carries author text) and shows a
+  computed field's expression after its type.
+- **`::route`** keeps `filter=` and `sort=` (`Block::Route` gains both, `Option<String>`), shown as detail rows.
+- **`::picker[bind= tiers= layout= emoji=]`** — `- Core: a · b · c | info="…"` rows (`Block::Picker`,
+  `PickerRow { core, choices, info }`): a `fieldset.surfdoc-picker` of `div.surfdoc-picker-row[data-core]` rows,
+  one radio per graded choice named by `bind=`, `data-tier` 1..tiers.
+- **`::when[bind= op= value=]`** or **`::when[expr=]`** — a `section.surfdoc-when[hidden]` of ordinary blocks with
+  `data-when-*` attributes (`Block::When`).
+- **`::compute[name= expr= source=]`** — an empty `output.surfdoc-compute` (`Block::Compute`).
+- **`::flow[model=]`** — `:::step[title= repeat=true]` children holding blocks (a nested `::::picker`, prose) and
+  field lines (`Block::Flow`, `FlowStep`): the 0.32.0 stepped-form shell posting to `/_api/{model}`, radio prefix
+  `id=` else `flow`, a repeatable step marked `data-repeat="true"`, submit `Save` unless `submit=`.
+- **`::form[model=]`** — `Block::Form` gains `model: Option<String>`: the form posts one row to `/_api/{model}`
+  (an authored `action=` still wins) with `data-model`, and reads the model's own field lines
+  (`- intensity: range [min=1, max=10]`) beside the form grammar. `FormField` gains `constraints` and
+  `FormFieldType` gains `Range`: a range renders `<input type="range" min max step="1" data-labels data-levels>`
+  plus an empty `<output>`, a textarea gains `maxlength` / `data-sentences`, a number `min` / `max`, a text input
+  `maxlength` / `pattern`. A form without `model=` renders byte-for-byte as before.
+- **`::schedule[bind= tz= title= body= link=]`** — a hidden `span.surfdoc-schedule` with `data-schedule-*`
+  attributes (`Block::Schedule`, `tz` default `viewer`).
+- Every URL-ish value (`link=`, `source=`) with a script scheme (`javascript:` · `data:` · `vbscript:`, ignoring
+  embedded whitespace) becomes `#`; a model name reaches `/_api/` with name characters only; every attribute is
+  escaped.
+- **Native schema v14.** `NativeBlock::Picker` · `When` · `Compute` · `Flow` · `Schedule` (app-chrome tier) with the
+  records `NativePickerRow` and `NativeFlowStep`; `Model.owner`, `NativeModelField.computed`, `Route.filter` /
+  `sort`, `Form.model`, `NativeFormField.constraints`. `NativeBlock` is a 131-variant enum.
+- **The FFI fails open.** `parse_surfdoc`, `parse_to_native` and `parse_to_native_styled` return the document's
+  blocks whatever diagnostics it earns — before 0.33.0 any error-severity diagnostic (an unquoted colon in a
+  front-matter value, P002) refused the whole document on native while the web rendered it. New export
+  `surfdoc_diagnostics(source) -> String`: the parse, schema and lint diagnostics as JSON
+  `[{severity, code, message, line, column}]`, for a "rendered with N problems" banner. `SurfDocError` keeps its
+  variants; nothing was removed or renamed. The kit's view model and the bindings regen belong to the consuming
+  repo's repin.
+- Constructive DOM twins for all five blocks, the model table (so a backends document renders constructively
+  whole) and the route's new rows, byte-identical to `render_html`; the allowlist gains `step`, `pattern` and
+  `maxlength` (the pin that listed `step` / `pattern` as never-widened now proves an arm emits them). Markdown and
+  terminal degradations; the serializer writes every new block back to a fixed point (a model-bound form or flow
+  field in the model grammar when it reads back exactly). Registry 125 → 130 (`form` declares `model`, `model`
+  `owner`, `route` `filter` / `sort`); lint `L046` (an unknown owner, a `::when` without a predicate or with an
+  unknown `op=`, a `::flow` without `model=`, an unknown picker layout, a row wider than `tiers=`); validate
+  `V350`–`V355`; fixture `tests/fixtures/backends/moodmap-app.surf`, corpus tier `tier9-backends` (both
+  snapshots; `tier4-manifest` re-pinned for `- id: uuid pk`), `tests/backends_grammar.rs`.
+- Breaking for struct-literal construction of `Block::Model` / `Route` / `Form`, `FormField`, `ModelField`,
+  `NativeBlock::Model` / `Route` / `Form`, `NativeModelField`, `NativeFormField`, and for exhaustive matches on
+  `Block`, `NativeBlock`, `ModelFieldType`, `FieldConstraint`, `FormFieldType`.
+
 ## 0.32.0 — 2026-09-29 (::carousel and ::form steps=true — the Elevate lanes C and Q; TASK-1115 · TASK-1112 under TASK-1110)
 
 - **`::carousel`** (lane C). `Block::Carousel { slides, id, aspect, span }` with `CarouselSlide { title, body, image,

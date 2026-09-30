@@ -480,6 +480,7 @@ impl SurfDocBuilder {
             honeypot: false,
             steps: false,
             id: None,
+            model: None,
             span: Span::SYNTHETIC,
         });
         self
@@ -1560,6 +1561,7 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             honeypot,
             steps,
             id,
+            model,
             ..
         } => {
             let mut attr_parts = Vec::new();
@@ -1581,6 +1583,9 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             if let Some(i) = id {
                 attr_parts.push(format!("id=\"{}\"", escape_attr(i)));
             }
+            if let Some(m) = model {
+                attr_parts.push(format!("model=\"{}\"", escape_attr(m)));
+            }
             let attrs = if attr_parts.is_empty() {
                 String::new()
             } else {
@@ -1599,27 +1604,15 @@ fn serialize_block(block: &Block, depth: usize) -> String {
                     });
                     open_group = group;
                 }
-                let req = if field.required { " *" } else { "" };
-                let type_str = form_field_type_str(field.field_type);
-                match field.field_type {
-                    ft if field_type_takes_options(ft) && !field.options.is_empty() => {
-                        content_lines.push(format!(
-                            "- {} ({type_str}: {}){req}",
-                            field.label,
-                            field.options.join(" | ")
-                        ));
-                    }
-                    _ => {
-                        if let Some(ph) = &field.placeholder {
-                            content_lines.push(format!(
-                                "- {} ({type_str}, \"{ph}\"){req}",
-                                field.label
-                            ));
-                        } else {
-                            content_lines.push(format!("- {} ({type_str}){req}", field.label));
-                        }
-                    }
+                // A model-bound form writes its fields in the model's own
+                // spelling when that reads back to the same field (0.33.0).
+                if model.is_some()
+                    && let Some(line) = model_field_line(field)
+                {
+                    content_lines.push(line);
+                    continue;
                 }
+                content_lines.push(form_field_line(field));
             }
             let content = content_lines.join("\n");
             if content.is_empty() {
@@ -2801,15 +2794,27 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
         }
 
-        Block::Model { name, fields, .. } => {
-            let attrs_str = if name.is_empty() {
+        Block::Model { name, owner, fields, .. } => {
+            let mut attr_parts = Vec::new();
+            if !name.is_empty() {
+                attr_parts.push(format!("name=\"{}\"", escape_attr(name)));
+            }
+            // The default owner stays unwritten, so a 0.32 model serializes
+            // exactly as before.
+            if owner != "viewer" {
+                attr_parts.push(format!("owner=\"{}\"", escape_attr(owner)));
+            }
+            let attrs_str = if attr_parts.is_empty() {
                 String::new()
             } else {
-                format!("[name=\"{}\"]", escape_attr(name))
+                format!("[{}]", attr_parts.join(" "))
             };
             let mut content_lines = Vec::new();
             for f in fields {
-                let type_str = model_field_type_surf(&f.field_type);
+                let mut type_str = model_field_type_surf(&f.field_type);
+                if let Some(expr) = &f.computed {
+                    type_str = format!("{type_str} = {expr}");
+                }
                 let constraints: Vec<String> = f.constraints.iter().map(|c| constraint_surf(c)).collect();
                 if constraints.is_empty() {
                     content_lines.push(format!("- {}: {}", f.name, type_str));
@@ -2825,7 +2830,7 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
         }
 
-        Block::Route { method, path, auth, returns, body, handler, content, .. } => {
+        Block::Route { method, path, auth, returns, body, handler, content, filter, sort, .. } => {
             let method_str = match method {
                 HttpMethod::Get => "GET",
                 HttpMethod::Post => "POST",
@@ -2836,6 +2841,12 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             let mut attrs_parts = vec![format!("method={method_str}")];
             if !path.is_empty() {
                 attrs_parts.push(format!("path=\"{}\"", escape_attr(path)));
+            }
+            if let Some(f) = filter {
+                attrs_parts.push(format!("filter=\"{}\"", escape_attr(f)));
+            }
+            if let Some(o) = sort {
+                attrs_parts.push(format!("sort=\"{}\"", escape_attr(o)));
             }
             let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut content_lines = Vec::new();
@@ -2895,6 +2906,118 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             } else {
                 format!("{fence}binding{attrs_str}\n{content}\n{fence}")
             }
+        }
+
+        // 0.33.0 stateful app blocks. Defaults stay unwritten; every value
+        // is quoted so an expression or a negative number reads back verbatim.
+        Block::Picker { bind, tiers, layout, emoji, rows, .. } => {
+            let mut attr_parts = vec![format!("bind=\"{}\"", escape_attr(bind))];
+            attr_parts.push(format!("tiers={tiers}"));
+            if layout != "wheel" {
+                attr_parts.push(format!("layout=\"{}\"", escape_attr(layout)));
+            }
+            if !emoji {
+                attr_parts.push("emoji=false".to_string());
+            }
+            let lines: Vec<String> = rows
+                .iter()
+                .map(|r| {
+                    let info = r
+                        .info
+                        .as_deref()
+                        .map(|i| format!(" | info={}", crate::render_md::quote_constraint(i)))
+                        .unwrap_or_default();
+                    format!("- {}: {}{info}", r.core, r.choices.join(" \u{b7} "))
+                })
+                .collect();
+            let attrs = attr_parts.join(" ");
+            if lines.is_empty() {
+                format!("{fence}picker[{attrs}]\n{fence}")
+            } else {
+                format!("{fence}picker[{attrs}]\n{}\n{fence}", lines.join("\n"))
+            }
+        }
+
+        Block::When { bind, op, value, expr, children, .. } => {
+            let mut attr_parts = Vec::new();
+            for (k, v) in [("bind", bind), ("op", op), ("value", value), ("expr", expr)] {
+                if let Some(v) = v {
+                    attr_parts.push(format!("{k}=\"{}\"", escape_attr(v)));
+                }
+            }
+            let attrs = if attr_parts.is_empty() { String::new() } else { format!("[{}]", attr_parts.join(" ")) };
+            let inner = serialize_children(children, depth + 1);
+            if inner.is_empty() {
+                format!("{fence}when{attrs}\n{fence}")
+            } else {
+                format!("{fence}when{attrs}\n{inner}\n{fence}")
+            }
+        }
+
+        Block::Compute { name, expr, source, .. } => {
+            let mut attr_parts = vec![
+                format!("name=\"{}\"", escape_attr(name)),
+                format!("expr=\"{}\"", escape_attr(expr)),
+            ];
+            if let Some(s) = source {
+                attr_parts.push(format!("source=\"{}\"", escape_attr(s)));
+            }
+            format!("{fence}compute[{}]\n{fence}", attr_parts.join(" "))
+        }
+
+        Block::Flow { model, id, submit_label, steps, .. } => {
+            let mut attr_parts = Vec::new();
+            if let Some(m) = model {
+                attr_parts.push(format!("model=\"{}\"", escape_attr(m)));
+            }
+            if let Some(i) = id {
+                attr_parts.push(format!("id=\"{}\"", escape_attr(i)));
+            }
+            if let Some(s) = submit_label {
+                attr_parts.push(format!("submit=\"{}\"", escape_attr(s)));
+            }
+            let attrs = if attr_parts.is_empty() { String::new() } else { format!("[{}]", attr_parts.join(" ")) };
+            let mut lines = Vec::new();
+            for step in steps {
+                let mut step_attrs = Vec::new();
+                if let Some(t) = &step.title {
+                    step_attrs.push(format!("title=\"{}\"", escape_attr(t)));
+                }
+                if step.repeat {
+                    step_attrs.push("repeat=true".to_string());
+                }
+                if step_attrs.is_empty() {
+                    lines.push(format!("{fence_in}step"));
+                } else {
+                    lines.push(format!("{fence_in}step[{}]", step_attrs.join(" ")));
+                }
+                let inner = serialize_children(&step.children, depth + 2);
+                if !inner.is_empty() {
+                    lines.push(inner);
+                }
+                for field in &step.fields {
+                    lines.push(flow_field_line(field));
+                }
+                lines.push(fence_in.clone());
+            }
+            if lines.is_empty() {
+                format!("{fence}flow{attrs}\n{fence}")
+            } else {
+                format!("{fence}flow{attrs}\n{}\n{fence}", lines.join("\n"))
+            }
+        }
+
+        Block::Schedule { bind, tz, title, body, link, .. } => {
+            let mut attr_parts = vec![format!("bind=\"{}\"", escape_attr(bind))];
+            if tz != "viewer" {
+                attr_parts.push(format!("tz=\"{}\"", escape_attr(tz)));
+            }
+            for (k, v) in [("title", title), ("body", body), ("link", link)] {
+                if let Some(v) = v {
+                    attr_parts.push(format!("{k}=\"{}\"", escape_attr(v)));
+                }
+            }
+            format!("{fence}schedule[{}]\n{fence}", attr_parts.join(" "))
         }
 
         Block::Schema { name, fields, .. } => {
@@ -3846,7 +3969,82 @@ fn form_field_type_str(ft: FormFieldType) -> &'static str {
         FormFieldType::Toggle => "toggle",
         FormFieldType::File => "file",
         FormFieldType::Hidden => "hidden",
+        FormFieldType::Range => "range",
     }
+}
+
+/// One `::form` field in the form grammar: `- Label (type)`, with its
+/// options, placeholder and required star.
+fn form_field_line(field: &FormField) -> String {
+    let req = if field.required { " *" } else { "" };
+    let type_str = form_field_type_str(field.field_type);
+    match field.field_type {
+        ft if field_type_takes_options(ft) && !field.options.is_empty() => {
+            format!("- {} ({type_str}: {}){req}", field.label, field.options.join(" | "))
+        }
+        _ => match &field.placeholder {
+            Some(ph) => format!("- {} ({type_str}, \"{ph}\"){req}", field.label),
+            None => format!("- {} ({type_str}){req}", field.label),
+        },
+    }
+}
+
+/// A model-bound form field in the model grammar (0.33.0):
+/// `- intensity: range [required, min=1, max=10]`. `None` when that line
+/// would not read back to this exact field (a free-form label, a
+/// placeholder that is not its `prompt=`, a type the model grammar cannot
+/// name), so the caller falls back to [`form_field_line`].
+fn model_field_line(field: &FormField) -> Option<String> {
+    use crate::types::FieldConstraint;
+    if field.name.is_empty() || !field.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    if field.label != crate::blocks::humanize_field_name(&field.name) {
+        return None;
+    }
+    let prompt = field.constraints.iter().find_map(|c| match c {
+        FieldConstraint::Prompt(p) => Some(p.as_str()),
+        _ => None,
+    });
+    if field.placeholder.as_deref() != prompt {
+        return None;
+    }
+    let ty = match field.field_type {
+        FormFieldType::Text => "string".to_string(),
+        FormFieldType::Textarea => "textarea".to_string(),
+        FormFieldType::Number => "number".to_string(),
+        FormFieldType::Date => "date".to_string(),
+        FormFieldType::Range => "range".to_string(),
+        FormFieldType::Toggle => "bool".to_string(),
+        FormFieldType::Email => "email".to_string(),
+        FormFieldType::File => "image".to_string(),
+        FormFieldType::Select
+            if !field.options.is_empty()
+                && field
+                    .options
+                    .iter()
+                    .all(|o| !o.is_empty() && o.trim() == o && !o.contains([',', '(', ')'])) =>
+        {
+            format!("enum({})", field.options.join(", "))
+        }
+        _ => return None,
+    };
+    let mut constraints = Vec::new();
+    if field.required {
+        constraints.push("required".to_string());
+    }
+    constraints.extend(field.constraints.iter().map(constraint_surf));
+    Some(if constraints.is_empty() {
+        format!("- {}: {ty}", field.name)
+    } else {
+        format!("- {}: {ty} [{}]", field.name, constraints.join(", "))
+    })
+}
+
+/// A `::flow` step field: the model grammar when it reads back exactly,
+/// else the form grammar (a flow step reads both).
+fn flow_field_line(field: &FormField) -> String {
+    model_field_line(field).unwrap_or_else(|| form_field_line(field))
 }
 
 /// Field types whose choices are re-serialized inline as `(<type>: A | B)`.
@@ -3893,38 +4091,13 @@ fn serialize_nav_item(item: &crate::types::NavItem) -> String {
 }
 
 fn model_field_type_surf(ft: &crate::types::ModelFieldType) -> String {
-    use crate::types::ModelFieldType;
-    match ft {
-        ModelFieldType::Uuid => "uuid".to_string(),
-        ModelFieldType::String => "string".to_string(),
-        ModelFieldType::Int => "int".to_string(),
-        ModelFieldType::Float => "float".to_string(),
-        ModelFieldType::Bool => "bool".to_string(),
-        ModelFieldType::Datetime => "datetime".to_string(),
-        ModelFieldType::Text => "text".to_string(),
-        ModelFieldType::Json => "json".to_string(),
-        ModelFieldType::Money => "money".to_string(),
-        ModelFieldType::Image => "image".to_string(),
-        ModelFieldType::Email => "email".to_string(),
-        ModelFieldType::Url => "url".to_string(),
-        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
-        ModelFieldType::Ref(target) => format!("ref({target})"),
-    }
+    crate::render_md::model_field_type_md(ft)
 }
 
+/// The serializer writes a constraint exactly as every renderer spells it —
+/// quoted where the parser would otherwise change the value (0.33.0).
 fn constraint_surf(c: &crate::types::FieldConstraint) -> String {
-    use crate::types::FieldConstraint;
-    match c {
-        FieldConstraint::Primary => "primary".to_string(),
-        FieldConstraint::Auto => "auto".to_string(),
-        FieldConstraint::Required => "required".to_string(),
-        FieldConstraint::Optional => "optional".to_string(),
-        FieldConstraint::Unique => "unique".to_string(),
-        FieldConstraint::Index => "index".to_string(),
-        FieldConstraint::Max(n) => format!("max={n}"),
-        FieldConstraint::Min(n) => format!("min={n}"),
-        FieldConstraint::Default(v) => format!("default={v}"),
-    }
+    crate::render_md::constraint_md(c)
 }
 
 /// Serialize an `Attrs` map to a string suitable for inside `[...]`.

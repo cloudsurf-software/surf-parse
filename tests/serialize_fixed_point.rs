@@ -354,6 +354,36 @@ fn carousel_and_stepped_form_round_trip() {
     }
 }
 
+/// 0.33.0: the backends grammar — a model with owner / computed / quoted
+/// constraints, a route with filter / sort, a picker, a when (both predicate
+/// forms), a compute, a flow with a nested picker and a repeatable step, a
+/// model-bound form and a schedule. Fixed point on the FIRST pass, HTML
+/// included — nested one level deep as well.
+#[test]
+fn backends_grammar_round_trip() {
+    for src in [
+        "::model[name=Entry owner=workspace]\n- id: uuid pk\n- note: textarea [max=500, sentences=1..4, prompt=\"Why, \\\"today\\\"?\"]\n- level: range [min=1, max=10, labels=\"Low|High\", levels=\"2|4\"]\n- t: string [default=\"Todo\", pattern=\"^[a-z]+$\"]\n- score: number = round(sum(e.w) / count(e), 2) [index]\n- emotions: list(Emotion)\n::\n",
+        "::route[method=GET path=/_api/Entry returns=list(Entry) filter=date sort=date]\n::\n",
+        "::picker[bind=entry.core tiers=2 layout=grid emoji=false]\n- Joy: Serenity \u{b7} Joy \u{b7} Ecstasy | info=\"Content | \\\"old\\\" friend\"\n- Calm\n::\n",
+        "::when[bind=day.score op=\"<=\" value=-8]\nA hard day.\n\n:::callout[type=tip]\nReach out.\n:::\n::\n",
+        "::when[expr=\"day.score <= -8\"]\nBody\n::\n",
+        "::compute[name=daily_score expr=\"avg(entries.weighted)\" source=/_api/Entry]\n::\n",
+        "::flow[model=Entry id=checkin submit=\"Done\"]\n:::step[title=\"Pick\"]\nWhich one?\n\n::::picker[bind=entry.core tiers=3]\n- Joy: A \u{b7} B \u{b7} C\n::::\n:::\n:::step[repeat=true]\n- note: textarea [prompt=\"Why?\"]\n- Full name (text) *\n- E-mail (email, \"you@x\")\n:::\n::\n",
+        "::form[model=Entry submit=\"Save\"]\n- level: range [required, min=1, max=10]\n- Full name (text) *\n- core: enum(Joy, Trust)\n- happy: boolean\n::\n",
+        "::schedule[bind=preference.reminder_time tz=Europe/Paris title=\"MoodMap\" body=\"How are you?\" link=/log]\n::\n",
+        "::section\n## Check-in\n:::when[bind=a.b]\n::::compute[name=x expr=\"sum(y)\"]\n::::\n:::\n::\n",
+    ] {
+        let first = surf_parse::builder::to_surf_source(&surf_parse::parse(src).doc);
+        let second = surf_parse::builder::to_surf_source(&surf_parse::parse(&first).doc);
+        assert_eq!(first, second, "not a fixed point for:\n{src}first pass:\n{first}");
+        let html0 = surf_parse::render_html::to_html(&surf_parse::parse(src).doc);
+        let html1 = surf_parse::render_html::to_html(&surf_parse::parse(&first).doc);
+        let html2 = surf_parse::render_html::to_html(&surf_parse::parse(&second).doc);
+        assert_eq!(html0, html1, "the serializer changed the render:\n{src}first pass:\n{first}");
+        assert_eq!(html1, html2, "render drifted across the round trip:\n{src}");
+    }
+}
+
 /// 0.25.0: the fourteen blocks that were planned until sessions 11 + 12.
 /// Each source is the corpus's own authored shape; the serializer writes the
 /// canonical spelling (`related` normalises a sentence relation onto the

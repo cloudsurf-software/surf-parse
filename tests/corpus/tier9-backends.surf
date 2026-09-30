@@ -1,0 +1,45 @@
+---
+title: "Corpus — Tier 9: the backends grammar"
+type: document
+---
+
+# The backends grammar
+
+The stateful blocks a phone app needs (0.33.0): a record with an owner and a
+computed field, a list route, a tiered picker, a stepped flow, a model-bound
+form, a derived value, a conditional section and a reminder.
+
+::model[name=Entry owner=viewer]
+- id: uuid pk
+- core: enum(Joy,Trust) [required]
+- level: range [min=1, max=10, labels="Barely felt it|All-consuming"]
+- score: number = round(avg(level), 1)
+::
+
+::route[method=GET path=/_api/Entry returns=list(Entry) filter=date sort=date]
+::
+
+::flow[model=Entry]
+:::step[title="Pick an emotion"]
+::::picker[bind=entry.core tiers=2 emoji=false]
+- Joy: Serenity · Joy | info="Content | Seeing a friend"
+::::
+:::
+:::step[title="Why?" repeat=true]
+- note: textarea [max=500, sentences=1..4, prompt="What caused it?"]
+:::
+::
+
+::form[model=Entry]
+- level: range [min=1, max=10, levels="2|4|7|9"]
+::
+
+::compute[name=daily_score expr="avg(entries.level)" source=/_api/Entry]
+::
+
+::when[bind=day.score op="<=" value=-8]
+Reach out to someone you trust.
+::
+
+::schedule[bind=preference.reminder_time title="MoodMap" body="How are you feeling today?" link=/log]
+::

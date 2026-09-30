@@ -1959,6 +1959,87 @@ pub(crate) const GALLERY_FILTER_JS: &str = r#"<script>document.querySelectorAll(
 /// `::gallery` lightbox client script.
 pub(crate) const GALLERY_LIGHTBOX_JS: &str = r#"<script>document.querySelectorAll('.surfdoc-gallery').forEach(function(g){var lb=g.querySelector('.surfdoc-lightbox');if(!lb)return;var si=lb.querySelector('.sl-img'),sc=lb.querySelector('.sl-caption'),sn=lb.querySelector('.sl-counter'),items,idx;function vis(){return Array.prototype.filter.call(g.querySelectorAll('.surfdoc-gallery-item'),function(i){return i.style.display!=='none'})}function show(i){items=vis();idx=i;var f=items[idx],im=f.querySelector('img'),fc=f.querySelector('figcaption');si.src=im.src;si.alt=im.alt||'';sc.textContent=fc?fc.textContent:'';sn.textContent=(idx+1)+' / '+items.length;lb.hidden=false;document.body.style.overflow='hidden'}function hide(){lb.hidden=true;document.body.style.overflow=''}function nav(d){show((idx+d+items.length)%items.length)}g.querySelectorAll('.surfdoc-gallery-item').forEach(function(f){f.onclick=function(){var v=vis();show(v.indexOf(f))};f.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();f.onclick()}}});lb.querySelector('.sl-close').onclick=hide;lb.querySelector('.sl-prev').onclick=function(){nav(-1)};lb.querySelector('.sl-next').onclick=function(){nav(1)};lb.onclick=function(e){if(e.target===lb)hide()};document.addEventListener('keydown',function(e){if(lb.hidden)return;if(e.key==='Escape')hide();if(e.key==='ArrowLeft')nav(-1);if(e.key==='ArrowRight')nav(1)});var tx;lb.addEventListener('touchstart',function(e){tx=e.touches[0].clientX});lb.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)nav(dx>0?-1:1)})})</script>"#;
 
+/// The `min` / `max` of a range field (0.33.0): its `min=` / `max=`
+/// constraints, else the browser's own 0 and 100 written out.
+pub(crate) fn form_range_bounds(field: &FormField) -> (u32, u32) {
+    use crate::types::FieldConstraint;
+    let min = field.constraints.iter().find_map(|c| match c {
+        FieldConstraint::Min(n) => Some(*n),
+        _ => None,
+    });
+    let max = field.constraints.iter().find_map(|c| match c {
+        FieldConstraint::Max(n) => Some(*n),
+        _ => None,
+    });
+    (min.unwrap_or(0), max.unwrap_or(100))
+}
+
+/// The extra input attributes a model field line's constraints add (0.33.0),
+/// in emission order, values unescaped. Empty for every field without
+/// constraints, so a 0.32 form's markup is byte-unchanged. Shared with
+/// `render_dom`, which must emit the same attributes in the same order.
+pub(crate) fn form_constraint_attrs(field: &FormField) -> Vec<(&'static str, String)> {
+    use crate::types::FieldConstraint;
+    let mut out = Vec::new();
+    for c in &field.constraints {
+        match (field.field_type, c) {
+            (FormFieldType::Range, FieldConstraint::Labels(l)) => out.push(("data-labels", l.join("|"))),
+            (FormFieldType::Range, FieldConstraint::Levels(l)) => out.push(("data-levels", l.join("|"))),
+            (FormFieldType::Number, FieldConstraint::Min(n)) => out.push(("min", n.to_string())),
+            (FormFieldType::Number, FieldConstraint::Max(n)) => out.push(("max", n.to_string())),
+            (
+                FormFieldType::Textarea
+                | FormFieldType::Text
+                | FormFieldType::Email
+                | FormFieldType::Tel
+                | FormFieldType::Password,
+                FieldConstraint::Max(n),
+            ) => out.push(("maxlength", n.to_string())),
+            (FormFieldType::Textarea, FieldConstraint::Sentences(lo, hi)) => {
+                out.push(("data-sentences", format!("{lo}..{hi}")))
+            }
+            (
+                FormFieldType::Text | FormFieldType::Email | FormFieldType::Tel | FormFieldType::Password,
+                FieldConstraint::Pattern(p),
+            ) => out.push(("pattern", p.clone())),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn constraint_attrs_html(field: &FormField) -> String {
+    form_constraint_attrs(field)
+        .into_iter()
+        .map(|(k, v)| format!(" {k}=\"{}\"", escape_html(&v)))
+        .collect()
+}
+
+/// The `/_api/{model}` route a model-bound form or flow posts to (0.33.0).
+/// Only name characters survive, so a model name can never smuggle a
+/// scheme, a query or another path into the action.
+pub(crate) fn model_api_path(model: &str) -> String {
+    let clean: String = model
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    format!("/_api/{clean}")
+}
+
+/// A form's submission target as (method, action): the authored `action=`
+/// wins; a model-bound form without one posts to its model's route.
+pub(crate) fn form_target(
+    action: Option<&str>,
+    method: Option<&str>,
+    model: Option<&str>,
+) -> Option<(String, String)> {
+    match (action, model) {
+        (Some(a), _) => Some((method.unwrap_or("post").to_string(), a.to_string())),
+        (None, Some(m)) => Some(("post".to_string(), model_api_path(m))),
+        (None, None) => None,
+    }
+}
+
 /// `::form` honeypot input.
 /// Render a field list, wrapping each run of fields that share a `group`
 /// value in a `<fieldset>` with that `<legend>`. Ungrouped fields render
@@ -2011,9 +2092,21 @@ pub(crate) fn render_form_field_html(html: &mut String, field: &FormField) {
         FormFieldType::Textarea => {
             let ph = field.placeholder.as_deref().unwrap_or("");
             html.push_str(&format!(
-                "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}></textarea>",
+                "<textarea name=\"{}\" placeholder=\"{}\" rows=\"4\"{}{}></textarea>",
                 escape_html(&field.name),
                 escape_html(ph),
+                constraint_attrs_html(field),
+                req,
+            ));
+        }
+        // 0.33.0: a bounded slider; the `<output>` after it is where the
+        // platform runtime shows the chosen value (surf-parse emits no script).
+        FormFieldType::Range => {
+            let (min, max) = form_range_bounds(field);
+            html.push_str(&format!(
+                "<input type=\"range\" name=\"{}\" min=\"{min}\" max=\"{max}\" step=\"1\"{}{}/><output class=\"surfdoc-form-range-value\"></output>",
+                escape_html(&field.name),
+                constraint_attrs_html(field),
                 req,
             ));
         }
@@ -2078,10 +2171,11 @@ pub(crate) fn render_form_field_html(html: &mut String, field: &FormField) {
             };
             let ph = field.placeholder.as_deref().unwrap_or("");
             html.push_str(&format!(
-                "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}/>",
+                "<input type=\"{}\" name=\"{}\" placeholder=\"{}\"{}{}/>",
                 input_type,
                 escape_html(&field.name),
                 escape_html(ph),
+                constraint_attrs_html(field),
                 req,
             ));
         }
@@ -3283,23 +3377,57 @@ fn stepped_form_html(
     method: Option<&str>,
     honeypot: bool,
     id: Option<&str>,
+    model: Option<&str>,
 ) -> String {
-    let btn_label = submit_label.unwrap_or("Submit");
-    let target_attrs = match action {
-        Some(a) => format!(
-            " method=\"{}\" action=\"{}\"",
-            escape_html(method.unwrap_or("post")),
-            escape_html(a)
-        ),
+    let runs = form_step_runs(fields);
+    let steps: Vec<(Option<&str>, bool, String)> = runs
+        .iter()
+        .map(|(title, run)| {
+            let mut inner = String::new();
+            for field in *run {
+                render_form_field_html(&mut inner, field);
+            }
+            (*title, false, inner)
+        })
+        .collect();
+    stepped_shell_html(
+        form_target(action, method, model),
+        model,
+        id,
+        form_step_prefix(id),
+        honeypot,
+        &steps,
+        submit_label.unwrap_or("Submit"),
+    )
+}
+
+/// The CSS-only stepped shell shared by `::form[steps=true]` (0.32.0) and
+/// `::flow` (0.33.0): the `_step` radios, the progress line, one fieldset
+/// per step with its legend and Previous / Next footer, the submit in the
+/// last step. Each step is (title, repeat, inner markup). `render_dom`
+/// builds the byte-identical twin.
+fn stepped_shell_html(
+    target: Option<(String, String)>,
+    model: Option<&str>,
+    id: Option<&str>,
+    prefix: &str,
+    honeypot: bool,
+    steps: &[(Option<&str>, bool, String)],
+    btn_label: &str,
+) -> String {
+    let target_attrs = match target {
+        Some((m, a)) => format!(" method=\"{}\" action=\"{}\"", escape_html(&m), escape_html(&a)),
         None => String::new(),
     };
+    let model_attr = model
+        .map(|m| format!(" data-model=\"{}\"", escape_html(m)))
+        .unwrap_or_default();
     let id_attr = id
         .map(|i| format!(" id=\"{}\"", escape_html(i)))
         .unwrap_or_default();
-    let prefix = escape_html(form_step_prefix(id));
-    let runs = form_step_runs(fields);
-    let total = runs.len();
-    let mut html = format!("<form class=\"surfdoc-form\"{target_attrs} data-steps=\"true\"{id_attr}>");
+    let prefix = escape_html(prefix);
+    let total = steps.len();
+    let mut html = format!("<form class=\"surfdoc-form\"{target_attrs}{model_attr} data-steps=\"true\"{id_attr}>");
     for n in 1..=total {
         let checked = if n == 1 { " checked" } else { "" };
         html.push_str(&format!(
@@ -3312,15 +3440,14 @@ fn stepped_form_html(
     if honeypot {
         html.push_str(FORM_HONEYPOT_HTML);
     }
-    for (i, (title, run)) in runs.iter().enumerate() {
+    for (i, (title, repeat, inner)) in steps.iter().enumerate() {
         let n = i + 1;
+        let repeat_attr = if *repeat { " data-repeat=\"true\"" } else { "" };
         html.push_str(&format!(
-            "<fieldset class=\"surfdoc-form-step\" data-step=\"{n}\"><legend>{}</legend>",
+            "<fieldset class=\"surfdoc-form-step\" data-step=\"{n}\"{repeat_attr}><legend>{}</legend>",
             escape_html(&form_step_legend(n, total, *title)),
         ));
-        for field in *run {
-            render_form_field_html(&mut html, field);
-        }
+        html.push_str(inner);
         html.push_str("<div class=\"surfdoc-form-step-nav\">");
         if n > 1 {
             html.push_str(&format!(
@@ -3341,8 +3468,126 @@ fn stepped_form_html(
         }
         html.push_str("</div></fieldset>");
     }
+    // A flow with no steps still offers its submit.
+    if total == 0 {
+        html.push_str(&format!(
+            "<button type=\"submit\" class=\"surfdoc-form-submit\">{}</button>",
+            escape_html(btn_label),
+        ));
+    }
     html.push_str("</form>");
     html
+}
+
+/// The radio id prefix of a `::flow` without `id=`.
+pub(crate) const FLOW_DEFAULT_PREFIX: &str = "flow";
+
+/// Render a `::flow` (0.33.0): the stepped shell, each step's nested blocks
+/// then its field lines, posting to the model's route.
+fn flow_html(
+    model: Option<&str>,
+    id: Option<&str>,
+    submit_label: Option<&str>,
+    steps: &[crate::types::FlowStep],
+) -> String {
+    let rendered: Vec<(Option<&str>, bool, String)> = steps
+        .iter()
+        .map(|step| {
+            let mut inner = String::new();
+            for child in &step.children {
+                inner.push_str(&render_block(child));
+            }
+            for field in &step.fields {
+                render_form_field_html(&mut inner, field);
+            }
+            (step.title.as_deref(), step.repeat, inner)
+        })
+        .collect();
+    stepped_shell_html(
+        form_target(None, None, model),
+        model,
+        id,
+        id.unwrap_or(FLOW_DEFAULT_PREFIX),
+        false,
+        &rendered,
+        submit_label.unwrap_or("Save"),
+    )
+}
+
+/// Render a `::picker` (0.33.0): a fieldset of option rows, each row one
+/// radio per graded choice (up to `tiers`), all named by the bound field.
+/// The platform runtime lays the rows out (wheel, grid, list) and writes
+/// the chosen value; the markup works as a plain radio group without it.
+fn picker_html(bind: &str, tiers: usize, layout: &str, emoji: bool, rows: &[crate::types::PickerRow]) -> String {
+    let bind_esc = escape_html(bind);
+    let mut html = format!(
+        "<fieldset class=\"surfdoc-picker\" data-bind=\"{bind_esc}\" data-tiers=\"{tiers}\" data-layout=\"{}\" data-emoji=\"{emoji}\">",
+        escape_html(layout),
+    );
+    for row in rows {
+        html.push_str(&format!("<div class=\"surfdoc-picker-row\" data-core=\"{}\"", escape_html(&row.core)));
+        if let Some(info) = &row.info {
+            html.push_str(&format!(" data-info=\"{}\"", escape_html(info)));
+        }
+        html.push('>');
+        for (i, choice) in row.choices.iter().take(tiers).enumerate() {
+            let choice_esc = escape_html(choice);
+            html.push_str(&format!(
+                "<label class=\"surfdoc-picker-choice\"><input type=\"radio\" name=\"{bind_esc}\" value=\"{choice_esc}\" data-tier=\"{}\"/>{choice_esc}</label>",
+                i + 1
+            ));
+        }
+        html.push_str("</div>");
+    }
+    html.push_str("</fieldset>");
+    html
+}
+
+/// The `data-when-*` attributes of a `::when` (0.33.0), in emission order,
+/// values unescaped. Shared with `render_dom`.
+pub(crate) fn when_attrs<'a>(
+    bind: Option<&'a str>,
+    op: Option<&'a str>,
+    value: Option<&'a str>,
+    expr: Option<&'a str>,
+) -> Vec<(&'static str, &'a str)> {
+    [
+        ("data-when-bind", bind),
+        ("data-when-op", op),
+        ("data-when-value", value),
+        ("data-when-expr", expr),
+    ]
+    .into_iter()
+    .filter_map(|(k, v)| v.map(|v| (k, v)))
+    .collect()
+}
+
+/// The `data-schedule-*` attributes of a `::schedule` (0.33.0), in
+/// emission order, values unescaped. Shared with `render_dom`.
+pub(crate) fn schedule_attrs<'a>(
+    bind: &'a str,
+    tz: &'a str,
+    title: Option<&'a str>,
+    body: Option<&'a str>,
+    link: Option<&'a str>,
+) -> Vec<(&'static str, &'a str)> {
+    [
+        ("data-schedule-bind", Some(bind)),
+        ("data-schedule-tz", Some(tz)),
+        ("data-schedule-title", title),
+        ("data-schedule-body", body),
+        ("data-schedule-link", link),
+    ]
+    .into_iter()
+    .filter_map(|(k, v)| v.map(|v| (k, v)))
+    .collect()
+}
+
+fn data_attrs_html(attrs: &[(&'static str, &str)]) -> String {
+    attrs
+        .iter()
+        .map(|(k, v)| format!(" {k}=\"{}\"", escape_html(v)))
+        .collect()
 }
 
 // ------------------------------------------------------------------
@@ -4236,7 +4481,7 @@ fn render_block_inner(block: &Block) -> String {
         }
 
         Block::Form {
-            fields, submit_label, action, method, honeypot, steps: true, id, ..
+            fields, submit_label, action, method, honeypot, steps: true, id, model, ..
         } if !fields.is_empty() => stepped_form_html(
             fields,
             submit_label.as_deref(),
@@ -4244,21 +4489,24 @@ fn render_block_inner(block: &Block) -> String {
             method.as_deref(),
             *honeypot,
             id.as_deref(),
+            model.as_deref(),
         ),
 
         Block::Form {
-            fields, submit_label, action, method, honeypot, ..
+            fields, submit_label, action, method, honeypot, model, ..
         } => {
             let btn_label = submit_label.as_deref().unwrap_or("Submit");
-            // A real submission target makes the form POST to a server route.
-            let target_attrs = match action {
-                Some(a) => {
-                    let m = method.as_deref().unwrap_or("post");
-                    format!(" method=\"{}\" action=\"{}\"", escape_html(m), escape_html(a))
-                }
+            // A real submission target makes the form POST to a server route;
+            // a model-bound form (0.33.0) posts one row to its model's route.
+            let target_attrs = match form_target(action.as_deref(), method.as_deref(), model.as_deref()) {
+                Some((m, a)) => format!(" method=\"{}\" action=\"{}\"", escape_html(&m), escape_html(&a)),
                 None => String::new(),
             };
-            let mut html = format!("<form class=\"surfdoc-form\"{target_attrs}>");
+            let model_attr = model
+                .as_deref()
+                .map(|m| format!(" data-model=\"{}\"", escape_html(m)))
+                .unwrap_or_default();
+            let mut html = format!("<form class=\"surfdoc-form\"{target_attrs}{model_attr}>");
             if *honeypot {
                 html.push_str(FORM_HONEYPOT_HTML);
             }
@@ -4335,6 +4583,39 @@ fn render_block_inner(block: &Block) -> String {
 
         Block::Carousel { slides, id, aspect, .. } => {
             carousel_html(slides, id.as_deref(), aspect.as_deref())
+        }
+
+        // 0.33.0 stateful app blocks — inert markup the platform runtime
+        // reads through its data-* attributes. No script is ever emitted.
+        Block::Picker { bind, tiers, layout, emoji, rows, .. } => {
+            picker_html(bind, *tiers, layout, *emoji, rows)
+        }
+
+        Block::When { bind, op, value, expr, children, .. } => {
+            let attrs = when_attrs(bind.as_deref(), op.as_deref(), value.as_deref(), expr.as_deref());
+            let mut html = format!("<section class=\"surfdoc-when\"{} hidden>", data_attrs_html(&attrs));
+            for child in children {
+                html.push_str(&render_block(child));
+            }
+            html.push_str("</section>");
+            html
+        }
+
+        Block::Compute { name, expr, source, .. } => {
+            let mut attrs = vec![("data-compute-name", name.as_str()), ("data-compute-expr", expr.as_str())];
+            if let Some(src) = source {
+                attrs.push(("data-source", src.as_str()));
+            }
+            format!("<output class=\"surfdoc-compute\"{}></output>", data_attrs_html(&attrs))
+        }
+
+        Block::Flow { model, id, submit_label, steps, .. } => {
+            flow_html(model.as_deref(), id.as_deref(), submit_label.as_deref(), steps)
+        }
+
+        Block::Schedule { bind, tz, title, body, link, .. } => {
+            let attrs = schedule_attrs(bind, tz, title.as_deref(), body.as_deref(), link.as_deref());
+            format!("<span class=\"surfdoc-schedule\"{} hidden></span>", data_attrs_html(&attrs))
         }
 
         Block::ProductGrid { groups, tiles: true, .. } => {
@@ -5957,14 +6238,21 @@ fn render_block_inner(block: &Block) -> String {
             for f in fields {
                 let type_str = model_field_type_str(&f.field_type);
                 let constraints_str: Vec<String> = f.constraints.iter().map(|c| constraint_str(c)).collect();
+                // Escaped: a 0.33.0 prompt= / pattern= carries author text.
                 let constraints_html = if constraints_str.is_empty() {
                     String::new()
                 } else {
-                    format!(" <span class=\"surfdoc-model-constraints\">[{}]</span>", constraints_str.join(", "))
+                    format!(" <span class=\"surfdoc-model-constraints\">[{}]</span>", escape_html(&constraints_str.join(", ")))
                 };
+                // A computed field (0.33.0) shows its expression after the type.
+                let computed_html = f
+                    .computed
+                    .as_deref()
+                    .map(|e| format!(" <span class=\"surfdoc-model-computed\">= {}</span>", escape_html(e)))
+                    .unwrap_or_default();
                 rows.push_str(&format!(
-                    "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>",
-                    escape_html(&f.name), escape_html(&type_str), constraints_html,
+                    "<tr><td><code>{}</code></td><td><code>{}</code>{}</td><td>{}</td></tr>",
+                    escape_html(&f.name), escape_html(&type_str), computed_html, constraints_html,
                 ));
             }
             format!(
@@ -5975,7 +6263,7 @@ fn render_block_inner(block: &Block) -> String {
             )
         }
 
-        Block::Route { method, path, auth, returns, body, handler, content, .. } => {
+        Block::Route { method, path, auth, returns, body, handler, content, filter, sort, .. } => {
             let method_str = http_method_str(*method);
             if let Some(code) = handler {
                 // Route with embedded handler — render as documentation block.
@@ -5995,6 +6283,8 @@ fn render_block_inner(block: &Block) -> String {
                 if let Some(a) = auth { details.push(format!("<li>auth: {}</li>", escape_html(a))); }
                 if let Some(r) = returns { details.push(format!("<li>returns: <code>{}</code></li>", escape_html(r))); }
                 if let Some(b) = body { details.push(format!("<li>body: <code>{}</code></li>", escape_html(b))); }
+                if let Some(f) = filter { details.push(format!("<li>filter: <code>{}</code></li>", escape_html(f))); }
+                if let Some(o) = sort { details.push(format!("<li>sort: <code>{}</code></li>", escape_html(o))); }
                 if !content.is_empty() { details.push(format!("<li>{}</li>", escape_html(content))); }
                 let details_html = if details.is_empty() { String::new() } else { format!("<ul>{}</ul>", details.join("")) };
                 format!(
@@ -7315,38 +7605,13 @@ fn comparison_cell(cell: &str) -> String {
 }
 
 fn model_field_type_str(ft: &crate::types::ModelFieldType) -> String {
-    use crate::types::ModelFieldType;
-    match ft {
-        ModelFieldType::Uuid => "uuid".to_string(),
-        ModelFieldType::String => "string".to_string(),
-        ModelFieldType::Int => "int".to_string(),
-        ModelFieldType::Float => "float".to_string(),
-        ModelFieldType::Bool => "bool".to_string(),
-        ModelFieldType::Datetime => "datetime".to_string(),
-        ModelFieldType::Text => "text".to_string(),
-        ModelFieldType::Json => "json".to_string(),
-        ModelFieldType::Money => "money".to_string(),
-        ModelFieldType::Image => "image".to_string(),
-        ModelFieldType::Email => "email".to_string(),
-        ModelFieldType::Url => "url".to_string(),
-        ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),
-        ModelFieldType::Ref(target) => format!("ref({target})"),
-    }
+    crate::render_md::model_field_type_md(ft)
 }
 
+/// One spelling for a constraint everywhere (markdown, HTML, native, the
+/// serializer), so a quoted 0.33.0 value reads the same in each.
 fn constraint_str(c: &crate::types::FieldConstraint) -> String {
-    use crate::types::FieldConstraint;
-    match c {
-        FieldConstraint::Primary => "primary".to_string(),
-        FieldConstraint::Auto => "auto".to_string(),
-        FieldConstraint::Required => "required".to_string(),
-        FieldConstraint::Optional => "optional".to_string(),
-        FieldConstraint::Unique => "unique".to_string(),
-        FieldConstraint::Index => "index".to_string(),
-        FieldConstraint::Max(n) => format!("max={n}"),
-        FieldConstraint::Min(n) => format!("min={n}"),
-        FieldConstraint::Default(v) => format!("default={v}"),
-    }
+    crate::render_md::constraint_md(c)
 }
 
 pub(crate) fn http_method_str(m: crate::types::HttpMethod) -> &'static str {
@@ -9385,6 +9650,7 @@ mod tests {
             honeypot: true,
             steps: false,
             id: None,
+            model: None,
             span: span(),
         }]);
         let html = to_html(&doc);
@@ -9404,6 +9670,7 @@ mod tests {
             honeypot: false,
             steps: false,
             id: None,
+            model: None,
             span: span(),
         }]);
         let html = to_html(&doc);

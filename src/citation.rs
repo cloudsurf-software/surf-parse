@@ -753,7 +753,8 @@ fn children_of(b: &Block) -> Option<&[Block]> {
         | Block::Panel { children, .. }
         | Block::TabContent { children, .. }
         | Block::Drawer { children, .. }
-        | Block::Modal { children, .. } => Some(children),
+        | Block::Modal { children, .. }
+        | Block::When { children, .. } => Some(children),
         _ => None,
     }
 }
