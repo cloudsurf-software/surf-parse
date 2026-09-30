@@ -106,7 +106,7 @@ pub use slots::{resolve_slot_markers, IMG_SLOT_PLACEHOLDER_URI};
 pub use render_slides::{DeckConfig, SlideEntry, extract_deck, render_deck_html};
 
 #[cfg(feature = "pdf")]
-pub use render_pdf::{collect_image_srcs, page_count, to_pages, to_pdf_and_pages, Margins, PaperSize, PdfConfig, PdfError};
+pub use render_pdf::{collect_image_srcs, page_count, to_pages, to_pdf_and_pages, typst_source, Margins, PaperSize, PdfConfig, PdfError};
 
 impl SurfDoc {
     /// Render this document as standard CommonMark markdown (no `::` markers).

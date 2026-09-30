@@ -3,6 +3,26 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.34.0 — 2026-09-30 (the page furniture is the renderer's — the brand line, the "SurfDoc" running head retired, the callout card without its stroke; TASK-1167 under TASK-1045)
+
+- **`PdfConfig.brand: Option<String>`** (default `None`; `Debug` prints it; `for_doc` passes it through — no front-matter
+  key reads it, a document cannot opt out). With `Some(words)`, EVERY page's footer — the first included — carries the
+  words bottom-right, 8 pt in the page number's grey (`luma(150)`), as a `#link("https://cloudsurf.com")`; the page
+  counter stays centred between two equal `1fr` grid columns. The words are the caller's: the engine never hears the
+  word "plan". Rust-only — `PdfConfig` crosses no FFI or wasm boundary; the native schema stays 14.
+- **The running footer is emitted by the renderer** (`build_page_furniture`, with the page geometry, BEFORE the profile
+  template + the markup — a `#set page` rule after content starts a new page in Typst, so a footer cannot follow the
+  markup). `assets/surfdoc.typ` sets `margin:` only: the **"SurfDoc" running head** that sat top-right of every page
+  after the first is gone from every profile, and nothing in the engine names itself on a page.
+- **`surfdoc-callout` draws a tinted block with 6 pt corners and NO stroke on any side** (the 3 pt left accent bar is
+  gone); the six kinds keep their tints and title colours. The resume's head and section rules are untouched.
+- **`typst_source(doc, config)`** (new, public): the exact Typst source the compile sees (geometry · furniture ·
+  template + markup) — the seam the profile tests read the footer through, since the page SVGs draw glyphs as paths.
+- Tests (+5 in `tests/pdf_profiles.rs`): no running head on a three-page report; the brand in every page's footer
+  (the markup, the PDF's `/URI` per page, the page count unchanged); no words without a brand (blank words are none);
+  the callout card without a stroke; the V7 resume still one page with a brand. `examples/render_pdf.rs` takes
+  `--brand "…"` for the eyes-on loop.
+
 ## 0.33.0 — 2026-09-29 (the backends grammar — the stateful blocks a phone app needs; native schema v14; the FFI fails open; TASK-1176 under TASK-1174)
 
 surf-parse describes these blocks and never runs them: no expression is evaluated, no query run, nothing

@@ -179,6 +179,14 @@ pub struct PdfConfig {
     /// supported format (PNG/JPEG/GIF/WebP/SVG) — degrade to a deterministic
     /// placeholder; they never fail the render (default: empty).
     pub images: HashMap<String, Vec<u8>>,
+    /// A small line at the bottom-right of EVERY page's footer, including the
+    /// first (surf-parse 0.34.0): the words, 8 pt in the page number's grey,
+    /// as a link to <https://cloudsurf.com>. The caller decides the words and
+    /// whether there are any — the engine never hears the word "plan"; a
+    /// document cannot opt out by front matter ([`PdfConfig::for_doc`] passes
+    /// it through untouched). `None` (the default) draws only the centred
+    /// page counter.
+    pub brand: Option<String>,
 }
 
 impl Default for PdfConfig {
@@ -191,6 +199,7 @@ impl Default for PdfConfig {
             title: None,
             source_path: None,
             images: HashMap::new(),
+            brand: None,
         }
     }
 }
@@ -232,6 +241,7 @@ impl std::fmt::Debug for PdfConfig {
             .field("print_background", &self.print_background)
             .field("title", &self.title)
             .field("source_path", &self.source_path)
+            .field("brand", &self.brand)
             .field(
                 "images",
                 &self
@@ -355,16 +365,11 @@ fn compile_once(
 ) -> Result<typst::layout::PagedDocument, PdfError> {
     // Generate Typst markup from the SurfDoc block tree, with the src →
     // virtual-path map ambient so image emissions resolve (CiteScope pattern).
-    let mut typst_source = {
+    let markup = {
         let _images = render_typst::install_image_context(virtual_map.clone());
         render_typst::to_typst(doc)
     };
-
-    // Apply config overrides (paper size, margins) at the top of the document
-    let overrides = build_config_overrides(config);
-    if !overrides.is_empty() {
-        typst_source = format!("{overrides}\n{typst_source}");
-    }
+    let typst_source = assemble_source(markup, config);
 
     // Build the Typst engine with our source and embedded fonts.
     // Without fonts, Typst renders boxes/lines but no text. The TypstKit embedded
@@ -470,6 +475,71 @@ pub fn collect_image_srcs(doc: &SurfDoc) -> Vec<String> {
         }
     }
     walk(&doc.blocks, &mut out, &mut seen);
+    out
+}
+
+/// The exact Typst source [`to_pdf`], [`to_pages`] and [`page_count`] compile
+/// for `doc` under `config` (surf-parse 0.34.0): the page geometry, the page
+/// furniture, then the profile template + the document's markup (images
+/// unresolved — the same text the compile sees when no image bytes are
+/// given). The seam the profile tests read the running footer through: the
+/// page SVGs draw glyphs as paths, so the words are not greppable there.
+pub fn typst_source(doc: &SurfDoc, config: &PdfConfig) -> String {
+    let markup = {
+        let _images = render_typst::install_image_context(HashMap::new());
+        render_typst::to_typst(doc)
+    };
+    assemble_source(markup, config)
+}
+
+/// Geometry, furniture, then the markup. Both `#set page` rules come BEFORE
+/// the template + markup: a page set rule that follows content starts a new
+/// page in Typst, so "after the markup" is not a place a footer can live. The
+/// profile templates set `margin:` only (surfdoc.typ stopped setting a header
+/// and a footer in 0.34.0) and a set rule merges per property, so the
+/// furniture survives them.
+fn assemble_source(markup: String, config: &PdfConfig) -> String {
+    let mut out = build_config_overrides(config);
+    out.push_str(&build_page_furniture(config));
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&markup);
+    out
+}
+
+/// The running footer every profile carries (surf-parse 0.34.0, the "SurfDoc"
+/// running head retired): the page counter centred in 8 pt `luma(150)`, and
+/// with [`PdfConfig::brand`] the words bottom-right on EVERY page as a link to
+/// <https://cloudsurf.com>. The grid's outer columns are equal `1fr`, so the
+/// counter stays centred whatever the words weigh.
+fn build_page_furniture(config: &PdfConfig) -> String {
+    let counter = "#counter(page).display(\"1 / 1\", both: true)";
+    match &config.brand {
+        Some(words) if !words.trim().is_empty() => format!(
+            "#set page(footer: context [\n  #set text(size: 8pt, fill: luma(150))\n  #grid(columns: (1fr, auto, 1fr), align: (left, center, right), [], [{counter}], [#link(\"https://cloudsurf.com\")[#{}]])\n])\n",
+            typst_string(words.trim())
+        ),
+        _ => format!(
+            "#set page(footer: context [\n  #set text(size: 8pt, fill: luma(150))\n  #h(1fr) {counter} #h(1fr)\n])\n"
+        ),
+    }
+}
+
+/// A Typst string literal: backslashes and quotes escaped, nothing else
+/// interpreted (the words are the caller's, shown verbatim).
+fn typst_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' | '\r' => out.push(' '),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
     out
 }
 

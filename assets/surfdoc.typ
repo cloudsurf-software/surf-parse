@@ -3,20 +3,12 @@
 
 // The paper is NOT set here: the PDF config's `#set page(paper: …)` override precedes this template and must
 // win (a doc's `paper: letter` and the route's Letter came out A4 until 2026-09-28); with no override Typst's
-// own default (A4) applies, as before.
-#set page(
-  margin: (top: 2.5cm, bottom: 2.5cm, left: 2cm, right: 2cm),
-  header: context {
-    if counter(page).get().first() > 1 [
-      #set text(size: 8pt, fill: luma(150))
-      #h(1fr) SurfDoc
-    ]
-  },
-  footer: context [
-    #set text(size: 8pt, fill: luma(150))
-    #h(1fr) #counter(page).display("1 / 1", both: true) #h(1fr)
-  ],
-)
+// own default (A4) applies, as before. The page FURNITURE is not set here either (surf-parse 0.34.0): the running
+// footer — the centred page counter, and the caller's brand words bottom-right when it asks for them — is written
+// by the renderer's `build_page_furniture` before this template, and a `#set page` merges per property, so this
+// margin rule leaves it standing. The "SurfDoc" running head that sat top-right of every page after the first is
+// retired: nothing in the engine names itself on a page.
+#set page(margin: (top: 2.5cm, bottom: 2.5cm, left: 2cm, right: 2cm))
 
 // Body font mirrors the on-screen surfdoc viewer (system sans-serif). Liberation
 // Sans is bundled by the renderer; raw/code falls back to DejaVu Sans Mono.
@@ -74,11 +66,12 @@
 
 #let surfdoc-callout(type-name, title, body) = {
   let colors = callout-colors.at(type-name, default: callout-colors.info)
+  // A tinted card, 6pt corners, NO stroke on any side (0.34.0): the one-sided accent bar is not a card language
+  // the on-screen doc has, and the kind still reads from the tint and the title colour.
   block(
     fill: colors.bg,
     inset: 12pt,
-    radius: 4pt,
-    stroke: (left: 3pt + colors.border),
+    radius: 6pt,
     width: 100%,
   )[
     #set text(fill: colors.text)

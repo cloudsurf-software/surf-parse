@@ -4,7 +4,7 @@
 //! path is untouched.
 #![cfg(feature = "pdf")]
 
-use surf_parse::{page_count, to_pages, Margins, PaperSize, PdfConfig};
+use surf_parse::{page_count, to_pages, typst_source, Margins, PaperSize, PdfConfig};
 
 const V7: &str = include_str!("fixtures/resume-ashley-yeghiayan-v7.surf");
 
@@ -154,4 +154,83 @@ fn view_box(svg: &str) -> (f64, f64) {
     let vb = svg.split("viewBox=\"").nth(1).and_then(|r| r.split('"').next()).expect("a viewBox");
     let nums: Vec<f64> = vb.split(' ').map(|n| n.parse().unwrap()).collect();
     (nums[2], nums[3])
+}
+
+// ── surf-parse 0.34.0: the running footer, the brand line, the callout card (TASK-1167) ─────────────────────────
+
+/// A generic document long enough for three pages on US Letter.
+fn three_pages() -> surf_parse::SurfDoc {
+    let mut text = String::from("---\ntitle: A long report\n---\n\n# A long report\n\n");
+    for i in 0..140 {
+        text.push_str(&format!("Paragraph {i}: the quick brown fox jumps over the lazy dog, and the dog, being lazy, lets it, which is the whole of the story as far as anyone has ever cared to tell it.\n\n"));
+    }
+    let parsed = surf_parse::parse(&text);
+    assert!(parsed.diagnostics.iter().all(|d| d.severity != surf_parse::error::Severity::Error), "{:?}", parsed.diagnostics);
+    parsed.doc
+}
+
+#[test]
+fn no_running_head_on_any_page() {
+    let doc = three_pages();
+    let cfg = doc.pdf_config(route_default());
+    assert!(page_count(&doc, &cfg).expect("compiles") >= 3, "the fixture must span three pages");
+    let src = typst_source(&doc, &cfg);
+    assert!(!src.contains("header:"), "no page header is set anywhere in the source: {src}");
+    assert!(!src.contains("#h(1fr) SurfDoc"), "the engine never names itself on a page");
+    assert!(src.contains("#counter(page).display(\"1 / 1\", both: true)"), "the page counter stays: {src}");
+    let footers = src.matches("#set page(footer:").count();
+    assert_eq!(footers, 1, "ONE footer rule, the renderer's, before the template: {src}");
+    assert!(src.find("#set page(footer:").unwrap() < src.find("#set text(font:").unwrap(), "the furniture precedes the template");
+}
+
+#[test]
+fn brand_rides_in_every_pages_footer() {
+    let doc = three_pages();
+    let plain = doc.pdf_config(route_default());
+    let branded = PdfConfig { brand: Some("Built with CloudSurf".into()), ..plain.clone() };
+    let src = typst_source(&doc, &branded);
+    assert!(src.contains("#link(\"https://cloudsurf.com\")[#\"Built with CloudSurf\"]"), "the words as a link, bottom-right: {src}");
+    assert!(src.contains("#grid(columns: (1fr, auto, 1fr), align: (left, center, right)"), "the counter stays centred between equal columns");
+    assert_eq!(src.matches("#set page(footer:").count(), 1, "one footer rule carries both");
+    // The footer is page furniture: the page count does not move.
+    assert_eq!(page_count(&doc, &branded).unwrap(), page_count(&doc, &plain).unwrap());
+    // The PDF carries the link annotation on every page (Typst writes /URI uncompressed).
+    let pdf = surf_parse::to_pdf(&doc, &branded).expect("compiles");
+    let uris = pdf.windows(b"https://cloudsurf.com".len()).filter(|w| *w == b"https://cloudsurf.com").count();
+    assert!(uris >= page_count(&doc, &branded).unwrap(), "one link per page: {uris} URIs");
+}
+
+#[test]
+fn no_brand_means_no_footer_words() {
+    let doc = three_pages();
+    let cfg = doc.pdf_config(route_default());
+    let src = typst_source(&doc, &cfg);
+    assert!(!src.contains("cloudsurf.com"), "no brand, no words, no link: {src}");
+    assert!(src.contains("#h(1fr) #counter(page).display(\"1 / 1\", both: true) #h(1fr)"), "the centred counter alone");
+    let empty = PdfConfig { brand: Some("   ".into()), ..cfg };
+    assert!(!typst_source(&doc, &empty).contains("cloudsurf.com"), "blank words are no brand");
+}
+
+#[test]
+fn the_callout_card_has_no_stroke() {
+    let parsed = surf_parse::parse("# Cards\n\n::callout[type=note title=\"Mirror\"]\nThe mirror is the sibling tree.\n::\n\n::callout[type=warning]\nMind the gap.\n::\n");
+    assert!(parsed.diagnostics.iter().all(|d| d.severity != surf_parse::error::Severity::Error), "{:?}", parsed.diagnostics);
+    let cfg = parsed.doc.pdf_config(route_default());
+    let src = typst_source(&parsed.doc, &cfg);
+    assert!(src.contains("#surfdoc-callout(\"note\""), "the note card is emitted: {src}");
+    let def_start = src.find("#let surfdoc-callout").expect("the template's callout");
+    let def = &src[def_start..];
+    let def = &def[..def.find("\n#let ").unwrap_or(def.len())];
+    assert!(!def.contains("stroke"), "no stroke on any side of the card: {def}");
+    assert!(def.contains("radius: 6pt"), "the 6pt corners: {def}");
+    assert_eq!(page_count(&parsed.doc, &cfg).unwrap(), 1);
+}
+
+#[test]
+fn ashley_v7_still_lays_out_on_one_page_with_a_brand() {
+    let parsed = surf_parse::parse(V7);
+    let cfg = PdfConfig { brand: Some("Built with CloudSurf".into()), ..parsed.doc.pdf_config(route_default()) };
+    assert_eq!(page_count(&parsed.doc, &cfg).expect("compiles"), 1, "the footer line sits in the margin: the V7 page holds");
+    let src = typst_source(&parsed.doc, &cfg);
+    assert!(src.contains("https://cloudsurf.com"), "a template-set document carries the words too (D-PDF-5)");
 }

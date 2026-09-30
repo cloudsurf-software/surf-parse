@@ -1,14 +1,26 @@
 //! Render one `.surf` file to a PDF through the route's Letter config (the doc's own paper and margins win):
-//! `cargo run --example render_pdf -- in.surf out.pdf` — the eyes-on loop for the page profiles.
+//! `cargo run --example render_pdf -- in.surf out.pdf [--brand "Built with CloudSurf"]` — the eyes-on loop for the
+//! page profiles; `--brand` draws the 0.34.0 footer line on every page.
 use std::env;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let input = args.get(1).expect("Usage: render_pdf <in.surf> <out.pdf>");
-    let output = args.get(2).expect("Usage: render_pdf <in.surf> <out.pdf>");
+    let all: Vec<String> = env::args().collect();
+    let brand = all.iter().position(|a| a == "--brand").and_then(|i| all.get(i + 1).cloned());
+    let args: Vec<String> = {
+        let mut out = Vec::new();
+        let mut skip = false;
+        for a in all.iter().skip(1) {
+            if skip { skip = false; continue; }
+            if a == "--brand" { skip = true; continue; }
+            out.push(a.clone());
+        }
+        out
+    };
+    let input = args.first().expect("Usage: render_pdf <in.surf> <out.pdf> [--brand <words>]");
+    let output = args.get(1).expect("Usage: render_pdf <in.surf> <out.pdf> [--brand <words>]");
     let source = std::fs::read_to_string(input).expect("read the .surf");
     let parsed = surf_parse::parse(&source);
-    let base = surf_parse::PdfConfig { paper_size: surf_parse::PaperSize::Letter, ..Default::default() };
+    let base = surf_parse::PdfConfig { paper_size: surf_parse::PaperSize::Letter, brand, ..Default::default() };
     let cfg = parsed.doc.pdf_config(base);
     let (pdf, pages) = surf_parse::to_pdf_and_pages(&parsed.doc, &cfg).expect("compile");
     std::fs::write(output, &pdf).expect("write the pdf");
