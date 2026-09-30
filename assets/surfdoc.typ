@@ -66,7 +66,7 @@
 
 #let surfdoc-callout(type-name, title, body) = {
   let colors = callout-colors.at(type-name, default: callout-colors.info)
-  // A tinted card, 6pt corners, NO stroke on any side (0.34.0): the one-sided accent bar is not a card language
+  // A tinted card, 6pt corners, no border on any side (0.34.0): the one-sided accent bar is not a card language
   // the on-screen doc has, and the kind still reads from the tint and the title colour.
   block(
     fill: colors.bg,
