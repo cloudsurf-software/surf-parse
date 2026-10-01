@@ -7906,75 +7906,79 @@ pub fn extract_site(doc: &SurfDoc) -> (Option<SiteConfig>, Vec<PageEntry>, Vec<B
 }
 
 /// CSS for site-level navigation and footer (uses unified variable names).
-const SITE_NAV_CSS: &str = r#"
+/// The site-nav sheet every site page inlines after [`SURFDOC_CSS`] — the
+/// doc.surf nav standard. Public so a consumer can pin the standard it links
+/// (surf's `frontend/tests/surf_parse_0_35_0.rs`).
+pub const SITE_NAV_CSS: &str = r#"
 /* Skip link (BR-SITE-A11Y): first focusable on every site page; visually
    hidden until keyboard focus, then a pill above the sticky nav. */
-.surfdoc-skip-link { position: absolute; left: -9999px; top: 0.75rem; z-index: 200; background: var(--surface); color: var(--accent-ink, var(--accent)); padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+.surfdoc-skip-link { position: absolute; left: -9999px; top: 0.75rem; z-index: 400; background: var(--surface); color: var(--accent-ink, var(--accent)); padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.875rem; font-weight: 600; text-decoration: none; }
 .surfdoc-skip-link:focus { left: 0.75rem; }
 
-/* Site navigation — a sticky topbar (hamburger + logo on the left, theme
-   toggle far right) that opens a LEFT DRAWER of page links at ALL screen sizes
-   (the wavesite "app" nav, matching the Surf shell). Pure-CSS checkbox toggle
-   + click-anywhere scrim; the SPA router also unchecks the toggle on navigate.
-   Drawer look mirrors the Surf rich shell (.surfdoc-shell-drawer): a floating
-   rounded panel with a brand head, close affordance, group label, and
-   line-icon links. */
-.surfdoc-site-nav { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); max-width: 100%; position: sticky; top: 0; z-index: 100; }
-.surfdoc-site-nav .site-name { order: 1; display: inline-flex; align-items: center; font-weight: 700; color: var(--text); font-size: 1rem; text-decoration: none; }
+/* Site navigation — the doc.surf standard (2026-10-01, the Khoury's nav made
+   the rule for every site): a sticky glass bar with the brand on the left and
+   the controls on the right. On a wide screen (>= 901px) a site with at most
+   seven links (pages + the CTA) shows them INLINE on the right — plain words
+   with an accent underline that grows on hover, the one CTA a pill, the theme
+   toggle beside it — and the menu button is gone. Every other case (a small
+   screen, or more than seven links) keeps the menu button, which opens a
+   FULL-SCREEN SHEET that settles in from the top: large rows parted by
+   hairlines, the CTA pinned to the bottom as a full-width pill, and the bar's
+   button — an X while open — as the ONE close control (the sheet's own head,
+   group label, link icons and scrim are not drawn). Pure-CSS checkbox toggle;
+   the SPA router unchecks it on navigate. The bar's glass lives on a
+   pseudo-element: a backdrop-filter on the bar itself would make it the
+   containing block for the fixed sheet, which would then collapse into the bar
+   (measured on the Khoury's site, 2026-09-19). The seven-link rule rides
+   `:has()` inside `:where()`, so it adds no specificity: a site's own
+   stylesheet (linked last) still wins at equal weight (D-CSS-2); a browser
+   without `:has()` keeps the button + sheet at every width. */
+.surfdoc-site-nav { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 clamp(16px, 4vw, 40px); background: color-mix(in srgb, var(--surface) 88%, transparent); border-bottom: 1px solid var(--border); max-width: 100%; position: sticky; top: 0; z-index: 100; }
+.surfdoc-site-nav::before { content: ""; position: absolute; inset: 0; z-index: -1; backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); }
+.surfdoc-site-nav .site-name { order: 1; display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); font-size: 1.05rem; letter-spacing: -0.01em; text-decoration: none; }
 /* Monogram logo — accent rounded square standing in for a brand emblem
-   (generated apps ship no logo asset). Used in the topbar anchor AND the
-   drawer-head brand. */
-.site-nav-logo { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 7px; background: var(--accent); color: var(--accent-text, #ffffff); font-size: 0.8rem; font-weight: 700; line-height: 1; margin-right: 8px; }
-/* Hamburger — always visible, far left; a circular shell-style control that
-   animates to an X when the drawer opens. */
-.site-nav-hamburger { order: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 38px; height: 38px; flex-shrink: 0; cursor: pointer; border: 1px solid var(--border); border-radius: 50%; color: var(--text); transition: background 0.15s; }
+   (generated apps ship no logo asset); a site's own logo image rides the same
+   seat as a plain picture (the container swaps the tile for `.site-nav-logo-img`). */
+.site-nav-logo { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; background: var(--accent); color: var(--accent-text, #ffffff); font-size: 0.85rem; font-weight: 700; line-height: 1; }
+.site-nav-logo-img { width: 32px; height: 32px; border-radius: 0; background: none; object-fit: contain; }
+/* Menu button — on the RIGHT, a plain square, three bars that fold into an X;
+   above the open sheet (z 300 > sheet z 200) so it is the one close control. */
+.site-nav-hamburger { order: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 44px; height: 44px; flex-shrink: 0; cursor: pointer; border: 0; border-radius: 10px; background: transparent; color: var(--text); position: relative; z-index: 300; transition: background 0.15s; }
 .site-nav-hamburger:hover { background: var(--surface-hover); }
-.site-nav-hamburger span { display: block; width: 18px; height: 2px; background: currentColor; border-radius: 1px; transition: transform 0.2s, opacity 0.2s; }
+.site-nav-hamburger span { display: block; width: 22px; height: 2px; background: currentColor; border-radius: 1px; transition: transform 0.2s, opacity 0.2s; }
 /* Toggle checkbox: visually hidden but focusable (keyboard-operable menu). */
 .site-nav-toggle { position: absolute; width: 1px; height: 1px; margin: -1px; opacity: 0; pointer-events: none; }
 .site-nav-toggle:focus-visible ~ .site-nav-hamburger { outline: 2px solid var(--accent-ink, var(--accent)); outline-offset: 2px; }
-/* Left drawer holding the page links — a floating rounded panel inset 12px
-   from the viewport edges, floating OVER the topbar (z 200 > nav z 100),
-   matching the Surf shell drawer. Close via the head button or the scrim. */
-.site-nav-links { position: fixed; top: 12px; bottom: 12px; left: 12px; z-index: 200; width: min(320px, calc(100vw - 24px)); display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 18px 14px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25); transform: translateX(calc(-100% - 16px)); transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1); overflow-y: auto; }
-/* Drawer head: brand (monogram + name) left, circular close button right. */
-.site-nav-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.site-nav-drawer-brand { display: inline-flex; align-items: center; font-weight: 700; font-size: 1rem; color: var(--text); }
-.site-nav-close { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text); cursor: pointer; transition: background 0.15s; }
-.site-nav-close:hover { background: var(--surface-hover); }
-.site-nav-close svg { width: 18px; height: 18px; }
-/* Uppercase section label above the page links. */
-.site-nav-group-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 14px 12px 6px; }
-.site-nav-links a { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-size: 0.9375rem; font-weight: 500; padding: 11px 12px; border-radius: 12px; transition: color 0.15s, background 0.15s; }
-.site-nav-links a:hover { color: var(--accent); background: var(--surface-hover); }
-.site-nav-links a.active { color: var(--accent-ink, var(--accent)); background: var(--accent-soft); font-weight: 600; }
-/* Per-link line icon; follows the link color on hover/active. */
-.site-nav-link-icon { display: inline-flex; width: 18px; height: 18px; flex-shrink: 0; color: var(--text-muted); transition: color 0.15s; }
-.site-nav-link-icon svg { width: 18px; height: 18px; }
-.site-nav-links a:hover .site-nav-link-icon { color: var(--accent); }
-.site-nav-links a.active .site-nav-link-icon { color: var(--accent-ink, var(--accent)); }
-.site-nav-toggle:checked ~ .site-nav-links { transform: translateX(0); }
-/* Scrim behind the open drawer (click to close) — full-viewport, under the
-   floating panel. */
-.site-nav-scrim { position: fixed; inset: 0; z-index: 150; background: rgba(8, 12, 24, 0.30); opacity: 0; visibility: hidden; transition: opacity 220ms ease, visibility 220ms; cursor: pointer; }
-.site-nav-toggle:checked ~ .site-nav-scrim { opacity: 1; visibility: visible; }
-/* Hamburger → X when the drawer is open. */
-.site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+/* The full-screen sheet holding the page links. Closed it is invisible AND
+   unclickable (visibility + pointer-events — it overlays the page rather than
+   parking off-screen); open it settles in from the top. */
+.site-nav-links { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 96px clamp(16px, 4vw, 40px) 32px; background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-2.5%); transition: transform 400ms cubic-bezier(0.32, 0.72, 0, 1), opacity 400ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 400ms; overflow-y: auto; }
+.site-nav-toggle:checked ~ .site-nav-links { opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition: transform 400ms cubic-bezier(0.32, 0.72, 0, 1), opacity 400ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s; }
+/* The page behind the open sheet does not scroll. */
+html:has(.site-nav-toggle:checked) { overflow: hidden; }
+/* The drawer-era furniture stays in the markup (the container's needles and
+   the SPA router read it) and is not drawn. */
+.site-nav-drawer-head, .site-nav-group-label, .site-nav-link-icon, .site-nav-scrim { display: none; }
+.site-nav-close { display: none; }
+.site-nav-links a { display: flex; align-items: center; color: var(--text); text-decoration: none; font-size: clamp(1.5rem, 6vw, 2rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; padding: 16px 0; border-bottom: 1px solid var(--border); border-radius: 0; transition: color 0.15s; }
+.site-nav-links a:first-of-type { border-top: 1px solid var(--border); }
+.site-nav-links a:hover, .site-nav-links a.active { color: var(--accent-ink, var(--accent)); }
+/* The nav's one action (the container appends it as the LAST link): a
+   full-width pill pinned to the bottom of the sheet. */
+.surfdoc-site-nav .site-nav-links a.site-nav-cta { margin: auto 0 0; justify-content: center; min-height: 52px; padding: 0 24px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-text, #ffffff); font-size: 1.05rem; font-weight: 700; letter-spacing: 0; line-height: 1; }
+.surfdoc-site-nav .site-nav-links a.site-nav-cta:hover { color: var(--accent-text, #ffffff); opacity: 0.9; }
+/* Menu button → X when the sheet is open. */
+.site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
 .site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(2) { opacity: 0; }
-.site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-/* Deeper panel shadow on dark surfaces — both theme arms, mirroring the
-   theme-icon-swap pattern below. */
-[data-theme="dark"] .site-nav-links { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .site-nav-links { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
-}
+.site-nav-toggle:checked ~ .site-nav-hamburger span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
 @media (prefers-reduced-motion: reduce) {
   .site-nav-links, .site-nav-scrim { transition: none; }
+  .site-nav-toggle:checked ~ .site-nav-links { transition: none; }
 }
 
-/* Theme toggle (BR-SITE-THEME): ≥24px target, theme-aware icon swap; same
-   circular shell-style control as the hamburger. */
-.site-nav-theme-toggle { order: 2; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex-shrink: 0; margin-left: auto; padding: 0; background: none; border: 1px solid var(--border); border-radius: 50%; color: var(--text-muted); cursor: pointer; transition: color 0.15s, background 0.15s; }
+/* Theme toggle (BR-SITE-THEME): ≥24px target, theme-aware icon swap; sits
+   right of the links, left of the menu button. */
+.site-nav-theme-toggle { order: 2; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex-shrink: 0; margin-left: auto; padding: 0; background: none; border: 0; border-radius: 50%; color: var(--text-muted); cursor: pointer; transition: color 0.15s, background 0.15s; }
 .site-nav-theme-toggle:hover { background: var(--surface-hover); color: var(--text); }
 .site-nav-theme-toggle svg { width: 18px; height: 18px; }
 .site-nav-theme-toggle .site-theme-icon-sun { display: none; }
@@ -7985,13 +7989,22 @@ const SITE_NAV_CSS: &str = r#"
   :root:not([data-theme]) .site-nav-theme-toggle .site-theme-icon-moon { display: none; }
 }
 
+/* Wide screens, at most seven links: the links inline, no menu button. */
+@media (min-width: 901px) {
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-hamburger { display: none; }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links { position: static; inset: auto; order: 2; margin-left: auto; width: auto; flex-direction: row; align-items: center; gap: 28px; padding: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; opacity: 1; visibility: visible; pointer-events: auto; transform: none; transition: none; overflow: visible; }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-theme-toggle { margin-left: 0; }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a, .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a:first-of-type { position: relative; padding: 6px 0; border: 0; font-size: 0.95rem; font-weight: 500; letter-spacing: 0; line-height: 1.6; color: var(--text); }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 1px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 0.25s; }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a:hover, .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a.active { color: var(--text); }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a:hover::after, .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a.active::after { transform: scaleX(1); }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a.site-nav-cta { margin: 0 0 0 4px; min-height: 40px; padding: 0 18px; font-size: 0.95rem; font-weight: 600; }
+  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-links a.site-nav-cta::after { display: none; }
+}
+
 /* Focus visibility (BR-SITE-A11Y): every interactive chrome element shows a
    ring; offset keeps it outside style-pack borders (Comic's 3px). */
 .surfdoc-site-nav a:focus-visible, .site-nav-theme-toggle:focus-visible, .surfdoc-skip-link:focus-visible, .site-nav-close:focus-visible { outline: 2px solid var(--accent-ink, var(--accent)); outline-offset: 2px; }
-
-@media (max-width: 640px) {
-  .surfdoc-site-nav { padding: 0 12px; }
-}
 
 /* Site footer */
 .surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-faint); font-size: 0.8rem; }
@@ -13674,18 +13687,51 @@ About
     }
 
     #[test]
-    fn site_nav_css_theme_arms() {
+    fn site_nav_css_is_the_full_screen_standard() {
+        // The doc.surf nav standard (2026-10-01): the menu button on the
+        // right, the full-screen sheet from the top, the inline row on wide
+        // screens for a site with at most seven links, the glass on a
+        // pseudo-element (never on the bar), the page locked behind the sheet.
         assert!(
-            SITE_NAV_CSS.contains(
-                "[data-theme=\"dark\"] .site-nav-links { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }"
-            ),
-            "explicit dark arm deepens the panel shadow"
+            SITE_NAV_CSS.contains(".site-nav-hamburger { order: 4;"),
+            "the menu button sits after the theme toggle, on the right"
         );
         assert!(
-            SITE_NAV_CSS.contains(
-                ":root:not([data-theme]) .site-nav-links { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }"
-            ),
-            "device-dark (no data-theme) arm deepens the panel shadow"
+            SITE_NAV_CSS.contains(".site-nav-hamburger { order: 4; display: flex;")
+                && SITE_NAV_CSS.contains("z-index: 300;"),
+            "the menu button floats above the open sheet as its one close control"
+        );
+        assert!(
+            SITE_NAV_CSS.contains(".site-nav-links { position: fixed; inset: 0; z-index: 200;"),
+            "the sheet covers the viewport"
+        );
+        assert!(
+            SITE_NAV_CSS.contains("visibility: hidden; pointer-events: none; transform: translateY(-2.5%);"),
+            "closed, the sheet is invisible and unclickable; open, it settles in from the top"
+        );
+        assert!(
+            SITE_NAV_CSS.contains(".site-nav-drawer-head, .site-nav-group-label, .site-nav-link-icon, .site-nav-scrim { display: none; }"),
+            "the drawer-era head, label, icons and scrim are not drawn"
+        );
+        assert!(
+            SITE_NAV_CSS.contains(".surfdoc-site-nav::before { content: \"\"; position: absolute; inset: 0; z-index: -1; backdrop-filter:"),
+            "the bar's glass is a pseudo-element, so the bar is never the sheet's containing block"
+        );
+        assert!(
+            !SITE_NAV_CSS.contains(".surfdoc-site-nav { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 clamp(16px, 4vw, 40px); background: color-mix(in srgb, var(--surface) 88%, transparent); border-bottom: 1px solid var(--border); max-width: 100%; position: sticky; top: 0; z-index: 100; backdrop-filter"),
+            "no backdrop-filter on the bar itself"
+        );
+        assert!(
+            SITE_NAV_CSS.contains("html:has(.site-nav-toggle:checked) { overflow: hidden; }"),
+            "the page behind the open sheet does not scroll"
+        );
+        assert!(
+            SITE_NAV_CSS.contains("@media (min-width: 901px) {\n  .surfdoc-site-nav:where(:not(:has(.site-nav-links > a:nth-of-type(8)))) .site-nav-hamburger { display: none; }"),
+            "wide screens with at most seven links drop the menu button and show the links inline"
+        );
+        assert!(
+            SITE_NAV_CSS.contains(".surfdoc-site-nav .site-nav-links a.site-nav-cta { margin: auto 0 0;"),
+            "the CTA is pinned to the bottom of the sheet (and outranks the container's drawer-era pill rule)"
         );
         assert!(
             SITE_NAV_CSS.contains("@media (prefers-reduced-motion: reduce)"),
@@ -13693,7 +13739,7 @@ About
         );
         assert!(
             SITE_NAV_CSS.contains(".site-nav-links, .site-nav-scrim { transition: none; }"),
-            "reduced-motion disables drawer + scrim transitions"
+            "reduced-motion disables the sheet transition"
         );
     }
 

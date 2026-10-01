@@ -3,6 +3,32 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.35.0 — 2026-10-01 (the site nav standard — the Khoury's nav for every doc.surf site; web CSS only, no schema move)
+
+- **`SITE_NAV_CSS` is rewritten as the doc.surf nav standard.** The bar keeps its markup (every needle surf's container
+  reads — the logo anchor, the `.site-nav-links` close, the toggle id — is byte-identical) and changes only how it is
+  drawn: a sticky glass bar (the blur on a `::before` pseudo-element, never on the bar — a backdrop-filter on the bar
+  makes it the containing block for the fixed sheet, which then collapses into the bar; measured on the Khoury's site
+  2026-09-19) with the brand on the left and the controls on the right. On a wide screen (`>= 901px`) a site with at
+  most seven links (pages + the CTA) shows them INLINE on the right — plain words with an accent underline that grows
+  on hover, the one CTA a pill, the theme toggle beside it, no menu button. Every other case (a small screen, or more
+  than seven links) keeps the menu button, now on the RIGHT with no ring, which opens a FULL-SCREEN SHEET that settles
+  in from the top (400 ms, opacity + a 2.5 % translate): large rows parted by hairlines, the CTA pinned to the bottom as
+  a full-width pill, the bar's button — an X while open — the ONE close control. The drawer-era head, group label,
+  link icons and scrim stay in the markup and are not drawn. The page behind the open sheet does not scroll
+  (`html:has(.site-nav-toggle:checked)`). The seven-link rule rides `:has()`; a browser without it keeps the button +
+  sheet at every width. `.site-nav-logo-img` (the container's logo swap) gains its own rule: a plain 32 px picture,
+  no tile behind it.
+- **Pinned by the a11y tests exactly as before:** the focusable checkbox, its focus ring on the menu button, the
+  `:focus-visible` ring list, the skip link, the 38 px theme toggle at `order: 2`. The drawer-era
+  `site_nav_css_theme_arms` test (a deeper panel shadow in the dark arms — a full-screen sheet has no panel) is
+  replaced by `site_nav_css_is_the_full_screen_standard`, which pins the standard's seams.
+- **`SITE_NAV_CSS` is `pub`** (beside `SURFDOC_CSS`), so a consumer can pin the standard it links.
+- `tests/integration.rs::render_editor_surf_to_html` SKIPS (says so, passes) on a machine with no surf checkout — the
+  build pool's cargo device — instead of failing the suite on a laptop path.
+- No parser, schema (native stays 14), FFI or wasm surface moves; the Mac and iOS kits are untouched. The HTML of a
+  site page changes only inside the inlined `<style>`.
+
 ## 0.34.0 — 2026-09-30 (the page furniture is the renderer's — the brand line, the "SurfDoc" running head retired, the callout card without its stroke; TASK-1167 under TASK-1045)
 
 - **`PdfConfig.brand: Option<String>`** (default `None`; `Debug` prints it; `for_doc` passes it through — no front-matter
