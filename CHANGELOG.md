@@ -3,6 +3,24 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.37.2 — 2026-10-02 (the allow-list passes the host's own pages: the scheme grammar, and a scoped door only a host can open; TASK-1300)
+
+0.37.1's allow-list refused three things a host application hands the renderer for its own pages. 0.37.2 passes
+them and keeps every refusal a document met.
+
+- **A scheme is a scheme.** Text before a colon is read as a scheme only when it is `ALPHA *( ALPHA / DIGIT / "+" /
+  "-" / "." )` — what a browser requires. A template's `«IMG: description»` slot marker in a `src` (and `1:2`) is a
+  relative reference again and is written untouched, so the slot can still be filled. `javascript:` and every other
+  real scheme are read exactly as before.
+- **`install_host_urls(HostUrls) -> HostUrlScope`** — a thread-local RAII guard, the shape of `install_media_resolver`.
+  A host that renders blocks IT built may name `same_origin_frame_prefixes` (a relative frame `src` under `/email/`
+  — never a `..` segment, a backslash, an encoded dot, slash or backslash, never protocol-relative) and `link_schemes`
+  (`cursor`, `vscode`; `javascript`, `vbscript`, `data`, `file` and `blob` are refused even when named). Nothing a
+  document writes installs it: no front-matter key, no directive, no FFI or wasm export. Without the guard the rules
+  are 0.37.1's — a relative frame from a document is still refused.
+- Tests: `tests/host_urls.rs` (the three inputs and the negative of each) and the unit tests beside the policy.
+  No snapshot changed.
+
 ## 0.37.1 — 2026-10-01 (security patch, the 0.32.1 allow-list carried onto 0.37.0: one URL allow-list at render time)
 
 - **One URL allow-list** (`url_policy`, crate-private). Every URL a document supplies is checked when it is

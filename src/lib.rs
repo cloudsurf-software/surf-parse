@@ -38,6 +38,7 @@ pub mod resolve;
 pub mod slots;
 pub mod spec_registry;
 pub(crate) mod url_policy;
+pub use url_policy::{install_host_urls, HostUrlScope, HostUrls};
 #[cfg(feature = "pdf")]
 pub mod render_pdf;
 pub mod render_typst;

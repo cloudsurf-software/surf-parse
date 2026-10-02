@@ -18,6 +18,22 @@
 //!   origin must not frame that origin's own signed-in routes).
 //! - [`UrlKind::FormAction`] — `https` and relative paths (never
 //!   protocol-relative: that is another origin).
+//!
+//! A scheme is `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` (RFC 3986, and
+//! what a browser's URL parser requires before it leaves the no-scheme
+//! state). Text before a colon that is not one — a template's `«IMG: a photo
+//! of the venue»` slot marker, `1:2` — is a relative reference, as it is to
+//! the browser.
+//!
+//! # The host's door
+//!
+//! A HOST that renders its OWN blocks (an application's chrome built from
+//! `Block` values, never a document's source) may widen two rules for the
+//! lifetime of a guard, through [`install_host_urls`]: same-origin frames
+//! under path prefixes it names, and link schemes it names (an editor's
+//! install deeplink). Nothing a document can write installs it — there is
+//! no front-matter key, no directive, no FFI or wasm export — and a host
+//! must not hold the guard while it renders a document's blocks.
 
 /// What the URL is about to be used for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +67,82 @@ fn ignored(c: char) -> bool {
     c.is_ascii_control() || c == ' '
 }
 
+/// What a host allows for the blocks it builds itself. See the module doc.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostUrls {
+    /// Path prefixes (each starting with one `/`) under which a relative
+    /// frame `src` is allowed: `"/email/"` lets the host frame its own
+    /// `/email/<thread>/body`. A path with a `..` segment, a backslash or an
+    /// encoded dot, slash or backslash is refused whatever its prefix.
+    pub same_origin_frame_prefixes: Vec<String>,
+    /// Extra link schemes, without the colon (`"cursor"`, `"vscode"`).
+    /// `javascript`, `vbscript`, `data`, `file` and `blob` are refused even
+    /// when named here.
+    pub link_schemes: Vec<String>,
+}
+
+thread_local! {
+    static HOST_URLS: std::cell::RefCell<Option<HostUrls>> = const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard of [`install_host_urls`]: dropping it puts back whatever was
+/// installed before (or nothing).
+pub struct HostUrlScope {
+    previous: Option<HostUrls>,
+}
+
+impl Drop for HostUrlScope {
+    fn drop(&mut self) {
+        let previous = self.previous.take();
+        HOST_URLS.with(|c| *c.borrow_mut() = previous);
+    }
+}
+
+/// Install what the host allows for ITS OWN blocks on the current thread,
+/// for the lifetime of the returned guard. Hold it only around a render of
+/// blocks the host built; drop it before rendering a document.
+pub fn install_host_urls(urls: HostUrls) -> HostUrlScope {
+    let previous = HOST_URLS.with(|c| c.borrow_mut().replace(urls));
+    HostUrlScope { previous }
+}
+
+/// Schemes no host may name.
+const NEVER: [&str; 5] = ["javascript", "vbscript", "data", "file", "blob"];
+
+fn host_allows_link_scheme(scheme: &str) -> bool {
+    !NEVER.contains(&scheme)
+        && HOST_URLS.with(|c| {
+            c.borrow()
+                .as_ref()
+                .is_some_and(|h| h.link_schemes.iter().any(|s| s.eq_ignore_ascii_case(scheme)))
+        })
+}
+
+fn host_allows_frame_path(raw: &str) -> bool {
+    let cleaned: String = raw.chars().filter(|c| !ignored(*c)).collect();
+    let lower = cleaned.to_ascii_lowercase();
+    if !cleaned.starts_with('/')
+        || lower.contains('\\')
+        || lower.split(['/', '?', '#']).any(|seg| seg == "..")
+        || ["%2e", "%2f", "%5c"].iter().any(|e| lower.contains(e))
+    {
+        return false;
+    }
+    HOST_URLS.with(|c| {
+        c.borrow().as_ref().is_some_and(|h| {
+            h.same_origin_frame_prefixes
+                .iter()
+                .any(|p| p.starts_with('/') && !p.starts_with("//") && cleaned.starts_with(p.as_str()))
+        })
+    })
+}
+
+fn is_scheme(s: &str) -> bool {
+    let mut chars = s.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
 fn shape(raw: &str) -> Shape {
     let cleaned: String = raw.chars().filter(|c| !ignored(*c)).collect();
     let mut chars = cleaned.chars();
@@ -60,7 +152,7 @@ fn shape(raw: &str) -> Shape {
         return Shape::ProtocolRelative;
     }
     match cleaned.find([':', '/', '?', '#', '\\']) {
-        Some(i) if cleaned.as_bytes()[i] == b':' => Shape::Scheme {
+        Some(i) if cleaned.as_bytes()[i] == b':' && is_scheme(&cleaned[..i]) => Shape::Scheme {
             scheme: cleaned[..i].to_ascii_lowercase(),
             rest: cleaned[i + 1..].to_ascii_lowercase(),
         },
@@ -71,12 +163,14 @@ fn shape(raw: &str) -> Shape {
 /// `Some(raw)` — unchanged — when `raw` is allowed for `kind`, else `None`.
 pub(crate) fn safe_url(raw: &str, kind: UrlKind) -> Option<&str> {
     let ok = match (shape(raw), kind) {
-        (Shape::Relative, UrlKind::Frame) => false,
+        (Shape::Relative, UrlKind::Frame) => host_allows_frame_path(raw),
         (Shape::Relative, _) => true,
         (Shape::ProtocolRelative, UrlKind::Link | UrlKind::Image) => true,
         (Shape::ProtocolRelative, _) => false,
         (Shape::Scheme { scheme, rest }, kind) => match kind {
-            UrlKind::Link => matches!(scheme.as_str(), "http" | "https" | "mailto" | "tel"),
+            UrlKind::Link => {
+                matches!(scheme.as_str(), "http" | "https" | "mailto" | "tel") || host_allows_link_scheme(&scheme)
+            }
             UrlKind::Image => {
                 matches!(scheme.as_str(), "http" | "https")
                     || (scheme == "data" && rest.starts_with("image/"))
@@ -257,5 +351,91 @@ mod tests {
         assert_eq!(css_url("/a');x:url('b)"), "/a%27%29;x:url%28%27b%29");
         assert_eq!(css_url("/a\\b\nc"), "/a%5Cb%0Ac");
         assert_eq!(css_url("data:image/png;base64,AA"), "data:image/png;base64,AA");
+    }
+
+    #[test]
+    fn text_before_a_colon_that_is_no_scheme_is_relative() {
+        // A template's image-slot marker rides in a `src` until the slot is
+        // filled; a browser reads it as a relative reference too.
+        let marker = "«IMG: a wide photo of the venue or last year's crowd»";
+        assert_eq!(safe_url(marker, UrlKind::Image), Some(marker));
+        assert_eq!(src_or_empty(marker, UrlKind::Image), marker);
+        assert_eq!(css_url(marker), "«IMG: a wide photo of the venue or last year%27s crowd»");
+        assert_eq!(safe_url("«FILL: site | https://example.com»", UrlKind::Link), Some("«FILL: site | https://example.com»"));
+        assert_eq!(safe_url("1:2", UrlKind::Link), Some("1:2"));
+        // …and never a frame, and a real scheme behind such text is still read.
+        assert_eq!(safe_url(marker, UrlKind::Frame), None);
+        assert_eq!(safe_url("javascript:«IMG: x»", UrlKind::Image), None);
+        assert_eq!(safe_url("java+script.x-1:y", UrlKind::Link), None);
+    }
+
+    fn host() -> HostUrls {
+        HostUrls {
+            same_origin_frame_prefixes: vec!["/email/".into()],
+            link_schemes: vec!["cursor".into(), "VSCode".into(), "javascript".into(), "data".into()],
+        }
+    }
+
+    #[test]
+    fn without_a_host_the_door_is_shut() {
+        assert_eq!(safe_url("/email/thr/body", UrlKind::Frame), None);
+        assert_eq!(safe_url("cursor://anysphere.cursor-deeplink/mcp/install?name=a", UrlKind::Link), None);
+        assert_eq!(safe_url("vscode:mcp/install?x", UrlKind::Link), None);
+    }
+
+    #[test]
+    fn the_host_frames_its_own_prefix_and_nothing_else() {
+        let _h = install_host_urls(host());
+        assert_eq!(safe_url("/email/thr/body", UrlKind::Frame), Some("/email/thr/body"));
+        assert_eq!(safe_url("/email/t%3Fx/body?images=1", UrlKind::Frame), Some("/email/t%3Fx/body?images=1"));
+        for raw in [
+            "/settings/danger",
+            "/emailx/thr/body",
+            "email/thr/body",
+            "//email/thr/body",
+            "/\\email/x",
+            "/email/../settings/danger",
+            "/email/thr/..",
+            "/email/%2e%2e/settings",
+            "/email/%2E%2e%2fsettings",
+            "/email/a\\..\\b",
+            "/email/a?next=/..",
+            "http://example.com/email/",
+            "",
+        ] {
+            assert_eq!(safe_url(raw, UrlKind::Frame), None, "{raw:?}");
+        }
+        // https frames are what they were.
+        assert_eq!(safe_url("https://example.com/f", UrlKind::Frame), Some("https://example.com/f"));
+    }
+
+    #[test]
+    fn the_host_names_link_schemes_but_never_a_script_one() {
+        let _h = install_host_urls(host());
+        let cursor = "cursor://anysphere.cursor-deeplink/mcp/install?name=a&config=e30%3D";
+        assert_eq!(safe_url(cursor, UrlKind::Link), Some(cursor));
+        assert_eq!(safe_url("vscode:mcp/install?%7B%7D", UrlKind::Link), Some("vscode:mcp/install?%7B%7D"));
+        assert_eq!(safe_url("CURSOR://x", UrlKind::Link), Some("CURSOR://x"));
+        // named by the host, refused all the same
+        assert_eq!(safe_url("javascript:alert(1)", UrlKind::Link), None);
+        assert_eq!(safe_url("data:text/html,x", UrlKind::Link), None);
+        // a host link scheme is a LINK scheme only
+        for k in [UrlKind::Image, UrlKind::Frame, UrlKind::FormAction] {
+            assert_eq!(safe_url(cursor, k), None);
+        }
+        assert_eq!(safe_url("zed://x", UrlKind::Link), None);
+    }
+
+    #[test]
+    fn the_guard_restores_what_was_there() {
+        {
+            let _outer = install_host_urls(HostUrls { link_schemes: vec!["cursor".into()], ..Default::default() });
+            {
+                let _inner = install_host_urls(HostUrls::default());
+                assert_eq!(safe_url("cursor://x", UrlKind::Link), None);
+            }
+            assert_eq!(safe_url("cursor://x", UrlKind::Link), Some("cursor://x"));
+        }
+        assert_eq!(safe_url("cursor://x", UrlKind::Link), None);
     }
 }
