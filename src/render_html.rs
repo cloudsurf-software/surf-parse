@@ -6,6 +6,7 @@
 
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
+use crate::url_policy::{css_url, css_value, link_href, safe_url, src_or_empty, UrlKind};
 use crate::types::{Block, CalloutType, CarouselSlide, ChartType, DecisionStatus, Format, FormField, FormFieldType, HoursRow, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
@@ -579,7 +580,7 @@ fn render_nav_shell_html(items: &[crate::types::NavItem], effective_logo: Option
         if is_image {
             html.push_str(&format!(
                 "<a class=\"surfdoc-nav-logo\" href=\"/\"><img src=\"{}\" alt=\"Logo\" class=\"surfdoc-nav-logo-img\" data-img-fallback=\"logo\" data-img-fallback-text=\"Surf\"></a>",
-                escape_html(logo_text),
+                escape_html(src_or_empty(logo_text, UrlKind::Image)),
             ));
         } else {
             html.push_str(&format!(
@@ -613,7 +614,7 @@ fn render_nav_shell_html(items: &[crate::types::NavItem], effective_logo: Option
             .unwrap_or_default();
         html.push_str(&format!(
             "<a href=\"{}\" class=\"surfdoc-nav-drawer-row\">{}<span class=\"surfdoc-nav-drawer-label\">{}</span></a>",
-            escape_html(&item.href),
+            escape_html(link_href(&item.href)),
             icon_html,
             escape_html(&item.label),
         ));
@@ -662,7 +663,7 @@ fn shell_brand_inner(logo: Option<&str>, brand: Option<&str>, brand_reg: bool, e
     {
         s.push_str(&format!(
             "<img src=\"{}\" alt=\"\" width=\"34\" height=\"34\" class=\"{}\">",
-            escape_html(l),
+            escape_html(src_or_empty(l, UrlKind::Image)),
             emblem_class,
         ));
     }
@@ -683,7 +684,7 @@ fn render_shell_drawer_link(it: &NavItem) -> String {
         // the monochrome line icons. The asset path rides the --emblem property.
         format!(
             "<span class=\"surfdoc-shell-drawer-link-emblem\" style=\"--emblem:url('{}')\"></span>",
-            escape_html(img),
+            escape_html(&css_url(img)),
         )
     } else if let Some(svg) = it.icon.as_deref().and_then(get_icon) {
         format!("<span class=\"surfdoc-shell-drawer-link-icon\">{}</span>", svg)
@@ -692,7 +693,7 @@ fn render_shell_drawer_link(it: &NavItem) -> String {
     };
     format!(
         "<a href=\"{}\" class=\"surfdoc-shell-drawer-link\"{}>{}{}</a>",
-        escape_html(&it.href),
+        escape_html(link_href(&it.href)),
         tgt,
         lead,
         escape_html(&it.label),
@@ -723,7 +724,7 @@ fn render_shell_nav_html(
             let tgt = if c.external { " target=\"_blank\" rel=\"noopener\"" } else { "" };
             format!(
                 "<div class=\"surfdoc-shell-nav-links\"><a href=\"{}\" class=\"surfdoc-shell-nav-cta\"{}>{}</a></div>",
-                escape_html(&c.href),
+                escape_html(link_href(&c.href)),
                 tgt,
                 escape_html(&c.label),
             )
@@ -738,7 +739,7 @@ fn render_shell_nav_html(
         let tgt = if it.external { " target=\"_blank\" rel=\"noopener\"" } else { "" };
         inline_links.push_str(&format!(
             "<a href=\"{}\" class=\"surfdoc-shell-nav-link\"{}>{}</a>",
-            escape_html(&it.href),
+            escape_html(link_href(&it.href)),
             tgt,
             escape_html(&it.label),
         ));
@@ -838,11 +839,11 @@ fn product_tile_bg(bg: Option<&str>) -> (String, bool, bool, bool) {
     let style = if let Some(src) = spec.strip_prefix("image:") {
         // Rendered as a media area BELOW the tile copy (apple.com tile shape),
         // not as a cover background: the caller puts this on the media div.
-        format!("--tile-image:url('{}')", escape_html(src.trim()))
+        format!("--tile-image:url('{}')", escape_html(&css_url(src.trim())))
     } else if let Some(color) = spec.strip_prefix("color:") {
-        format!("background:{}", escape_html(color.trim()))
+        css_value(color.trim()).map(|c| format!("background:{}", escape_html(c))).unwrap_or_default()
     } else if let Some(gradient) = spec.strip_prefix("gradient:") {
-        format!("background:{}", escape_html(gradient.trim()))
+        css_value(gradient.trim()).map(|g| format!("background:{}", escape_html(g))).unwrap_or_default()
     } else {
         // "transparent" (explicit), "surface" (opaque theme surface — the
         // caller styles it via the .surfdoc-pg-tile-surface class so the ink
@@ -2483,7 +2484,8 @@ fn render_app_tabbar(children: &[Block]) -> String {
             "surfdoc-app-tabbar-item"
         };
         let href_attr = match href {
-            Some(h) => format!(" data-href=\"{}\"", escape_html(h)),
+            // A script consumes data-href as a navigation target: the link rule applies.
+            Some(h) => format!(" data-href=\"{}\"", escape_html(link_href(h))),
             None => String::new(),
         };
         // Forward the source row's verb (0.14): same verbatim data-action
@@ -3214,7 +3216,7 @@ fn carousel_html(slides: &[CarouselSlide], id: Option<&str>, aspect: Option<&str
         if let Some(src) = &slide.image {
             out.push_str(&format!(
                 "<figure class=\"surfdoc-carousel-media\"><img src=\"{}\" alt=\"{}\" loading=\"lazy\" /></figure>",
-                escape_html(src),
+                escape_html(src_or_empty(src, UrlKind::Image)),
                 escape_html(slide.alt.as_deref().unwrap_or("")),
             ));
         }
@@ -3285,7 +3287,7 @@ fn stepped_form_html(
     id: Option<&str>,
 ) -> String {
     let btn_label = submit_label.unwrap_or("Submit");
-    let target_attrs = match action {
+    let target_attrs = match action.and_then(|a| safe_url(a, UrlKind::FormAction)) {
         Some(a) => format!(
             " method=\"{}\" action=\"{}\"",
             escape_html(method.unwrap_or("post")),
@@ -3545,7 +3547,7 @@ fn render_block_inner(block: &Block) -> String {
                 match linked.and_then(data_source_href) {
                     Some(href) => html.push_str(&format!(
                         "<a class=\"surfdoc-table-more\" href=\"{}\">{text}</a>",
-                        escape_html(&href)
+                        escape_html(link_href(&href))
                     )),
                     None => html.push_str(&format!(
                         "<p class=\"surfdoc-table-more\">{text}</p>"
@@ -3747,7 +3749,7 @@ fn render_block_inner(block: &Block) -> String {
             // delegated capture-phase error listener performs the swap.
             format!(
                 "<figure class=\"surfdoc-figure\"><div class=\"surfdoc-figure-img\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"hide\" /></div>{caption_html}</figure>",
-                escape_html(src),
+                escape_html(src_or_empty(src, UrlKind::Image)),
                 escape_html(alt_attr),
             )
         }
@@ -3899,7 +3901,7 @@ fn render_block_inner(block: &Block) -> String {
             format!(
                 "<a class=\"{}\" href=\"{}\">{}{}</a>",
                 class,
-                escape_html(href),
+                escape_html(link_href(href)),
                 icon_html,
                 escape_html(label),
             )
@@ -3915,7 +3917,7 @@ fn render_block_inner(block: &Block) -> String {
             format!(
                 "<div class=\"surfdoc-hero-image\"{}><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\" /></div>",
                 role_attr,
-                escape_html(src),
+                escape_html(src_or_empty(src, UrlKind::Image)),
                 escape_html(alt_attr),
             )
         }
@@ -4190,15 +4192,17 @@ fn render_block_inner(block: &Block) -> String {
             // (youtu.be/xyz etc.) don't produce an error box.
             let is_generic = matches!(embed_type, None | Some(crate::types::EmbedType::Generic));
             if is_generic && !src.is_empty() && height.is_some() {
-                let h = height.as_deref().unwrap();
-                let w = width.as_deref().unwrap_or("100%");
+                // A width / height that could write a url() is refused: the
+                // width falls back to 100%, the height to an empty value.
+                let h = css_value(height.as_deref().unwrap()).unwrap_or("");
+                let w = width.as_deref().and_then(css_value).unwrap_or("100%");
                 let title_attr = match title {
                     Some(t) => format!(" title=\"{}\"", escape_html(t)),
                     None => String::new(),
                 };
                 return format!(
                     "<iframe class=\"surfdoc-embed-frame\" src=\"{}\"{} style=\"width:{};height:{};border:0\" loading=\"lazy\"></iframe>",
-                    escape_html(src),
+                    escape_html(src_or_empty(src, UrlKind::Frame)),
                     title_attr,
                     escape_html(w),
                     escape_html(h),
@@ -4251,7 +4255,7 @@ fn render_block_inner(block: &Block) -> String {
         } => {
             let btn_label = submit_label.as_deref().unwrap_or("Submit");
             // A real submission target makes the form POST to a server route.
-            let target_attrs = match action {
+            let target_attrs = match action.as_deref().and_then(|a| safe_url(a, UrlKind::FormAction)) {
                 Some(a) => {
                     let m = method.as_deref().unwrap_or("post");
                     format!(" method=\"{}\" action=\"{}\"", escape_html(m), escape_html(a))
@@ -4308,7 +4312,7 @@ fn render_block_inner(block: &Block) -> String {
                     let target = if btn.external { " target=\"_blank\" rel=\"noopener\"" } else { "" };
                     parts.push(format!(
                         "<a href=\"{}\" class=\"{}\"{}>{}</a>",
-                        escape_html(&btn.href),
+                        escape_html(link_href(&btn.href)),
                         cls,
                         target,
                         escape_html(&btn.label)
@@ -4442,7 +4446,7 @@ fn render_block_inner(block: &Block) -> String {
                         let s_rel = if sh.contains("://") { " target=\"_blank\" rel=\"noopener\"" } else { "" };
                         parts.push(format!(
                             "<a href=\"{}\" class=\"surfdoc-pg-tile-stretch\" tabindex=\"-1\" aria-hidden=\"true\"{}></a>",
-                            escape_html(sh),
+                            escape_html(link_href(sh)),
                             s_rel,
                         ));
                     }
@@ -4473,7 +4477,7 @@ fn render_block_inner(block: &Block) -> String {
                         } else {
                             parts.push(format!(
                                 "<img src=\"{}\" alt=\"\" width=\"48\" height=\"48\" class=\"surfdoc-pg-tile-emblem\" loading=\"lazy\" data-img-fallback=\"broken\">",
-                                escape_html(emblem)
+                                escape_html(src_or_empty(emblem, UrlKind::Image))
                             ));
                         }
                     }
@@ -4495,7 +4499,7 @@ fn render_block_inner(block: &Block) -> String {
                     if linked {
                         parts.push(format!(
                             "<a href=\"{}\" class=\"surfdoc-pg-tile-cta\"{}>{}</a>",
-                            escape_html(p_href),
+                            escape_html(link_href(p_href)),
                             p_rel,
                             escape_html(p_label),
                         ));
@@ -4504,7 +4508,7 @@ fn render_block_inner(block: &Block) -> String {
                         let rel2 = if h.contains("://") { " target=\"_blank\" rel=\"noopener\"" } else { "" };
                         parts.push(format!(
                             "<a href=\"{}\" class=\"surfdoc-pg-tile-cta surfdoc-pg-tile-cta-secondary\"{}>{}</a>",
-                            escape_html(h),
+                            escape_html(link_href(h)),
                             rel2,
                             escape_html(l),
                         ));
@@ -4569,7 +4573,7 @@ fn render_block_inner(block: &Block) -> String {
                         };
                         parts.push(format!(
                             "<a href=\"{}\" class=\"surfdoc-pg-card\" data-product=\"{}\"{}>",
-                            escape_html(&item.href),
+                            escape_html(link_href(&item.href)),
                             escape_html(&slug),
                             rel
                         ));
@@ -4587,7 +4591,7 @@ fn render_block_inner(block: &Block) -> String {
                         } else {
                             parts.push(format!(
                                 "<img src=\"{}\" alt=\"\" width=\"40\" height=\"40\" class=\"surfdoc-pg-emblem\" loading=\"lazy\" data-img-fallback=\"broken\">",
-                                escape_html(emblem)
+                                escape_html(src_or_empty(emblem, UrlKind::Image))
                             ));
                         }
                     }
@@ -4647,13 +4651,13 @@ fn render_block_inner(block: &Block) -> String {
                 };
                 parts.push(format!(
                     "<a class=\"surfdoc-post-card\" href=\"{}\"{}>",
-                    escape_html(&item.href),
+                    escape_html(link_href(&item.href)),
                     rel
                 ));
                 if let Some(image) = &item.image {
                     parts.push(format!(
                         "<span class=\"surfdoc-post-card-img\" style=\"--img:url('{}')\"></span>",
-                        escape_html(image)
+                        escape_html(&css_url(image))
                     ));
                 }
                 parts.push("<span class=\"surfdoc-post-card-body\">".to_string());
@@ -4709,9 +4713,12 @@ fn render_block_inner(block: &Block) -> String {
                     escape_html(e)
                 ));
             }
+            let gate_action = safe_url(action, UrlKind::FormAction)
+                .map(|a| format!(" action=\"{}\"", escape_html(a)))
+                .unwrap_or_default();
             parts.push(format!(
-                "<form method=\"post\" action=\"{}\"><input type=\"password\" name=\"code\" class=\"surfdoc-gate-input\" placeholder=\"{}\" required autofocus autocomplete=\"off\"><button class=\"surfdoc-gate-submit\" type=\"submit\">{}</button></form>",
-                escape_html(action),
+                "<form method=\"post\"{}><input type=\"password\" name=\"code\" class=\"surfdoc-gate-input\" placeholder=\"{}\" required autofocus autocomplete=\"off\"><button class=\"surfdoc-gate-submit\" type=\"submit\">{}</button></form>",
+                gate_action,
                 escape_html(placeholder),
                 escape_html(submit),
             ));
@@ -4759,7 +4766,7 @@ fn render_block_inner(block: &Block) -> String {
                 ));
                 html.push_str(&format!(
                     "<img src=\"{}\" alt=\"{}\" loading=\"lazy\" data-img-fallback=\"hide\" />",
-                    escape_html(&item.src),
+                    escape_html(src_or_empty(&item.src, UrlKind::Image)),
                     escape_html(alt),
                 ));
                 if let Some(cap) = &item.caption {
@@ -4804,7 +4811,7 @@ fn render_block_inner(block: &Block) -> String {
                         } else {
                             html.push_str(&format!(
                                 "<a href=\"{}\"{}>{}</a>",
-                                escape_html(&link.href),
+                                escape_html(link_href(&link.href)),
                                 tgt,
                                 escape_html(&link.label),
                             ));
@@ -4818,7 +4825,7 @@ fn render_block_inner(block: &Block) -> String {
                     for link in social {
                         html.push_str(&format!(
                             "<a href=\"{}\" class=\"social-link\" aria-label=\"{}\">{}</a>",
-                            escape_html(&link.href),
+                            escape_html(link_href(&link.href)),
                             escape_html(&link.platform),
                             escape_html(&link.platform),
                         ));
@@ -4844,7 +4851,7 @@ fn render_block_inner(block: &Block) -> String {
                         } else {
                             html.push_str(&format!(
                                 "<li><a href=\"{}\">{}</a></li>",
-                                escape_html(&link.href),
+                                escape_html(link_href(&link.href)),
                                 escape_html(&link.label),
                             ));
                         }
@@ -4858,7 +4865,7 @@ fn render_block_inner(block: &Block) -> String {
                 for link in social {
                     html.push_str(&format!(
                         "<a href=\"{}\" class=\"social-link\" aria-label=\"{}\">{}</a>",
-                        escape_html(&link.href),
+                        escape_html(link_href(&link.href)),
                         escape_html(&link.platform),
                         escape_html(&link.platform),
                     ));
@@ -4937,7 +4944,7 @@ fn render_block_inner(block: &Block) -> String {
             let cover_style = if cover {
                 format!(
                     " style=\"background-image:url('{}')\"",
-                    escape_html(image.as_deref().unwrap_or(""))
+                    escape_html(&css_url(image.as_deref().unwrap_or("")))
                 )
             } else {
                 String::new()
@@ -4950,7 +4957,7 @@ fn render_block_inner(block: &Block) -> String {
                 if let Some(img) = image {
                     // data-img-fallback replaces the inline onerror handler
                     // (TT sink) — see the Figure arm note.
-                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\"></div>", escape_html(img), escape_html(alt)));
+                    parts.push(format!("<div class=\"surfdoc-hero-image\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\"></div>", escape_html(src_or_empty(img, UrlKind::Image)), escape_html(alt)));
                 }
             }
             if let Some(b) = badge {
@@ -4967,7 +4974,7 @@ fn render_block_inner(block: &Block) -> String {
                 for btn in buttons {
                     let cls = if btn.primary { "surfdoc-hero-btn surfdoc-hero-btn-primary" } else { "surfdoc-hero-btn surfdoc-hero-btn-secondary" };
                     let target = if btn.external { " target=\"_blank\" rel=\"noopener\"" } else { "" };
-                    parts.push(format!("<a href=\"{}\" class=\"{}\"{}>{}</a>", escape_html(&btn.href), cls, target, escape_html(&btn.label)));
+                    parts.push(format!("<a href=\"{}\" class=\"{}\"{}>{}</a>", escape_html(link_href(&btn.href)), cls, target, escape_html(&btn.label)));
                 }
                 parts.push("</div>".to_string());
             }
@@ -4975,7 +4982,7 @@ fn render_block_inner(block: &Block) -> String {
             // Left-aligned layout: image to the side (side-by-side)
             if image_side {
                 if let Some(img) = image {
-                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\"></div>", escape_html(img), escape_html(alt)));
+                    parts.push(format!("<div class=\"surfdoc-hero-image-side\"><img src=\"{}\" alt=\"{}\" data-img-fallback=\"broken\"></div>", escape_html(src_or_empty(img, UrlKind::Image)), escape_html(alt)));
                 }
             }
             parts.push("</section>".to_string());
@@ -4998,7 +5005,7 @@ fn render_block_inner(block: &Block) -> String {
                     parts.push(render_wrapped_phrasing_or_blocks(Some("surfdoc-feature-body"), &card.body));
                 }
                 if let (Some(label), Some(href)) = (&card.link_label, &card.link_href) {
-                    parts.push(format!("<a href=\"{}\" class=\"surfdoc-feature-link\">{} \u{2192}</a>", escape_html(href), escape_html(label)));
+                    parts.push(format!("<a href=\"{}\" class=\"surfdoc-feature-link\">{} \u{2192}</a>", escape_html(link_href(href)), escape_html(label)));
                 }
                 parts.push("</div>".to_string());
             }
@@ -5029,7 +5036,7 @@ fn render_block_inner(block: &Block) -> String {
             let mut parts = Vec::new();
             parts.push("<div class=\"surfdoc-stats\">".to_string());
             for item in items {
-                let style = item.color.as_ref().map(|c| format!(" style=\"color:{}\"", escape_html(c))).unwrap_or_default();
+                let style = item.color.as_deref().and_then(css_value).map(|c| format!(" style=\"color:{}\"", escape_html(c))).unwrap_or_default();
                 parts.push(format!(
                     "<div class=\"surfdoc-stat\"><span class=\"surfdoc-stat-value\"{}>{}</span><span class=\"surfdoc-stat-label\">{}</span></div>",
                     style, escape_html(&item.value), escape_html(&item.label)
@@ -5076,7 +5083,7 @@ fn render_block_inner(block: &Block) -> String {
             let style = size.map(|s| format!(" style=\"max-width:{}px\"", s)).unwrap_or_default();
             format!(
                 "<div class=\"surfdoc-logo\"><img src=\"{}\" alt=\"{}\"{}></div>",
-                escape_html(src), alt_attr, style
+                escape_html(src_or_empty(src, UrlKind::Image)), alt_attr, style
             )
         }
 
@@ -5233,7 +5240,7 @@ fn render_block_inner(block: &Block) -> String {
             if let (Some(label), Some(href)) = (cta_label, cta_href) {
                 parts.push(format!(
                     "<a href=\"{}\" class=\"surfdoc-product-cta\">{}</a>",
-                    escape_html(href),
+                    escape_html(link_href(href)),
                     escape_html(label)
                 ));
             }
@@ -5389,13 +5396,19 @@ fn render_block_inner(block: &Block) -> String {
                 HttpMethod::Patch => "patch",
                 HttpMethod::Delete => "delete",
             };
-            let mut html = format!(
-                "<form class=\"surfdoc-action\" method=\"{}\" action=\"{}\" data-surf-method=\"{}\" data-surf-action=\"{}\"",
-                method_str,
-                escape_html(target),
-                method_str,
-                escape_html(target),
-            );
+            let mut html = match safe_url(target, UrlKind::FormAction) {
+                Some(t) => format!(
+                    "<form class=\"surfdoc-action\" method=\"{}\" action=\"{}\" data-surf-method=\"{}\" data-surf-action=\"{}\"",
+                    method_str,
+                    escape_html(t),
+                    method_str,
+                    escape_html(t),
+                ),
+                None => format!(
+                    "<form class=\"surfdoc-action\" method=\"{}\" data-surf-method=\"{}\"",
+                    method_str, method_str,
+                ),
+            };
             if let Some(c) = confirm {
                 html.push_str(&format!(" data-surf-confirm=\"{}\"", escape_html(c)));
             }
@@ -5940,7 +5953,7 @@ fn render_block_inner(block: &Block) -> String {
 
         Block::DeployUrls { entries, .. } => {
             let items: Vec<String> = entries.iter()
-                .map(|p| format!("<li>{}: <a href=\"{}\">{}</a></li>", escape_html(&p.key), escape_html(&p.value), escape_html(&p.value)))
+                .map(|p| format!("<li>{}: <a href=\"{}\">{}</a></li>", escape_html(&p.key), escape_html(link_href(&p.value)), escape_html(&p.value)))
                 .collect();
             format!("<div class=\"surfdoc-infra-card surfdoc-deploy-urls\"><strong class=\"surfdoc-infra-label\">Deploy URLs</strong><ul>{}</ul></div>", items.join(""))
         }
@@ -6135,7 +6148,7 @@ fn render_block_inner(block: &Block) -> String {
             let arrow_svg = "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"9 18 15 12 9 6\"/></svg>";
             let tag = if href.is_some() { "a" } else { "div" };
             let href_attr = match href {
-                Some(h) => format!(" href=\"{}\"", escape_html(h)),
+                Some(h) => format!(" href=\"{}\"", escape_html(link_href(h))),
                 None => String::new(),
             };
             // Row-level action (0.14): dispatcher hook stamped verbatim on
@@ -6267,7 +6280,7 @@ fn render_block_inner(block: &Block) -> String {
             let mut html = format!("<div class=\"surfdoc-infocard{state_class}\">");
             html.push_str("<div class=\"surfdoc-infocard-header\">");
             if let Some(img) = image {
-                html.push_str(&format!("<img class=\"surfdoc-infocard-image\" src=\"{}\" alt=\"{}\">", escape_html(img), escape_html(title)));
+                html.push_str(&format!("<img class=\"surfdoc-infocard-image\" src=\"{}\" alt=\"{}\">", escape_html(src_or_empty(img, UrlKind::Image)), escape_html(title)));
             }
             html.push_str("<div class=\"surfdoc-infocard-info\">");
             html.push_str(&format!("<h3 class=\"surfdoc-infocard-title\">{}</h3>", escape_html(title)));
@@ -6927,7 +6940,7 @@ fn render_block_inner(block: &Block) -> String {
             for item in items {
                 html.push_str(&format!(
                     "<li class=\"surfdoc-related-item\"><a class=\"surfdoc-related-link\" href=\"{}\">{}</a>",
-                    escape_html(&item.href),
+                    escape_html(link_href(&item.href)),
                     escape_html(item.title.as_deref().unwrap_or(&item.href)),
                 ));
                 if let Some(rel) = &item.relation {
@@ -7174,7 +7187,7 @@ fn render_block_inner(block: &Block) -> String {
             for item in items {
                 html.push_str(&format!(
                     "<li class=\"surfdoc-logo-cloud-item\"><img class=\"surfdoc-logo-cloud-logo\" src=\"{}\" alt=\"{}\" loading=\"lazy\" /></li>",
-                    escape_html(&item.src),
+                    escape_html(src_or_empty(&item.src, UrlKind::Image)),
                     escape_html(&logo_alt(&item.src, item.name.as_deref())),
                 ));
             }
@@ -7184,7 +7197,7 @@ fn render_block_inner(block: &Block) -> String {
 
         Block::Subscribe { action, placeholder, content, .. } => {
             let mut html = String::from("<form class=\"surfdoc-subscribe\" method=\"post\"");
-            if let Some(a) = action {
+            if let Some(a) = action.as_deref().and_then(|a| safe_url(a, UrlKind::FormAction)) {
                 html.push_str(&format!(" action=\"{}\"", escape_html(a)));
             }
             html.push('>');
@@ -7865,7 +7878,7 @@ fn build_site_nav_html(
         };
         nav_html.push_str(&format!(
             "    <a href=\"{}\"{}{}><span class=\"site-nav-link-icon\" aria-hidden=\"true\">{}</span>{}</a>\n",
-            escape_html(&href),
+            escape_html(link_href(&href)),
             if active {
                 " class=\"active\" aria-current=\"page\"".to_string()
             } else {
@@ -10113,6 +10126,9 @@ mod tests {
         let html = to_html(&doc);
         assert!(!html.contains("<script>"));
         assert!(html.contains("&lt;script&gt;"));
+        // The script-scheme href is refused at render time, not passed on.
+        assert!(!html.contains("javascript:"), "{html}");
+        assert!(html.contains("href=\"#\""), "{html}");
     }
 
     #[test]
@@ -12047,6 +12063,8 @@ mod tests {
         assert!(!html.contains("<script>alert"));
         assert!(!html.contains("<img onerror"));
         assert!(html.contains("&lt;script&gt;"));
+        // The script-scheme nav href is refused at render time.
+        assert!(!html.contains("javascript:"), "{html}");
     }
 
     #[test]
@@ -12803,8 +12821,10 @@ About
             span: span(),
         }]);
         let html = to_html(&doc);
-        // Should still render (browser won't execute in img src), but verify no unescaped injection
         assert!(!html.contains("<script>"), "No script injection");
+        // The script-scheme src is refused: the image renders with an empty src.
+        assert!(!html.contains("javascript:"), "{html}");
+        assert!(html.contains("<img src=\"\""), "{html}");
     }
 
     #[test]
@@ -14056,6 +14076,25 @@ About
             html[tabbar_start..].contains("data-action=\"openMessages\""),
             "tab-bar item forwards the row verb"
         );
+    }
+
+    /// The tab bar's data-href is a navigation target a script reads, so the
+    /// link rule applies to it as it does to an href.
+    #[test]
+    fn html_app_tabbar_data_href_takes_the_link_rule() {
+        let shell = |href: &str| {
+            let src = format!(
+                "::app-shell[layout=sidebar-main]\n:::sidebar[position=left]\n::::row[icon=knowledge href=\"{href}\"]\nMessages\n::::\n:::\n::"
+            );
+            crate::parse(&src).doc.to_html()
+        };
+        let ok = shell("/messages");
+        assert!(ok.contains("data-href=\"/messages\""), "{ok}");
+        for h in ["javascript:alert(1)", "JaVaScRiPt:alert(1)", "  javascript:alert(1)", "vbscript:x"] {
+            let html = shell(h);
+            assert!(!html.to_ascii_lowercase().contains("script:"), "{h:?}: {html}");
+            assert!(html.contains("data-href=\"#\""), "{h:?}: {html}");
+        }
     }
 
     #[test]
@@ -15757,6 +15796,197 @@ About
             !html.contains("surfdoc-callout-info"),
             "Context callout must not fall back to Info class: {html}"
         );
+    }
+    /// One hostile address per block type and per URL kind (link, image,
+    /// frame, form action, CSS url), in the spellings a scheme check most
+    /// often misses. Each source is first rendered with a safe address that
+    /// must come through (so the source really reaches the sink), then with
+    /// every hostile spelling, which must be absent from the output.
+    #[test]
+    fn html_url_allowlist_hostile_table() {
+        const OK: &str = "https://example.com/ok-target";
+        let cases: &[(&str, &str)] = &[
+            // link
+            ("cta", "::cta[label=\"Go\" href=\"{U}\"]\n"),
+            ("hero button", "::hero\n# T\n\n[Button]({U}){primary}\n::\n"),
+            ("footer", "::footer\n## Links\n- [Home]({U})\n::\n"),
+            ("nav", "::nav[logo=\"Surf\"]\n- [Home]({U})\n::\n"),
+            ("shell nav", "::nav[drawer brand=\"B\" cta-label=\"Go\" cta-href=\"{U}\"]\n## Explore\n- [R]({U})\n::\n"),
+            ("product grid", "::product-grid\n- Thing | | {U} | Does things\n::\n"),
+            ("related", "::related\n- [T]({U})\n::\n"),
+            ("markdown link", "[x]({U})\n"),
+            // image
+            ("figure", "::figure[src=\"{U}\" alt=\"a\"]\n"),
+            ("hero-image", "::hero-image[src=\"{U}\" alt=\"a\"]\n"),
+            ("gallery", "::gallery\n![a]({U})\n::\n"),
+            ("hero image", "::hero[align=center image=\"{U}\" image-alt=\"a\"]\n# T\n::\n"),
+            ("infocard", "::infocard[image=\"{U}\"]\n# T\n::\n"),
+            // frame
+            ("embed", "::embed[src=\"{U}\" title=\"Demo\" height=\"300\"]\n"),
+            // form action
+            ("form", "::form[action=\"{U}\"]\n- Name (text)\n::\n"),
+            ("subscribe", "::subscribe[action=\"{U}\"]\n::\n"),
+            ("gate", "::gate[title=\"P\" action=\"{U}\" field=\"Code\" submit=\"Go\"]\n::\n"),
+            ("action", "::action[method=post target=\"{U}\" label=\"Add\"]\n- Name (text)\n::\n"),
+            // css url
+            ("hero cover", "::hero[layout=cover align=center image=\"{U}\" image-alt=\"c\"]\n# T\n::\n"),
+            ("tile image", "::product-grid[tiles]\n- Mac | | /mac | x | image:{U} dark\n::\n"),
+        ];
+        let hostile = [
+            "javascript:alert(1)",
+            "JaVaScRiPt:alert(1)",
+            "java\tscript:alert(1)",
+            "   javascript:alert(1)",
+            "javascript&#58;alert(1)",
+            "vbscript:msgbox(1)",
+            "data:text/html,payload",
+        ];
+        // Every URL-bearing value in the output (href, src, action and the
+        // data-surf-action twin, CSS url('…')), as a browser would read its
+        // scheme: entity-decoded once, whitespace and controls dropped, case
+        // folded. Text content is not a URL and is not inspected.
+        let url_values = |html: &str| -> Vec<String> {
+            let mut out = Vec::new();
+            for (open, close) in [("href=\"", '"'), ("src=\"", '"'), ("action=\"", '"'), ("url('", '\'')] {
+                let mut rest = html;
+                while let Some(i) = rest.find(open) {
+                    let after = &rest[i + open.len()..];
+                    let end = after.find(close).unwrap_or(after.len());
+                    let v = after[..end]
+                        .replace("&quot;", "\"")
+                        .replace("&lt;", "<")
+                        .replace("&gt;", ">")
+                        .replace("&#58;", ":")
+                        .replace("&amp;", "&");
+                    out.push(v.chars().filter(|c| !c.is_ascii_control() && *c != ' ').collect::<String>().to_ascii_lowercase());
+                    rest = &after[end..];
+                }
+            }
+            out
+        };
+        for (name, tpl) in cases {
+            // ::action keeps only same-origin targets at parse time.
+            let ok = if *name == "action" { "/api/ok-target" } else { OK };
+            let ok_html = to_html(&crate::parse(&tpl.replace("{U}", ok)).doc);
+            assert!(ok_html.contains(ok), "{name}: the safe address must reach the output: {ok_html}");
+            for h in hostile {
+                let html = to_html(&crate::parse(&tpl.replace("{U}", h)).doc);
+                for v in url_values(&html) {
+                    for scheme in ["javascript:", "vbscript:", "data:text"] {
+                        assert!(!v.starts_with(scheme), "{name} with {h:?}: {v:?} in {html}");
+                    }
+                }
+            }
+        }
+        // Kind-specific refusals: plain http is no frame, protocol-relative is
+        // no form action, data:image is an image only.
+        let frame = to_html(&crate::parse("::embed[src=\"http://example.com/f\" title=\"D\" height=\"300\"]\n").doc);
+        assert!(!frame.contains("http://example.com/f\""), "{frame}");
+        let form = to_html(&crate::parse("::subscribe[action=\"//example.com/collect\"]\n::\n").doc);
+        assert!(!form.contains("example.com/collect"), "{form}");
+        let img = to_html(&crate::parse("::figure[src=\"data:image/png;base64,AAAA\" alt=\"a\"]\n").doc);
+        assert!(img.contains("src=\"data:image/png;base64,AAAA\""), "{img}");
+    }
+
+    /// Spellings the attribute grammar cannot carry (an embedded newline)
+    /// reach the renderer through the block tree directly.
+    #[test]
+    fn html_url_allowlist_newline_and_nul() {
+        for h in ["java\nscript:alert(1)", "java\r\nscript:alert(1)", "\u{0}javascript:alert(1)", " \n javascript:alert(1)"] {
+            let cta = to_html(&doc_with(vec![Block::Cta {
+                label: "Go".into(),
+                href: h.into(),
+                primary: true,
+                icon: None,
+                span: span(),
+            }]));
+            assert!(cta.contains("href=\"#\""), "{h:?}: {cta}");
+            assert!(!cta.contains("script:"), "{h:?}: {cta}");
+            let img = to_html(&doc_with(vec![Block::HeroImage { src: h.into(), alt: None, span: span() }]));
+            assert!(!img.contains("script:"), "{h:?}: {img}");
+            let frame = to_html(&doc_with(vec![Block::Embed {
+                src: h.into(),
+                embed_type: None,
+                width: None,
+                height: Some("300".into()),
+                title: None,
+                span: span(),
+            }]));
+            assert!(frame.contains("<iframe class=\"surfdoc-embed-frame\" src=\"\""), "{h:?}: {frame}");
+        }
+    }
+
+    /// A frame is https only: a relative path would frame the app origin's
+    /// own signed-in routes inside a document.
+    #[test]
+    fn html_url_allowlist_frame_refuses_relative() {
+        let frame = |src: &str| {
+            to_html(&doc_with(vec![Block::Embed {
+                src: src.into(),
+                embed_type: None,
+                width: None,
+                height: Some("300px".into()),
+                title: None,
+                span: span(),
+            }]))
+        };
+        for src in ["/settings/danger", "settings/danger", "./a", "?q=1", "#top", "/\\example.com"] {
+            let html = frame(src);
+            assert!(html.contains("<iframe class=\"surfdoc-embed-frame\" src=\"\""), "{src:?}: {html}");
+        }
+        assert!(frame("https://example.com/f").contains("src=\"https://example.com/f\""));
+    }
+
+    /// A CSS value taken from the document (tile colour / gradient, stat
+    /// colour, embed width / height) never writes a url() or anything that
+    /// could spell or smuggle one; ordinary values are written unchanged.
+    #[test]
+    fn html_css_values_refuse_url() {
+        let hostile = [
+            "red;background-image:url(javascript:alert(1))",
+            "URL(javascript:alert(1))",
+            "u\\72l(javascript:alert(1))",
+            "red}body{background:red",
+            "expression(alert(1))",
+            "image-set('x.png' 1x)",
+        ];
+        let stats = |c: &str| {
+            to_html(&doc_with(vec![Block::Stats {
+                items: vec![crate::types::StatItem { value: "1".into(), label: "A".into(), color: Some(c.into()) }],
+                span: span(),
+            }]))
+        };
+        let embed = |w: &str, h: &str| {
+            to_html(&doc_with(vec![Block::Embed {
+                src: "https://example.com/f".into(),
+                embed_type: None,
+                width: Some(w.into()),
+                height: Some(h.into()),
+                title: None,
+                span: span(),
+            }]))
+        };
+        for h in hostile {
+            for spec in [format!("color:{h}"), format!("gradient:{h}")] {
+                let (style, ..) = product_tile_bg(Some(&spec));
+                assert!(style.is_empty(), "{spec:?}: {style}");
+            }
+            let s = stats(h);
+            assert!(!s.contains("style="), "{h:?}: {s}");
+            for e in [embed(h, "300px"), embed("100%", h)] {
+                let lower = e.to_ascii_lowercase();
+                for bad in ["url(", "expression(", "image-set(", "\\72", "}body{", ";background"] {
+                    assert!(!lower.contains(bad), "{h:?}: {e}");
+                }
+            }
+        }
+        assert_eq!(product_tile_bg(Some("color:#123456")).0, "background:#123456");
+        assert_eq!(
+            product_tile_bg(Some("gradient:linear-gradient(90deg, #000, #fff)")).0,
+            "background:linear-gradient(90deg, #000, #fff)"
+        );
+        assert!(stats("#e11d48").contains(" style=\"color:#e11d48\""));
+        assert!(embed("80%", "480px").contains("style=\"width:80%;height:480px;border:0\""));
     }
 }
 

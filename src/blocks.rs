@@ -2494,17 +2494,14 @@ fn unbold(s: &str) -> &str {
 }
 
 /// A link target for the HTML `href=` / `src=` / `action=` attributes: the
-/// authored value trimmed, with a script scheme (`javascript:`, `data:`,
-/// `vbscript:`) replaced by `#`. Relative paths and http(s) URLs pass — a
+/// authored value trimmed, with any scheme outside the link allow-list
+/// (`crate::url_policy`, `UrlKind::Link`) replaced by `#`. Relative paths,
+/// fragments and http(s) / mailto / tel URLs pass — a
 /// cross-reference points at a repo file or a page, not a mount point, so
 /// `validate_source_path`'s relative-only rule does not apply.
 fn sanitize_href(raw: &str) -> String {
     let trimmed = raw.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    if lower.starts_with("javascript:") || lower.starts_with("data:") || lower.starts_with("vbscript:") {
-        return "#".to_string();
-    }
-    trimmed.to_string()
+    crate::url_policy::link_href(trimmed).to_string()
 }
 
 /// A signed integer attribute (`exit=0`, `exit=-1`); absent or unparsable

@@ -17,6 +17,7 @@
 //! already a deck with zero edits.
 
 use crate::render_html::{escape_html, render_block};
+use crate::url_policy::css_value;
 use crate::types::{Block, SlideLayout, StyleProperty};
 use crate::SurfDoc;
 
@@ -264,10 +265,12 @@ pub fn render_deck_html(config: &DeckConfig, slides: &[SlideEntry]) -> String {
 
     // Per-deck root overrides (author wins over theme default): accent + font.
     let mut root_override = String::new();
-    if let Some(a) = &config.accent {
+    // Both land in a <style> rule: a value that could leave its declaration
+    // or write a url() is dropped.
+    if let Some(a) = config.accent.as_deref().and_then(css_value) {
         root_override.push_str(&format!("--accent:{};", escape_html(a)));
     }
-    if let Some(f) = &config.font {
+    if let Some(f) = config.font.as_deref().and_then(css_value) {
         root_override.push_str(&format!("--sans:{};", escape_html(f)));
     }
     let accent_override = if root_override.is_empty() {
@@ -772,5 +775,18 @@ b | 2
         let a = to_slides_html(&doc);
         let b = to_slides_html(&doc);
         assert_eq!(a, b, "deck HTML must be byte-identical across renders");
+    }
+
+    #[test]
+    fn deck_accent_and_font_refuse_css_url() {
+        let config = DeckConfig {
+            accent: Some("red}body{background:url(javascript:alert(1))".into()),
+            font: Some("x;background:url(javascript:alert(2))".into()),
+            ..Default::default()
+        };
+        let html = render_deck_html(&config, &[]);
+        assert!(!html.contains("javascript:"), "{html}");
+        let ok = DeckConfig { accent: Some("#e11d48".into()), ..Default::default() };
+        assert!(render_deck_html(&ok, &[]).contains("--accent:#e11d48;"));
     }
 }

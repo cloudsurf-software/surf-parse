@@ -3,6 +3,31 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.32.1 — 2026-10-01 (security patch on the 0.32 line: one URL allow-list at render time)
+
+- **One URL allow-list** (`url_policy`, crate-private). Every URL a document supplies is checked when it is
+  written, not only when it is parsed: `href`, `src`, form `action` (and `::action`'s `data-surf-action` twin) and
+  CSS `url('…')` across `render_html` and its constructive twin `render_dom`. The scheme is read the way a browser
+  reads it — ASCII whitespace and control characters ignored, case folded, a colon before any `/`, `?` or `#` is a
+  scheme — and an allowed URL is written unchanged.
+  - link: `http`, `https`, `mailto`, `tel`, protocol-relative, relative, fragment; refused → `#`.
+  - image: `http`, `https`, `data:image/…`, protocol-relative, relative; refused → empty `src` / empty `url()`.
+  - frame: `https` only (no `http`, no protocol-relative, no relative path: a document must not frame the app
+    origin's own routes); refused → empty `src`.
+  - form action: `https` and relative; refused → the `action` attribute is omitted.
+  - CSS `url('…')` (hero cover, post-card image, tile image, drawer emblem): the image rule, then `'`, `(`, `)`, `\`
+    and controls percent-encoded so the value cannot leave the string.
+- CSS values a document supplies (product tile `color:` / `gradient:`, stat `color`, embed `width` / `height`, deck
+  `accent` / `font`) are refused — the declaration is dropped, an embed width falls back to `100%` — when they carry a
+  `url(` / `image(` / `image-set(` / `cross-fade(` / `element(` / `src(` / `expression(` function, a backslash escape,
+  a comment opener, or `;` `{` `}`.
+- `sanitize_href` (parse time) now applies the link rule, so `ftp:`, `file:`, `blob:` and other schemes outside the
+  list become `#` there too, alongside `javascript:` / `data:` / `vbscript:`.
+- Tests: the three tests that pinned the gap (`html_cta_escapes_xss`, `html_nav_escapes_xss`,
+  `html_image_src_xss_escaped`) and `hostile_shell_javascript_and_data_urls` now assert the script address is
+  absent; a hostile table test covers each block type and kind (mixed case, tab, newline, NUL, leading spaces,
+  entity text). No snapshot changed.
+
 ## 0.32.0 — 2026-09-29 (::carousel and ::form steps=true — the Elevate lanes C and Q; TASK-1115 · TASK-1112 under TASK-1110)
 
 - **`::carousel`** (lane C). `Block::Carousel { slides, id, aspect, span }` with `CarouselSlide { title, body, image,
