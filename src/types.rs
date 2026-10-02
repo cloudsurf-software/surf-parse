@@ -176,6 +176,10 @@ pub enum DocType {
     /// Spreadsheet workbook: each top-level `::data` block is one sheet.
     /// Resolves to [`RenderProfile::Spreadsheet`].
     Spreadsheet,
+    /// A note (`type: note`): quick words under a cursor, titled by their
+    /// first line. An ordinary SurfDoc on the ordinary document profile —
+    /// changing `type:` promotes it to any other kind.
+    Note,
 }
 
 /// Publication / citation format for papers and reports (front matter
@@ -646,7 +650,8 @@ pub fn render_profile(doc_type: Option<DocType>, format: Option<Format>) -> Rend
             | DocType::App
             | DocType::Manifest
             | DocType::Contract
-            | DocType::Specification => RenderProfile::Document,
+            | DocType::Specification
+            | DocType::Note => RenderProfile::Document,
         },
     }
 }
@@ -3247,6 +3252,16 @@ mod doc_type_format_tests {
     fn specification_doc_type_serializes_back_to_lowercase() {
         let yaml = serde_yaml::to_string(&DocType::Specification).expect("serialize");
         assert_eq!(yaml.trim(), "specification");
+    }
+
+    // ----- 0.36.0: `type: note` is in-vocabulary -----
+
+    #[test]
+    fn note_doc_type_round_trips_and_renders_on_the_document_profile() {
+        assert_eq!(parse_fm("type: note").doc_type, Some(DocType::Note));
+        let yaml = serde_yaml::to_string(&DocType::Note).expect("serialize");
+        assert_eq!(yaml.trim(), "note");
+        assert_eq!(render_profile(Some(DocType::Note), None), RenderProfile::Document);
     }
 
     // ----- 0.20.0: `type: spreadsheet` is in-vocabulary -----

@@ -898,6 +898,7 @@ fn doc_type_str(dt: crate::types::DocType) -> &'static str {
         DocType::Contract => "contract",
         DocType::Specification => "specification",
         DocType::Spreadsheet => "spreadsheet",
+        DocType::Note => "note",
     }
 }
 

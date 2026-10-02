@@ -1367,6 +1367,7 @@ fn doc_type_name(doc_type: DocType) -> &'static str {
         DocType::Contract => "contract",
         DocType::Specification => "specification",
         DocType::Spreadsheet => "spreadsheet",
+        DocType::Note => "note",
     }
 }
 

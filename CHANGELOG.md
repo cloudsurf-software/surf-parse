@@ -3,6 +3,15 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.36.0 — 2026-10-01 (the note doc type — `type: note`; additive, no render or schema move)
+
+- **`DocType::Note`** (`type: note` in front matter): quick words under a cursor, titled by their first line in the
+  CloudSurf clients. It is an ordinary SurfDoc — it resolves to `RenderProfile::Document`, lints and builds under the
+  word `note`, and changing `type:` promotes it to any other kind. `app` and `site` are NOT new types: `App`, `Website`
+  and `Web` already exist.
+- Additive only: no block, render path, native schema (stays 14), FFI or wasm surface moves. A consumer on an earlier
+  tag reads `type: note` as an unknown type exactly as before.
+
 ## 0.35.0 — 2026-10-01 (the site nav standard — the Khoury's nav for every doc.surf site; web CSS only, no schema move)
 
 - **`SITE_NAV_CSS` is rewritten as the doc.surf nav standard.** The bar keeps its markup (every needle surf's container
