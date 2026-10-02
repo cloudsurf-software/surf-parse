@@ -53,6 +53,7 @@ use crate::render_html::{
     self, escape_markdown_in_slot_markers, slugify, split_explicit_anchor,
 };
 use crate::limits::ParseLimits;
+use crate::url_policy::{css_url, css_value, link_href, safe_url, src_or_empty, UrlKind};
 use crate::render_html::chart_type_str;
 use crate::types::{AdaptiveMode, AppShellLayout, Block, FormFieldType, PanelSlotRole, PerClass, RowState, SizeClass, SurfDoc, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 use crate::render_html::{default_preset, fr_tracks, panels_grid_style, panels_slot_placement};
@@ -1928,7 +1929,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-figure-img"));
             dom.open("img", CloseStyle::SelfCloseSpace);
-            dom.attr("src", AttrVal::Markup(src));
+            dom.attr("src", AttrVal::Markup(src_or_empty(src, UrlKind::Image)));
             dom.attr("alt", AttrVal::Markup(alt_attr));
             dom.attr("data-img-fallback", AttrVal::Markup("hide"));
             dom.close();
@@ -2105,7 +2106,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                         "surfdoc-banner-btn surfdoc-banner-btn-secondary"
                     };
                     dom.open("a", CloseStyle::Normal);
-                    dom.attr("href", AttrVal::Markup(&btn.href));
+                    dom.attr("href", AttrVal::Markup(link_href(&btn.href)));
                     dom.attr("class", AttrVal::Markup(cls));
                     if btn.external {
                         dom.attr("target", AttrVal::Markup("_blank"));
@@ -2203,7 +2204,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     dom.open("figure", CloseStyle::Normal);
                     dom.attr("class", AttrVal::Markup("surfdoc-carousel-media"));
                     dom.open("img", CloseStyle::SelfCloseSpace);
-                    dom.attr("src", AttrVal::Markup(src));
+                    dom.attr("src", AttrVal::Markup(src_or_empty(src, UrlKind::Image)));
                     dom.attr("alt", AttrVal::Markup(slide.alt.as_deref().unwrap_or("")));
                     dom.attr("loading", AttrVal::Markup("lazy"));
                     dom.close();
@@ -2438,14 +2439,14 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 build_hero_video(dom, player);
             }
             if cover {
-                // Byte-parity note: render_html escape_html's the src INSIDE
-                // url('…') but leaves apostrophes alone (known flaw, pinned
-                // by hostile fixtures). Markup() reproduces it exactly.
+                // css_url applies the image allow-list and percent-encodes
+                // the quote / parenthesis / backslash that could leave the
+                // url('…'), exactly as render_html does.
                 dom.attr(
                     "style",
                     AttrVal::Markup(&format!(
                         "background-image:url('{}')",
-                        image.as_deref().unwrap_or("")
+                        css_url(image.as_deref().unwrap_or(""))
                     )),
                 );
             }
@@ -2456,7 +2457,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     dom.open("div", CloseStyle::Normal);
                     dom.attr("class", AttrVal::Markup("surfdoc-hero-image"));
                     dom.open("img", CloseStyle::Void);
-                    dom.attr("src", AttrVal::Markup(img));
+                    dom.attr("src", AttrVal::Markup(src_or_empty(img, UrlKind::Image)));
                     dom.attr("alt", AttrVal::Markup(alt));
                     dom.attr("data-img-fallback", AttrVal::Markup("broken"));
                     dom.close();
@@ -2488,7 +2489,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                         "surfdoc-hero-btn surfdoc-hero-btn-secondary"
                     };
                     dom.open("a", CloseStyle::Normal);
-                    dom.attr("href", AttrVal::Markup(&btn.href));
+                    dom.attr("href", AttrVal::Markup(link_href(&btn.href)));
                     dom.attr("class", AttrVal::Markup(cls));
                     if btn.external {
                         dom.attr("target", AttrVal::Markup("_blank"));
@@ -2505,7 +2506,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     dom.open("div", CloseStyle::Normal);
                     dom.attr("class", AttrVal::Markup("surfdoc-hero-image-side"));
                     dom.open("img", CloseStyle::Void);
-                    dom.attr("src", AttrVal::Markup(img));
+                    dom.attr("src", AttrVal::Markup(src_or_empty(img, UrlKind::Image)));
                     dom.attr("alt", AttrVal::Markup(alt));
                     dom.attr("data-img-fallback", AttrVal::Markup("broken"));
                     dom.close();
@@ -2543,7 +2544,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 }
                 if let (Some(label), Some(href)) = (&card.link_label, &card.link_href) {
                     dom.open("a", CloseStyle::Normal);
-                    dom.attr("href", AttrVal::Markup(href));
+                    dom.attr("href", AttrVal::Markup(link_href(href)));
                     dom.attr("class", AttrVal::Markup("surfdoc-feature-link"));
                     dom.text_markup(label);
                     dom.text_raw(" \u{2192}");
@@ -2640,7 +2641,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     dom.attr("data-category", AttrVal::Markup(c));
                 }
                 dom.open("img", CloseStyle::SelfCloseSpace);
-                dom.attr("src", AttrVal::Markup(&item.src));
+                dom.attr("src", AttrVal::Markup(src_or_empty(&item.src, UrlKind::Image)));
                 dom.attr("alt", AttrVal::Markup(alt));
                 dom.attr("loading", AttrVal::Markup("lazy"));
                 dom.attr("data-img-fallback", AttrVal::Markup("hide"));
@@ -2796,7 +2797,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.open(tag, CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup(&format!("surfdoc-row{state_class}")));
             if let Some(h) = href {
-                dom.attr("href", AttrVal::Markup(h));
+                dom.attr("href", AttrVal::Markup(link_href(h)));
             }
             if let Some(a) = action {
                 dom.attr("data-action", AttrVal::Markup(a));
@@ -2975,7 +2976,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             if let Some(img) = image {
                 dom.open("img", CloseStyle::Void);
                 dom.attr("class", AttrVal::Markup("surfdoc-infocard-image"));
-                dom.attr("src", AttrVal::Markup(img));
+                dom.attr("src", AttrVal::Markup(src_or_empty(img, UrlKind::Image)));
                 dom.attr("alt", AttrVal::Markup(title));
                 dom.close();
             }
@@ -3396,7 +3397,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     Some(href) => {
                         dom.open("a", CloseStyle::Normal);
                         dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
-                        dom.attr("href", AttrVal::Markup(&href));
+                        dom.attr("href", AttrVal::Markup(link_href(&href)));
                         dom.text_markup(&text);
                         dom.close();
                     }
@@ -3649,11 +3650,13 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                     &crate::media::VideoSpec::from_embed(src, title.as_deref(), width.as_deref()),
                 );
             } else if is_generic && !src.is_empty() && height.is_some() {
-                let h = height.as_deref().unwrap();
-                let w = width.as_deref().unwrap_or("100%");
+                // Twin of render_html: a width / height that could write a
+                // url() is refused (width → 100%, height → empty).
+                let h = css_value(height.as_deref().unwrap()).unwrap_or("");
+                let w = width.as_deref().and_then(css_value).unwrap_or("100%");
                 dom.open("iframe", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-embed-frame"));
-                dom.attr("src", AttrVal::Markup(src));
+                dom.attr("src", AttrVal::Markup(src_or_empty(src, UrlKind::Frame)));
                 if let Some(t) = title {
                     dom.attr("title", AttrVal::Markup(t));
                 }
@@ -4043,7 +4046,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.attr("class", AttrVal::Markup("surfdoc-related-item"));
                 dom.open("a", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-related-link"));
-                dom.attr("href", AttrVal::Markup(&item.href));
+                dom.attr("href", AttrVal::Markup(link_href(&item.href)));
                 dom.text_markup(item.title.as_deref().unwrap_or(&item.href));
                 dom.close();
                 if let Some(rel) = &item.relation {
@@ -4415,7 +4418,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.attr("class", AttrVal::Markup("surfdoc-logo-cloud-item"));
                 dom.open("img", CloseStyle::SelfCloseSpace);
                 dom.attr("class", AttrVal::Markup("surfdoc-logo-cloud-logo"));
-                dom.attr("src", AttrVal::Markup(&item.src));
+                dom.attr("src", AttrVal::Markup(src_or_empty(&item.src, UrlKind::Image)));
                 dom.attr("alt", AttrVal::Markup(&render_html::logo_alt(&item.src, item.name.as_deref())));
                 dom.attr("loading", AttrVal::Markup("lazy"));
                 dom.close();
@@ -4429,7 +4432,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.open("form", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-subscribe"));
             dom.attr("method", AttrVal::Markup("post"));
-            if let Some(a) = action {
+            if let Some(a) = action.as_deref().and_then(|a| safe_url(a, UrlKind::FormAction)) {
                 dom.attr("action", AttrVal::Markup(a));
             }
             if !content.trim().is_empty() {
@@ -4600,7 +4603,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         Block::Cta { label, href, primary, icon, .. } => {
             dom.open("a", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup(if *primary { "surfdoc-cta surfdoc-cta-primary" } else { "surfdoc-cta surfdoc-cta-secondary" }));
-            dom.attr("href", AttrVal::Markup(href));
+            dom.attr("href", AttrVal::Markup(link_href(href)));
             if let Some(svg) = icon.as_deref().and_then(crate::icons::get_icon) {
                 dom.open("span", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-icon"));
@@ -4634,7 +4637,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.attr("class", AttrVal::Markup("surfdoc-stat"));
                 dom.open("span", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-stat-value"));
-                if let Some(c) = &item.color {
+                if let Some(c) = item.color.as_deref().and_then(css_value) {
                     dom.attr("style", AttrVal::Markup(&format!("color:{c}")));
                 }
                 dom.text_markup(&item.value);
@@ -4898,7 +4901,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-logo"));
             dom.open("img", CloseStyle::Void);
-            dom.attr("src", AttrVal::Markup(src));
+            dom.attr("src", AttrVal::Markup(src_or_empty(src, UrlKind::Image)));
             dom.attr("alt", AttrVal::Markup(alt.as_deref().unwrap_or("")));
             if let Some(s) = size {
                 dom.attr("style", AttrVal::Markup(&format!("max-width:{s}px")));
@@ -5643,7 +5646,7 @@ fn build_app_tabbar<S: DomSink>(
         dom.attr("class", AttrVal::Markup(cls));
         dom.attr("data-tab", AttrVal::Markup(&slugify(title)));
         if let Some(h) = href {
-            dom.attr("data-href", AttrVal::Markup(h));
+            dom.attr("data-href", AttrVal::Markup(link_href(h)));
         }
         if let Some(a) = action {
             dom.attr("data-action", AttrVal::Markup(a));

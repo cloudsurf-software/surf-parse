@@ -3,6 +3,31 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.37.1 — 2026-10-01 (security patch, the 0.32.1 allow-list carried onto 0.37.0: one URL allow-list at render time)
+
+- **One URL allow-list** (`url_policy`, crate-private). Every URL a document supplies is checked when it is
+  written, not only when it is parsed: `href`, `src`, form `action` (and `::action`'s `data-surf-action` twin) and
+  CSS `url('…')` across `render_html` and its constructive twin `render_dom`. The scheme is read the way a browser
+  reads it — ASCII whitespace and control characters ignored, case folded, a colon before any `/`, `?` or `#` is a
+  scheme — and an allowed URL is written unchanged.
+  - link: `http`, `https`, `mailto`, `tel`, protocol-relative, relative, fragment; refused → `#`.
+  - image: `http`, `https`, `data:image/…`, protocol-relative, relative; refused → empty `src` / empty `url()`.
+  - frame: `https` only (no `http`, no protocol-relative, no relative path: a document must not frame the app
+    origin's own routes); refused → empty `src`.
+  - form action: `https` and relative; refused → the `action` attribute is omitted.
+  - CSS `url('…')` (hero cover, post-card image, tile image, drawer emblem): the image rule, then `'`, `(`, `)`, `\`
+    and controls percent-encoded so the value cannot leave the string.
+- CSS values a document supplies (product tile `color:` / `gradient:`, stat `color`, embed `width` / `height`, deck
+  `accent` / `font`) are refused — the declaration is dropped, an embed width falls back to `100%` — when they carry a
+  `url(` / `image(` / `image-set(` / `cross-fade(` / `element(` / `src(` / `expression(` function, a backslash escape,
+  a comment opener, or `;` `{` `}`.
+- `sanitize_href` (parse time) now applies the link rule, so `ftp:`, `file:`, `blob:` and other schemes outside the
+  list become `#` there too, alongside `javascript:` / `data:` / `vbscript:`.
+- Tests: the three tests that pinned the gap (`html_cta_escapes_xss`, `html_nav_escapes_xss`,
+  `html_image_src_xss_escaped`) and `hostile_shell_javascript_and_data_urls` now assert the script address is
+  absent; a hostile table test covers each block type and kind (mixed case, tab, newline, NUL, leading spaces,
+  entity text). No snapshot changed.
+
 ## 0.37.0 — 2026-10-01 (video — a `::video` block, a hero background video, the video-file embed, the `media:` scheme and the host's resolver; native schema v15; TASK-1277)
 
 surf-parse names a library file by id and never turns it into a URL: the host does, through the resolver seam.

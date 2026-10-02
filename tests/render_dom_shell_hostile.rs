@@ -198,31 +198,48 @@ fn hostile_shell_quote_breaking_text() {
 
 // -- (2) javascript: / data: URLs in row href, form action, embed src, avatar -
 
-/// PINS CURRENT BEHAVIOR. Chrome URL slots (`row href=`, `form action=`,
-/// `embed src=`, the `avatar=` initials slot, `trailing-action`) are stamped
-/// VERBATIM-ESCAPED by `render_html` — surf-parse applies scheme filtering on
-/// the markdown path only, and the chrome path leaves scheme policy to the
-/// serving layer's CSP. What this test guarantees is what the crate owns: the
-/// hostile URL never breaks out of its attribute, never becomes markup, and
-/// renders identically through both backends.
+/// Chrome URL slots (`row href=`, `form action=`, `embed src=`) pass the
+/// renderer's URL allow-list: a script or `data:text` scheme becomes `#` on a
+/// link, an omitted `action` on a form and an empty `src` on a frame. The
+/// `avatar=` initials slot and `trailing-action` are not URLs and stay inert
+/// text / dispatcher names. Both backends must agree byte for byte, and no
+/// hostile value may break out of its attribute or become markup.
 #[test]
 fn hostile_shell_javascript_and_data_urls() {
     let name = "hostile-shell-urls";
     let html = assert_identity_or_typed_decline(name);
     assert_no_attribute_breakout(name, &html);
     assert_parser_and_render_stability(name);
-    // Verbatim-escaped, inside the attribute, never executable markup.
+    // Refused at render time: never written into a URL attribute.
+    for refused in [
+        " href=\"javascript:",
+        " href=\"JaVaScRiPt:",
+        " href=\"vbscript:",
+        " href=\"data:text/html",
+        " action=\"javascript:",
+        " action=\"data:",
+        " src=\"javascript:",
+        " src=\"data:text/html",
+    ] {
+        assert!(!html.contains(refused), "{name}: {refused} must be refused by the allow-list");
+    }
     assert!(
-        html.contains("href=\"javascript:alert('sidebar')\""),
-        "{name}: row href must stay a pinned, escaped attribute value"
+        html.contains("<a class=\"surfdoc-row\" href=\"#\" data-action=\"openDocs\">"),
+        "{name}: a refused row href becomes #"
     );
     assert!(
-        html.contains("action=\"javascript:alert('form')\""),
-        "{name}: form action must stay a pinned, escaped attribute value"
+        html.contains("<iframe class=\"surfdoc-embed-frame\" src=\"\" title=\"JS body\""),
+        "{name}: a refused embed src becomes empty"
+    );
+    // A frame is https only: a relative path would frame the app origin's
+    // own routes, so it is refused like a script scheme.
+    assert!(
+        !html.contains("/email/thread-id/body"),
+        "{name}: a relative embed src must be refused"
     );
     assert!(
-        html.contains("src=\"data:text/html,%3Cscript%3Ex%3C/script%3E\""),
-        "{name}: embed src must stay a pinned, escaped attribute value"
+        html.contains("<iframe class=\"surfdoc-embed-frame\" src=\"\" title=\"Ampersand body\""),
+        "{name}: a refused relative embed src becomes empty"
     );
     // The data: payload's percent-encoded script must NEVER be decoded into
     // real markup by either backend.

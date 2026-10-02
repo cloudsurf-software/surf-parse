@@ -742,3 +742,19 @@ fn identity_unknown_block_and_cta_group() {
     assert_eq!(render_fragment_string(&doc).expect("renders"), doc.to_html_fragment());
     assert!(doc.to_html_fragment().contains("surfdoc-cta-group"), "two CTAs group");
 }
+
+/// Both backends refuse a relative frame source and a CSS value that carries
+/// a url(), and agree byte for byte while doing it.
+#[test]
+fn identity_frame_relative_and_css_value_url_refused() {
+    let src = "::stats\n- 1 {label=\"A\" color=\"red;background-image:url(javascript:alert(1))\"}\n- 2 {label=\"B\" color=\"#e11d48\"}\n::\n\n\
+::embed[src=\"/settings/danger\" height=\"300px\" title=\"Rel\"]\n\n\
+::embed[src=\"https://example.com/f\" width=\"url(javascript:alert(2))\" height=\"300px;background:url(javascript:alert(3))\" title=\"Css\"]\n";
+    let doc = surf_parse::parse(src).doc;
+    let html = render_fragment_string(&doc).expect("renders");
+    assert_eq!(html, doc.to_html_fragment(), "backends drifted");
+    assert!(!html.contains("/settings/danger"), "a relative frame src must be refused: {html}");
+    assert!(!html.to_ascii_lowercase().contains("url("), "a CSS url() must be refused: {html}");
+    assert!(html.contains(" style=\"color:#e11d48\""), "an ordinary colour survives: {html}");
+    assert!(html.contains("src=\"https://example.com/f\""), "{html}");
+}

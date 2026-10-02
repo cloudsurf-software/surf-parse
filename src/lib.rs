@@ -37,6 +37,7 @@ pub mod render_md;
 pub mod resolve;
 pub mod slots;
 pub mod spec_registry;
+pub(crate) mod url_policy;
 #[cfg(feature = "pdf")]
 pub mod render_pdf;
 pub mod render_typst;
