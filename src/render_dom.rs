@@ -145,6 +145,14 @@ pub fn attr_allowed(name: &str) -> bool {
             // answer's `maxlength` and a pattern-checked input's `pattern`
             // (render_html::render_form_field_html / form_constraint_attrs).
             | "step" | "maxlength" | "pattern"
+            // 0.37.0 `::video` / `::hero[video=]` / the video-file embed:
+            // the `<video>` flags, its `poster` and `preload`, and the
+            // `<source media>` reduced-motion query (render_html::video_html).
+            // None is a script sink; `src` / `poster` values come out of
+            // `crate::media`, which admits only resolved `media:` ids,
+            // relative paths and `https:` URLs.
+            | "poster" | "controls" | "autoplay" | "muted" | "loop" | "playsinline"
+            | "preload" | "media"
             // SVG presentation attributes used by the vendored icon set and
             // static widget markup.
             | "viewBox" | "xmlns" | "fill" | "stroke" | "stroke-width" | "stroke-linecap"
@@ -450,6 +458,15 @@ pub mod websys {
             assert!(attr_allowed(name), "attribute not allowlisted: {name}");
             let decoded = value.map(|(_, d)| d).unwrap_or("");
             el.set_attribute(name, decoded).expect("set_attribute");
+            // A `muted` CONTENT attribute only mutes an element the HTML
+            // parser creates; on a constructed `<video>` it must also be set
+            // as the property, or the browser refuses to autoplay it.
+            if name == "muted" {
+                use web_sys::wasm_bindgen::JsCast;
+                if let Some(media) = el.dyn_ref::<web_sys::HtmlMediaElement>() {
+                    media.set_muted(true);
+                }
+            }
         }
 
         fn append_child(&mut self, parent: &Self::Node, child: &Self::Node) {
@@ -1757,6 +1774,109 @@ fn build_data_attrs<S: DomSink>(dom: &mut Dom<'_, S>, attrs: &[(&'static str, &s
     }
 }
 
+/// One `<video>` element — the twin of `render_html::video_tag_html`.
+fn build_video_tag<S: DomSink>(
+    dom: &mut Dom<'_, S>,
+    player: &crate::media::VideoPlayer,
+    twin: crate::media::VideoTwin,
+    alt: Option<&str>,
+    box_style: Option<&str>,
+) {
+    dom.open("video", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup(twin.class()));
+    for name in twin.bool_attrs(&player.flags) {
+        dom.bool_attr(name);
+    }
+    dom.attr("preload", AttrVal::Markup(twin.preload(player.poster.is_some())));
+    if let Some(p) = &player.poster {
+        dom.attr("poster", AttrVal::Markup(p));
+    }
+    if let Some(a) = alt.filter(|a| !a.is_empty()) {
+        dom.attr("aria-label", AttrVal::Markup(a));
+    }
+    if let Some(st) = box_style {
+        dom.attr("style", AttrVal::Markup(st));
+    }
+    dom.open("source", CloseStyle::Void);
+    dom.attr("src", AttrVal::Markup(&player.url));
+    if let Some(mime) = player.mime {
+        dom.attr("type", AttrVal::Markup(mime));
+    }
+    if twin == crate::media::VideoTwin::Motion {
+        dom.attr("media", AttrVal::Markup(crate::media::MOTION_OK_MEDIA_QUERY));
+    }
+    dom.close();
+    dom.close();
+}
+
+/// A video block — the twin of `render_html::video_html` (see there for the
+/// two-element reduced-motion structure and the placeholder).
+fn build_video<S: DomSink>(dom: &mut Dom<'_, S>, spec: &crate::media::VideoSpec<'_>) {
+    use crate::media::VideoTwin;
+    let fig_style = spec.figure_style();
+    let box_style = spec.box_style();
+    let player = spec.player();
+    dom.open("figure", CloseStyle::Normal);
+    let class = match &player {
+        None => "surfdoc-video surfdoc-video-unavailable",
+        Some(p) if p.flags.autoplay => "surfdoc-video surfdoc-video-autoplay",
+        Some(_) => "surfdoc-video",
+    };
+    dom.attr("class", AttrVal::Markup(class));
+    if let Some(st) = &fig_style {
+        dom.attr("style", AttrVal::Markup(st));
+    }
+    match &player {
+        None => {
+            let label = spec.alt.filter(|a| !a.is_empty()).unwrap_or("Video unavailable");
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-video-placeholder"));
+            dom.attr("role", AttrVal::Markup("img"));
+            dom.attr("aria-label", AttrVal::Markup(label));
+            if let Some(st) = &box_style {
+                dom.attr("style", AttrVal::Markup(st));
+            }
+            dom.close();
+        }
+        Some(p) if p.flags.autoplay => {
+            build_video_tag(dom, p, VideoTwin::Motion, spec.alt, box_style.as_deref());
+            build_video_tag(dom, p, VideoTwin::Still, spec.alt, box_style.as_deref());
+        }
+        Some(p) => build_video_tag(dom, p, VideoTwin::Plain, spec.alt, box_style.as_deref()),
+    }
+    if let Some(c) = spec.caption.filter(|c| !c.is_empty()) {
+        dom.open("figcaption", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-video-cap"));
+        dom.text_markup(c);
+        dom.close();
+    }
+    dom.close();
+}
+
+/// The hero's background `<video>` — the twin of
+/// `render_html::hero_video_html`.
+fn build_hero_video<S: DomSink>(dom: &mut Dom<'_, S>, player: &crate::media::VideoPlayer) {
+    dom.open("video", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-hero-bg"));
+    for name in ["autoplay", "muted", "loop", "playsinline"] {
+        dom.bool_attr(name);
+    }
+    dom.attr("preload", AttrVal::Markup("metadata"));
+    if let Some(p) = &player.poster {
+        dom.attr("poster", AttrVal::Markup(p));
+    }
+    dom.attr("aria-hidden", AttrVal::Markup("true"));
+    dom.attr("tabindex", AttrVal::Markup("-1"));
+    dom.open("source", CloseStyle::Void);
+    dom.attr("src", AttrVal::Markup(&player.url));
+    if let Some(mime) = player.mime {
+        dom.attr("type", AttrVal::Markup(mime));
+    }
+    dom.attr("media", AttrVal::Markup(crate::media::MOTION_OK_MEDIA_QUERY));
+    dom.close();
+    dom.close();
+}
+
 fn block_kind(b: &Block) -> String {
     serde_json::to_value(b)
         .ok()
@@ -1821,6 +1941,34 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             }
             dom.close();
         }
+
+        Block::Video {
+            src,
+            poster,
+            autoplay,
+            loops,
+            muted,
+            controls,
+            caption,
+            alt,
+            width,
+            aspect,
+            ..
+        } => build_video(
+            dom,
+            &crate::media::VideoSpec {
+                src,
+                poster: poster.as_deref(),
+                autoplay: *autoplay,
+                loops: *loops,
+                muted: *muted,
+                controls: *controls,
+                caption: caption.as_deref(),
+                alt: alt.as_deref(),
+                width: width.as_deref(),
+                aspect: aspect.as_deref(),
+            },
+        ),
 
         Block::Site { properties, domain, .. } => {
             dom.open("div", CloseStyle::Normal);
@@ -2242,13 +2390,22 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             image_alt,
             layout,
             transparent,
+            video,
+            poster,
             buttons,
             ..
         } => {
-            let cover = layout.as_deref() == Some("cover") && image.is_some();
+            // 0.37.0 `video=`: the cover layout with a background video (see
+            // the render_html Hero arm).
+            let bg_video = crate::media::hero_video_player(
+                video.as_deref(),
+                poster.as_deref(),
+                image.as_deref(),
+            );
+            let cover = bg_video.is_none() && layout.as_deref() == Some("cover") && image.is_some();
             let stacked = layout.as_deref() == Some("stacked");
-            let image_above = !cover && (stacked || align != "left");
-            let image_side = !cover && !image_above;
+            let image_above = bg_video.is_none() && !cover && (stacked || align != "left");
+            let image_side = bg_video.is_none() && !cover && !image_above;
             let align_cls = if align == "left" { " surfdoc-hero-left" } else { "" };
             let layout_cls = layout
                 .as_deref()
@@ -2257,10 +2414,29 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             let transparent_cls = if *transparent { " surfdoc-hero-transparent" } else { "" };
             let alt = image_alt.as_deref().unwrap_or("");
             dom.open("section", CloseStyle::Normal);
-            dom.attr(
-                "class",
-                AttrVal::Markup(&format!("surfdoc-hero{align_cls}{layout_cls}{transparent_cls}")),
-            );
+            if bg_video.is_some() {
+                dom.attr(
+                    "class",
+                    AttrVal::Markup("surfdoc-hero surfdoc-hero-cover surfdoc-hero-video"),
+                );
+            } else {
+                dom.attr(
+                    "class",
+                    AttrVal::Markup(&format!("surfdoc-hero{align_cls}{layout_cls}{transparent_cls}")),
+                );
+            }
+            if let Some(player) = &bg_video {
+                if let Some(p) = &player.poster {
+                    dom.attr(
+                        "style",
+                        AttrVal::Markup(&format!(
+                            "background-image:url('{}')",
+                            crate::media::css_url(p)
+                        )),
+                    );
+                }
+                build_hero_video(dom, player);
+            }
             if cover {
                 // Byte-parity note: render_html escape_html's the src INSIDE
                 // url('…') but leaves apostrophes alone (known flaw, pinned
@@ -3466,7 +3642,13 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         Block::Embed { src, embed_type, title, width, height, .. } => {
             use crate::types::EmbedType;
             let is_generic = matches!(embed_type, None | Some(EmbedType::Generic));
-            if is_generic && !src.is_empty() && height.is_some() {
+            // 0.37.0: a video file is a player; a provider's page keeps the card.
+            if crate::media::embed_is_video_file(*embed_type, src) {
+                build_video(
+                    dom,
+                    &crate::media::VideoSpec::from_embed(src, title.as_deref(), width.as_deref()),
+                );
+            } else if is_generic && !src.is_empty() && height.is_some() {
                 let h = height.as_deref().unwrap();
                 let w = width.as_deref().unwrap_or("100%");
                 dom.open("iframe", CloseStyle::Normal);

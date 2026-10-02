@@ -1,0 +1,130 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# Video\n\nThe video element (0.37.0): a player with a poster, a caption and playback\nflags; a hero with a background video; an embed that names a video file; and\nlibrary references (`media:`) that draw the placeholder until a host\nresolves them."
+  },
+  {
+    "type": "video",
+    "src": "/media/intro.mp4",
+    "poster": "/img/intro.jpg",
+    "autoplay": false,
+    "loops": false,
+    "muted": false,
+    "controls": true,
+    "playsinline": true,
+    "caption": "How a claim works",
+    "alt": "A phone showing the claim screen",
+    "aspect": "16/9"
+  },
+  {
+    "type": "video",
+    "src": "https://cdn.example.com/loop.webm",
+    "poster": "/img/loop.jpg",
+    "autoplay": true,
+    "loops": true,
+    "muted": true,
+    "controls": false,
+    "playsinline": true,
+    "alt": "Waves rolling in"
+  },
+  {
+    "type": "video",
+    "src": "/media/clip.mov",
+    "autoplay": true,
+    "loops": false,
+    "muted": true,
+    "controls": true,
+    "playsinline": true,
+    "caption": "Autoplay with its controls stated",
+    "aspect": "9/16"
+  },
+  {
+    "type": "video",
+    "src": "media:3f6c0a1e",
+    "poster": "media:3f6c0a1e/poster",
+    "autoplay": false,
+    "loops": false,
+    "muted": false,
+    "controls": true,
+    "playsinline": true,
+    "caption": "A library file with no resolver installed",
+    "alt": "The claim screen"
+  },
+  {
+    "type": "video",
+    "src": "http://example.com/plain-http.mp4",
+    "autoplay": false,
+    "loops": false,
+    "muted": false,
+    "controls": true,
+    "playsinline": true,
+    "caption": "An unusable source draws the placeholder"
+  },
+  {
+    "type": "hero",
+    "headline": "Proof in your pocket",
+    "anchor": null,
+    "subtitle": "Show your card in two taps.",
+    "badge": "NEW",
+    "align": "center",
+    "image": "/img/hero.jpg",
+    "video": "/media/hero.mp4",
+    "poster": "/img/hero.jpg",
+    "buttons": [
+      {
+        "label": "Get started",
+        "href": "/start",
+        "primary": true
+      }
+    ],
+    "content": ""
+  },
+  {
+    "type": "hero",
+    "headline": "An unresolved background keeps the picture",
+    "anchor": null,
+    "subtitle": null,
+    "badge": null,
+    "align": "center",
+    "image": "/img/fallback.jpg",
+    "video": "media:9a8b7c",
+    "poster": "/img/fallback.jpg",
+    "buttons": [],
+    "content": ""
+  },
+  {
+    "type": "video",
+    "src": "/media/tour.mp4",
+    "autoplay": false,
+    "loops": false,
+    "muted": false,
+    "controls": true,
+    "playsinline": true,
+    "caption": "A two-minute tour"
+  },
+  {
+    "type": "embed",
+    "src": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "A provider page stays a link card",
+    "embed_type": "video"
+  },
+  {
+    "type": "section_container",
+    "bg": null,
+    "headline": "Nested",
+    "anchor": null,
+    "subtitle": null,
+    "children": [
+      {
+        "type": "video",
+        "src": "/media/nested.m4v",
+        "autoplay": false,
+        "loops": true,
+        "muted": true,
+        "controls": false,
+        "playsinline": true,
+        "alt": "A silent loop without controls"
+      }
+    ]
+  }
+]

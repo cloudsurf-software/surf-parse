@@ -1771,6 +1771,41 @@ ul.surfdoc-tasks { padding-left: 0; }
 }
 .surfdoc-figure-cap, .surfdoc-figure figcaption { margin-top: 6px; font-size: var(--font-size-micro); color: var(--text-muted); font-style: normal; text-align: center; }
 
+/* ── ::video (0.37.0) ─────────────────────────────────────────────────────
+   A player in a figure: fluid to its column, rounded like a figure, with an
+   aspect-ratio box when `aspect=` is set (inline on the element). */
+.surfdoc-video { margin: 1.5rem auto; text-align: center; max-width: 100%; }
+.surfdoc-video-player {
+    display: block; width: 100%; max-width: 100%; height: auto;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+}
+.surfdoc-video-cap, .surfdoc-video figcaption { margin-top: 6px; font-size: var(--font-size-micro); color: var(--text-muted); font-style: normal; text-align: center; }
+/* An unusable source or a library file the host could not resolve: a quiet
+   16/9 box with a play glyph, and the caption below. */
+.surfdoc-video-placeholder {
+    aspect-ratio: 16 / 9; display: grid; place-items: center;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+}
+.surfdoc-video-placeholder::after {
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%236b7388' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M10 8.5v7l6-3.5z'/%3E%3C/svg%3E");
+    display: block;
+}
+/* Reduced motion (no script): an autoplaying video is drawn twice. The
+   playing element is hidden — and, through its <source media>, never loaded —
+   when the viewer asks for reduced motion; its stand-in (poster + controls,
+   no autoplay, preload=none) is shown only then. */
+.surfdoc-video-still { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    .surfdoc-video-motion { display: none; }
+    .surfdoc-video-still { display: block; }
+}
+
 /* ============================================================
    33. SURFDOC UNKNOWN BLOCKS
    ============================================================ */
@@ -2185,6 +2220,20 @@ img.broken::after { content: attr(alt); display: block; position: absolute; bott
 /* layout=cover — the image IS the hero background (home-page header): give it
    presence and vertically center the headline over it. */
 .surfdoc-hero-cover { min-height: min(74vh, 44rem); display: flex; align-items: center; justify-content: center; padding-top: 6rem; padding-bottom: 6rem; }
+/* video= (0.37.0) — a muted, looping background video. The section paints
+   the poster as its background picture; the video covers it, the darkening
+   layer sits over both, the headline over that. Under reduced motion the
+   video is hidden (its <source media> keeps it from loading) and the poster
+   picture is what remains. */
+.surfdoc-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; pointer-events: none; }
+.surfdoc-hero-video::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(15,23,42,0.35), rgba(15,23,42,0.6));
+    z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .surfdoc-hero-bg { display: none; }
+}
 .surfdoc-hero-inner { max-width: 640px; margin: 0 auto; }
 .surfdoc-hero-left .surfdoc-hero-inner { margin: 0; max-width: none; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
 .surfdoc-hero-badge { display: inline-flex; align-items: center; gap: 0.5rem; border: var(--ws-border-w) var(--ws-border-style) rgba(255,255,255,0.5); background: rgba(255,255,255,0.14); border-radius: var(--ws-radius-chip); padding: 0.25rem 0.75rem; font-size: var(--font-size-micro); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: #fff; margin-bottom: 1.5rem; }

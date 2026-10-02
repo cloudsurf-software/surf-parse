@@ -1,0 +1,22 @@
+---
+title: "L047 — a video with no usable source"
+type: doc
+status: active
+created: "2026-10-01"
+---
+
+::summary
+A video needs a source the page can load.
+::
+
+::video[caption="No source at all"]
+::
+
+::video[src="http://example.com/a.mp4" caption="Plain http"]
+::
+
+::video[src="javascript:alert(1)" alt="A script URL"]
+::
+
+::video[src="/media/ok.mp4" poster="/img/ok.jpg" caption="A usable one"]
+::

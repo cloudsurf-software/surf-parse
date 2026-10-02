@@ -1164,6 +1164,41 @@ fn render_block(block: &Block, out: &mut String) {
             out.push_str("\n)\n");
         }
 
+        // A video degrades to its poster picture (when the ambient image
+        // context holds its bytes — `collect_image_srcs` lists the poster),
+        // else the placeholder box; then the caption and, for an `https:`
+        // source, a link to the video.
+        Block::Video {
+            src,
+            poster,
+            caption,
+            alt,
+            ..
+        } => {
+            use crate::media::{effective_poster, media_url, MediaUse};
+            let label = alt.as_deref().filter(|s| !s.is_empty()).unwrap_or("Video");
+            let poster_path = effective_poster(src, poster.as_deref()).and_then(|p| resolved_image(&p));
+            out.push_str("#figure(\n");
+            match poster_path {
+                Some(path) => out.push_str(&format!("  image(\"{}\")", escape_typst(&path))),
+                None => out.push_str(&format!(
+                    "  rect(width: 100%, height: 90pt, stroke: 0.5pt + luma(180), fill: luma(248), inset: 8pt)[#align(center + horizon)[#text(fill: luma(140))[{}]]]",
+                    escape_typst(label)
+                )),
+            }
+            if let Some(cap) = caption {
+                out.push_str(&format!(",\n  caption: [{}]", md_to_typst_inline(cap)));
+            }
+            out.push_str("\n)\n");
+            if let Some(url) = media_url(src, MediaUse::Video).filter(|u| u.starts_with("https://")) {
+                out.push_str(&format!(
+                    "#text(fill: luma(120))[\\[Video: #link(\"{}\")[{}]\\]]\n",
+                    escape_typst(&url),
+                    escape_typst(caption.as_deref().unwrap_or(label))
+                ));
+            }
+        }
+
         Block::Quote {
             content,
             attribution,
@@ -2719,6 +2754,8 @@ mod tests {
                 image_alt: None,
                 layout: None,
                 transparent: false,
+                video: None,
+                poster: None,
                 buttons: vec![HeroButton {
                     label: "Get Started".to_string(),
                     href: "/start".to_string(),

@@ -471,6 +471,21 @@ fn render_block(block: &Block) -> String {
             }
         }
 
+        Block::Video {
+            src, caption, alt, ..
+        } => {
+            let label = caption
+                .as_deref()
+                .or(alt.as_deref())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("Video");
+            let target = crate::media::media_url(src, crate::media::MediaUse::Video);
+            match target {
+                Some(url) => format!("{}", format!("[Video: {label}] ({url})").dimmed()),
+                None => format!("{}", format!("[Video: {label}]").dimmed()),
+            }
+        }
+
         Block::Embed { src, title, .. } => {
             let label = title.as_deref().unwrap_or("Embed");
             format!("{} {}", format!("[{label}]").cyan(), src.dimmed())

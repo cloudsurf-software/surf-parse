@@ -1,0 +1,32 @@
+---
+title: "L048 — video authoring"
+type: doc
+status: active
+created: "2026-10-01"
+---
+
+::summary
+A video the page still draws, with something left to say.
+::
+
+::video[src="/media/loop.mp4" autoplay loop alt="Autoplay with no poster"]
+::
+
+::video[src="/media/silent.mp4" poster="/img/silent.jpg"]
+::
+
+::video[src="media:not a file id" caption="A malformed library reference"]
+::
+
+::video[src="media:abc/poster" caption="A poster as the source"]
+::
+
+::video[src="/media/a.mp4" poster="media:abc" caption="A file as the poster"]
+::
+
+::hero[video="http://example.com/bg.mp4" image="/img/bg.jpg"]
+# The hero keeps its picture
+::
+
+::video[src="media:abc" autoplay caption="A library file has its processed poster"]
+::

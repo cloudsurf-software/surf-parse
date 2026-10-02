@@ -49,6 +49,7 @@ pub fn resolve_block(block: Block) -> Block {
         "cite" | "reference-def" => parse_cite(attrs, content, *span),
         "bibliography" | "references" => parse_bibliography(attrs, *span),
         "figure" => parse_figure(attrs, *span),
+        "video" => parse_video(attrs, *span),
         "diagram" => parse_diagram(attrs, content, *span),
         "tabs" => parse_tabs(content, *span),
         "columns" => parse_columns(content, *span),
@@ -906,6 +907,42 @@ fn parse_figure(attrs: &Attrs, span: Span) -> Block {
     }
 }
 
+/// A boolean flag attribute in any of its spellings: bare (`autoplay`),
+/// `autoplay=true` / `autoplay=false`, or the quoted forms (`"yes"`, `"no"`,
+/// `"1"`, `"0"`, `"on"`, `"off"`). `None` when the key is absent or its
+/// value is not a boolean word.
+fn attr_flag(attrs: &Attrs, key: &str) -> Option<bool> {
+    match attrs.get(key)? {
+        AttrValue::Bool(b) => Some(*b),
+        AttrValue::Number(n) => Some(*n != 0.0),
+        AttrValue::String(s) => match s.trim().to_ascii_lowercase().as_str() {
+            "true" | "yes" | "on" | "1" => Some(true),
+            "false" | "no" | "off" | "0" => Some(false),
+            _ => None,
+        },
+        AttrValue::Null => None,
+    }
+}
+
+/// `::video` (0.37.0). The flags are kept as authored — `autoplay` forcing
+/// `muted` is a rendering rule ([`crate::media::video_flags`]), so the source
+/// round-trips unchanged.
+fn parse_video(attrs: &Attrs, span: Span) -> Block {
+    Block::Video {
+        src: attr_string(attrs, "src").unwrap_or_default().trim().to_string(),
+        poster: attr_string(attrs, "poster").filter(|p| !p.trim().is_empty()),
+        autoplay: attr_flag(attrs, "autoplay").unwrap_or(false),
+        loops: attr_flag(attrs, "loop").unwrap_or(false),
+        muted: attr_flag(attrs, "muted").unwrap_or(false),
+        controls: attr_flag(attrs, "controls"),
+        caption: attr_string(attrs, "caption"),
+        alt: attr_string(attrs, "alt"),
+        width: attr_string(attrs, "width"),
+        aspect: attr_string(attrs, "aspect"),
+        span,
+    }
+}
+
 fn parse_cta(attrs: &Attrs, span: Span) -> Block {
     let label = attr_string(attrs, "label").unwrap_or_default();
     let href = attr_string(attrs, "href").unwrap_or_default();
@@ -1422,7 +1459,13 @@ fn parse_embed(attrs: &Attrs, span: Span) -> Block {
             let s = src.to_lowercase();
             if s.contains("google.com/maps") || s.contains("maps.google") {
                 Some(EmbedType::Map)
-            } else if s.contains("youtube.com") || s.contains("youtu.be") || s.contains("vimeo.com") {
+            } else if s.contains("youtube.com")
+                || s.contains("youtu.be")
+                || s.contains("vimeo.com")
+                // 0.37.0: a video FILE (a `media:` id or a `.mp4`-style
+                // path) is a video too — it draws as a player.
+                || crate::media::is_direct_video_src(&src)
+            {
                 Some(EmbedType::Video)
             } else if s.contains("soundcloud.com") || s.contains("spotify.com") {
                 Some(EmbedType::Audio)
@@ -2045,6 +2088,8 @@ fn parse_hero(attrs: &Attrs, content: &str, span: Span) -> Block {
     let image_alt = attr_string(attrs, "image-alt");
     let layout = attr_string(attrs, "layout");
     let transparent = attr_bool(attrs, "transparent");
+    let video = attr_string(attrs, "video").filter(|v| !v.trim().is_empty());
+    let poster = attr_string(attrs, "poster").filter(|p| !p.trim().is_empty());
 
     let mut headline: Option<String> = None;
     let mut subtitle_lines: Vec<&str> = Vec::new();
@@ -2117,6 +2162,8 @@ fn parse_hero(attrs: &Attrs, content: &str, span: Span) -> Block {
         image_alt,
         layout,
         transparent,
+        video,
+        poster,
         buttons,
         content,
         span,
@@ -4756,7 +4803,8 @@ fn is_model_type_word(word: &str) -> bool {
             | "float" | "f32" | "f64" | "decimal" | "numeric" | "number"
             | "bool" | "boolean" | "datetime" | "timestamp" | "timestamptz"
             | "text" | "textarea" | "json" | "jsonb" | "money" | "currency" | "price"
-            | "image" | "photo" | "picture" | "img" | "email" | "email_address"
+            | "image" | "photo" | "picture" | "img" | "video" | "clip" | "movie"
+            | "email" | "email_address"
             | "url" | "uri" | "link" | "href" | "date" | "range"
     )
 }
@@ -4797,6 +4845,8 @@ fn parse_model_field_type(s: &str) -> ModelFieldType {
         "json" | "jsonb" => ModelFieldType::Json,
         "money" | "currency" | "price" => ModelFieldType::Money,
         "image" | "photo" | "picture" | "img" => ModelFieldType::Image,
+        // 0.37.0: a video is a library file id, like an image.
+        "video" | "clip" | "movie" => ModelFieldType::Video,
         "email" | "email_address" => ModelFieldType::Email,
         "url" | "uri" | "link" | "href" => ModelFieldType::Url,
         "date" => ModelFieldType::Date,
@@ -4893,7 +4943,7 @@ fn model_form_field(rest: &str, group: Option<String>) -> Option<FormField> {
         ModelFieldType::Date | ModelFieldType::Datetime => (FormFieldType::Date, Vec::new()),
         ModelFieldType::Bool => (FormFieldType::Toggle, Vec::new()),
         ModelFieldType::Email => (FormFieldType::Email, Vec::new()),
-        ModelFieldType::Image => (FormFieldType::File, Vec::new()),
+        ModelFieldType::Image | ModelFieldType::Video => (FormFieldType::File, Vec::new()),
         ModelFieldType::Enum(v) => (FormFieldType::Select, v.clone()),
         _ => (FormFieldType::Text, Vec::new()),
     };
@@ -5621,6 +5671,7 @@ pub fn parse_schema_field_type(raw: &str) -> Result<ModelFieldType, crate::error
         "json" | "jsonb" => Ok(ModelFieldType::Json),
         "money" | "cents" | "price" => Ok(ModelFieldType::Money),
         "image" | "img" | "photo" => Ok(ModelFieldType::Image),
+        "video" | "clip" | "movie" => Ok(ModelFieldType::Video),
         "email" => Ok(ModelFieldType::Email),
         "url" | "uri" | "link" => Ok(ModelFieldType::Url),
         _ => Err(crate::error::ParseError::InvalidAttrs {

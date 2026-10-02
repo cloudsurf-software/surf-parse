@@ -28,6 +28,7 @@ mod icons_vendored;
 pub mod inline;
 pub mod limits;
 pub mod lint;
+pub mod media;
 pub(crate) mod mermaid_compat;
 pub mod parse;
 pub mod render_html;
@@ -86,6 +87,10 @@ pub use limits::{LimitExceeded, ParseLimits};
 pub use lint::{
     AppliedFix, CheckReport, FixOutcome, LintConfig, LintRule, SkippedFix, apply_fixes,
     apply_fixes_once, check, check_with,
+};
+pub use media::{
+    install_media_resolver, media_refs, media_refs_in, media_templates, video_flags, MediaRef,
+    MediaScope, MediaUse, VideoFlags,
 };
 pub use parse::parse;
 pub use resolve::{resolve_blocks_for_class, resolve_size_class};

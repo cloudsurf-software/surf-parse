@@ -46,6 +46,8 @@ const ENUM_VARIANTS: &[&str] = &[
     "Carousel",
     // The backends grammar, 0.33.0
     "Picker", "When", "Compute", "Flow", "Schedule",
+    // Video, 0.37.0
+    "Video",
 ];
 
 #[derive(Debug, Deserialize)]

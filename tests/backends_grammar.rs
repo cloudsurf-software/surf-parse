@@ -393,8 +393,10 @@ mod native {
     use surf_parse::render_native::{block_tier, to_native_blocks, BlockTier, NativeBlock, NATIVE_DOC_SCHEMA_VERSION};
 
     #[test]
-    fn moodmap_crosses_the_native_schema_v14() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 14);
+    fn moodmap_crosses_the_native_schema() {
+        // The backends grammar crossed at v14 (0.33.0); the schema has moved
+        // on since (v15, 0.37.0 video) and its variants still cross.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
         let doc = surf_parse::parse(&fixture()).doc;
         for b in doc.blocks.iter().filter(|b| {
             matches!(

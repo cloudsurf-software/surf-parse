@@ -263,6 +263,34 @@ fn arb_block() -> impl Strategy<Value = Block> {
                 width: None,
                 span: Span::SYNTHETIC,
             }),
+        // Video (any source shape, any flag combination — render must never panic)
+        (
+            prop_oneof![
+                "[a-z/]{1,20}\\.(mp4|webm|mov)",
+                "media:[a-zA-Z0-9_-]{0,12}(/poster)?",
+                "https://[a-z.]{1,20}/[a-z]{1,8}\\.mp4",
+                "(javascript|data|http):\\PC{0,20}",
+                "\\PC{0,30}",
+            ],
+            proptest::option::of(prop_oneof!["[a-z/]{1,20}\\.jpg", "media:[a-z0-9]{1,8}/poster", "\\PC{0,20}"]),
+            any::<(bool, bool, bool)>(),
+            proptest::option::of(any::<bool>()),
+            proptest::option::of("[a-zA-Z ]{1,30}"),
+            proptest::option::of(prop_oneof!["[0-9]{1,3}/[0-9]{1,3}", "\\PC{0,10}"]),
+        )
+            .prop_map(|(src, poster, (autoplay, loops, muted), controls, caption, aspect)| Block::Video {
+                src,
+                poster,
+                autoplay,
+                loops,
+                muted,
+                controls,
+                alt: caption.clone(),
+                caption,
+                width: None,
+                aspect,
+                span: Span::SYNTHETIC,
+            }),
         // Diagram (type may be valid, unknown, or empty — render must never panic)
         (
             prop_oneof!["architecture", "erd", "[a-z]{0,10}"],
@@ -531,6 +559,9 @@ proptest! {
             Just("image"),
             Just("img"),
             Just("photo"),
+            Just("video"),
+            Just("clip"),
+            Just("movie"),
             Just("email"),
             Just("url"),
             Just("uri"),
@@ -577,6 +608,7 @@ fn all_simple_model_field_type_variants_reachable() {
         ("json", ModelFieldType::Json),
         ("money", ModelFieldType::Money),
         ("image", ModelFieldType::Image),
+        ("video", ModelFieldType::Video),
         ("email", ModelFieldType::Email),
         ("url", ModelFieldType::Url),
         ("enum:x,y", ModelFieldType::Enum(vec!["x".to_string(), "y".to_string()])),

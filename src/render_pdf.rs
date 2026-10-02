@@ -448,6 +448,13 @@ pub fn collect_image_srcs(doc: &SurfDoc) -> Vec<String> {
                 Block::Figure { src, .. }
                 | Block::HeroImage { src, .. }
                 | Block::Logo { src, .. } => push(src, out, seen),
+                // A video prints as its poster: the stated one, or a
+                // `media:` source's processed poster (`media:<id>/poster`).
+                Block::Video { src, poster, .. } => {
+                    if let Some(p) = crate::media::effective_poster(src, poster.as_deref()) {
+                        push(&p, out, seen);
+                    }
+                }
                 Block::Gallery { items, .. } => {
                     for item in items {
                         push(&item.src, out, seen);

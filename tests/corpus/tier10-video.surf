@@ -1,0 +1,51 @@
+---
+title: "Corpus — Tier 10: video"
+type: document
+---
+
+# Video
+
+The video element (0.37.0): a player with a poster, a caption and playback
+flags; a hero with a background video; an embed that names a video file; and
+library references (`media:`) that draw the placeholder until a host
+resolves them.
+
+::video[src="/media/intro.mp4" poster="/img/intro.jpg" caption="How a claim works" alt="A phone showing the claim screen" aspect="16/9"]
+::
+
+::video[src="https://cdn.example.com/loop.webm" poster="/img/loop.jpg" autoplay loop alt="Waves rolling in" width="640"]
+::
+
+::video[src="/media/clip.mov" autoplay controls muted caption="Autoplay with its controls stated" aspect="9/16"]
+::
+
+::video[src="media:3f6c0a1e" caption="A library file with no resolver installed" alt="The claim screen"]
+::
+
+::video[src="http://example.com/plain-http.mp4" caption="An unusable source draws the placeholder"]
+::
+
+::hero[video="/media/hero.mp4" image="/img/hero.jpg" badge="NEW"]
+# Proof in your pocket
+
+Show your card in two taps.
+
+[Get started](/start){primary}
+::
+
+::hero[video="media:9a8b7c" image="/img/fallback.jpg"]
+# An unresolved background keeps the picture
+::
+
+::embed[src="/media/tour.mp4" type=video title="A two-minute tour"]
+::
+
+::embed[src="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="A provider page stays a link card"]
+::
+
+::section
+## Nested
+
+:::video[src="/media/nested.m4v" controls=false loop muted alt="A silent loop without controls"]
+:::
+::
