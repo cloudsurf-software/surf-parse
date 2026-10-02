@@ -811,6 +811,31 @@ pub enum Block {
         width: Option<String>,
         span: Span,
     },
+    /// A video the workspace owns (`::video`, 0.37.0): a player with a
+    /// poster, a caption and playback flags. `src` is `media:<file-id>` (a
+    /// library file the HOST resolves — see [`crate::media`]), a
+    /// site-relative path, or an `https:` URL. The flags are stored as
+    /// authored; [`crate::media::video_flags`] applies the browser's rules
+    /// (autoplay plays muted and inline) for every renderer.
+    Video {
+        src: String,
+        /// Picture shown before play. `None` on a `media:` source means that
+        /// file's processed poster (`media:<id>/poster`).
+        poster: Option<String>,
+        autoplay: bool,
+        /// `loop` — repeat.
+        loops: bool,
+        muted: bool,
+        /// `None` = not stated: on, and off with `autoplay`.
+        controls: Option<bool>,
+        caption: Option<String>,
+        /// Accessible name (`aria-label`).
+        alt: Option<String>,
+        width: Option<String>,
+        /// Layout box as `w/h` (`16/9`, `9/16`, `1/1`).
+        aspect: Option<String>,
+        span: Span,
+    },
     /// Native diagram block (`::diagram`) — architecture diagrams + ERDs.
     /// `content` is the raw DSL source, preserved verbatim for lossless
     /// round-trip; unknown `diagram_type` values degrade to prose at render.
@@ -1124,6 +1149,14 @@ pub enum Block {
         /// Drop the hero's card background/shadow so it blends into the page
         /// (text over the page background instead of a gradient card).
         transparent: bool,
+        /// Background video (0.37.0): plays muted, looping and inline behind
+        /// the headline. `image` stays the fallback picture. Same source
+        /// rules as [`Block::Video`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        video: Option<String>,
+        /// Poster for `video`; absent, `image` is the poster.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        poster: Option<String>,
         buttons: Vec<HeroButton>,
         content: String,
         span: Span,
@@ -2089,6 +2122,7 @@ impl Block {
             | Block::Cite { span, .. }
             | Block::Bibliography { span, .. }
             | Block::Figure { span, .. }
+            | Block::Video { span, .. }
             | Block::Diagram { span, .. }
             | Block::Tabs { span, .. }
             | Block::Columns { span, .. }
@@ -3071,6 +3105,8 @@ pub enum ModelFieldType {
     Money,
     /// Image URL/path — stored as String, triggers upload codegen.
     Image,
+    /// Video — stored as String (a library file id), 0.37.0.
+    Video,
     /// Email address — stored as String, auto-capped at 254 chars per RFC 5321.
     Email,
     /// URL — stored as String, auto-capped at 2048 chars.

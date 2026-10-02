@@ -1,0 +1,73 @@
+---
+title: "Video fixture"
+type: doc
+---
+
+# Video
+
+::video[src="/media/intro.mp4" poster="/img/intro.jpg" caption="How a claim works & why" alt="A phone showing the \"claim\" screen" aspect="16/9" width="80%"]
+::
+
+::video[src="https://cdn.example.com/loop.webm?v=2&t=1" poster="/img/loop.jpg" autoplay loop alt="Waves rolling in"]
+::
+
+::video[src="/media/clip.mov" autoplay controls caption="Autoplay with its controls stated"]
+::
+
+::video[src="/stream/live" controls=false muted]
+::
+
+::video[src="media:3f6c0a1e" caption="A library file" alt="The claim screen" aspect="9/16"]
+::
+
+::video[src="javascript:alert(1)" caption="<b>Hostile</b> \"source\""]
+::
+
+::video
+::
+
+::hero[video="/media/hero.mp4" image="/img/he'ro (1).jpg" badge="NEW" align=left]
+# Proof in your pocket
+
+Show your card in two taps.
+
+[Get started](/start){primary}
+::
+
+::hero[video="/media/hero.webm" poster="/img/poster.jpg" image="/img/fallback.jpg"]
+# A stated poster wins
+::
+
+::hero[video="/media/bare.mp4"]
+# No picture at all
+::
+
+::hero[video="media:9a8b7c" image="/img/fallback.jpg"]
+# An unresolved background keeps the picture
+::
+
+::hero[video="data:video/mp4;base64,AAAA" image="/img/fallback.jpg" layout=cover]
+# An unusable background keeps the cover
+::
+
+::embed[src="/media/tour.mp4" type=video title="A two-minute tour" width="100%"]
+::
+
+::embed[src="https://cdn.example.com/a.webm"]
+::
+
+::embed[src="media:abc123"]
+::
+
+::embed[src="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="A provider page"]
+::
+
+::embed[src="https://vimeo.com/12345" type=video]
+::
+
+::section
+## Nested
+
+:::video[src="/media/nested.m4v" loop muted alt="A silent loop"]
+:::
+::

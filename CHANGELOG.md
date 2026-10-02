@@ -3,6 +3,71 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.37.0 — 2026-10-01 (video — a `::video` block, a hero background video, the video-file embed, the `media:` scheme and the host's resolver; native schema v15; TASK-1277)
+
+surf-parse names a library file by id and never turns it into a URL: the host does, through the resolver seam.
+This release stacks on 0.35.0 (the site nav standard) and 0.36.0 (the note doc type) and carries both. The grammar, the
+exact HTML and the seam are in `docs/video-grammar-0.37.0.surf`.
+
+- **`::video`** — `Block::Video { src, poster, autoplay, loops, muted, controls: Option<bool>, caption, alt, width,
+  aspect, span }`. `src` is `media:<file-id>`, a site-relative path or an `https:` URL; `poster` defaults to
+  `media:<id>/poster` on a `media:` source. Flags are bare (`autoplay`) or valued (`controls=false`) and stored as
+  authored; `media::video_flags` is the ONE place the rules live — `autoplay` forces `muted` and `playsinline` with no
+  override, `controls` is on by default and off with `autoplay` unless stated. Registry row `video` (131 blocks),
+  builder `.video(src)` · `.video_with_caption(src, poster, caption, alt)` · `.video_loop(src, poster, alt)`, and the
+  serializer round-trips on the first pass.
+- **HTML** — `<figure class="surfdoc-video"><video class="surfdoc-video-player" … playsinline preload><source src
+  type></video><figcaption class="surfdoc-video-cap">`. `preload="none"` with a poster and no autoplay, `metadata`
+  otherwise; `<source type>` from the extension, `video/mp4` for `media:`; `aria-label` from `alt`; `width` and
+  `aspect` reach a `style` only as checked CSS (`max-width:640px`, `aspect-ratio:16 / 9`). New styles in
+  `assets/surfdoc.css` (`.surfdoc-video*`, `.surfdoc-hero-bg`, `.surfdoc-hero-video`).
+- **Reduced motion, no script.** A `<video autoplay>` cannot be stopped by a style rule and a fragment carries no
+  runtime, so an autoplaying video is drawn as TWO elements: `.surfdoc-video-motion` (autoplaying; its `<source>`
+  carries `media="(prefers-reduced-motion: no-preference)"`, so under reduced motion it loads nothing) and
+  `.surfdoc-video-still` (the same source with the poster and controls, no `autoplay`, `preload="none"`). The
+  stylesheet hides the stand-in by default and, under `prefers-reduced-motion: reduce`, hides the playing element and
+  shows the stand-in. A hero's background video is hidden the same way; its poster picture remains.
+- **`::hero[video= poster=]`** — `Block::Hero` gains `video` and `poster` (both `Option<String>`, serde-skipped when
+  absent). A playable video draws the hero as the cover layout with `<video class="surfdoc-hero-bg" autoplay muted
+  loop playsinline …>` behind the headline; the poster is `poster=`, else `image=`, else the library poster. An
+  unusable or unresolved `video=` leaves the hero byte-identical to the one without it. `::figure` is unchanged.
+- **`::embed`** — an embed whose `src` is a video FILE (`media:<id>`, or a path / `https:` URL ending `.mp4 .webm
+  .mov .m4v .ogv`, query string tolerated) parses as `type=video` and renders through the `::video` path with
+  controls, its `title` as the caption. A provider's page keeps the link card. **The test
+  `html_video_embed_stays_link_card` changes on purpose**: it now pins the card for a PROVIDER URL only, and the new
+  `html_video_file_embed_is_a_player` pins the player for a direct file. Behaviour change: a generic embed of a
+  `.mp4` with a `height` was an `<iframe>` and is now a `<video>`.
+- **The `media:` scheme and the resolver seam** (new module `media`, thread-local with an RAII guard — the shape of
+  `render_typst::install_image_context`): `install_media_resolver(impl Fn(&str, MediaUse) -> Option<String> + 'static)
+  -> MediaScope`, `media_templates(video, video_loop, poster)`, `enum MediaUse { Video, VideoLoop, Poster }` — an
+  autoplaying video and a hero background ask for `VideoLoop`, so a host can serve a smaller silent rendition. An
+  UNRESOLVED id draws `<figure class="surfdoc-video surfdoc-video-unavailable">` with a placeholder box and the
+  caption — never a `<video src="media:…">`. `media_refs(&SurfDoc) -> Vec<MediaRef { id, media_use }>` (and
+  `media_refs_in(&[Block])`) lists every library file a document references, through every container, in
+  first-appearance order — exactly what the renderers ask the resolver for. Also public in `media`:
+  `classify_media_src` / `MediaSrc`, `video_flags` / `VideoFlags`, `video_mime`, `is_direct_video_src`,
+  `embed_is_video_file`, `video_aspect`, `video_width`, `resolve_media`, `media_url`, `effective_poster`,
+  `hero_poster`, `video_player` / `VideoPlayer`, `hero_video_player`, and the constants `MEDIA_SCHEME`,
+  `MEDIA_POSTER_SUFFIX`, `MEDIA_ID_MAX_LEN`, `MOTION_OK_MEDIA_QUERY`. Re-exported at the crate root:
+  `install_media_resolver`, `media_refs`, `media_refs_in`, `media_templates`, `video_flags`, `MediaRef`,
+  `MediaScope`, `MediaUse`, `VideoFlags`. wasm: `set_media_templates(video, video_loop, poster)`.
+- **Twins.** `render_dom` draws `::video`, the hero video and the video-file embed byte-identically (allowlist gains
+  `poster controls autoplay muted loop playsinline preload media`; the browser sink also sets the `muted` PROPERTY,
+  which a constructed `<video>` needs to autoplay — `web-sys` feature `HtmlMediaElement`). **Native schema 14 → 15**:
+  `NativeBlock::Video { src, poster, autoplay, loops, muted, controls, playsinline, caption, alt, aspect }` (sources
+  cross as authored for the client to resolve; flags are the effective ones), a video-file embed crosses as `Video`,
+  and `NativeBlock::Hero` gains `video` and `poster`. `NativeBlock` is a 132-variant enum. Markdown, terminal, Typst
+  / PDF (`collect_image_srcs` lists a video's poster) and LaTeX degrade to the poster picture, the caption and a link;
+  the slides draw the HTML element.
+- **Lint** — `L047` (error): `::video` with no `src`, or a scheme other than `media:` / `https:` / relative. `L048`
+  (warning): `autoplay` with no poster on a path or URL, neither `alt` nor `caption`, a malformed `media:`
+  reference, an unusable `poster`, a `::hero[video=]` that cannot play. Nothing else about video is an error. 24 rules.
+- **Model field** — `ModelFieldType::Video` from `video` · `clip` · `movie` (model lines and `parse_schema_field_type`);
+  a form shows it as a file field, as it does an image.
+- Tests: `tests/video.rs` (the element end to end, the DOM twin and the native node under their features), the
+  corpus fixture `tier10-video` with its HTML and native snapshots, `tests/fixtures/video.surf` in the DOM identity
+  suite (unresolved and resolved), two lint fixtures, a `Block::Video` strategy in the property suite; the registry
+  sweep covers `video` in the no-panic suite.
 ## 0.36.0 — 2026-10-01 (the note doc type — `type: note`; additive, no render or schema move)
 
 - **`DocType::Note`** (`type: note` in front matter): quick words under a cursor, titled by their first line in the

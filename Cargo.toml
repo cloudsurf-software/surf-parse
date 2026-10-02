@@ -1,6 +1,6 @@
 [package]
 name = "surf-parse"
-version = "0.36.0"
+version = "0.37.0"
 edition = "2024"
 license = "MIT"
 authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
@@ -64,7 +64,7 @@ typst-pdf = { version = "0.14", optional = true }
 typst-svg = { version = "0.14", optional = true }
 clap = { version = "4", optional = true, features = ["derive"] }
 wasm-bindgen = { version = "0.2", optional = true }
-web-sys = { version = "0.3", optional = true, features = ["Document", "Element", "Node", "Text", "Window", "HtmlElement"] }
+web-sys = { version = "0.3", optional = true, features = ["Document", "Element", "Node", "Text", "Window", "HtmlElement", "HtmlMediaElement"] }
 
 [dev-dependencies]
 pretty_assertions = "1"

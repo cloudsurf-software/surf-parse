@@ -217,6 +217,39 @@ pub(crate) fn render_block(block: &Block) -> String {
             }
         }
 
+        // A video degrades to its poster picture (when the poster is a URL
+        // this text can carry — a path, an `https:` URL, or a `media:` poster
+        // the host resolves), its caption, and a link to the video.
+        Block::Video {
+            src,
+            poster,
+            caption,
+            alt,
+            ..
+        } => {
+            use crate::media::{effective_poster, media_url, MediaUse};
+            let mut lines = Vec::new();
+            let alt_text = alt.as_deref().unwrap_or("");
+            if let Some(p) = effective_poster(src, poster.as_deref())
+                .and_then(|p| media_url(&p, MediaUse::Poster))
+            {
+                lines.push(format!("![{alt_text}]({p})"));
+            }
+            if let Some(c) = caption {
+                lines.push(format!("*{c}*"));
+            }
+            let label = caption
+                .as_deref()
+                .or(alt.as_deref())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("Video");
+            match media_url(src, MediaUse::Video) {
+                Some(url) => lines.push(format!("[Video: {label}]({url})")),
+                None => lines.push(format!("Video: {label}")),
+            }
+            lines.join("\n")
+        }
+
         Block::Diagram {
             diagram_type,
             title,
@@ -1575,6 +1608,7 @@ pub(crate) fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {
         ModelFieldType::Json => "json".to_string(),
         ModelFieldType::Money => "money".to_string(),
         ModelFieldType::Image => "image".to_string(),
+        ModelFieldType::Video => "video".to_string(),
         ModelFieldType::Email => "email".to_string(),
         ModelFieldType::Url => "url".to_string(),
         ModelFieldType::Enum(variants) => format!("enum({})", variants.join(", ")),

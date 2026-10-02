@@ -228,7 +228,165 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(DataSourceWithoutCounts),
         Box::new(PanelsLayoutShape),
         Box::new(BackendsShape),
+        Box::new(VideoSourceUnusable),
+        Box::new(VideoAuthoring),
     ]
+}
+
+// ------------------------------------------------------------------
+// L047 / L048 — `::video` (0.37.0)
+// ------------------------------------------------------------------
+
+/// Visit every block of the tree, through the same containers the other
+/// tree-walking rules descend into.
+fn walk_blocks(blocks: &[Block], visit: &mut dyn FnMut(&Block)) {
+    for b in blocks {
+        visit(b);
+        if let Some(children) = container_children(b) {
+            walk_blocks(children, visit);
+        }
+        match b {
+            Block::Flow { steps, .. } => {
+                for step in steps {
+                    walk_blocks(&step.children, visit);
+                }
+            }
+            Block::SplitPane { left, right, .. } => {
+                walk_blocks(left, visit);
+                walk_blocks(right, visit);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// L047 (error): a `::video` whose `src` is missing, or uses a scheme other
+/// than `media:` / `https:` / a relative path. The block cannot play — the
+/// renderers draw the placeholder. This is the ONLY error-severity video
+/// rule: a client that refuses a document on an error must not refuse one
+/// for a matter of taste.
+struct VideoSourceUnusable;
+
+impl LintRule for VideoSourceUnusable {
+    fn id(&self) -> &'static str {
+        "L047"
+    }
+
+    fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
+        use crate::media::{classify_media_src, MediaSrc};
+        let mut out = Vec::new();
+        walk_blocks(&doc.blocks, &mut |b| {
+            if let Block::Video { src, span, .. } = b {
+                match classify_media_src(src) {
+                    MediaSrc::Missing => out.push(diag(
+                        "L047",
+                        "'::video' has no src= — give it media:<file-id>, a site path or an https: URL".to_string(),
+                        Some(*span),
+                    )),
+                    MediaSrc::Forbidden => out.push(diag(
+                        "L047",
+                        format!("'::video' src='{src}' is not a usable source — use media:<file-id>, a site path or an https: URL"),
+                        Some(*span),
+                    )),
+                    _ => {}
+                }
+            }
+        });
+        out
+    }
+}
+
+/// L048 (warning): video authoring the page still draws with — an
+/// autoplaying video with no poster on a source that has no processed one
+/// (reduced motion and a slow network show an empty box), a video with
+/// neither `alt` nor `caption`, a `media:` reference that is not a file id,
+/// an unusable `poster=`, and a `::hero[video=]` that cannot play (the hero
+/// keeps its picture).
+struct VideoAuthoring;
+
+impl LintRule for VideoAuthoring {
+    fn id(&self) -> &'static str {
+        "L048"
+    }
+
+    fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
+        use crate::media::{classify_media_src, MediaSrc};
+        let mut out = Vec::new();
+        let poster_problem = |poster: &str| -> Option<&'static str> {
+            match classify_media_src(poster) {
+                MediaSrc::Media { poster: true, .. } | MediaSrc::Https(_) | MediaSrc::Relative(_) => None,
+                MediaSrc::Media { poster: false, .. } => Some("names a file, not its poster — write media:<file-id>/poster"),
+                MediaSrc::MalformedMedia => Some("is not a media:<file-id>/poster reference"),
+                MediaSrc::Forbidden | MediaSrc::Missing => Some("is not a usable picture source"),
+            }
+        };
+        walk_blocks(&doc.blocks, &mut |b| match b {
+            Block::Video { src, poster, autoplay, caption, alt, span, .. } => {
+                let kind = classify_media_src(src);
+                match kind {
+                    MediaSrc::MalformedMedia => out.push(diag(
+                        "L048",
+                        format!("'::video' src='{src}' is not a media:<file-id> reference — the placeholder is drawn"),
+                        Some(*span),
+                    )),
+                    MediaSrc::Media { poster: true, .. } => out.push(diag(
+                        "L048",
+                        format!("'::video' src='{src}' names a poster, not a video — drop '/poster'"),
+                        Some(*span),
+                    )),
+                    _ => {}
+                }
+                if let Some(p) = poster
+                    && let Some(why) = poster_problem(p)
+                {
+                    out.push(diag(
+                        "L048",
+                        format!("'::video' poster='{p}' {why}"),
+                        Some(*span),
+                    ));
+                }
+                if *autoplay
+                    && poster.is_none()
+                    && matches!(kind, MediaSrc::Https(_) | MediaSrc::Relative(_))
+                {
+                    out.push(diag(
+                        "L048",
+                        "'::video' autoplays with no poster= — reduced motion and a slow network show an empty box".to_string(),
+                        Some(*span),
+                    ));
+                }
+                let blank = |v: &Option<String>| v.as_deref().is_none_or(|s| s.trim().is_empty());
+                if blank(alt) && blank(caption) && kind.is_usable() {
+                    out.push(diag(
+                        "L048",
+                        "'::video' has neither alt= nor caption= — say what the video shows".to_string(),
+                        Some(*span),
+                    ));
+                }
+            }
+            Block::Hero { video: Some(video), poster, span, .. } => {
+                let kind = classify_media_src(video);
+                if !matches!(kind, MediaSrc::Media { poster: false, .. } | MediaSrc::Https(_) | MediaSrc::Relative(_)) {
+                    out.push(diag(
+                        "L048",
+                        format!("'::hero' video='{video}' is not a usable source — the hero keeps its picture"),
+                        Some(*span),
+                    ));
+                }
+                if let Some(p) = poster
+                    && let Some(why) = poster_problem(p)
+                {
+                    out.push(diag(
+                        "L048",
+                        format!("'::hero' poster='{p}' {why}"),
+                        Some(*span),
+                    ));
+                }
+            }
+            _ => {}
+        });
+        out
+    }
 }
 
 // ------------------------------------------------------------------

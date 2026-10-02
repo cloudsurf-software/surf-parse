@@ -312,6 +312,68 @@ impl SurfDocBuilder {
         self
     }
 
+    /// Add a video block: a player with its controls. `src` is
+    /// `media:<file-id>`, a site-relative path or an `https:` URL.
+    pub fn video(mut self, src: &str) -> Self {
+        self.blocks.push(Block::Video {
+            src: src.to_string(),
+            poster: None,
+            autoplay: false,
+            loops: false,
+            muted: false,
+            controls: None,
+            caption: None,
+            alt: None,
+            width: None,
+            aspect: None,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a video block with a poster, a caption and an accessible name.
+    pub fn video_with_caption(
+        mut self,
+        src: &str,
+        poster: Option<&str>,
+        caption: &str,
+        alt: Option<&str>,
+    ) -> Self {
+        self.blocks.push(Block::Video {
+            src: src.to_string(),
+            poster: poster.map(|s| s.to_string()),
+            autoplay: false,
+            loops: false,
+            muted: false,
+            controls: None,
+            caption: Some(caption.to_string()),
+            alt: alt.map(|s| s.to_string()),
+            width: None,
+            aspect: None,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
+    /// Add a silent, looping, autoplaying video (a moving picture): no
+    /// controls, muted and inline, the poster shown under reduced motion.
+    pub fn video_loop(mut self, src: &str, poster: Option<&str>, alt: Option<&str>) -> Self {
+        self.blocks.push(Block::Video {
+            src: src.to_string(),
+            poster: poster.map(|s| s.to_string()),
+            autoplay: true,
+            loops: true,
+            muted: true,
+            controls: None,
+            caption: None,
+            alt: alt.map(|s| s.to_string()),
+            width: None,
+            aspect: None,
+            span: Span::SYNTHETIC,
+        });
+        self
+    }
+
     /// Add a quote block.
     pub fn quote(mut self, content: &str) -> Self {
         self.blocks.push(Block::Quote {
@@ -551,6 +613,8 @@ impl SurfDocBuilder {
             image_alt: None,
             layout: None,
             transparent: false,
+            video: None,
+            poster: None,
             buttons,
             content: String::new(),
             span: Span::SYNTHETIC,
@@ -1222,6 +1286,54 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             format!("{fence}figure{attrs}\n{fence}")
         }
 
+        Block::Video {
+            src,
+            poster,
+            autoplay,
+            loops,
+            muted,
+            controls,
+            caption,
+            alt,
+            width,
+            aspect,
+            ..
+        } => {
+            let mut attr_parts = Vec::new();
+            attr_parts.push(format!("src=\"{}\"", escape_attr(src)));
+            if let Some(p) = poster {
+                attr_parts.push(format!("poster=\"{}\"", escape_attr(p)));
+            }
+            if *autoplay {
+                attr_parts.push("autoplay".to_string());
+            }
+            if *loops {
+                attr_parts.push("loop".to_string());
+            }
+            if *muted {
+                attr_parts.push("muted".to_string());
+            }
+            match controls {
+                Some(true) => attr_parts.push("controls".to_string()),
+                Some(false) => attr_parts.push("controls=false".to_string()),
+                None => {}
+            }
+            if let Some(c) = caption {
+                attr_parts.push(format!("caption=\"{}\"", escape_attr(c)));
+            }
+            if let Some(a) = alt {
+                attr_parts.push(format!("alt=\"{}\"", escape_attr(a)));
+            }
+            if let Some(w) = width {
+                attr_parts.push(format!("width=\"{}\"", escape_attr(w)));
+            }
+            if let Some(a) = aspect {
+                attr_parts.push(format!("aspect=\"{}\"", escape_attr(a)));
+            }
+            let attrs = format!("[{}]", attr_parts.join(" "));
+            format!("{fence}video{attrs}\n{fence}")
+        }
+
         Block::Tabs { tabs, .. } => {
             let mut content_parts = Vec::new();
             for tab in tabs {
@@ -1751,6 +1863,8 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             image_alt,
             layout,
             transparent,
+            video,
+            poster,
             buttons,
             ..
         } => {
@@ -1772,6 +1886,12 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
             if *transparent {
                 attrs_parts.push("transparent".to_string());
+            }
+            if let Some(v) = video {
+                attrs_parts.push(format!("video=\"{}\"", escape_attr(v)));
+            }
+            if let Some(p) = poster {
+                attrs_parts.push(format!("poster=\"{}\"", escape_attr(p)));
             }
             let attrs_str = if attrs_parts.is_empty() {
                 String::new()

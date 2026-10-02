@@ -26,6 +26,21 @@ pub fn render_surfdoc_full(source: &str) -> String {
     result.doc.to_html_page(&crate::PageConfig::default())
 }
 
+/// Tell the renderers how to turn a library file (`media:<file-id>`) into a
+/// URL (0.37.0): three templates with `{id}` where the file id goes — the
+/// video, the rendition an autoplaying (muted) video plays, and the poster
+/// picture. Stays in force until called again; an empty template leaves
+/// that use unresolved (the block draws its placeholder). See
+/// [`crate::media::install_media_resolver`].
+#[wasm_bindgen]
+pub fn set_media_templates(video: &str, video_loop: &str, poster: &str) {
+    // The guard is forgotten on purpose: a wasm instance has one thread and
+    // the host sets its templates once for the page's life.
+    std::mem::forget(crate::media::install_media_resolver(
+        crate::media::media_templates(video, video_loop, poster),
+    ));
+}
+
 /// Parse a SurfDoc source string and return metadata as JSON.
 ///
 /// Returns: `{"title": "...", "summary": "...", "doc_type": "...", "tags": [...]}`

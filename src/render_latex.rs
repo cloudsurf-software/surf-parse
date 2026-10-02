@@ -380,6 +380,33 @@ fn latex_block(b: &Block, out: &mut String) {
             }
             out.push_str("\\end{figure}\n\n");
         }
+        // A video degrades to its poster picture (a local path only — the
+        // engine cannot fetch), its caption, and the video's address.
+        Block::Video {
+            src,
+            poster,
+            caption,
+            alt,
+            ..
+        } => {
+            use crate::media::{classify_media_src, media_url, MediaSrc, MediaUse};
+            out.push_str("\\begin{figure}[h]\n\\centering\n");
+            if let Some(MediaSrc::Relative(p)) = poster.as_deref().map(classify_media_src) {
+                out.push_str(&format!(
+                    "\\includegraphics[width=0.8\\linewidth]{{{}}}\n",
+                    escape_latex_path(p)
+                ));
+            }
+            let label = caption.as_deref().or(alt.as_deref()).filter(|s| !s.is_empty());
+            match media_url(src, MediaUse::Video).filter(|u| u.starts_with("https://")) {
+                Some(url) => out.push_str(&format!("\\url{{{}}}\n", escape_latex_path(&url))),
+                None => out.push_str("\\textit{Video}\n"),
+            }
+            if let Some(c) = label {
+                out.push_str(&format!("\\caption{{{}}}\n", md_inline_to_latex(c)));
+            }
+            out.push_str("\\end{figure}\n\n");
+        }
         Block::Section {
             headline,
             subtitle,

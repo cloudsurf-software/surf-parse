@@ -32,12 +32,13 @@ pub const CORPUS: &[(&str, &str)] = &[
     ("tier7-panels", include_str!("../tests/corpus/tier7-panels.surf")),
     ("tier8-carousel-steps", include_str!("../tests/corpus/tier8-carousel-steps.surf")),
     ("tier9-backends", include_str!("../tests/corpus/tier9-backends.surf")),
+    ("tier10-video", include_str!("../tests/corpus/tier10-video.surf")),
 ];
 
 /// One minimal source document per implemented registry kind — the
 /// coverage suite's table, exported (0.27) so every block has an example
-/// (spec/blocks.toml, status = "implemented"; registry currently has 130
-/// implemented of 130 total). When a kind is added to the registry, the
+/// (spec/blocks.toml, status = "implemented"; registry currently has 131
+/// implemented of 131 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 pub const SNIPPETS: &[(&str, &str)] = &[
     ("banner", "::banner[id=contact]\n# Talk to us\nWe reply within one business day.\n[Book a call](/book)\n::"),
@@ -58,6 +59,9 @@ pub const SNIPPETS: &[(&str, &str)] = &[
     ("embed", "::embed[src=\"https://example.com\" type=iframe title=\"Demo\"]\n::"),
     ("faq", "::faq\n- q=\"Fast?\" a=\"Yes.\"\n::"),
     ("figure", "::figure[src=/img/a.png alt=\"A\" caption=\"First\"]\n::"),
+    // 0.37.0: video. A site path draws the player; a `media:` id needs the
+    // host's resolver and draws the placeholder without one.
+    ("video", "::video[src=\"/media/intro.mp4\" poster=\"/img/intro.jpg\" caption=\"How a claim works\" alt=\"A phone showing the claim screen\" aspect=16/9]\n::"),
     ("footer", "::footer[copyright=\"© 2026\"]\n::"),
     ("form", "::form[submit=\"Send\"]\ngroup: Contact\n- Name (text, \"Your name\") *\n- Email (email)\ngroup: Preferences\n- Plan (radio: Free | Pro)\n- Subscribe (checkbox)\n- Dark mode (toggle)\n- Resume (file)\n- Source (hidden, \"pricing\")\n::"),
     ("gallery", "::gallery[columns=2]\n- src=/img/a.png alt=\"A\" caption=\"First\"\n::"),
@@ -305,7 +309,7 @@ mod tests {
     #[test]
     fn the_typed_registry_matches_the_toml() {
         let rows = registry();
-        assert_eq!(rows.len(), 130);
+        assert_eq!(rows.len(), 131);
         let slot = rows.iter().find(|r| r.name == "panel-slot").expect("panel-slot");
         assert_eq!(slot.status, "implemented");
         assert_eq!(slot.enum_variant.as_deref(), Some("PanelSlot"));

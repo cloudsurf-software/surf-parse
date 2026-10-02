@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 22
-registry_updated = "2026-09-29"
+total_rules = 24
+registry_updated = "2026-10-01"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -189,6 +189,20 @@ severity = "warning"
 fixable = false
 message = "'::model[name={name}]' owner='{owner}' is not one of viewer, workspace, public | '::when' has no predicate — give it bind= (with op= and value=) or expr= | '::when' op='{op}' is not one of == != < <= > >= = in contains | '::flow' names no model= — it has no record to write | '::picker[bind={bind}]' layout='{layout}' is not one of wheel, grid, list | '::picker[bind={bind}]' row '{core}' has {n} choices but tiers={tiers} shows only the first {tiers}"
 description = "0.33.0 backends grammar: the words the platform runtime acts on must be ones it knows — a model's owner, a ::when predicate (bind=/op=/value= or expr=) and its operator, the record a ::flow writes, a picker's layout and how many tiered choices a row may offer. Never a failed render — the page draws as authored and the hole is reported here. Not fixable — only the author knows the intended owner, predicate or model"
+
+[rules.L047]
+layer = "style"
+severity = "error"
+fixable = false
+message = "'::video' has no src= — give it media:<file-id>, a site path or an https: URL | '::video' src='{src}' is not a usable source — use media:<file-id>, a site path or an https: URL"
+description = "0.37.0 video: a ::video needs a source the page can load — media:<file-id> (a library file the host resolves), a site-relative path, or an https: URL. A missing src, or any other scheme (http:, javascript:, data:, a protocol-relative //host), cannot play: the renderers draw the placeholder and never emit the value. The only error-severity video rule. Not fixable — only the author knows the file"
+
+[rules.L048]
+layer = "style"
+severity = "warning"
+fixable = false
+message = "'::video' autoplays with no poster= — reduced motion and a slow network show an empty box | '::video' has neither alt= nor caption= — say what the video shows | '::video' src='{src}' is not a media:<file-id> reference — the placeholder is drawn | '::video' src='{src}' names a poster, not a video — drop '/poster' | '::video' poster='{poster}' {why} | '::hero' video='{video}' is not a usable source — the hero keeps its picture | '::hero' poster='{poster}' {why}"
+description = "0.37.0 video: authoring the page still draws with. An autoplaying ::video on a path or URL with no poster= shows an empty box under reduced motion (a media: source has its processed poster, so it is exempt); a video with neither alt= nor caption= has no accessible name; a media: reference must be media:<file-id> for a video and media:<file-id>/poster for a poster; a ::hero[video=] that cannot play keeps its picture. Never a failed render. Not fixable — only the author knows the words or the file"
 
 [rules.L042]
 layer = "style"

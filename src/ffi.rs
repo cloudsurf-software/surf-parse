@@ -254,10 +254,10 @@ mod tests {
     /// uniffi feature is outside the default gates, so 0.33.0 moves it to the
     /// current number.)
     #[test]
-    fn native_doc_schema_version_is_fourteen() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 14);
+    fn native_doc_schema_version_is_fifteen() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 14);
+        assert_eq!(doc.schema_version, 15);
     }
 
     /// 0.33.0 fail-open: a front-matter value with an unquoted colon is

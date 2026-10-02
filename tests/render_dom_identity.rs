@@ -100,6 +100,26 @@ fn identity_carousel_and_stepped_form() {
     assert_identity("carousel-steps.surf");
 }
 
+/// 0.37.0 video: `::video` (the plain player, the autoplay pair with its
+/// reduced-motion stand-in, the placeholder for an unresolved `media:` id
+/// and for a hostile source), `::hero[video=]` and the video-file `::embed`
+/// — constructively whole and byte-equal, unresolved and with a host's
+/// resolver installed.
+#[test]
+fn identity_video() {
+    assert_identity("video.surf");
+    let _media = surf_parse::install_media_resolver(surf_parse::media_templates(
+        "/media/{id}",
+        "/media/{id}?r=loop",
+        "/media/{id}/poster",
+    ));
+    assert_identity("video.surf");
+    let doc = surf_parse::parse(&fixture("video.surf")).doc;
+    let html = render_fragment_string(&doc).expect("native sink renders");
+    assert!(html.contains("<source src=\"/media/3f6c0a1e\" type=\"video/mp4\">"), "{html}");
+    assert!(html.contains("<source src=\"/media/9a8b7c?r=loop\" type=\"video/mp4\" media="), "{html}");
+}
+
 /// 0.33.0 backends grammar: the MoodMap fixture — the model table (covered
 /// since 0.33.0), routes with filter / sort, the flow's stepped shell with a
 /// nested picker and a repeatable step, the model-bound form's range field,

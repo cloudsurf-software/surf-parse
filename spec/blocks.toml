@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 130
-registry_updated = "2026-09-29"
+total_blocks = 131
+registry_updated = "2026-10-01"
 
 [blocks.ai-context]
 status = "implemented"
@@ -137,7 +137,7 @@ enum_variant = "Divider"
 [blocks.embed]
 status = "implemented"
 category = "web"
-purpose = "Embedded external content"
+purpose = "Embedded external content — a provider page is a link card, a generic page with a height is a frame, and (0.37.0) a video file (`media:<file-id>` or a `.mp4 .webm .mov .m4v .ogv` path / https URL) is a player"
 attributes = ["src", "type", "width", "height", "title"]
 degradation = "link to source"
 enum_variant = "Embed"
@@ -379,8 +379,8 @@ enum_variant = "Turn"
 [blocks.hero]
 status = "implemented"
 category = "web"
-purpose = "Full hero section with headline, subtitle, badge, and CTA buttons"
-attributes = ["badge", "align", "image"]
+purpose = "Full hero section with headline, subtitle, badge, and CTA buttons — `video=` (0.37.0) plays a muted, looping background video behind the headline, with `poster=` (else `image`) as its still picture"
+attributes = ["badge", "align", "image", "video", "poster"]
 degradation = "heading with subtitle and links"
 enum_variant = "Hero"
 
@@ -1086,3 +1086,17 @@ purpose = "Recurring reminder whose time of day lives in a record field (bind=),
 attributes = ["bind", "tz", "title", "body", "link"]
 degradation = "reminder line"
 enum_variant = "Schedule"
+
+# ----- Video added in 0.37.0 (TASK-1277) -----
+# A player for a video the workspace owns. `media:<file-id>` is resolved by
+# the host (crate::media::install_media_resolver), never by the parser. An
+# autoplaying video is muted and inline; under reduced motion it is its
+# poster with controls. No script.
+
+[blocks.video]
+status = "implemented"
+category = "core"
+purpose = "Video player with a poster, a caption and playback flags — `src` is `media:<file-id>` (a library file the host resolves), a site-relative path, or an https: URL; `autoplay` implies muted and inline, and yields to reduced motion"
+attributes = ["src", "poster", "autoplay", "loop", "muted", "controls", "caption", "alt", "width", "aspect"]
+degradation = "poster picture, caption and a link to the video"
+enum_variant = "Video"

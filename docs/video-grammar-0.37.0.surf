@@ -1,0 +1,81 @@
+---
+title: "surf-parse 0.37.0: the video grammar"
+type: doc
+status: active
+scope: public
+created: 2026-10-01
+version: 1
+tags: [surf-parse, video, grammar, media, html-contract]
+description: "The ::video block, ::hero[video=], the video-file ::embed, the media: scheme and the host's resolver seam, the exact HTML each one emits, the reduced-motion mechanism, the native node and the lint rules. surf-parse names a library file by id; the host turns the id into a URL."
+---
+
+# The video grammar (0.37.0)
+
+**Video.** `::video[src= poster= autoplay loop muted controls caption= alt= width= aspect=]` — a leaf block.
+
+| Attribute | Meaning | Default |
+|---|---|---|
+| `src` | `media:<file-id>`, a site-relative path, or an `https:` URL | required |
+| `poster` | picture shown before play; `media:<file-id>/poster` is a library file's processed poster | `media:<id>/poster` when `src` is `media:<id>`, else none |
+| `autoplay` | play unasked — always muted and inline | off |
+| `loop` | repeat | off |
+| `muted` | no sound | off; on with `autoplay` |
+| `controls` | the player bar | on; off with `autoplay` unless stated |
+| `caption` · `alt` | visible caption · accessible name (`aria-label`) | none |
+| `width` | a number (pixels) or a number with `px % rem em vw` | fluid |
+| `aspect` | `w/h` — `16/9`, `9/16`, `1/1` (`16:9` reads the same) | intrinsic |
+
+A flag is bare (`autoplay`) or valued (`autoplay=true`, `controls=false`, `"yes"` / `"no"` / `"on"` / `"off"` / `1` / `0`). The block stores the flags as authored; `media::video_flags(autoplay, loops, muted, controls)` is the one function that applies the rules, and every renderer calls it. There is no way to autoplay with sound.
+
+**Sources.** A file id is 1–128 characters of `A–Z a–z 0–9 - _`. Any scheme other than `media:` and `https:` (`http:`, `javascript:`, `data:`, `blob:`), a protocol-relative `//host/…` and a value holding control characters are never emitted. `<source type>` comes from the extension (`.mp4` `.m4v` → `video/mp4`, `.webm` → `video/webm`, `.mov` → `video/quicktime`, `.ogv` → `video/ogg`; a query string is ignored) and is `video/mp4` for a `media:` source; an unknown extension emits no `type`.
+
+**Hero.** `::hero[video= poster=]` — a muted, looping, inline background video behind the headline. The poster is `poster=`, else `image=`, else a `media:` source's processed poster. A hero with a playable video draws as the cover layout; an unusable or unresolved `video=` leaves the hero exactly as it is without one. `::figure` is unchanged.
+
+**Embed.** `::embed` whose `src` is a video FILE — a `media:` id, or a path / `https:` URL ending `.mp4 .webm .mov .m4v .ogv` — is a video (`type` is inferred as `video`) and draws as a player with its controls, the `title` as its caption. A provider's page (YouTube, Vimeo, any other URL) keeps the link card.
+
+**Model field.** `video` (aliases `clip`, `movie`) → `ModelFieldType::Video`; a form shows it as a file field, as it does an image.
+
+## The media: scheme and the resolver seam
+
+The parser never turns `media:<file-id>` into a URL. The host does, for the thread that renders:
+
+::code[lang=rust]
+let _media = surf_parse::install_media_resolver(|id, media_use| match media_use {
+    MediaUse::Video => Some(format!("/media/{id}")),
+    MediaUse::VideoLoop => Some(format!("/media/{id}?r=loop")),
+    MediaUse::Poster => Some(format!("/media/{id}/poster")),
+});
+let html = doc.to_html_fragment();
+::
+
+- `MediaUse::Video` — a video played on request; `VideoLoop` — an autoplaying (muted) video and a hero background, so the host can answer with a smaller silent rendition; `Poster` — the poster picture.
+- The guard restores the previously installed resolver when dropped. `media_templates(video, video_loop, poster)` builds a resolver from three `{id}` templates; the wasm surface exposes it as `set_media_templates`.
+- Unresolved (no resolver, or it answers `None`): the block draws the placeholder with its caption; a hero keeps its picture. A `<video src="media:…">` is never emitted.
+- `media_refs(&doc) -> Vec<MediaRef { id, media_use }>` lists every library file a document references — video sources, posters (a video's default poster included), hero videos and video-file embeds, through every container — in first-appearance order, without repeats. It is exactly the set the renderers ask the resolver for.
+
+## HTML contract
+
+Attribute values are HTML-escaped. `{…}` is present only when it applies.
+
+- **video** `<figure class="surfdoc-video" {style="max-width:W"}><video class="surfdoc-video-player" {controls} {muted} {loop} playsinline preload="none|metadata" {poster} {aria-label} {style="aspect-ratio:W / H"}><source src {type}></video>{<figcaption class="surfdoc-video-cap">}</figure>` — `preload="none"` with a poster, `metadata` without.
+- **autoplay video** `<figure class="surfdoc-video surfdoc-video-autoplay">` holding two elements: `<video class="surfdoc-video-player surfdoc-video-motion" {controls} autoplay muted {loop} playsinline preload="metadata" …><source src {type} media="(prefers-reduced-motion: no-preference)"></video>` then `<video class="surfdoc-video-player surfdoc-video-still" controls muted {loop} playsinline preload="none" …><source src {type}></video>`.
+- **placeholder** `<figure class="surfdoc-video surfdoc-video-unavailable"><div class="surfdoc-video-placeholder" role="img" aria-label="{alt, else Video unavailable}"></div>{figcaption}</figure>`.
+- **hero video** `<section class="surfdoc-hero surfdoc-hero-cover surfdoc-hero-video" {style="background-image:url('POSTER')"}><video class="surfdoc-hero-bg" autoplay muted loop playsinline preload="metadata" {poster} aria-hidden="true" tabindex="-1"><source src {type} media="(prefers-reduced-motion: no-preference)"></video><div class="surfdoc-hero-inner">…</div></section>`.
+
+The DOM renderer (`render_dom`) builds the same trees, byte for byte; the slides draw the same element.
+
+## Reduced motion
+
+No script. An autoplaying `<video>` cannot be stopped by a style rule, so it is drawn twice. The playing element's `<source>` carries `media="(prefers-reduced-motion: no-preference)"`: when the viewer asks for reduced motion it has nothing to load, and the stylesheet hides it. Its stand-in — the same source with the poster and controls, no `autoplay`, `preload="none"` — is hidden by default and shown only under `prefers-reduced-motion: reduce`. A browser that ignores `<source media>` still shows no motion, because the stylesheet alone hides the playing element. A hero's background video is hidden the same way and the poster picture, which the section paints as its background, remains.
+
+## The other renderers
+
+Markdown: `![alt](poster)`, `*caption*`, `[Video: caption](src)` — the poster and the link only when they are real URLs (a `media:` reference through the resolver). Terminal: `[Video: caption] (src)`. Typst and PDF: a figure with the poster when the caller supplied its bytes (`collect_image_srcs` lists a video's poster) or the placeholder box, the caption, and a link for an `https:` source. LaTeX: a figure with a local poster path, the caption, `\url{…}` for an `https:` source.
+
+## Native (schema v15)
+
+`NativeBlock::Video { src, poster, autoplay, loops, muted, controls, playsinline, caption, alt, aspect }` — `src` and `poster` cross as authored (`media:<file-id>`, `media:<file-id>/poster`) for the client to resolve; `poster` is the effective one; the flags are the effective ones; a client honours the system's reduced-motion setting itself. A video-file embed crosses as `Video`. `NativeBlock::Hero` gains `video` and `poster`.
+
+## Lint
+
+`L047` (error) — `::video` with no `src`, or a `src` whose scheme is not `media:` / `https:` / relative. `L048` (warning) — `autoplay` with no `poster` on a path or URL; neither `alt` nor `caption`; a `media:` reference that is not a file id, a poster named as the source or a file named as the poster; an unusable `poster`; a `::hero[video=]` that cannot play.

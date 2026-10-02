@@ -50,6 +50,18 @@
 //!   Executive summary box.
 //! - **`Figure`**
 //!   Image with optional caption and alt text.
+//! - **`Video`** (schema v15)
+//!   A video for the client's own player. `src` and `poster` cross AS
+//!   AUTHORED — `media:<file-id>` / `media:<file-id>/poster` are library
+//!   references the client maps to URLs it can authorise; a path or an
+//!   `https:` URL is used as is. `poster` is already the effective one (a
+//!   `media:` source with none stated carries `media:<id>/poster`). The
+//!   flags are the EFFECTIVE ones (`crate::media::video_flags`): `autoplay`
+//!   implies `muted` and `playsinline`; `controls` is on unless the video
+//!   autoplays without stating it. A client honours the system's
+//!   reduced-motion setting by showing the poster with controls instead of
+//!   autoplaying. `aspect` is `w/h` as authored (`16/9`). A `::embed` that
+//!   names a video file crosses as this variant too, with controls.
 //! - **`Tabs`**
 //!   Tabbed content panels (renders as segmented picker or TabView).
 //! - **`Columns`**
@@ -586,6 +598,24 @@ pub enum NativeBlock {
         alt: Option<String>,
     },
 
+    /// ::video
+    Video {
+        src: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        poster: Option<String>,
+        autoplay: bool,
+        loops: bool,
+        muted: bool,
+        controls: bool,
+        playsinline: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        caption: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alt: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        aspect: Option<String>,
+    },
+
     /// ::tabs
     Tabs { tabs: Vec<NativeTabPanel> },
 
@@ -634,6 +664,10 @@ pub enum NativeBlock {
         badge: Option<String>,
         align: String,
         image: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        video: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        poster: Option<String>,
         buttons: Vec<NativeHeroButton>,
         content: String,
     },
@@ -2505,7 +2539,15 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// `NativeModelField` gains `computed`, `Route` gains `filter` / `sort`,
 /// `Form` gains `model` and `NativeFormField` gains `constraints`.
 /// `NativeBlock` is now a 131-variant enum (130 structural + `Markdown`).
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 14;
+///
+/// v15 (0.37.0) — video: a new variant `Video` (`src`, `poster`, the
+/// effective `autoplay` / `loops` / `muted` / `controls` / `playsinline`,
+/// `caption`, `alt`, `aspect`; content tier) — `::video`, and a `::embed`
+/// that names a video file; `Hero` gains `video` and `poster`
+/// (`::hero[video= poster=]`). `media:<file-id>` sources cross as authored
+/// for the client to resolve. `NativeBlock` is now a 132-variant enum
+/// (131 structural + `Markdown`).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 15;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -2932,6 +2974,26 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             alt: alt.clone(),
         },
 
+        Block::Video {
+            src,
+            poster,
+            autoplay,
+            loops,
+            muted,
+            controls,
+            caption,
+            alt,
+            aspect,
+            ..
+        } => native_video(
+            src,
+            poster.as_deref(),
+            crate::media::video_flags(*autoplay, *loops, *muted, *controls),
+            caption.clone(),
+            alt.clone(),
+            aspect.clone(),
+        ),
+
         // Native gets the laid-out geometry scene (typed shapes, same
         // layout the web SVG is serialized from) plus the raw DSL for the
         // titled-card fallback; `scene` is None when the DSL fails to parse.
@@ -3130,11 +3192,27 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             badge,
             align,
             image,
+            video,
+            poster,
             buttons,
             content,
             ..
         } => {
             let (headline, anchor) = split_headline_anchor(headline.as_deref());
+            // The background video crosses only when its source is one a
+            // client can use; its poster is the stated one, else the image,
+            // else a `media:` source's processed poster.
+            let video = video
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| crate::media::classify_media_src(v).is_usable())
+                .map(str::to_string);
+            let poster = video.as_deref().and_then(|v| {
+                crate::media::effective_poster(
+                    v,
+                    crate::media::hero_poster(poster.as_deref(), image.as_deref()),
+                )
+            });
             NativeBlock::Hero {
             headline,
             anchor,
@@ -3142,6 +3220,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             badge: badge.clone(),
             align: align.clone(),
             image: image.clone(),
+            video,
+            poster,
             buttons: buttons
                 .iter()
                 .map(|b| NativeHeroButton {
@@ -3897,6 +3977,21 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 })
                 .collect(),
         },
+
+        // 0.37.0: an embed that names a video FILE is a player with controls.
+        Block::Embed {
+            src,
+            embed_type,
+            title,
+            ..
+        } if crate::media::embed_is_video_file(*embed_type, src) => native_video(
+            src,
+            None,
+            crate::media::video_flags(false, false, false, Some(true)),
+            title.clone(),
+            None,
+            None,
+        ),
 
         Block::Embed {
             src,
@@ -4788,6 +4883,30 @@ fn list_display_str(d: crate::types::ListDisplay) -> String {
     .to_string()
 }
 
+/// `NativeBlock::Video` from a source, its stated poster and the effective
+/// flags. `src` / `poster` cross as authored (see the variant ledger).
+fn native_video(
+    src: &str,
+    poster: Option<&str>,
+    flags: crate::media::VideoFlags,
+    caption: Option<String>,
+    alt: Option<String>,
+    aspect: Option<String>,
+) -> NativeBlock {
+    NativeBlock::Video {
+        src: src.to_string(),
+        poster: crate::media::effective_poster(src, poster),
+        autoplay: flags.autoplay,
+        loops: flags.loops,
+        muted: flags.muted,
+        controls: flags.controls,
+        playsinline: flags.playsinline,
+        caption,
+        alt,
+        aspect: aspect.filter(|a| crate::media::video_aspect(a).is_some()),
+    }
+}
+
 fn embed_type_str(et: EmbedType) -> String {
     match et {
         EmbedType::Map => "map",
@@ -4913,6 +5032,7 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Data { .. }
         | Block::Tasks { .. }
         | Block::Figure { .. }
+        | Block::Video { .. }
         | Block::Diagram { .. }
         | Block::Quote { .. }
         | Block::Divider { .. }
@@ -7184,6 +7304,8 @@ mod tests {
             image_alt: None,
             layout: None,
             transparent: false,
+            video: None,
+            poster: None,
             buttons: vec![],
             content: "Some content".to_string(),
             span: syn(),
@@ -7197,6 +7319,8 @@ mod tests {
                 badge: Some("New".to_string()),
                 align: "center".to_string(),
                 image: Some("hero.png".to_string()),
+                video: None,
+                poster: None,
                 buttons: vec![],
                 content: "Some content".to_string(),
             }
@@ -8218,7 +8342,8 @@ mod tests {
         // hero/section `anchor` + heading anchors stripped — schema v11.
         // 0.27: the panels layout — `PanelSlot` + `Preset` — schema v12.
         // 0.33.0: the backends grammar — schema v14.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 14);
+        // 0.37.0: video — `Video`, `Hero.video` / `Hero.poster` — schema v15.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

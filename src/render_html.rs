@@ -3286,6 +3286,119 @@ fn marquee_html(items: &[String]) -> String {
 /// The id a `::carousel` renders under when the author gave none. A pure
 /// renderer keeps no per-page counter, so a page with two carousels gives
 /// each an `id=`.
+/// One `<video>` element of a video block.
+fn video_tag_html(
+    player: &crate::media::VideoPlayer,
+    twin: crate::media::VideoTwin,
+    alt: Option<&str>,
+    box_style: Option<&str>,
+) -> String {
+    use crate::media::{VideoTwin, MOTION_OK_MEDIA_QUERY};
+    let mut tag = format!("<video class=\"{}\"", twin.class());
+    for name in twin.bool_attrs(&player.flags) {
+        tag.push(' ');
+        tag.push_str(name);
+    }
+    tag.push_str(&format!(" preload=\"{}\"", twin.preload(player.poster.is_some())));
+    if let Some(p) = &player.poster {
+        tag.push_str(&format!(" poster=\"{}\"", escape_html(p)));
+    }
+    if let Some(a) = alt.filter(|a| !a.is_empty()) {
+        tag.push_str(&format!(" aria-label=\"{}\"", escape_html(a)));
+    }
+    if let Some(st) = box_style {
+        tag.push_str(&format!(" style=\"{}\"", escape_html(st)));
+    }
+    tag.push_str(&format!("><source src=\"{}\"", escape_html(&player.url)));
+    if let Some(mime) = player.mime {
+        tag.push_str(&format!(" type=\"{mime}\""));
+    }
+    if twin == VideoTwin::Motion {
+        tag.push_str(&format!(" media=\"{MOTION_OK_MEDIA_QUERY}\""));
+    }
+    tag.push_str("></video>");
+    tag
+}
+
+/// A video block: `<figure class="surfdoc-video"><video …><source …></video>
+/// <figcaption>`. Shared by `::video`, the `::embed` that names a video file,
+/// and the slides (which render through this module).
+///
+/// **Reduced motion, without a script.** A `<video autoplay>` cannot be
+/// stopped by CSS, and a fragment carries no runtime (nor may the DOM twin
+/// create a `<script>`). So an AUTOPLAYING video is drawn as two elements:
+///
+/// - `.surfdoc-video-motion` — the autoplaying one. Its `<source>` carries
+///   `media="(prefers-reduced-motion: no-preference)"`, so under reduced
+///   motion it has no source to load, and the stylesheet hides it.
+/// - `.surfdoc-video-still` — the stand-in: the same source with the poster
+///   and controls, no `autoplay`, `preload="none"`. The stylesheet shows it
+///   ONLY under `prefers-reduced-motion: reduce`; hidden, it fetches nothing.
+///
+/// A browser that ignores `<source media>` still shows no motion: the
+/// stylesheet rule alone hides the playing element. A video that does not
+/// autoplay is one plain element.
+///
+/// An unusable source or an unresolved `media:` id draws the poster-less
+/// placeholder with the caption — never a `<video>` the browser cannot load.
+pub(crate) fn video_html(spec: &crate::media::VideoSpec<'_>) -> String {
+    use crate::media::VideoTwin;
+    let fig_style = spec
+        .figure_style()
+        .map(|st| format!(" style=\"{}\"", escape_html(&st)))
+        .unwrap_or_default();
+    let box_style = spec.box_style();
+    let caption_html = match spec.caption.filter(|c| !c.is_empty()) {
+        Some(c) => format!("<figcaption class=\"surfdoc-video-cap\">{}</figcaption>", escape_html(c)),
+        None => String::new(),
+    };
+    let Some(player) = spec.player() else {
+        let label = spec.alt.filter(|a| !a.is_empty()).unwrap_or("Video unavailable");
+        let st = box_style
+            .map(|st| format!(" style=\"{}\"", escape_html(&st)))
+            .unwrap_or_default();
+        return format!(
+            "<figure class=\"surfdoc-video surfdoc-video-unavailable\"{fig_style}><div class=\"surfdoc-video-placeholder\" role=\"img\" aria-label=\"{}\"{st}></div>{caption_html}</figure>",
+            escape_html(label),
+        );
+    };
+    if player.flags.autoplay {
+        format!(
+            "<figure class=\"surfdoc-video surfdoc-video-autoplay\"{fig_style}>{}{}{caption_html}</figure>",
+            video_tag_html(&player, VideoTwin::Motion, spec.alt, box_style.as_deref()),
+            video_tag_html(&player, VideoTwin::Still, spec.alt, box_style.as_deref()),
+        )
+    } else {
+        format!(
+            "<figure class=\"surfdoc-video\"{fig_style}>{}{caption_html}</figure>",
+            video_tag_html(&player, VideoTwin::Plain, spec.alt, box_style.as_deref()),
+        )
+    }
+}
+
+/// The hero's background `<video>`: decorative (hidden from assistive
+/// tech, out of the tab order), autoplaying muted in a loop. Its `<source>`
+/// carries the reduced-motion query and the stylesheet hides it under
+/// `prefers-reduced-motion: reduce`, leaving the poster picture the section
+/// already paints as its background.
+pub(crate) fn hero_video_html(player: &crate::media::VideoPlayer) -> String {
+    let mut tag = String::from(
+        "<video class=\"surfdoc-hero-bg\" autoplay muted loop playsinline preload=\"metadata\"",
+    );
+    if let Some(p) = &player.poster {
+        tag.push_str(&format!(" poster=\"{}\"", escape_html(p)));
+    }
+    tag.push_str(&format!(
+        " aria-hidden=\"true\" tabindex=\"-1\"><source src=\"{}\"",
+        escape_html(&player.url)
+    ));
+    if let Some(mime) = player.mime {
+        tag.push_str(&format!(" type=\"{mime}\""));
+    }
+    tag.push_str(&format!(" media=\"{}\"></video>", crate::media::MOTION_OK_MEDIA_QUERY));
+    tag
+}
+
 pub(crate) const CAROUSEL_DEFAULT_ID: &str = "carousel";
 
 /// Render a `::carousel` (0.32.0): a scroll-snap track of slide articles and
@@ -3997,6 +4110,31 @@ fn render_block_inner(block: &Block) -> String {
             )
         }
 
+        Block::Video {
+            src,
+            poster,
+            autoplay,
+            loops,
+            muted,
+            controls,
+            caption,
+            alt,
+            width,
+            aspect,
+            ..
+        } => video_html(&crate::media::VideoSpec {
+            src,
+            poster: poster.as_deref(),
+            autoplay: *autoplay,
+            loops: *loops,
+            muted: *muted,
+            controls: *controls,
+            caption: caption.as_deref(),
+            alt: alt.as_deref(),
+            width: width.as_deref(),
+            aspect: aspect.as_deref(),
+        }),
+
         Block::Diagram {
             diagram_type,
             title,
@@ -4427,6 +4565,16 @@ fn render_block_inner(block: &Block) -> String {
         Block::Embed {
             src, embed_type, title, width, height, ..
         } => {
+            // 0.37.0: a video FILE (a `media:` id, or a path / https URL
+            // ending in a video extension) is a player with its controls. A
+            // provider's page (YouTube, Vimeo, …) keeps the link card below.
+            if crate::media::embed_is_video_file(*embed_type, src) {
+                return video_html(&crate::media::VideoSpec::from_embed(
+                    src,
+                    title.as_deref(),
+                    width.as_deref(),
+                ));
+            }
             let title_text = title.as_deref().unwrap_or(src.as_str());
             // Generic embeds (no recognized provider type) with a real src and an
             // explicit height are first-class iframes — e.g. a Termly policy viewer
@@ -5195,10 +5343,60 @@ fn render_block_inner(block: &Block) -> String {
             image_alt,
             layout,
             transparent,
+            video,
+            poster,
             buttons,
             content: _,
             ..
         } => {
+            // 0.37.0 `video=`: a muted, looping background video behind the
+            // headline. The hero then draws as the cover layout — the poster
+            // (`poster=`, else `image`) is the section's background picture,
+            // the video plays over it, and under reduced motion (or when the
+            // video cannot load) the picture is what remains. An unusable or
+            // unresolved `video=` leaves the hero exactly as it is without
+            // one.
+            let bg_video = crate::media::hero_video_player(
+                video.as_deref(),
+                poster.as_deref(),
+                image.as_deref(),
+            );
+            if let Some(player) = &bg_video {
+                let cover_style = match &player.poster {
+                    Some(p) => format!(
+                        " style=\"background-image:url('{}')\"",
+                        escape_html(&crate::media::css_url(p))
+                    ),
+                    None => String::new(),
+                };
+                let mut parts = Vec::new();
+                parts.push(format!(
+                    "<section class=\"surfdoc-hero surfdoc-hero-cover surfdoc-hero-video\"{cover_style}>"
+                ));
+                parts.push(hero_video_html(player));
+                parts.push("<div class=\"surfdoc-hero-inner\">".to_string());
+                if let Some(b) = badge {
+                    parts.push(format!("<span class=\"surfdoc-hero-badge\">{}</span>", escape_html(b)));
+                }
+                if let Some(h) = headline {
+                    parts.push(format!("<h1 class=\"surfdoc-hero-headline\">{}</h1>", render_inline_markdown_phrasing(h)));
+                }
+                if let Some(s) = subtitle {
+                    parts.push(render_wrapped_phrasing_or_blocks(Some("surfdoc-hero-subtitle"), s));
+                }
+                if !buttons.is_empty() {
+                    parts.push("<div class=\"surfdoc-hero-actions\">".to_string());
+                    for btn in buttons {
+                        let cls = if btn.primary { "surfdoc-hero-btn surfdoc-hero-btn-primary" } else { "surfdoc-hero-btn surfdoc-hero-btn-secondary" };
+                        let target = if btn.external { " target=\"_blank\" rel=\"noopener\"" } else { "" };
+                        parts.push(format!("<a href=\"{}\" class=\"{}\"{}>{}</a>", escape_html(&btn.href), cls, target, escape_html(&btn.label)));
+                    }
+                    parts.push("</div>".to_string());
+                }
+                parts.push("</div>".to_string());
+                parts.push("</section>".to_string());
+                return parts.join("");
+            }
             // `layout=cover` makes the image a full-bleed hero BACKGROUND (with
             // a darkening overlay + white text, see surfdoc.css §50) — the
             // home-page "header" look. `layout=stacked` forces the image above
@@ -9481,6 +9679,8 @@ mod tests {
             image_alt,
             layout,
             transparent: false,
+            video: None,
+            poster: None,
             buttons: vec![],
             content: String::new(),
             span: span(),
@@ -9641,6 +9841,8 @@ mod tests {
             image_alt: Some("CloudSurf logo".into()),
             layout: Some("stacked".into()),
             transparent: true,
+            video: None,
+            poster: None,
             buttons: vec![],
             content: String::new(),
             span: span(),
@@ -10945,8 +11147,10 @@ mod tests {
 
     #[test]
     fn html_video_embed_stays_link_card() {
-        // Provider embeds (video/audio/map) keep the safe link-card so
-        // unembeddable share URLs don't produce an iframe error box.
+        // A PROVIDER's page (YouTube, Vimeo, …) keeps the safe link-card so
+        // unembeddable share URLs don't produce an iframe error box. Since
+        // 0.37.0 this holds for provider pages only — a video FILE is a
+        // player (`html_video_file_embed_is_a_player`, below).
         let doc = doc_with(vec![Block::Embed {
             src: "https://youtu.be/abc".into(),
             embed_type: Some(EmbedType::Video),
@@ -10956,8 +11160,29 @@ mod tests {
             span: span(),
         }]);
         let html = to_html(&doc);
-        assert!(html.contains("surfdoc-embed-title"), "video embed stays a link card");
+        assert!(html.contains("surfdoc-embed-title"), "a provider page stays a link card");
         assert!(!html.contains("<iframe"));
+        assert!(!html.contains("<video"));
+    }
+
+    #[test]
+    fn html_video_file_embed_is_a_player() {
+        // 0.37.0: a `type=video` embed whose src is a video FILE draws
+        // through the `::video` path, with controls.
+        let doc = doc_with(vec![Block::Embed {
+            src: "https://cdn.example.com/tour.mp4?v=2".into(),
+            embed_type: Some(EmbedType::Video),
+            width: None,
+            height: Some("400px".into()),
+            title: Some("My Video".into()),
+            span: span(),
+        }]);
+        let html = to_html(&doc);
+        assert!(
+            html.contains("<figure class=\"surfdoc-video\"><video class=\"surfdoc-video-player\" controls playsinline preload=\"metadata\"><source src=\"https://cdn.example.com/tour.mp4?v=2\" type=\"video/mp4\"></video><figcaption class=\"surfdoc-video-cap\">My Video</figcaption></figure>"),
+            "{html}"
+        );
+        assert!(!html.contains("surfdoc-embed-title") && !html.contains("<iframe"));
     }
 
     #[test]
@@ -11816,6 +12041,8 @@ mod tests {
                 image_alt: None,
                 layout: None,
                 transparent: false,
+                video: None,
+                poster: None,
                 buttons: vec![],
                 content: String::new(),
                 span: span(),
@@ -11852,6 +12079,8 @@ mod tests {
             image_alt: None,
             layout: None,
             transparent: false,
+            video: None,
+            poster: None,
             buttons: vec![],
             content: String::new(),
             span: span(),
@@ -11979,6 +12208,8 @@ mod tests {
                 image_alt: None,
                 layout: None,
                 transparent: false,
+                video: None,
+                poster: None,
                 buttons: vec![],
                 content: String::new(),
                 span: span(),
@@ -12027,6 +12258,8 @@ mod tests {
             image_alt: None,
             layout: None,
             transparent: false,
+            video: None,
+            poster: None,
             buttons: vec![],
             content: String::new(),
             span: span(),
@@ -13861,6 +14094,8 @@ About
                     image_alt: None,
                     layout: None,
                     transparent: false,
+                    video: None,
+                    poster: None,
                     buttons: vec![],
                     content: String::new(),
                     span: span(),

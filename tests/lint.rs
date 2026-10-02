@@ -63,6 +63,8 @@ const LINT_CORPUS: &[(&str, &[&str])] = &[
     ("l042-desktop-only.surf", &["L042"]),
     ("l043-duplicate-block-id.surf", &["L043"]),
     ("l044-data-source-counts.surf", &["L044"]),
+    ("l047-video-source.surf", &["L047", "L047", "L047"]),
+    ("l048-video-authoring.surf", &["L048", "L048", "L048", "L048", "L048", "L048"]),
     ("registered-blocks.surf", &[]),
     ("p001-unclosed.surf", &[]),
     ("p002-unclosed-frontmatter.surf", &[]),
@@ -205,6 +207,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     ("single.surf", &[]),
     ("site.surf", &[]),
     ("strategy-sample.surf", &[]),
+    // 0.37.0: the ::video / hero video / video-file embed fixture —
+    // well-formed (its hostile sources are lint matters, not parse ones).
+    ("video.surf", &[]),
 ];
 
 #[test]
