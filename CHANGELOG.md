@@ -3,6 +3,34 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.38.0 — 2026-10-02 (the workbook learns pipe tables and the DOM twin: `type: spreadsheet` on the web; TASK-1314)
+
+A `type: spreadsheet` document opened as a workbook in the Mac app and as prose on app.cloudsurf.com: the web's
+player draws every doc through the constructive DOM renderer, which had no workbook, and the HTML workbook counted
+top-level `::data` blocks only — a register written as twelve markdown pipe tables under headings had zero sheets.
+
+- **One rule for what a sheet is** (`workbook::plan_workbook`, D-WS-1): every top-level `::data` block AND every GFM
+  pipe table inside a top-level markdown block is a sheet, in source order. The label is `name=` → `caption=` → the
+  nearest preceding markdown heading → `Sheet<n>`, never twice the same ("Status", "Status (2)" — the kit's own
+  form). Everything else — the summary, the callouts, the headings that became labels — is the About aside, after
+  the sheets, never interleaved.
+- **The markup, in both renderers.** `section.surfdoc-workbook[data-sheets]` › `nav.surfdoc-sheet-strip` of
+  `a[href=#surfdoc-sheet-n][data-sheet-index][title=label]` (or `span.surfdoc-sheet-empty` "No sheets") ›
+  `section.surfdoc-sheet[id][data-sheet][data-rows][data-cols][data-source]` each holding ONE table with EVERY
+  inline row (the 20-row preview cap is the prose contract; a sheet has no `surfdoc-table-more` line) ›
+  `aside.surfdoc-workbook-about`. `render_dom::render_doc_dom` builds the same bytes for a spreadsheet doc
+  (`render_doc_string` / `to_html_workbook_fragment` are the identity pair) and `check_coverage` dry-runs that
+  branch, so a wasm host's `render_doc` can take the workbook over.
+- **The stylesheet**: a strip tab is at most 180px wide with a tail ellipsis, the full name in its title
+  (D-WS-9); the strip scrolls in one row; the server page shows one sheet at a time by `:target` with no script;
+  the About aside's rules.
+- Native schema unchanged (v15): `NativeBlock::DataTable` does not carry `name=` yet — the uniffi bindings would
+  have to be regenerated for Swift and Kotlin; that is the bindings lane's, and the kit's adapter keeps caption →
+  heading → `Sheet<n>` until then.
+- Tests: `src/workbook.rs` (the plan over the invented register fixture `tests/fixtures/workbook-register.surf`,
+  the label rule, the splitter), `tests/render_dom_identity.rs` (the workbook byte-identity pair on the register,
+  a `::data` workbook and an empty one), `tests/data_preview_contract.rs` (the markup pins).
+
 ## 0.37.2 — 2026-10-02 (the allow-list passes the host's own pages: the scheme grammar, and a scoped door only a host can open; TASK-1300)
 
 0.37.1's allow-list refused three things a host application hands the renderer for its own pages. 0.37.2 passes

@@ -1,0 +1,49 @@
+---
+title: "The workbook — a `type: spreadsheet` document in both renderers (0.38.0)"
+type: guide
+status: active
+---
+
+# The workbook (0.38.0)
+
+::summary
+What a `type: spreadsheet` document IS to the renderers: a strip of sheets, one section per sheet holding its whole table, and the document's prose behind them. One rule decides the sheets (`src/workbook.rs`), and `render_html` and `render_dom` draw the same bytes from it, so a page the server wrote and a mount the browser built hash alike.
+::
+
+## What a sheet is (D-WS-1)
+
+Every top-level `::data` block is a sheet, and every GFM pipe table inside a top-level markdown block is a sheet, in source order. The markdown block is cut around its tables; the prose between them stays prose. A fenced code block is never cut. A table whose delimiter row does not match its header's cell count is prose (pulldown-cmark would not draw a table from it either).
+
+## The label
+
+`name=` on a `::data`, else its `caption=`, else the nearest preceding markdown heading (hashes and a trailing `{#anchor}` removed), else `Sheet<n>` by position. A label is never used twice: the second "Status" is "Status (2)", the third "Status (3)" — the same form the SurfDocKit adapter uses, so the web and the Mac name a document's tabs alike.
+
+## The markup
+
+::code[lang=html]
+<section class="surfdoc-workbook" data-sheets="2">
+  <nav class="surfdoc-sheet-strip">
+    <a href="#surfdoc-sheet-1" data-sheet-index="0" title="Totals">Totals</a>
+    <a href="#surfdoc-sheet-2" data-sheet-index="1" title="1 — Schedule A">1 — Schedule A</a>
+  </nav>
+  <section class="surfdoc-sheet" id="surfdoc-sheet-1" data-sheet="Totals" data-rows="12" data-cols="4">
+    <div class="surfdoc-table-wrap"><table>…every row…</table></div>
+  </section>
+  <section class="surfdoc-sheet" id="surfdoc-sheet-2" …>…</section>
+  <aside class="surfdoc-workbook-about">…the summary, the headings, the callouts…</aside>
+</section>
+::
+
+A sheet section holds ONE table with EVERY inline row: the 20-row preview cap and the `N rows · open as spreadsheet` line belong to the prose contract (D-SS-5 / D-SS-14), not to a sheet. A `::data[source=]` sheet writes its inline preview; the section's `data-rows` / `data-cols` / `data-source` say what lives out of line, and a face says so in its status line until the range route lands. A workbook with no table writes `<span class="surfdoc-sheet-empty">No sheets</span>` in the strip and everything in About.
+
+## The two renderers
+
+`render_html::to_html` takes the workbook path when the front matter resolves to `RenderProfile::Spreadsheet`; `to_html_workbook_fragment` is the fragment alone, headings wired. `render_dom::render_doc_dom` branches on the same profile (`is_workbook`) and `check_coverage` dry-runs that branch; `render_doc_string` serializes it for the identity tests. A wasm host that renders a whole document calls `render_doc_dom` with the parsed document, never `render_blocks_dom` with its blocks, or the workbook is lost.
+
+## The stylesheet
+
+A strip tab is at most 180px wide, clipped with a tail ellipsis, its full name in `title=` (D-WS-9, every platform); the strip is one row that scrolls. The server page has no script: `:target` shows one sheet at a time, the first until a strip link names another.
+
+## Not in 0.38.0
+
+`NativeBlock::DataTable` does not carry `name=` (the Swift and Kotlin bindings would have to be regenerated; native schema stays v15). Cell editing, the range route and XLSX import are other lanes.

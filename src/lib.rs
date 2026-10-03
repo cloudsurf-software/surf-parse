@@ -61,6 +61,7 @@ pub mod render_dom;
 pub mod template;
 pub mod types;
 pub mod validate;
+pub mod workbook;
 
 /// Unified CSS for app chrome and SurfDoc content rendering.
 ///

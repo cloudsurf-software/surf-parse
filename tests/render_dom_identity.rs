@@ -84,6 +84,52 @@ fn identity_data_preview_thirty_rows() {
     assert_identity("data-preview.surf");
 }
 
+/// 0.38.0: the WORKBOOK pair — `render_doc_dom` for a `type: spreadsheet`
+/// doc against `to_html_workbook_fragment`, byte for byte, and the doc-level
+/// gate agreeing. The register fixture (thirteen pipe-table sheets under
+/// headings, a summary in About), a `::data` workbook over the preview cap
+/// with a `source=` sheet, and an empty workbook.
+fn assert_workbook_identity(src: &str, what: &str) {
+    let doc = surf_parse::parse(src).doc;
+    assert!(surf_parse::render_dom::is_workbook(&doc), "{what}: a spreadsheet doc");
+    if let Err(e) = check_coverage(&doc) {
+        panic!("{what}: expected full coverage, got decline: {e}");
+    }
+    let dom_html = surf_parse::render_dom::render_doc_string(&doc).expect("native sink renders");
+    let string_html = surf_parse::render_html::to_html_workbook_fragment(&doc);
+    assert_eq!(dom_html, string_html, "{what}: the constructive workbook drifted from render_html");
+}
+
+#[test]
+fn identity_workbook_register_fixture() {
+    let src = fixture("workbook-register.surf");
+    assert_workbook_identity(&src, "workbook-register.surf");
+    let html = surf_parse::render_html::to_html_workbook_fragment(&surf_parse::parse(&src).doc);
+    assert!(html.contains("data-sheets=\"13\""), "{html}");
+}
+
+#[test]
+fn identity_workbook_data_blocks_over_the_cap_and_a_source_sheet() {
+    let mut src = String::from("---\ntitle: \"Books\"\ntype: spreadsheet\n---\n\n# Books\n\n::data[name=\"Revenue\" caption=\"Money\"]\nH1 | H2\n");
+    for n in 1..=25 {
+        src.push_str(&format!("r{n} | {n}\n"));
+    }
+    src.push_str("total: all | 325\n::\n\n::callout[type=info]\nA note between.\n::\n\n::data[source=\"file:abc\" rows=4200 cols=2]\nA | B\n1 | 2\n::\n\n| Loose | Table |\n|---|---|\n| x | y |\n");
+    assert_workbook_identity(&src, "data workbook");
+}
+
+#[test]
+fn identity_workbook_with_no_table() {
+    assert_workbook_identity("---\ntype: spreadsheet\n---\n\n# Nothing yet\n\nWords only.\n", "empty workbook");
+}
+
+#[test]
+fn a_prose_doc_still_renders_as_its_block_list_through_render_doc_dom() {
+    let doc = surf_parse::parse("---\ntype: doc\n---\n\n# Prose\n\n| A |\n|---|\n| 1 |\n").doc;
+    assert!(!surf_parse::render_dom::is_workbook(&doc));
+    assert_eq!(surf_parse::render_dom::render_doc_string(&doc).unwrap(), doc.to_html_fragment());
+}
+
 /// 0.21.0 site pair: the `::hours` table (status span empty — the pure
 /// render has no clock) and the doubled `::marquee` track, with authored
 /// text that must escape identically in both backends.

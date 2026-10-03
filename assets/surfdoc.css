@@ -1633,10 +1633,21 @@ a.surfdoc-table-more:hover { color: var(--text); text-decoration: underline; }
 /* 0.20.0 workbook layout (type: spreadsheet). The strip is the sheet tab row
    above the sheets; each sheet is a titled band carrying one ::data table. */
 .surfdoc-workbook { display: flex; flex-direction: column; gap: 16px; }
-.surfdoc-sheet-strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.surfdoc-sheet-strip a { padding: 6px 12px; border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0; background: var(--surface-alt); color: var(--text-muted); font-size: var(--font-size-caption); text-decoration: none; white-space: nowrap; }
+/* 0.38.0 (D-WS-9): the strip is ONE row that scrolls; a tab's label is drawn at most 180px wide and clipped with a tail
+   ellipsis — the full name is the tab's title (the tooltip) and the About aside lists it. */
+.surfdoc-sheet-strip { display: flex; flex-wrap: nowrap; gap: 4px; padding: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; }
+.surfdoc-sheet-strip a { flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; padding: 6px 12px; border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0; background: var(--surface-alt); color: var(--text-muted); font-size: var(--font-size-caption); text-decoration: none; white-space: nowrap; }
 .surfdoc-sheet-strip a:hover { color: var(--text); }
+.surfdoc-sheet-empty { padding: 6px 12px; color: var(--text-muted); font-size: var(--font-size-caption); }
 .surfdoc-sheet { scroll-margin-top: 12px; }
+/* The server page has no script: one sheet shows at a time — the first until a strip link targets another. */
+.surfdoc-workbook:not(:has(.surfdoc-sheet:target)) .surfdoc-sheet ~ .surfdoc-sheet { display: none; }
+.surfdoc-workbook:has(.surfdoc-sheet:target) .surfdoc-sheet:not(:target) { display: none; }
+.surfdoc-workbook .surfdoc-sheet .surfdoc-table-wrap { margin: 0; }
+.surfdoc-workbook .surfdoc-sheet table { width: max-content; min-width: 100%; }
+/* The doc's prose behind the grid (D-SHEET-3): never beside a sheet, always after it. */
+.surfdoc-workbook-about { padding: 12px 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.9375rem; }
+.surfdoc-workbook-about > :first-child { margin-top: 0; }
 
 /* Print: a table never scrolls and never breaks inside a row; the header
    repeats on every page and a wide table takes its own landscape page. */

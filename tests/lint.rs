@@ -210,6 +210,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     // 0.37.0: the ::video / hero video / video-file embed fixture —
     // well-formed (its hostile sources are lint matters, not parse ones).
     ("video.surf", &[]),
+    // 0.38.0: the invented contract register (thirteen pipe-table sheets
+    // under headings) — the workbook identity fixture, well-formed.
+    ("workbook-register.surf", &[]),
 ];
 
 #[test]
