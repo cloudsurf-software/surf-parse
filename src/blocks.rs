@@ -4021,7 +4021,7 @@ fn parse_action(attrs: &Attrs, content: &str, span: Span) -> Block {
 
 fn parse_filter_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     let target_selector = attr_string(attrs, "target").unwrap_or_default();
-    // 0.38: size=compact and inline=true for a navigator head.
+    // 0.39: size=compact and inline=true for a navigator head.
     let size = match attr_string(attrs, "size").as_deref() {
         Some("compact") => "compact".to_string(),
         _ => "default".to_string(),
@@ -6131,7 +6131,7 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
     let active = attr_string(attrs, "active");
     let size = attr_string(attrs, "size").unwrap_or_else(|| "compact".to_string());
     let action = attr_string(attrs, "action");
-    // 0.38: fold=never|always; anything else reads as never.
+    // 0.39: fold=never|always; anything else reads as never.
     let fold = match attr_string(attrs, "fold").as_deref() {
         Some("always") => "always".to_string(),
         _ => "never".to_string(),
@@ -6141,7 +6141,7 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("- ") {
             // Expected format: id "Label" {icon=token tint=name} — the
-            // trailing brace group is the `::tab-bar` idiom (0.38).
+            // trailing brace group is the `::tab-bar` idiom (0.39).
             let mut rest = rest.trim();
             let mut icon = None;
             let mut tint = None;

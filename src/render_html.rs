@@ -13,6 +13,14 @@ use crate::types::{Block, CalloutType, CarouselSlide, ChartType, DecisionStatus,
 ///
 /// Tables are wrapped in `<div class="surfdoc-table-wrap">` for responsive scrolling.
 fn render_markdown(content: &str) -> String {
+    render_markdown_capped(content, Some(DATA_PREVIEW_ROWS))
+}
+
+/// [`render_markdown`] with the pipe-table body cap as a parameter: the
+/// prose contract caps a table at [`DATA_PREVIEW_ROWS`]; inside a workbook
+/// sheet (0.38.0) the cap is `None` and every row is written.
+/// `render_dom::build_markdown_capped` mirrors this byte for byte.
+fn render_markdown_capped(content: &str, cap: Option<usize>) -> String {
     let mut options = pulldown_cmark::Options::empty();
     options.insert(pulldown_cmark::Options::ENABLE_TABLES);
     options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
@@ -26,7 +34,7 @@ fn render_markdown(content: &str) -> String {
     let html_output = ammonia::clean(&html_output);
     // Wrap bare <table> tags in scroll containers for mobile responsiveness,
     // capping an over-long body at `DATA_PREVIEW_ROWS` (0.20.0, D-SS-14).
-    let html_output = wrap_markdown_tables(&html_output);
+    let html_output = wrap_markdown_tables(&html_output, cap);
     // Resolve inline `[@key]` citations against the ambient citation context.
     substitute_cites_html(&html_output)
 }
@@ -42,7 +50,7 @@ fn render_markdown(content: &str) -> String {
 /// depend on the cap, so applying it would move bytes for tables under it.
 ///
 /// `render_dom.rs` mirrors this byte for byte from the pulldown event walk.
-fn wrap_markdown_tables(html: &str) -> String {
+fn wrap_markdown_tables(html: &str, cap: Option<usize>) -> String {
     const OPEN: &str = "<table>";
     const CLOSE: &str = "</table>";
     let mut out = String::with_capacity(html.len());
@@ -56,8 +64,8 @@ fn wrap_markdown_tables(html: &str) -> String {
             return out;
         };
         let inner = &after[..end];
-        let (kept, body_rows, cols) = cap_table_body(inner);
-        let preview = body_rows > DATA_PREVIEW_ROWS;
+        let (kept, body_rows, cols) = cap_table_body(inner, cap);
+        let preview = cap.is_some_and(|c| body_rows > c);
         if preview {
             out.push_str(&format!(
                 "<div class=\"surfdoc-table-wrap surfdoc-table-preview\" data-rows=\"{body_rows}\" data-cols=\"{cols}\">"
@@ -83,7 +91,7 @@ fn wrap_markdown_tables(html: &str) -> String {
 /// `(inner markup capped at the preview cap, total body rows, column count)`
 /// for one sanitized `<table>` body. Under the cap the markup is returned
 /// unchanged.
-fn cap_table_body(inner: &str) -> (String, usize, usize) {
+fn cap_table_body(inner: &str, cap: Option<usize>) -> (String, usize, usize) {
     let cols = markdown_table_cols(inner);
     let Some(body_start) = inner.find("<tbody>").map(|i| i + "<tbody>".len()) else {
         return (inner.to_string(), 0, cols);
@@ -94,12 +102,12 @@ fn cap_table_body(inner: &str) -> (String, usize, usize) {
     let body = &inner[body_start..body_start + body_len];
     let row_ends: Vec<usize> = body.match_indices("</tr>").map(|(i, _)| i).collect();
     let body_rows = row_ends.len();
-    if body_rows <= DATA_PREVIEW_ROWS {
+    let Some(cap) = cap.filter(|c| body_rows > *c && *c > 0) else {
         return (inner.to_string(), body_rows, cols);
-    }
+    };
     // Keep everything through the cap-th row's closing tag and the newline
     // pulldown writes after it; drop the rest of the body.
-    let mut cut = row_ends[DATA_PREVIEW_ROWS - 1] + "</tr>".len();
+    let mut cut = row_ends[cap - 1] + "</tr>".len();
     if body[cut..].starts_with('\n') {
         cut += 1;
     }
@@ -1185,7 +1193,7 @@ pub fn to_html(doc: &SurfDoc) -> String {
         doc.front_matter.as_ref().and_then(|fm| fm.format),
     );
     if profile == RenderProfile::Spreadsheet {
-        parts.push(render_workbook_html(&doc.blocks));
+        parts.push(render_workbook_html(doc));
         return wire_headings_and_toc(&parts.join("\n"));
     }
 
@@ -1235,46 +1243,206 @@ pub fn to_html(doc: &SurfDoc) -> String {
     wire_headings_and_toc(&parts.join("\n"))
 }
 
-/// The sheet label for the `index`-th (1-based) top-level `::data` block:
-/// its authored `name=`, or `Sheet<index>` by position.
-fn sheet_label(name: &Option<String>, index: usize) -> String {
-    match name {
-        Some(n) if !n.trim().is_empty() => n.trim().to_string(),
-        _ => format!("Sheet{index}"),
+/// The `type: spreadsheet` workbook body (0.38.0, D-WS-1..3): the plan from
+/// [`crate::workbook::plan_workbook`] drawn as
+///
+/// ```text
+/// <section class="surfdoc-workbook" data-sheets="N">
+///   <nav class="surfdoc-sheet-strip">
+///     <a href="#surfdoc-sheet-1" data-sheet-index="0" title="LABEL">LABEL</a> …
+///     (or <span class="surfdoc-sheet-empty">No sheets</span>)
+///   </nav>
+///   <section class="surfdoc-sheet" id="surfdoc-sheet-1" data-sheet="LABEL" data-rows="R" data-cols="C" [data-source="…"]>
+///     ONE table, every inline row (the preview cap is the prose contract)
+///   </section> …
+///   [<aside class="surfdoc-workbook-about"> the prose, in source order </aside>]
+/// </section>
+/// ```
+///
+/// `render_dom::build_workbook` mirrors every byte of this.
+pub(crate) fn render_workbook_html(doc: &SurfDoc) -> String {
+    use crate::workbook::{AboutPart, SheetBody};
+    let plan = crate::workbook::plan_workbook(&doc.blocks);
+    let mut html = format!(
+        "<section class=\"surfdoc-workbook\" data-sheets=\"{}\"><nav class=\"surfdoc-sheet-strip\">",
+        plan.sheets.len()
+    );
+    if plan.sheets.is_empty() {
+        html.push_str("<span class=\"surfdoc-sheet-empty\">No sheets</span>");
     }
+    for (i, sheet) in plan.sheets.iter().enumerate() {
+        let label = escape_html(&sheet.label);
+        html.push_str(&format!(
+            "<a href=\"#surfdoc-sheet-{n}\" data-sheet-index=\"{i}\" title=\"{label}\">{label}</a>",
+            n = i + 1
+        ));
+    }
+    html.push_str("</nav>");
+    for (i, sheet) in plan.sheets.iter().enumerate() {
+        html.push_str(&format!(
+            "<section class=\"surfdoc-sheet\" id=\"surfdoc-sheet-{n}\" data-sheet=\"{}\" data-rows=\"{}\" data-cols=\"{}\"",
+            escape_html(&sheet.label),
+            sheet.rows,
+            sheet.cols,
+            n = i + 1
+        ));
+        if let Some(source) = &sheet.source {
+            html.push_str(&format!(" data-source=\"{}\"", escape_html(source)));
+        }
+        html.push('>');
+        match &sheet.body {
+            SheetBody::Data(index) => {
+                if let Block::Data { headers, rows, caption, total, source, source_rows, source_cols, .. } = &doc.blocks[*index] {
+                    html.push_str(&render_data_html(headers, rows, caption, total, source, source_rows, source_cols, true));
+                }
+            }
+            SheetBody::Table(source) => html.push_str(&render_markdown_capped(source, None)),
+        }
+        html.push_str("</section>");
+    }
+    if !plan.about.is_empty() {
+        html.push_str("<aside class=\"surfdoc-workbook-about\">");
+        let parts: Vec<String> = plan
+            .about
+            .iter()
+            .map(|part| match part {
+                AboutPart::Block(index) => render_block(&doc.blocks[*index]),
+                AboutPart::Prose(text) => render_markdown(text),
+            })
+            .collect();
+        html.push_str(&parts.join("\n"));
+        html.push_str("</aside>");
+    }
+    html.push_str("</section>");
+    html
 }
 
-/// The `type: spreadsheet` workbook body: a `surfdoc-sheet-strip` nav naming
-/// every top-level `::data` block, then one `surfdoc-sheet` section per sheet
-/// carrying its label in `data-sheet`. Non-data blocks render exactly as they
-/// do on the document profile, in source order.
-fn render_workbook_html(blocks: &[Block]) -> String {
-    let mut sheets = 0usize;
-    let mut strip = String::new();
-    let mut body = String::new();
-    for block in blocks {
-        if matches!(block, Block::Nav { .. }) {
-            continue;
+/// The workbook fragment alone — what `to_html` emits for a spreadsheet
+/// document after the nav and style parts, headings wired (the byte-identity
+/// twin of `render_dom::render_doc_string`).
+pub fn to_html_workbook_fragment(doc: &SurfDoc) -> String {
+    wire_headings_and_toc(&render_workbook_html(doc))
+}
+
+/// The `::data` table markup (the 0.19.2 preview contract, the 0.20.0
+/// `source=` preview, and 0.38.0's `in_sheet` form). `render_dom::build_data`
+/// mirrors every byte of this; change both together.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_data_html(
+    headers: &[String],
+    rows: &[Vec<String>],
+    caption: &Option<String>,
+    total: &[String],
+    source: &Option<String>,
+    source_rows: &Option<usize>,
+    source_cols: &Option<usize>,
+    in_sheet: bool,
+) -> String {
+    // 0.19.2 preview contract. A block with more than
+    // `DATA_PREVIEW_ROWS` body rows paints only its first rows, keeps
+    // the `total:` summary, and carries an honest count line; at or
+    // under the cap the markup is byte-identical to 0.19.1 (no extra
+    // class, no `data-` attributes, no line). `render_dom.rs:2540`
+    // mirrors every byte of this.
+    //
+    // 0.20.0: `source=` makes the inline body a preview of rows held
+    // out of line, whatever its size — the counts then come from
+    // `rows=`/`cols=` and the count line becomes a link to the source.
+    let row_count = rows.len();
+    let col_count = rows
+        .iter()
+        .map(|r| r.len())
+        .max()
+        .unwrap_or(0)
+        .max(headers.len());
+    let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    // 0.38.0: inside a workbook sheet the whole table is the sheet — no
+    // preview class, no count line, every inline row (the sheet section
+    // carries `data-rows`/`data-cols`/`data-source` for the face).
+    let preview = !in_sheet && (row_count > DATA_PREVIEW_ROWS || linked.is_some());
+    let total_rows = match linked {
+        Some(_) => source_rows.unwrap_or(row_count),
+        None => row_count,
+    };
+    let total_cols = match linked {
+        Some(_) => source_cols.unwrap_or(col_count),
+        None => col_count,
+    };
+    let mut wrap_class = String::from("surfdoc-table-wrap");
+    if preview {
+        wrap_class.push_str(" surfdoc-table-preview");
+    }
+    if col_count >= DATA_WIDE_COLS {
+        wrap_class.push_str(" surfdoc-table-wide");
+    }
+    let preview_attrs = if preview {
+        format!(" data-rows=\"{total_rows}\" data-cols=\"{total_cols}\"")
+    } else {
+        String::new()
+    };
+    let shown = if !in_sheet && row_count > DATA_PREVIEW_ROWS {
+        DATA_PREVIEW_ROWS
+    } else {
+        row_count
+    };
+    let mut html = format!(
+        "<div class=\"{wrap_class}\"{preview_attrs}><table class=\"surfdoc-data\">"
+    );
+    if let Some(c) = caption {
+        html.push_str(&format!(
+            "<caption>{}</caption>",
+            render_cell_inline_markdown(c)
+        ));
+    }
+    if !headers.is_empty() {
+        html.push_str("<thead><tr>");
+        for h in headers {
+            html.push_str(&format!(
+                "<th scope=\"col\" aria-sort=\"none\">{}</th>",
+                render_cell_inline_markdown(h)
+            ));
         }
-        if let Block::Data { name, .. } = block {
-            sheets += 1;
-            let label = sheet_label(name, sheets);
-            strip.push_str(&format!(
-                "<a href=\"#surfdoc-sheet-{sheets}\">{}</a>",
-                escape_html(&label)
+        html.push_str("</tr></thead>");
+    }
+    html.push_str("<tbody>");
+    for row in rows.iter().take(shown) {
+        html.push_str("<tr>");
+        for cell in row {
+            let num_class = if is_numeric_cell(cell) { " class=\"num\"" } else { "" };
+            html.push_str(&format!(
+                "<td{num_class}>{}</td>",
+                render_cell_inline_markdown(cell)
             ));
-            body.push_str(&format!(
-                "<section class=\"surfdoc-sheet\" id=\"surfdoc-sheet-{sheets}\" data-sheet=\"{}\">{}</section>",
-                escape_html(&label),
-                render_block(block)
+        }
+        html.push_str("</tr>");
+    }
+    html.push_str("</tbody>");
+    if !total.is_empty() {
+        html.push_str("<tfoot><tr>");
+        for cell in total {
+            let num_class = if is_numeric_cell(cell) { " class=\"num\"" } else { "" };
+            html.push_str(&format!(
+                "<td{num_class}>{}</td>",
+                render_cell_inline_markdown(cell)
             ));
-        } else {
-            body.push_str(&render_block(block));
+        }
+        html.push_str("</tr></tfoot>");
+    }
+    html.push_str("</table>");
+    if preview {
+        let text = format!("{total_rows} rows \u{b7} open as spreadsheet");
+        match linked.and_then(data_source_href) {
+            Some(href) => html.push_str(&format!(
+                "<a class=\"surfdoc-table-more\" href=\"{}\">{text}</a>",
+                escape_html(link_href(&href))
+            )),
+            None => html.push_str(&format!(
+                "<p class=\"surfdoc-table-more\">{text}</p>"
+            )),
         }
     }
-    format!(
-        "<section class=\"surfdoc-workbook\"><nav class=\"surfdoc-sheet-strip\">{strip}</nav>{body}</section>"
-    )
+    html.push_str("</div>");
+    html
 }
 
 /// Render a slice of blocks as bare HTML fragments.
@@ -2756,7 +2924,7 @@ fn render_dropdown_options(
 /// Factored out (0.14, WP-N0) so the Surfy drawer head-row composer can
 /// inline a panel toolbar's items directly into the single head row;
 /// the Toolbar arm's output stays byte-identical.
-/// 0.38: a segment's icon span — the glyph from the icon set, tinted when
+/// 0.39: a segment's icon span — the glyph from the icon set, tinted when
 /// the segment names a palette tint; an unknown icon name draws nothing.
 pub(crate) fn segment_icon_html(seg: &crate::types::SegmentItem) -> String {
     match seg.icon.as_deref().and_then(get_icon) {
@@ -3825,110 +3993,7 @@ fn render_block_inner(block: &Block) -> String {
             source_rows,
             source_cols,
             ..
-        } => {
-            // 0.19.2 preview contract. A block with more than
-            // `DATA_PREVIEW_ROWS` body rows paints only its first rows, keeps
-            // the `total:` summary, and carries an honest count line; at or
-            // under the cap the markup is byte-identical to 0.19.1 (no extra
-            // class, no `data-` attributes, no line). `render_dom.rs:2540`
-            // mirrors every byte of this.
-            //
-            // 0.20.0: `source=` makes the inline body a preview of rows held
-            // out of line, whatever its size — the counts then come from
-            // `rows=`/`cols=` and the count line becomes a link to the source.
-            let row_count = rows.len();
-            let col_count = rows
-                .iter()
-                .map(|r| r.len())
-                .max()
-                .unwrap_or(0)
-                .max(headers.len());
-            let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
-            let preview = row_count > DATA_PREVIEW_ROWS || linked.is_some();
-            let total_rows = match linked {
-                Some(_) => source_rows.unwrap_or(row_count),
-                None => row_count,
-            };
-            let total_cols = match linked {
-                Some(_) => source_cols.unwrap_or(col_count),
-                None => col_count,
-            };
-            let mut wrap_class = String::from("surfdoc-table-wrap");
-            if preview {
-                wrap_class.push_str(" surfdoc-table-preview");
-            }
-            if col_count >= DATA_WIDE_COLS {
-                wrap_class.push_str(" surfdoc-table-wide");
-            }
-            let preview_attrs = if preview {
-                format!(" data-rows=\"{total_rows}\" data-cols=\"{total_cols}\"")
-            } else {
-                String::new()
-            };
-            let shown = if row_count > DATA_PREVIEW_ROWS {
-                DATA_PREVIEW_ROWS
-            } else {
-                row_count
-            };
-            let mut html = format!(
-                "<div class=\"{wrap_class}\"{preview_attrs}><table class=\"surfdoc-data\">"
-            );
-            if let Some(c) = caption {
-                html.push_str(&format!(
-                    "<caption>{}</caption>",
-                    render_cell_inline_markdown(c)
-                ));
-            }
-            if !headers.is_empty() {
-                html.push_str("<thead><tr>");
-                for h in headers {
-                    html.push_str(&format!(
-                        "<th scope=\"col\" aria-sort=\"none\">{}</th>",
-                        render_cell_inline_markdown(h)
-                    ));
-                }
-                html.push_str("</tr></thead>");
-            }
-            html.push_str("<tbody>");
-            for row in rows.iter().take(shown) {
-                html.push_str("<tr>");
-                for cell in row {
-                    let num_class = if is_numeric_cell(cell) { " class=\"num\"" } else { "" };
-                    html.push_str(&format!(
-                        "<td{num_class}>{}</td>",
-                        render_cell_inline_markdown(cell)
-                    ));
-                }
-                html.push_str("</tr>");
-            }
-            html.push_str("</tbody>");
-            if !total.is_empty() {
-                html.push_str("<tfoot><tr>");
-                for cell in total {
-                    let num_class = if is_numeric_cell(cell) { " class=\"num\"" } else { "" };
-                    html.push_str(&format!(
-                        "<td{num_class}>{}</td>",
-                        render_cell_inline_markdown(cell)
-                    ));
-                }
-                html.push_str("</tr></tfoot>");
-            }
-            html.push_str("</table>");
-            if preview {
-                let text = format!("{total_rows} rows \u{b7} open as spreadsheet");
-                match linked.and_then(data_source_href) {
-                    Some(href) => html.push_str(&format!(
-                        "<a class=\"surfdoc-table-more\" href=\"{}\">{text}</a>",
-                        escape_html(link_href(&href))
-                    )),
-                    None => html.push_str(&format!(
-                        "<p class=\"surfdoc-table-more\">{text}</p>"
-                    )),
-                }
-            }
-            html.push_str("</div>");
-            html
-        }
+        } => render_data_html(headers, rows, caption, total, source, source_rows, source_cols, false),
 
         Block::Code {
             lang,
@@ -5922,7 +5987,7 @@ fn render_block_inner(block: &Block) -> String {
             inline,
             ..
         } => {
-            // 0.38: size=compact and inline=true ride as data attributes
+            // 0.39: size=compact and inline=true ride as data attributes
             // (absent by default, so a 0.37 document renders byte for byte).
             let size_attr = if size == "compact" { " data-size=\"compact\"" } else { "" };
             let inline_attr = if *inline { " data-inline=\"true\"" } else { "" };
@@ -7042,7 +7107,7 @@ fn render_block_inner(block: &Block) -> String {
                 Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
                 None => String::new(),
             };
-            // 0.38: fold=always wraps the pills in a <details> menu whose
+            // 0.39: fold=always wraps the pills in a <details> menu whose
             // summary shows the segment on show; no script is emitted (the
             // host owns selection; a static page opens and closes natively).
             let folded = fold == "always";
@@ -15660,7 +15725,7 @@ About
         assert!(!html[option_start..oldest].contains("data-action"));
     }
 
-    /// 0.38: a segment's `{icon=name tint=blue}` draws the glyph before the
+    /// 0.39: a segment's `{icon=name tint=blue}` draws the glyph before the
     /// label with the tint on the glyph; a hex tint and an unknown glyph
     /// draw nothing; a segment without the brace group is the 0.37 button.
     #[test]
@@ -15674,7 +15739,7 @@ About
         assert!(!html.contains("#ff0000") && !html.contains("data-fold"), "{html}");
     }
 
-    /// 0.38: `fold=always` is a <details> chip opening the segments as rows —
+    /// 0.39: `fold=always` is a <details> chip opening the segments as rows —
     /// the active segment on the trigger, the same radio buttons inside, no
     /// script; without an active match the first segment is on show.
     #[test]
@@ -15693,7 +15758,7 @@ About
         assert!(none.contains("data-id=\"all\" aria-checked=\"false\""), "{none}");
     }
 
-    /// 0.38: `::filter-bar` carries `size=compact` and `inline=true` as data
+    /// 0.39: `::filter-bar` carries `size=compact` and `inline=true` as data
     /// attributes, absent by default (a 0.37 document is byte-identical).
     #[test]
     fn html_filter_bar_size_and_inline() {

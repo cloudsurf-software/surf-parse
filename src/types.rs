@@ -1279,10 +1279,10 @@ pub enum Block {
     FilterBar {
         target_selector: String,
         fields: Vec<FilterField>,
-        /// 0.38: `size=compact` — the 28 px chip row for a navigator head;
+        /// 0.39: `size=compact` — the 28 px chip row for a navigator head;
         /// the default is the document size.
         size: String,
-        /// 0.38: `inline=true` — no block margins, so the bar sits beside a
+        /// 0.39: `inline=true` — no block margins, so the bar sits beside a
         /// preceding inline control (a folded `::segmented-control`).
         inline: bool,
         span: Span,
@@ -1851,7 +1851,7 @@ pub enum Block {
         active: Option<String>,
         size: String,
         action: Option<String>,
-        /// 0.38: `fold=never|always` — `always` renders the control as a
+        /// 0.39: `fold=never|always` — `always` renders the control as a
         /// single-select menu (a `<details>` trigger showing the active
         /// segment's icon and label, the segments as rows beneath); `never`
         /// is the pill row and the default, byte-identical to 0.37.
@@ -2389,15 +2389,15 @@ pub struct CommandItem {
 pub struct SegmentItem {
     pub id: String,
     pub label: String,
-    /// 0.38: `{icon=name}` — a glyph from the icon set, drawn before the
+    /// 0.39: `{icon=name}` — a glyph from the icon set, drawn before the
     /// label; an unknown name draws nothing.
     pub icon: Option<String>,
-    /// 0.38: `{tint=blue}` — one of the palette names (`SEGMENT_TINTS`),
+    /// 0.39: `{tint=blue}` — one of the palette names (`SEGMENT_TINTS`),
     /// painted on the icon only; anything else is dropped at parse.
     pub tint: Option<String>,
 }
 
-/// The tint names a segment icon may carry (0.38): palette tokens, never a
+/// The tint names a segment icon may carry (0.39): palette tokens, never a
 /// hex — a Style's stylesheet layer recolours tokens.
 pub const SEGMENT_TINTS: &[&str] = &[
     "blue", "green", "amber", "red", "violet", "teal", "pink", "orange", "yellow", "slate",

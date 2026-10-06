@@ -3,11 +3,11 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
-## Unreleased (the navigator controls — `::segmented-control` icons, tints and `fold=always`; `::filter-bar` as a chip row; TASK-1373's walk, the CloudSurf web Docs panel)
+## 0.39.0 — 2026-10-06 (the navigator controls — `::segmented-control` icons, tints and `fold=always`; `::filter-bar` as a chip row; TASK-1373's walk, the CloudSurf web Docs panel)
 
 The web Docs panel at app.cloudsurf.com is spec-driven, and its head read as a form because the two navigator
 blocks did: seven text pills clipped sideways in a 320 px panel, a Sort in a boxed `<select>`. The blocks are fixed
-here so every SurfDoc on the platform gets the look, not one panel. Additive — a 0.37 document renders byte for byte.
+here so every SurfDoc on the platform gets the look, not one panel. Additive — a 0.37 or 0.38 document renders byte for byte.
 
 - **`::segmented-control` segments carry an icon and a tint.** `- docs "Docs" {icon=file-text tint=blue}` — the
   `::tab-bar` brace idiom. The icon is a glyph from the icon set, drawn as `<span class="surfdoc-icon">` before the
@@ -28,7 +28,62 @@ here so every SurfDoc on the platform gets the look, not one panel. Additive —
 - `spec/blocks.toml`: the two blocks' attribute lists and purposes.
 - Tests: `render_html` units for the icon, the tint, the dropped hex, the folded markup and the unchanged unfolded
   markup; the builder round trip with the brace group; the filter bar's attributes; the DOM identity fixture
-  `tests/fixtures/navigator-controls.surf`.
+  `tests/fixtures/dom/navigator-controls.surf`.
+
+## 0.38.0 — 2026-10-06 (the workbook learns pipe tables and the DOM twin: `type: spreadsheet` on the web, TASK-1314; and blocks as named fields: `fields`, `surf-fields`, field rows in the registry, TASK-1446)
+
+### The workbook (TASK-1314)
+
+A `type: spreadsheet` document opened as a workbook in the Mac app and as prose on app.cloudsurf.com: the web's
+player draws every doc through the constructive DOM renderer, which had no workbook, and the HTML workbook counted
+top-level `::data` blocks only — a register written as twelve markdown pipe tables under headings had zero sheets.
+
+- **One rule for what a sheet is** (`workbook::plan_workbook`, D-WS-1): every top-level `::data` block AND every GFM
+  pipe table inside a top-level markdown block is a sheet, in source order. The label is `name=` → `caption=` → the
+  nearest preceding markdown heading → `Sheet<n>`, never twice the same ("Status", "Status (2)" — the kit's own
+  form). Everything else — the summary, the callouts, the headings that became labels — is the About aside, after
+  the sheets, never interleaved.
+- **The markup, in both renderers.** `section.surfdoc-workbook[data-sheets]` › `nav.surfdoc-sheet-strip` of
+  `a[href=#surfdoc-sheet-n][data-sheet-index][title=label]` (or `span.surfdoc-sheet-empty` "No sheets") ›
+  `section.surfdoc-sheet[id][data-sheet][data-rows][data-cols][data-source]` each holding ONE table with EVERY
+  inline row (the 20-row preview cap is the prose contract; a sheet has no `surfdoc-table-more` line) ›
+  `aside.surfdoc-workbook-about`. `render_dom::render_doc_dom` builds the same bytes for a spreadsheet doc
+  (`render_doc_string` / `to_html_workbook_fragment` are the identity pair) and `check_coverage` dry-runs that
+  branch, so a wasm host's `render_doc` can take the workbook over.
+- **The stylesheet**: a strip tab is at most 180px wide with a tail ellipsis, the full name in its title
+  (D-WS-9); the strip scrolls in one row; the server page shows one sheet at a time by `:target` with no script;
+  the About aside's rules.
+- Native schema unchanged (v15): `NativeBlock::DataTable` does not carry `name=` yet — the uniffi bindings would
+  have to be regenerated for Swift and Kotlin; that is the bindings lane's, and the kit's adapter keeps caption →
+  heading → `Sheet<n>` until then.
+- Tests: `src/workbook.rs` (the plan over the invented register fixture `tests/fixtures/workbook-register.surf`,
+  the label rule, the splitter), `tests/render_dom_identity.rs` (the workbook byte-identity pair on the register,
+  a `::data` workbook and an empty one), `tests/data_preview_contract.rs` (the markup pins).
+
+### Blocks as named fields (TASK-1446)
+
+A model never writes block source: `surf_parse::fields` reads any admitted block as named fields and lists and
+writes them back, and the `surf-fields` binary (`--features cli`) speaks that over JSON on stdin and stdout —
+`kinds`, `stamp`, `pages`, `read`, `apply` (every op or none) and `admit`.
+
+- **One registry.** Each block's field rows (`fields`, `lists`, `fields_raw`, `fields_admitted`) sit beside its
+  `attributes` in `spec/blocks.toml`; the module reads its schema from `spec_registry::BLOCKS_TOML`. Seventeen kinds
+  carry rows: hero, cta, product-card, form, callout, stats, features, data, testimonial, pricing-table, faq, steps,
+  metric, gallery, quote, infocard, comparison. Loose Markdown reads as the pseudo-kind `text`.
+- **One write path.** A write mutates the typed block's JSON, builds the block back, serializes that one block at
+  its authored fence (`builder::serialize_block_at`), carries over every authored opener token the serializer did
+  not write (`id=` first), splices, and refuses itself when the result does not parse back to the intended block.
+- **Admission by round trip.** `surf-fields admit <file.surf>...` reports, per kind, instances · no-change round
+  trips · same-HTML renders · set-then-read-back per field, and the admitted list.
+- **product-card serializer:** a card with a body and no subtitle now writes its title on the opener; the `## title`
+  form made the parser read the first body line as the subtitle, so such a card never round-tripped.
+- **form field rows:** `name` follows the label (derived by the parser) and is not a field; `type` and
+  `placeholder` failed set-then-read-back on choice fields in the corpus and are not exposed.
+- **Two shapes the write path refuses rather than corrupts** (found by `admit` over `tests/corpus`): a hero
+  without a `#` headline cannot take a `subtitle` (the parser reads the first body line as prose), and a form range
+  field with constraints loses them when its label is rewritten (the serializer does not write `constraints`).
+  Both are refused by name at apply time; the fixture `tests/fixtures/fields/all-kinds.surf` carries one canonical
+  instance of every admitted kind so `admit` over `tests/fixtures/fields/` is the crate's own gate.
 
 ## 0.37.2 — 2026-10-02 (the allow-list passes the host's own pages: the scheme grammar, and a scoped door only a host can open; TASK-1300)
 

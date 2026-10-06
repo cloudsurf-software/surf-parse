@@ -375,7 +375,7 @@ fn workbook_source() -> String {
 fn a_spreadsheet_document_renders_the_workbook_shell() {
     let html = surf_parse::render_html::to_html(&surf_parse::parse(&workbook_source()).doc);
     assert!(
-        html.contains("<section class=\"surfdoc-workbook\">"),
+        html.contains("<section class=\"surfdoc-workbook\" data-sheets=\"2\">"),
         "workbook wrapper missing: {html}"
     );
     assert!(
@@ -397,8 +397,70 @@ fn sheet_names_come_from_the_name_attribute_then_position() {
         html.contains("data-sheet=\"Sheet2\""),
         "the unnamed second sheet takes its position: {html}"
     );
-    assert!(html.contains("href=\"#surfdoc-sheet-1\">Revenue</a>"), "{html}");
-    assert!(html.contains("href=\"#surfdoc-sheet-2\">Sheet2</a>"), "{html}");
+    assert!(html.contains("href=\"#surfdoc-sheet-1\" data-sheet-index=\"0\" title=\"Revenue\">Revenue</a>"), "{html}");
+    assert!(html.contains("href=\"#surfdoc-sheet-2\" data-sheet-index=\"1\" title=\"Sheet2\">Sheet2</a>"), "{html}");
+}
+
+// -- 0.38.0: pipe tables are sheets, the whole table lives in the sheet -----
+
+#[test]
+fn a_pipe_table_under_a_heading_is_a_sheet_and_the_heading_names_it() {
+    let src = "---\ntype: spreadsheet\n---\n\n# Register\n\n::summary\nWords.\n::\n\n## Totals\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n## 1 — Deliverables\n\n| ID | Status |\n|---|---|\n| R1 | Open |\n| R2 | Done |\n";
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(src).doc);
+    assert!(html.contains("data-sheets=\"2\""), "{html}");
+    assert!(html.contains("title=\"Totals\">Totals</a>"), "{html}");
+    assert!(html.contains("title=\"1 — Deliverables\">1 — Deliverables</a>"), "{html}");
+    assert!(html.contains("<section class=\"surfdoc-sheet\" id=\"surfdoc-sheet-2\" data-sheet=\"1 — Deliverables\" data-rows=\"2\" data-cols=\"2\"><div class=\"surfdoc-table-wrap\"><table>"), "{html}");
+    let about_at = html.find("<aside class=\"surfdoc-workbook-about\">").expect("the prose is the About aside");
+    let sheet_at = html.find("<section class=\"surfdoc-sheet\"").unwrap();
+    assert!(about_at > sheet_at, "About comes after every sheet, never between them");
+    let about = &html[about_at..];
+    assert!(about.contains("Register</h1>") && about.contains("Totals</h2>") && about.contains("surfdoc-summary"), "{about}");
+    assert!(!about.contains("<table"), "no table in About: {about}");
+}
+
+#[test]
+fn a_sheet_writes_every_row_and_no_count_line() {
+    let mut src = String::from("---\ntype: spreadsheet\n---\n\n## Many\n\n| N |\n|---|\n");
+    for n in 1..=30 {
+        src.push_str(&format!("| r{n} |\n"));
+    }
+    src.push_str("\n::data[name=\"Block\"]\nH\n");
+    for n in 1..=25 {
+        src.push_str(&format!("b{n}\n"));
+    }
+    src.push_str("::\n");
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(&src).doc);
+    assert!(html.contains("data-sheet=\"Many\" data-rows=\"30\" data-cols=\"1\""), "{html}");
+    assert!(html.contains("<td>r30</td>"), "the pipe table's thirtieth row is written: {html}");
+    assert!(html.contains("data-sheet=\"Block\" data-rows=\"25\" data-cols=\"1\""), "{html}");
+    assert!(html.contains("<td>b25</td>"), "the ::data block's twenty-fifth row is written: {html}");
+    assert!(!html.contains("open as spreadsheet"), "no count line inside a workbook: {html}");
+    assert!(!html.contains("surfdoc-table-preview"), "no preview class inside a workbook: {html}");
+}
+
+#[test]
+fn a_source_sheet_keeps_its_reference_on_the_section() {
+    let src = "---\ntype: spreadsheet\n---\n\n::data[name=\"GSA\" source=\"file:abc\" rows=4200 cols=9]\nA | B\n1 | 2\n::\n";
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(src).doc);
+    assert!(html.contains("data-sheet=\"GSA\" data-rows=\"4200\" data-cols=\"9\" data-source=\"file:abc\">"), "{html}");
+    assert!(!html.contains("surfdoc-table-more"), "the sheet section carries the counts; no count line: {html}");
+}
+
+#[test]
+fn a_spreadsheet_with_no_table_is_an_empty_workbook() {
+    let src = "---\ntype: spreadsheet\n---\n\n# Nothing yet\n\nWords only.\n";
+    let html = surf_parse::render_html::to_html(&surf_parse::parse(src).doc);
+    assert!(html.contains("data-sheets=\"0\"><nav class=\"surfdoc-sheet-strip\"><span class=\"surfdoc-sheet-empty\">No sheets</span></nav>"), "{html}");
+    assert!(html.contains("<aside class=\"surfdoc-workbook-about\">"), "{html}");
+}
+
+#[test]
+fn the_stylesheet_caps_a_strip_tab_at_180px_with_an_ellipsis() {
+    let rule = surf_parse::SURFDOC_CSS.lines().find(|l| l.starts_with(".surfdoc-sheet-strip a {")).expect("the tab rule");
+    assert!(rule.contains("max-width: 180px") && rule.contains("text-overflow: ellipsis") && rule.contains("overflow: hidden"), "{rule}");
+    assert!(surf_parse::SURFDOC_CSS.contains(".surfdoc-workbook-about"));
+    assert!(surf_parse::SURFDOC_CSS.contains(".surfdoc-sheet-empty"));
 }
 
 #[test]

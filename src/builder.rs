@@ -1021,6 +1021,13 @@ fn serde_yaml_value_to_inline(value: &serde_yaml::Value) -> String {
 // Block serialization
 // -----------------------------------------------------------------------
 
+/// One block as SurfDoc source at a given nesting depth (`depth + 2` colons).
+/// The field module writes a single block back in place through this, so a
+/// field write and a whole-document write share one serializer.
+pub(crate) fn serialize_block_at(block: &Block, depth: usize) -> String {
+    serialize_block(block, depth)
+}
+
 /// Serialize one block at `depth` (0 = top level).
 ///
 /// SurfDoc expresses nesting with the colon run on the fence line: a
@@ -2297,6 +2304,14 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             ..
         } => {
             let mut attrs_parts = Vec::new();
+            // A body with no subtitle cannot follow a `## title` line: the
+            // parser reads the first line after the heading as the subtitle.
+            // In that one case the title goes on the opener, where the parser
+            // takes it and reads every body line as body.
+            let title_on_opener = subtitle.is_none() && !body.is_empty() && !title.is_empty();
+            if title_on_opener {
+                attrs_parts.push(format!("title=\"{}\"", escape_attr(title)));
+            }
             if let Some(b) = badge {
                 attrs_parts.push(format!("badge=\"{}\"", escape_attr(b)));
             }
@@ -2315,11 +2330,13 @@ fn serialize_block(block: &Block, depth: usize) -> String {
                 format!("[{}]", attrs_parts.join(" "))
             };
             let mut content_lines = Vec::new();
-            content_lines.push(format!("## {title}"));
-            if let Some(s) = subtitle {
-                content_lines.push(s.clone());
+            if !title_on_opener {
+                content_lines.push(format!("## {title}"));
+                if let Some(s) = subtitle {
+                    content_lines.push(s.clone());
+                }
+                content_lines.push(String::new());
             }
-            content_lines.push(String::new());
             if !body.is_empty() {
                 content_lines.push(body.clone());
                 content_lines.push(String::new());
@@ -3479,7 +3496,7 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             let lines: Vec<String> = segments
                 .iter()
                 .map(|s| {
-                    // 0.38: the brace group carries icon and tint, written only when set.
+                    // 0.39: the brace group carries icon and tint, written only when set.
                     let mut extra = Vec::new();
                     if let Some(i) = &s.icon { extra.push(format!("icon={i}")); }
                     if let Some(t) = &s.tint { extra.push(format!("tint={t}")); }
@@ -5160,7 +5177,7 @@ mod tests {
         }
     }
 
-    /// 0.38: the brace group (icon · tint) and `fold=always` survive the
+    /// 0.39: the brace group (icon · tint) and `fold=always` survive the
     /// builder round trip; a segment without them is written as before.
     #[test]
     fn test_roundtrip_segmented_control_icon_tint_fold() {

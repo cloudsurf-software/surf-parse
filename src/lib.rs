@@ -22,6 +22,7 @@ pub mod citation;
 pub(crate) mod diagram;
 pub mod diagram_scene;
 pub mod edit;
+pub mod fields;
 pub mod error;
 pub mod icons;
 mod icons_vendored;
@@ -61,6 +62,7 @@ pub mod render_dom;
 pub mod template;
 pub mod types;
 pub mod validate;
+pub mod workbook;
 
 /// Unified CSS for app chrome and SurfDoc content rendering.
 ///

@@ -1,6 +1,6 @@
 [package]
 name = "surf-parse"
-version = "0.37.2"
+version = "0.39.0"
 edition = "2024"
 license = "MIT"
 authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
@@ -18,6 +18,11 @@ crate-type = ["cdylib", "rlib"]
 # The surf-lint CLI binary. NON-DEFAULT: built only with `--features cli`
 # (e.g. `cargo build --features cli`, `cargo test --features cli`), so
 # `cdylib`/wasm consumers never inherit clap.
+[[bin]]
+name = "surf-fields"
+path = "src/bin/surf-fields.rs"
+required-features = ["cli"]
+
 [[bin]]
 name = "surf-lint"
 path = "src/bin/surf-lint.rs"

@@ -510,6 +510,10 @@ struct Dom<'a, S: DomSink> {
     /// `render_html::inject_root_attrs`, which splices them ahead of the
     /// renderer's own attributes.
     root_attrs: Option<Vec<(&'static str, String)>>,
+    /// The pipe-table body cap the markdown walk applies (`render_html::
+    /// render_markdown_capped`): `Some(DATA_PREVIEW_ROWS)` for prose, `None`
+    /// inside a workbook sheet (0.38.0), where every row is written.
+    md_table_cap: Option<usize>,
 }
 
 impl<'a, S: DomSink> Dom<'a, S> {
@@ -517,6 +521,7 @@ impl<'a, S: DomSink> Dom<'a, S> {
         Dom {
             sink,
             stack: vec![Frame { node: root, pend_raw: String::new(), pend_dec: String::new() }],
+            md_table_cap: Some(DATA_PREVIEW_ROWS),
             slug_counts: HashMap::new(),
             headings_seen: 0,
             heading_text: None,
@@ -679,7 +684,7 @@ enum AttrVal<'v> {
 /// `&'static str` renderer-owned constants — untrusted content NEVER flows
 /// through it (the signature enforces `'static`), so it is not an HTML
 /// injection sink. `<script>`/`<style>` bodies are consumed as rawtext.
-/// 0.38: the segment icon span, the DOM twin of `render_html::segment_icon_html`.
+/// 0.39: the segment icon span, the DOM twin of `render_html::segment_icon_html`.
 fn segment_icon_dom<S: DomSink>(dom: &mut Dom<'_, S>, seg: &crate::types::SegmentItem) -> Result<(), RenderDomError> {
     if let Some(svg) = seg.icon.as_deref().and_then(crate::icons::get_icon) {
         dom.open("span", CloseStyle::Normal);
@@ -993,6 +998,20 @@ fn heading_level(level: HeadingLevel) -> u8 {
 fn build_markdown<S: DomSink>(dom: &mut Dom<'_, S>, content: &str) -> Result<(), RenderDomError> {
     let events: Vec<Event> = Parser::new_ext(content, md_options()).collect();
     build_md_events(dom, &events, true)
+}
+
+/// [`build_markdown`] with the pipe-table cap set for the call
+/// (`render_html::render_markdown_capped`'s twin): `None` writes every row.
+fn build_markdown_capped<S: DomSink>(
+    dom: &mut Dom<'_, S>,
+    content: &str,
+    cap: Option<usize>,
+) -> Result<(), RenderDomError> {
+    let before = dom.md_table_cap;
+    dom.md_table_cap = cap;
+    let built = build_markdown(dom, content);
+    dom.md_table_cap = before;
+    built
 }
 
 /// `render_inline_markdown` equivalent: raw HTML is defused by pre-escaping
@@ -1339,7 +1358,7 @@ fn build_md_events<S: DomSink>(
                 let (rows, cols) = markdown_table_shape(&events, i);
                 table_total_rows = rows;
                 table_rows_seen = 0;
-                table_preview = rows > DATA_PREVIEW_ROWS;
+                table_preview = dom.md_table_cap.is_some_and(|cap| rows > cap);
                 dom.open("div", CloseStyle::Normal);
                 if table_preview {
                     dom.attr(
@@ -1396,7 +1415,7 @@ fn build_md_events<S: DomSink>(
             }
             Event::Start(Tag::TableRow) => {
                 table_rows_seen += 1;
-                if table_preview && table_rows_seen > DATA_PREVIEW_ROWS {
+                if table_preview && table_rows_seen > dom.md_table_cap.unwrap_or(usize::MAX) {
                     // Past the cap: skip the whole row, newline included, so
                     // the bytes match the string renderer's truncated body.
                     let mut j = i + 1;
@@ -1890,6 +1909,193 @@ fn build_hero_video<S: DomSink>(dom: &mut Dom<'_, S>, player: &crate::media::Vid
     dom.attr("media", AttrVal::Markup(crate::media::MOTION_OK_MEDIA_QUERY));
     dom.close();
     dom.close();
+}
+
+/// The `::data` table (`render_html::render_data_html`'s twin, byte for byte:
+/// class order wrap · preview · wide, then `data-rows`, then `data-cols`; the
+/// count line the LAST child of the wrap; 0.38.0's `in_sheet` form writes
+/// every row and no preview).
+#[allow(clippy::too_many_arguments)]
+fn build_data<S: DomSink>(
+    dom: &mut Dom<'_, S>,
+    headers: &[String],
+    rows: &[Vec<String>],
+    caption: &Option<String>,
+    total: &[String],
+    source: &Option<String>,
+    source_rows: &Option<usize>,
+    source_cols: &Option<usize>,
+    in_sheet: bool,
+) -> Result<(), RenderDomError> {
+    // 0.19.2 preview contract — mirrors render_html.rs:2708 byte for
+    // byte: class order (wrap, preview, wide), then `data-rows`,
+    // then `data-cols`; the count line is the LAST child of the wrap.
+    // 0.20.0 adds the `source=` preview and its linked count line.
+    let row_count = rows.len();
+    let col_count = rows
+        .iter()
+        .map(|r| r.len())
+        .max()
+        .unwrap_or(0)
+        .max(headers.len());
+    let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    // 0.38.0: inside a workbook sheet the whole table is the sheet — no
+    // preview class, no count line, every inline row.
+    let preview = !in_sheet && (row_count > DATA_PREVIEW_ROWS || linked.is_some());
+    let total_rows = match linked {
+        Some(_) => source_rows.unwrap_or(row_count),
+        None => row_count,
+    };
+    let total_cols = match linked {
+        Some(_) => source_cols.unwrap_or(col_count),
+        None => col_count,
+    };
+    let mut wrap_class = String::from("surfdoc-table-wrap");
+    if preview {
+        wrap_class.push_str(" surfdoc-table-preview");
+    }
+    if col_count >= DATA_WIDE_COLS {
+        wrap_class.push_str(" surfdoc-table-wide");
+    }
+    let shown = if !in_sheet && row_count > DATA_PREVIEW_ROWS {
+        DATA_PREVIEW_ROWS
+    } else {
+        row_count
+    };
+    dom.open("div", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup(&wrap_class));
+    if preview {
+        dom.attr("data-rows", AttrVal::Markup(&total_rows.to_string()));
+        dom.attr("data-cols", AttrVal::Markup(&total_cols.to_string()));
+    }
+    dom.open("table", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-data"));
+    if let Some(c) = caption {
+        dom.open("caption", CloseStyle::Normal);
+        build_cell_markdown(dom, c)?;
+        dom.close();
+    }
+    if !headers.is_empty() {
+        dom.open("thead", CloseStyle::Normal);
+        dom.open("tr", CloseStyle::Normal);
+        for h in headers {
+            dom.open("th", CloseStyle::Normal);
+            dom.attr("scope", AttrVal::Markup("col"));
+            dom.attr("aria-sort", AttrVal::Markup("none"));
+            build_cell_markdown(dom, h)?;
+            dom.close();
+        }
+        dom.close();
+        dom.close();
+    }
+    dom.open("tbody", CloseStyle::Normal);
+    for row in rows.iter().take(shown) {
+        dom.open("tr", CloseStyle::Normal);
+        for cell in row {
+            build_data_cell(dom, cell)?;
+        }
+        dom.close();
+    }
+    dom.close();
+    if !total.is_empty() {
+        dom.open("tfoot", CloseStyle::Normal);
+        dom.open("tr", CloseStyle::Normal);
+        for cell in total {
+            build_data_cell(dom, cell)?;
+        }
+        dom.close();
+        dom.close();
+    }
+    dom.close();
+    if preview {
+        let text = format!("{total_rows} rows \u{b7} open as spreadsheet");
+        match linked.and_then(crate::render_html::data_source_href) {
+            Some(href) => {
+                dom.open("a", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
+                dom.attr("href", AttrVal::Markup(link_href(&href)));
+                dom.text_markup(&text);
+                dom.close();
+            }
+            None => {
+                dom.open("p", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
+                dom.text_markup(&text);
+                dom.close();
+            }
+        }
+    }
+    dom.close();
+    Ok(())
+}
+
+/// The `type: spreadsheet` workbook (`render_html::render_workbook_html`'s
+/// twin, 0.38.0): the plan from [`crate::workbook::plan_workbook`] built as
+/// the strip, one section per sheet holding its whole table, and the About
+/// aside. A whole block in About builds through [`build_block`] (root
+/// attributes included); a prose piece of a split markdown block through
+/// the bare markdown path, exactly as the string renderer writes it.
+fn build_workbook<S: DomSink>(dom: &mut Dom<'_, S>, doc: &SurfDoc) -> Result<(), RenderDomError> {
+    use crate::workbook::{AboutPart, SheetBody};
+    let plan = crate::workbook::plan_workbook(&doc.blocks);
+    dom.open("section", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-workbook"));
+    dom.attr("data-sheets", AttrVal::Markup(&plan.sheets.len().to_string()));
+    dom.open("nav", CloseStyle::Normal);
+    dom.attr("class", AttrVal::Markup("surfdoc-sheet-strip"));
+    if plan.sheets.is_empty() {
+        dom.open("span", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-sheet-empty"));
+        dom.text_markup("No sheets");
+        dom.close();
+    }
+    for (i, sheet) in plan.sheets.iter().enumerate() {
+        dom.open("a", CloseStyle::Normal);
+        dom.attr("href", AttrVal::Markup(&format!("#surfdoc-sheet-{}", i + 1)));
+        dom.attr("data-sheet-index", AttrVal::Markup(&i.to_string()));
+        dom.attr("title", AttrVal::Markup(&sheet.label));
+        dom.text_markup(&sheet.label);
+        dom.close();
+    }
+    dom.close();
+    for (i, sheet) in plan.sheets.iter().enumerate() {
+        dom.open("section", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-sheet"));
+        dom.attr("id", AttrVal::Markup(&format!("surfdoc-sheet-{}", i + 1)));
+        dom.attr("data-sheet", AttrVal::Markup(&sheet.label));
+        dom.attr("data-rows", AttrVal::Markup(&sheet.rows.to_string()));
+        dom.attr("data-cols", AttrVal::Markup(&sheet.cols.to_string()));
+        if let Some(source) = &sheet.source {
+            dom.attr("data-source", AttrVal::Markup(source));
+        }
+        match &sheet.body {
+            SheetBody::Data(index) => {
+                if let Block::Data { headers, rows, caption, total, source, source_rows, source_cols, .. } = &doc.blocks[*index] {
+                    build_data(dom, headers, rows, caption, total, source, source_rows, source_cols, true)?;
+                }
+            }
+            SheetBody::Table(source) => build_markdown_capped(dom, source, None)?,
+        }
+        dom.close();
+    }
+    if !plan.about.is_empty() {
+        dom.open("aside", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-workbook-about"));
+        let mut first = true;
+        for part in &plan.about {
+            if !first {
+                dom.text_raw("\n");
+            }
+            first = false;
+            match part {
+                AboutPart::Block(index) => build_block(dom, &doc.blocks[*index])?,
+                AboutPart::Prose(text) => build_markdown(dom, text)?,
+            }
+        }
+        dom.close();
+    }
+    dom.close();
+    Ok(())
 }
 
 fn block_kind(b: &Block) -> String {
@@ -3327,103 +3533,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
 
         // render_html.rs:2708
         Block::Data { headers, rows, caption, total, source, source_rows, source_cols, .. } => {
-            // 0.19.2 preview contract — mirrors render_html.rs:2708 byte for
-            // byte: class order (wrap, preview, wide), then `data-rows`,
-            // then `data-cols`; the count line is the LAST child of the wrap.
-            // 0.20.0 adds the `source=` preview and its linked count line.
-            let row_count = rows.len();
-            let col_count = rows
-                .iter()
-                .map(|r| r.len())
-                .max()
-                .unwrap_or(0)
-                .max(headers.len());
-            let linked = source.as_deref().map(str::trim).filter(|s| !s.is_empty());
-            let preview = row_count > DATA_PREVIEW_ROWS || linked.is_some();
-            let total_rows = match linked {
-                Some(_) => source_rows.unwrap_or(row_count),
-                None => row_count,
-            };
-            let total_cols = match linked {
-                Some(_) => source_cols.unwrap_or(col_count),
-                None => col_count,
-            };
-            let mut wrap_class = String::from("surfdoc-table-wrap");
-            if preview {
-                wrap_class.push_str(" surfdoc-table-preview");
-            }
-            if col_count >= DATA_WIDE_COLS {
-                wrap_class.push_str(" surfdoc-table-wide");
-            }
-            let shown = if row_count > DATA_PREVIEW_ROWS {
-                DATA_PREVIEW_ROWS
-            } else {
-                row_count
-            };
-            dom.open("div", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup(&wrap_class));
-            if preview {
-                dom.attr("data-rows", AttrVal::Markup(&total_rows.to_string()));
-                dom.attr("data-cols", AttrVal::Markup(&total_cols.to_string()));
-            }
-            dom.open("table", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup("surfdoc-data"));
-            if let Some(c) = caption {
-                dom.open("caption", CloseStyle::Normal);
-                build_cell_markdown(dom, c)?;
-                dom.close();
-            }
-            if !headers.is_empty() {
-                dom.open("thead", CloseStyle::Normal);
-                dom.open("tr", CloseStyle::Normal);
-                for h in headers {
-                    dom.open("th", CloseStyle::Normal);
-                    dom.attr("scope", AttrVal::Markup("col"));
-                    dom.attr("aria-sort", AttrVal::Markup("none"));
-                    build_cell_markdown(dom, h)?;
-                    dom.close();
-                }
-                dom.close();
-                dom.close();
-            }
-            dom.open("tbody", CloseStyle::Normal);
-            for row in rows.iter().take(shown) {
-                dom.open("tr", CloseStyle::Normal);
-                for cell in row {
-                    build_data_cell(dom, cell)?;
-                }
-                dom.close();
-            }
-            dom.close();
-            if !total.is_empty() {
-                dom.open("tfoot", CloseStyle::Normal);
-                dom.open("tr", CloseStyle::Normal);
-                for cell in total {
-                    build_data_cell(dom, cell)?;
-                }
-                dom.close();
-                dom.close();
-            }
-            dom.close();
-            if preview {
-                let text = format!("{total_rows} rows \u{b7} open as spreadsheet");
-                match linked.and_then(crate::render_html::data_source_href) {
-                    Some(href) => {
-                        dom.open("a", CloseStyle::Normal);
-                        dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
-                        dom.attr("href", AttrVal::Markup(link_href(&href)));
-                        dom.text_markup(&text);
-                        dom.close();
-                    }
-                    None => {
-                        dom.open("p", CloseStyle::Normal);
-                        dom.attr("class", AttrVal::Markup("surfdoc-table-more"));
-                        dom.text_markup(&text);
-                        dom.close();
-                    }
-                }
-            }
-            dom.close();
+            build_data(dom, headers, rows, caption, total, source, source_rows, source_cols, false)?
         }
 
         // render_html.rs:2760
@@ -5897,12 +6007,42 @@ pub fn render_blocks_dom<S: DomSink>(
 }
 
 /// Render a whole document (fragment semantics — see [`render_blocks_dom`]).
+///
+/// 0.38.0: a document whose front matter resolves to
+/// [`RenderProfile::Spreadsheet`] builds the WORKBOOK (`render_html::
+/// to_html_workbook_fragment`'s twin) instead of the block list; every other
+/// profile is the block list as before. Live-mount callers gate with
+/// [`check_coverage`], which dry-runs this same branch.
 pub fn render_doc_dom<S: DomSink>(
     sink: &mut S,
     root: &S::Node,
     doc: &SurfDoc,
 ) -> Result<(), RenderDomError> {
+    if is_workbook(doc) {
+        let mut dom = Dom::new(sink, root.clone());
+        build_workbook(&mut dom, doc)?;
+        dom.flush_pending();
+        return Ok(());
+    }
     render_blocks_dom(sink, root, &doc.blocks)
+}
+
+/// Whether `doc` renders as a workbook (`type: spreadsheet`).
+pub fn is_workbook(doc: &SurfDoc) -> bool {
+    crate::types::render_profile(
+        doc.front_matter.as_ref().and_then(|fm| fm.doc_type),
+        doc.front_matter.as_ref().and_then(|fm| fm.format),
+    ) == crate::types::RenderProfile::Spreadsheet
+}
+
+/// Test/measurement helper: [`render_doc_dom`] through the native sink,
+/// serialized — byte-comparable with `to_html_fragment` for a prose doc and
+/// with `to_html_workbook_fragment` for a spreadsheet doc.
+pub fn render_doc_string(doc: &SurfDoc) -> Result<String, RenderDomError> {
+    let mut nd = NativeDom::new();
+    let root = nd.create_root();
+    render_doc_dom(&mut nd, &root, doc)?;
+    Ok(nd.serialize(root))
 }
 
 /// Serde tag of a block whose render emits executable `<script>` text —
@@ -5995,8 +6135,18 @@ pub fn check_coverage_blocks(blocks: &[Block]) -> Result<(), RenderDomError> {
     render_blocks_dom(&mut nd, &root, blocks)
 }
 
-/// Detailed coverage check: [`check_coverage_blocks`] over the whole doc.
+/// Detailed coverage check: [`check_coverage_blocks`] over the whole doc —
+/// and, for a spreadsheet doc (0.38.0), a dry run of the workbook build, so
+/// the gate and [`render_doc_dom`] answer for the same bytes.
 pub fn check_coverage(doc: &SurfDoc) -> Result<(), RenderDomError> {
+    if is_workbook(doc) {
+        if let Some(kind) = find_script_emitter(&doc.blocks) {
+            return unimpl(format!("script-emitting:{kind}"));
+        }
+        let mut nd = NativeDom::new();
+        let root = nd.create_root();
+        return render_doc_dom(&mut nd, &root, doc);
+    }
     check_coverage_blocks(&doc.blocks)
 }
 

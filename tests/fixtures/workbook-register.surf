@@ -1,0 +1,196 @@
+---
+title: "Contract register — the pilot programme (an invented fixture)"
+type: spreadsheet
+status: active
+---
+
+# Contract register — the pilot programme
+
+::summary
+A made-up register in the shape of a real one: a Totals table, then twelve numbered sections with one requirement table each. Every name, number and clause here is invented for the test suite.
+::
+
+## Totals
+
+| Section | Rows | Open | Accepted |
+|---|---|---|---|
+| 1 | 9 | 4 | 3 |
+| 2 | 9 | 5 | 4 |
+| 3 | 9 | 3 | 5 |
+| 4 | 9 | 4 | 2 |
+| 5 | 9 | 5 | 3 |
+| 6 | 9 | 3 | 4 |
+| 7 | 9 | 4 | 5 |
+| 8 | 9 | 5 | 2 |
+| 9 | 9 | 3 | 3 |
+| 10 | 9 | 4 | 4 |
+| 11 | 9 | 5 | 5 |
+| 12 | 9 | 3 | 2 |
+
+## 1 — Schedule A deliverables (fixed bid)
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R1.1 | Requirement 1 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.1 | Both | Obligation | Blocked | Needs a written sign-off |
+| R1.2 | Requirement 2 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.2 | Vendor | Gate | Accepted | — |
+| R1.3 | Requirement 3 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.3 | Client | Report | Blocked | Carried from the kickoff notes |
+| R1.4 | Requirement 4 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.4 | Both | Deliverable | Accepted | Needs a written sign-off |
+| R1.5 | Requirement 5 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.5 | Vendor | Obligation | Blocked | — |
+| R1.6 | Requirement 6 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.6 | Client | Gate | Accepted | Carried from the kickoff notes |
+| R1.7 | Requirement 7 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.7 | Both | Report | Blocked | Needs a written sign-off |
+| R1.8 | Requirement 8 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.8 | Vendor | Deliverable | Accepted | — |
+| R1.9 | Requirement 9 of section 1: the party named here does the thing the clause describes, by the date in the calendar. | §1.9 | Client | Obligation | Blocked | Carried from the kickoff notes |
+
+## 2 — Milestones and the payment calendar
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R2.1 | Requirement 1 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.1 | Vendor | Gate | Open | Needs a written sign-off |
+| R2.2 | Requirement 2 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.2 | Client | Deliverable | In progress | — |
+| R2.3 | Requirement 3 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.3 | Both | Gate | Open | Carried from the kickoff notes |
+| R2.4 | Requirement 4 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.4 | Vendor | Deliverable | In progress | Needs a written sign-off |
+| R2.5 | Requirement 5 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.5 | Client | Gate | Open | — |
+| R2.6 | Requirement 6 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.6 | Both | Deliverable | In progress | Carried from the kickoff notes |
+| R2.7 | Requirement 7 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.7 | Vendor | Gate | Open | Needs a written sign-off |
+| R2.8 | Requirement 8 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.8 | Client | Deliverable | In progress | — |
+| R2.9 | Requirement 9 of section 2: the party named here does the thing the clause describes, by the date in the calendar. | §2.9 | Both | Gate | Open | Carried from the kickoff notes |
+
+## 3 — Change orders
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R3.1 | Requirement 1 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.1 | Client | Report | Accepted | Needs a written sign-off |
+| R3.2 | Requirement 2 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.2 | Both | Gate | Blocked | — |
+| R3.3 | Requirement 3 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.3 | Vendor | Obligation | Accepted | Carried from the kickoff notes |
+| R3.4 | Requirement 4 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.4 | Client | Deliverable | Blocked | Needs a written sign-off |
+| R3.5 | Requirement 5 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.5 | Both | Report | Accepted | — |
+| R3.6 | Requirement 6 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.6 | Vendor | Gate | Blocked | Carried from the kickoff notes |
+| R3.7 | Requirement 7 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.7 | Client | Obligation | Accepted | Needs a written sign-off |
+| R3.8 | Requirement 8 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.8 | Both | Deliverable | Blocked | — |
+| R3.9 | Requirement 9 of section 3: the party named here does the thing the clause describes, by the date in the calendar. | §3.9 | Vendor | Report | Accepted | Carried from the kickoff notes |
+
+## 4 — Engagement phases and acceptance gates for the pilot programme
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R4.1 | Requirement 1 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.1 | Both | Deliverable | In progress | Needs a written sign-off |
+| R4.2 | Requirement 2 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.2 | Vendor | Deliverable | Open | — |
+| R4.3 | Requirement 3 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.3 | Client | Deliverable | In progress | Carried from the kickoff notes |
+| R4.4 | Requirement 4 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.4 | Both | Deliverable | Open | Needs a written sign-off |
+| R4.5 | Requirement 5 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.5 | Vendor | Deliverable | In progress | — |
+| R4.6 | Requirement 6 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.6 | Client | Deliverable | Open | Carried from the kickoff notes |
+| R4.7 | Requirement 7 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.7 | Both | Deliverable | In progress | Needs a written sign-off |
+| R4.8 | Requirement 8 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.8 | Vendor | Deliverable | Open | — |
+| R4.9 | Requirement 9 of section 4: the party named here does the thing the clause describes, by the date in the calendar. | §4.9 | Client | Deliverable | In progress | Carried from the kickoff notes |
+
+## 5 — Data handling and retention
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R5.1 | Requirement 1 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.1 | Vendor | Obligation | Blocked | Needs a written sign-off |
+| R5.2 | Requirement 2 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.2 | Client | Gate | Accepted | — |
+| R5.3 | Requirement 3 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.3 | Both | Report | Blocked | Carried from the kickoff notes |
+| R5.4 | Requirement 4 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.4 | Vendor | Deliverable | Accepted | Needs a written sign-off |
+| R5.5 | Requirement 5 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.5 | Client | Obligation | Blocked | — |
+| R5.6 | Requirement 6 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.6 | Both | Gate | Accepted | Carried from the kickoff notes |
+| R5.7 | Requirement 7 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.7 | Vendor | Report | Blocked | Needs a written sign-off |
+| R5.8 | Requirement 8 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.8 | Client | Deliverable | Accepted | — |
+| R5.9 | Requirement 9 of section 5: the party named here does the thing the clause describes, by the date in the calendar. | §5.9 | Both | Obligation | Blocked | Carried from the kickoff notes |
+
+## 6 — Hosting, uptime and the support window
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R6.1 | Requirement 1 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.1 | Client | Gate | Open | Needs a written sign-off |
+| R6.2 | Requirement 2 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.2 | Both | Deliverable | In progress | — |
+| R6.3 | Requirement 3 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.3 | Vendor | Gate | Open | Carried from the kickoff notes |
+| R6.4 | Requirement 4 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.4 | Client | Deliverable | In progress | Needs a written sign-off |
+| R6.5 | Requirement 5 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.5 | Both | Gate | Open | — |
+| R6.6 | Requirement 6 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.6 | Vendor | Deliverable | In progress | Carried from the kickoff notes |
+| R6.7 | Requirement 7 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.7 | Client | Gate | Open | Needs a written sign-off |
+| R6.8 | Requirement 8 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.8 | Both | Deliverable | In progress | — |
+| R6.9 | Requirement 9 of section 6: the party named here does the thing the clause describes, by the date in the calendar. | §6.9 | Vendor | Gate | Open | Carried from the kickoff notes |
+
+## 7 — Security reviews and the audit trail
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R7.1 | Requirement 1 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.1 | Both | Report | Accepted | Needs a written sign-off |
+| R7.2 | Requirement 2 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.2 | Vendor | Gate | Blocked | — |
+| R7.3 | Requirement 3 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.3 | Client | Obligation | Accepted | Carried from the kickoff notes |
+| R7.4 | Requirement 4 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.4 | Both | Deliverable | Blocked | Needs a written sign-off |
+| R7.5 | Requirement 5 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.5 | Vendor | Report | Accepted | — |
+| R7.6 | Requirement 6 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.6 | Client | Gate | Blocked | Carried from the kickoff notes |
+| R7.7 | Requirement 7 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.7 | Both | Obligation | Accepted | Needs a written sign-off |
+| R7.8 | Requirement 8 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.8 | Vendor | Deliverable | Blocked | — |
+| R7.9 | Requirement 9 of section 7: the party named here does the thing the clause describes, by the date in the calendar. | §7.9 | Client | Report | Accepted | Carried from the kickoff notes |
+
+## 8 — Training and documentation
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R8.1 | Requirement 1 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.1 | Vendor | Deliverable | In progress | Needs a written sign-off |
+| R8.2 | Requirement 2 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.2 | Client | Deliverable | Open | — |
+| R8.3 | Requirement 3 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.3 | Both | Deliverable | In progress | Carried from the kickoff notes |
+| R8.4 | Requirement 4 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.4 | Vendor | Deliverable | Open | Needs a written sign-off |
+| R8.5 | Requirement 5 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.5 | Client | Deliverable | In progress | — |
+| R8.6 | Requirement 6 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.6 | Both | Deliverable | Open | Carried from the kickoff notes |
+| R8.7 | Requirement 7 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.7 | Vendor | Deliverable | In progress | Needs a written sign-off |
+| R8.8 | Requirement 8 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.8 | Client | Deliverable | Open | — |
+| R8.9 | Requirement 9 of section 8: the party named here does the thing the clause describes, by the date in the calendar. | §8.9 | Both | Deliverable | In progress | Carried from the kickoff notes |
+
+## 9 — Intellectual property and licences
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R9.1 | Requirement 1 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.1 | Client | Obligation | Blocked | Needs a written sign-off |
+| R9.2 | Requirement 2 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.2 | Both | Gate | Accepted | — |
+| R9.3 | Requirement 3 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.3 | Vendor | Report | Blocked | Carried from the kickoff notes |
+| R9.4 | Requirement 4 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.4 | Client | Deliverable | Accepted | Needs a written sign-off |
+| R9.5 | Requirement 5 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.5 | Both | Obligation | Blocked | — |
+| R9.6 | Requirement 6 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.6 | Vendor | Gate | Accepted | Carried from the kickoff notes |
+| R9.7 | Requirement 7 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.7 | Client | Report | Blocked | Needs a written sign-off |
+| R9.8 | Requirement 8 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.8 | Both | Deliverable | Accepted | — |
+| R9.9 | Requirement 9 of section 9: the party named here does the thing the clause describes, by the date in the calendar. | §9.9 | Vendor | Obligation | Blocked | Carried from the kickoff notes |
+
+## 10 — Warranties and the defect window
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R10.1 | Requirement 1 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.1 | Both | Gate | Open | Needs a written sign-off |
+| R10.2 | Requirement 2 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.2 | Vendor | Deliverable | In progress | — |
+| R10.3 | Requirement 3 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.3 | Client | Gate | Open | Carried from the kickoff notes |
+| R10.4 | Requirement 4 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.4 | Both | Deliverable | In progress | Needs a written sign-off |
+| R10.5 | Requirement 5 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.5 | Vendor | Gate | Open | — |
+| R10.6 | Requirement 6 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.6 | Client | Deliverable | In progress | Carried from the kickoff notes |
+| R10.7 | Requirement 7 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.7 | Both | Gate | Open | Needs a written sign-off |
+| R10.8 | Requirement 8 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.8 | Vendor | Deliverable | In progress | — |
+| R10.9 | Requirement 9 of section 10: the party named here does the thing the clause describes, by the date in the calendar. | §10.9 | Client | Gate | Open | Carried from the kickoff notes |
+
+## 11 — Termination and the hand-back
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R11.1 | Requirement 1 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.1 | Vendor | Report | Accepted | Needs a written sign-off |
+| R11.2 | Requirement 2 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.2 | Client | Gate | Blocked | — |
+| R11.3 | Requirement 3 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.3 | Both | Obligation | Accepted | Carried from the kickoff notes |
+| R11.4 | Requirement 4 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.4 | Vendor | Deliverable | Blocked | Needs a written sign-off |
+| R11.5 | Requirement 5 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.5 | Client | Report | Accepted | — |
+| R11.6 | Requirement 6 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.6 | Both | Gate | Blocked | Carried from the kickoff notes |
+| R11.7 | Requirement 7 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.7 | Vendor | Obligation | Accepted | Needs a written sign-off |
+| R11.8 | Requirement 8 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.8 | Client | Deliverable | Blocked | — |
+| R11.9 | Requirement 9 of section 11: the party named here does the thing the clause describes, by the date in the calendar. | §11.9 | Both | Report | Accepted | Carried from the kickoff notes |
+
+## 12 — Closing conditions
+
+| ID | Requirement | Section | Obligor | Type | Status | Notes |
+|---|---|---|---|---|---|---|
+| R12.1 | Requirement 1 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.1 | Client | Deliverable | In progress | Needs a written sign-off |
+| R12.2 | Requirement 2 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.2 | Both | Deliverable | Open | — |
+| R12.3 | Requirement 3 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.3 | Vendor | Deliverable | In progress | Carried from the kickoff notes |
+| R12.4 | Requirement 4 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.4 | Client | Deliverable | Open | Needs a written sign-off |
+| R12.5 | Requirement 5 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.5 | Both | Deliverable | In progress | — |
+| R12.6 | Requirement 6 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.6 | Vendor | Deliverable | Open | Carried from the kickoff notes |
+| R12.7 | Requirement 7 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.7 | Client | Deliverable | In progress | Needs a written sign-off |
+| R12.8 | Requirement 8 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.8 | Both | Deliverable | Open | — |
+| R12.9 | Requirement 9 of section 12: the party named here does the thing the clause describes, by the date in the calendar. | §12.9 | Vendor | Deliverable | In progress | Carried from the kickoff notes |
