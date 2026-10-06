@@ -2421,8 +2421,11 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             format!("{fence}action{attrs_str}\n{}\n{fence}", content_lines.join("\n"))
         }
 
-        Block::FilterBar { target_selector, fields, .. } => {
-            let attrs_str = format!("[target=\"{}\"]", escape_attr(target_selector));
+        Block::FilterBar { target_selector, fields, size, inline, .. } => {
+            let mut attrs_parts = vec![format!("target=\"{}\"", escape_attr(target_selector))];
+            if size != "default" { attrs_parts.push(format!("size={size}")); }
+            if *inline { attrs_parts.push("inline=true".to_string()); }
+            let attrs_str = format!("[{}]", attrs_parts.join(" "));
             let mut content_lines = Vec::new();
             for field in fields {
                 content_lines.push(format!(
@@ -3466,15 +3469,26 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
         }
 
-        Block::SegmentedControl { active, size, action, segments, .. } => {
+        Block::SegmentedControl { active, size, action, fold, segments, .. } => {
             let mut attrs_parts = Vec::new();
             if let Some(a) = active { attrs_parts.push(format!("active={a}")); }
             if size != "compact" { attrs_parts.push(format!("size={size}")); }
             if let Some(a) = action { attrs_parts.push(format!("action={a}")); }
+            if fold != "never" { attrs_parts.push(format!("fold={fold}")); }
             let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
             let lines: Vec<String> = segments
                 .iter()
-                .map(|s| format!("- {} {}", s.id, quote_list_label(&s.label)))
+                .map(|s| {
+                    // 0.38: the brace group carries icon and tint, written only when set.
+                    let mut extra = Vec::new();
+                    if let Some(i) = &s.icon { extra.push(format!("icon={i}")); }
+                    if let Some(t) = &s.tint { extra.push(format!("tint={t}")); }
+                    if extra.is_empty() {
+                        format!("- {} {}", s.id, quote_list_label(&s.label))
+                    } else {
+                        format!("- {} {} {{{}}}", s.id, quote_list_label(&s.label), extra.join(" "))
+                    }
+                })
                 .collect();
             if lines.is_empty() {
                 format!("{fence}segmented-control{attrs_str}\n{fence}")
@@ -5144,6 +5158,30 @@ mod tests {
             }
             other => panic!("Expected SegmentedControl, got {:?}", other),
         }
+    }
+
+    /// 0.38: the brace group (icon · tint) and `fold=always` survive the
+    /// builder round trip; a segment without them is written as before.
+    #[test]
+    fn test_roundtrip_segmented_control_icon_tint_fold() {
+        let source = "::segmented-control[active=docs action=pickKind fold=always]\n- all \"All\"\n- docs \"Docs\" {icon=file-text tint=blue}\n- notes \"Notes\" {icon=notebook}\n::";
+        let parsed = parse::parse(source);
+        let out = to_surf_source(&parsed.doc);
+        assert_eq!(out.trim(), source, "fixed point");
+        let reparsed = parse::parse(&out);
+        match &reparsed.doc.blocks[0] {
+            Block::SegmentedControl { fold, segments, .. } => {
+                assert_eq!(fold, "always");
+                assert_eq!(segments[0].icon, None);
+                assert_eq!(segments[1].icon.as_deref(), Some("file-text"));
+                assert_eq!(segments[1].tint.as_deref(), Some("blue"));
+                assert_eq!(segments[2].tint, None);
+            }
+            other => panic!("Expected SegmentedControl, got {other:?}"),
+        }
+        let bar = "::filter-bar[target=\"docs\" size=compact inline=true]\n- Sort (select: newest | oldest)\n::";
+        let bar_out = to_surf_source(&parse::parse(bar).doc);
+        assert_eq!(bar_out.trim(), bar, "filter-bar fixed point");
     }
 
     #[test]

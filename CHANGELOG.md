@@ -3,6 +3,33 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## Unreleased (the navigator controls — `::segmented-control` icons, tints and `fold=always`; `::filter-bar` as a chip row; TASK-1373's walk, the CloudSurf web Docs panel)
+
+The web Docs panel at app.cloudsurf.com is spec-driven, and its head read as a form because the two navigator
+blocks did: seven text pills clipped sideways in a 320 px panel, a Sort in a boxed `<select>`. The blocks are fixed
+here so every SurfDoc on the platform gets the look, not one panel. Additive — a 0.37 document renders byte for byte.
+
+- **`::segmented-control` segments carry an icon and a tint.** `- docs "Docs" {icon=file-text tint=blue}` — the
+  `::tab-bar` brace idiom. The icon is a glyph from the icon set, drawn as `<span class="surfdoc-icon">` before the
+  label (an unknown name draws nothing); the tint is one of ten palette names (`blue green amber red violet teal
+  pink orange yellow slate`, `SEGMENT_TINTS`) painted on the glyph only through `data-tint` and the `--tint-*`
+  tokens (each falls back to the theme's accent / success / warning / danger); a hex or any other word is dropped at
+  parse, never written. Both survive the builder round trip.
+- **`fold=always`** renders the control as one chip — the segment on show (the active one, else the first) as
+  icon · label · chevron — that opens a menu of the segments as rows with the active row filled and checked. It is a
+  `<details>`, so it opens and closes with no script (the constructive DOM renderer stays script-free; the host owns
+  selection, as before: the same `role=radio` buttons with the same `data-id` and the block's `action=`). `fold=never`
+  is the default and the 0.37 pill row. `fold=auto` is not in this release.
+- **`::filter-bar` is a chip row.** No box, no inner padding; each field is one pill (label · value · chevron) with
+  the native `<select>` laid over it, so the picker opens as before and a host's change listener is unchanged.
+  `size=compact` is the 28 px row for a navigator head; `inline=true` drops the block margins so the bar sits beside
+  a preceding inline control. Both ride as data attributes, absent by default.
+- The constructive DOM renderer (`dom` feature) mirrors the segmented control's new markup byte for byte.
+- `spec/blocks.toml`: the two blocks' attribute lists and purposes.
+- Tests: `render_html` units for the icon, the tint, the dropped hex, the folded markup and the unchanged unfolded
+  markup; the builder round trip with the brace group; the filter bar's attributes; the DOM identity fixture
+  `tests/fixtures/navigator-controls.surf`.
+
 ## 0.37.2 — 2026-10-02 (the allow-list passes the host's own pages: the scheme grammar, and a scoped door only a host can open; TASK-1300)
 
 0.37.1's allow-list refused three things a host application hands the renderer for its own pages. 0.37.2 passes

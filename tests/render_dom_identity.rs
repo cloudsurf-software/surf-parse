@@ -167,6 +167,19 @@ fn planned_css_declines_as_script_emitting_and_stays_identical() {
 
 // -- the six thelove222 routes (census source) --------------------------------
 
+/// 0.38: the segmented control's icons, tints and the `fold=always` menu
+/// render byte-identically through the constructive sink (a `<details>`, no
+/// script); the unknown glyph and the hex tint draw nothing.
+#[test]
+fn identity_navigator_controls() {
+    assert_identity("dom/navigator-controls.surf");
+    let html = surf_parse::parse(&fixture("dom/navigator-controls.surf")).doc.to_html_fragment();
+    assert!(html.contains("data-fold=\"always\""));
+    assert!(html.contains("<details class=\"surfdoc-segmented-fold\"><summary class=\"surfdoc-segmented-trigger\"><span class=\"surfdoc-icon\" data-tint=\"blue\">"));
+    assert!(html.contains("<span class=\"surfdoc-segmented-trigger-label\">Docs</span>"));
+    assert!(!html.contains("#ff0000") && !html.contains("not-a-glyph"));
+}
+
 #[test]
 fn identity_thelove222_route_home() {
     assert_identity("dom/thelove222-route-home.surf");

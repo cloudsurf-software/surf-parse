@@ -1,0 +1,22 @@
+---
+title: Navigator controls
+type: doc
+---
+
+# Navigator controls
+
+::segmented-control[active=docs action=pickKind fold=always]
+- all "All" {icon=layers tint=slate}
+- docs "Docs" {icon=file-text tint=blue}
+- spreadsheets "Sheets" {icon=clipboard tint=green}
+- presentations "Decks" {icon=layout tint=amber}
+- notes "Notes" {icon=notebook tint=violet}
+- folders "Folders" {icon=folder tint=slate}
+- starred "Starred" {icon=star tint=yellow}
+::
+
+::segmented-control[active=mine]
+- all "All"
+- mine "Mine" {icon=user}
+- theirs "Theirs" {icon=not-a-glyph tint=#ff0000}
+::

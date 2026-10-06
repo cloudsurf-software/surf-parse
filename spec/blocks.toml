@@ -493,8 +493,8 @@ enum_variant = "Action"
 [blocks.filter-bar]
 status = "implemented"
 category = "advanced"
-purpose = "Filter controls for data views with named fields and option lists"
-attributes = ["target"]
+purpose = "Filter controls for data views with named fields and option lists — a chip row since 0.38; `size=compact` for a navigator head, `inline=true` to sit beside a preceding inline control"
+attributes = ["target", "size", "inline"]
 degradation = "bulleted filter labels"
 enum_variant = "FilterBar"
 
@@ -833,8 +833,8 @@ enum_variant = "Modal"
 [blocks.segmented-control]
 status = "implemented"
 category = "advanced"
-purpose = "Compact pill single-select control for filtering — a filter idiom, not a tab-bar style"
-attributes = ["active", "size", "action"]
+purpose = "Compact pill single-select control for filtering — a filter idiom, not a tab-bar style; a segment line may carry `{icon=name tint=blue}` (0.38) and `fold=always` renders the control as one chip opening a menu of the segments as rows"
+attributes = ["active", "size", "action", "fold"]
 degradation = "inline segment list with active bolded"
 enum_variant = "SegmentedControl"
 

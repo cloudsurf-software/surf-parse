@@ -679,6 +679,20 @@ enum AttrVal<'v> {
 /// `&'static str` renderer-owned constants — untrusted content NEVER flows
 /// through it (the signature enforces `'static`), so it is not an HTML
 /// injection sink. `<script>`/`<style>` bodies are consumed as rawtext.
+/// 0.38: the segment icon span, the DOM twin of `render_html::segment_icon_html`.
+fn segment_icon_dom<S: DomSink>(dom: &mut Dom<'_, S>, seg: &crate::types::SegmentItem) -> Result<(), RenderDomError> {
+    if let Some(svg) = seg.icon.as_deref().and_then(crate::icons::get_icon) {
+        dom.open("span", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-icon"));
+        if let Some(t) = &seg.tint {
+            dom.attr("data-tint", AttrVal::Markup(t));
+        }
+        build_static(dom, svg)?;
+        dom.close();
+    }
+    Ok(())
+}
+
 fn build_static<S: DomSink>(dom: &mut Dom<'_, S>, src: &'static str) -> Result<(), RenderDomError> {
     build_markup(dom, src, false)
 }
@@ -3842,11 +3856,15 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         }
 
         // render_html.rs:5627
-        Block::SegmentedControl { active, size, action, segments, .. } => {
+        Block::SegmentedControl { active, size, action, fold, segments, .. } => {
+            let folded = fold == "always";
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-segmented-control"));
             dom.attr("role", AttrVal::Markup("radiogroup"));
             dom.attr("data-size", AttrVal::Markup(size));
+            if folded {
+                dom.attr("data-fold", AttrVal::Markup("always"));
+            }
             if let Some(a) = action {
                 dom.attr("data-action", AttrVal::Markup(a));
             }
@@ -3854,6 +3872,30 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             let active_idx = segments
                 .iter()
                 .position(|seg| active.as_ref().is_some_and(|a| a == &seg.id));
+            if folded {
+                let shown = active_idx.and_then(|i| segments.get(i)).or_else(|| segments.first());
+                dom.open("details", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-segmented-fold"));
+                dom.open("summary", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-segmented-trigger"));
+                if let Some(seg) = shown {
+                    segment_icon_dom(dom, seg)?;
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-segmented-trigger-label"));
+                    dom.text_markup(&seg.label);
+                    dom.close();
+                }
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-segmented-chevron"));
+                dom.attr("aria-hidden", AttrVal::Markup("true"));
+                if let Some(svg) = crate::icons::get_icon("chevron-down") {
+                    build_static(dom, svg)?;
+                }
+                dom.close();
+                dom.close();
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-segmented-menu"));
+            }
             for (i, seg) in segments.iter().enumerate() {
                 let is_active = active_idx == Some(i);
                 let cls = if is_active {
@@ -3867,7 +3909,12 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.attr("class", AttrVal::Markup(cls));
                 dom.attr("data-id", AttrVal::Markup(&seg.id));
                 dom.attr("aria-checked", AttrVal::Markup(if is_active { "true" } else { "false" }));
+                segment_icon_dom(dom, seg)?;
                 dom.text_markup(&seg.label);
+                dom.close();
+            }
+            if folded {
+                dom.close();
                 dom.close();
             }
             dom.close();

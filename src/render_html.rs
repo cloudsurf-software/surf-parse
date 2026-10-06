@@ -2756,6 +2756,18 @@ fn render_dropdown_options(
 /// Factored out (0.14, WP-N0) so the Surfy drawer head-row composer can
 /// inline a panel toolbar's items directly into the single head row;
 /// the Toolbar arm's output stays byte-identical.
+/// 0.38: a segment's icon span — the glyph from the icon set, tinted when
+/// the segment names a palette tint; an unknown icon name draws nothing.
+pub(crate) fn segment_icon_html(seg: &crate::types::SegmentItem) -> String {
+    match seg.icon.as_deref().and_then(get_icon) {
+        Some(svg) => match &seg.tint {
+            Some(t) => format!("<span class=\"surfdoc-icon\" data-tint=\"{}\">{}</span>", escape_html(t), svg),
+            None => format!("<span class=\"surfdoc-icon\">{}</span>", svg),
+        },
+        None => String::new(),
+    }
+}
+
 fn render_toolbar_items(items: &[crate::types::ToolbarItem]) -> String {
     let mut html = String::new();
     for item in items {
@@ -5906,11 +5918,17 @@ fn render_block_inner(block: &Block) -> String {
         Block::FilterBar {
             target_selector,
             fields,
+            size,
+            inline,
             ..
         } => {
+            // 0.38: size=compact and inline=true ride as data attributes
+            // (absent by default, so a 0.37 document renders byte for byte).
+            let size_attr = if size == "compact" { " data-size=\"compact\"" } else { "" };
+            let inline_attr = if *inline { " data-inline=\"true\"" } else { "" };
             let mut html = format!(
-                "<div class=\"surfdoc-filter-bar\" data-surf-target=\"{}\">",
-                escape_html(target_selector),
+                "<div class=\"surfdoc-filter-bar\" data-surf-target=\"{}\"{}{}>",
+                escape_html(target_selector), size_attr, inline_attr,
             );
             if fields.is_empty() {
                 // Static preview: sample filter chips so the bar is never empty
@@ -7017,32 +7035,57 @@ fn render_block_inner(block: &Block) -> String {
             html
         }
 
-        Block::SegmentedControl { active, size, action, segments, .. } => {
+        Block::SegmentedControl { active, size, action, fold, segments, .. } => {
             // A filter idiom, not a content-pane switcher: radiogroup role,
             // no tablist markup and no tab-switching script.
             let action_attr = match action {
                 Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
                 None => String::new(),
             };
+            // 0.38: fold=always wraps the pills in a <details> menu whose
+            // summary shows the segment on show; no script is emitted (the
+            // host owns selection; a static page opens and closes natively).
+            let folded = fold == "always";
+            let fold_attr = if folded { " data-fold=\"always\"" } else { "" };
             let mut html = format!(
-                "<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"{}\"{}>",
-                escape_html(size), action_attr,
+                "<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"{}\"{}{}>",
+                escape_html(size), fold_attr, action_attr,
             );
             // Single-select invariant: at most ONE active pill, even when
             // segment ids are duplicated — first match wins.
             let active_idx = segments
                 .iter()
                 .position(|seg| active.as_ref().is_some_and(|a| a == &seg.id));
+            if folded {
+                // The trigger shows the active segment, else the first.
+                let shown = active_idx.and_then(|i| segments.get(i)).or_else(|| segments.first());
+                html.push_str("<details class=\"surfdoc-segmented-fold\"><summary class=\"surfdoc-segmented-trigger\">");
+                if let Some(seg) = shown {
+                    html.push_str(&segment_icon_html(seg));
+                    html.push_str(&format!(
+                        "<span class=\"surfdoc-segmented-trigger-label\">{}</span>",
+                        escape_html(&seg.label)
+                    ));
+                }
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-segmented-chevron\" aria-hidden=\"true\">{}</span></summary><div class=\"surfdoc-segmented-menu\">",
+                    get_icon("chevron-down").unwrap_or("")
+                ));
+            }
             for (i, seg) in segments.iter().enumerate() {
                 let is_active = active_idx == Some(i);
                 let active_cls = if is_active { " is-active" } else { "" };
                 html.push_str(&format!(
-                    "<button type=\"button\" role=\"radio\" class=\"surfdoc-segment{}\" data-id=\"{}\" aria-checked=\"{}\">{}</button>",
+                    "<button type=\"button\" role=\"radio\" class=\"surfdoc-segment{}\" data-id=\"{}\" aria-checked=\"{}\">{}{}</button>",
                     active_cls,
                     escape_html(&seg.id),
                     is_active,
+                    segment_icon_html(seg),
                     escape_html(&seg.label),
                 ));
+            }
+            if folded {
+                html.push_str("</div></details>");
             }
             html.push_str("</div>");
             html
@@ -15617,16 +15660,60 @@ About
         assert!(!html[option_start..oldest].contains("data-action"));
     }
 
+    /// 0.38: a segment's `{icon=name tint=blue}` draws the glyph before the
+    /// label with the tint on the glyph; a hex tint and an unknown glyph
+    /// draw nothing; a segment without the brace group is the 0.37 button.
+    #[test]
+    fn html_segmented_control_icon_and_tint() {
+        let src = "::segmented-control[active=docs action=pickKind]\n- all \"All\"\n- docs \"Docs\" {icon=file-text tint=blue}\n- notes \"Notes\" {icon=not-a-glyph tint=#ff0000}\n::";
+        let html = crate::parse(src).doc.to_html();
+        assert!(html.contains("<button type=\"button\" role=\"radio\" class=\"surfdoc-segment\" data-id=\"all\" aria-checked=\"false\">All</button>"), "{html}");
+        assert!(html.contains("class=\"surfdoc-segment is-active\" data-id=\"docs\" aria-checked=\"true\"><span class=\"surfdoc-icon\" data-tint=\"blue\"><svg"), "{html}");
+        assert!(html.contains("</svg></span>Docs</button>"), "{html}");
+        assert!(html.contains("data-id=\"notes\" aria-checked=\"false\">Notes</button>"), "{html}");
+        assert!(!html.contains("#ff0000") && !html.contains("data-fold"), "{html}");
+    }
+
+    /// 0.38: `fold=always` is a <details> chip opening the segments as rows —
+    /// the active segment on the trigger, the same radio buttons inside, no
+    /// script; without an active match the first segment is on show.
+    #[test]
+    fn html_segmented_control_fold_always() {
+        let src = "::segmented-control[active=docs action=pickKind fold=always]\n- all \"All\" {icon=layers}\n- docs \"Docs\" {icon=file-text tint=blue}\n::";
+        let html = crate::parse(src).doc.to_html();
+        assert!(html.contains("<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"compact\" data-fold=\"always\" data-action=\"pickKind\"><details class=\"surfdoc-segmented-fold\"><summary class=\"surfdoc-segmented-trigger\"><span class=\"surfdoc-icon\" data-tint=\"blue\"><svg"), "{html}");
+        assert!(html.contains("</span><span class=\"surfdoc-segmented-trigger-label\">Docs</span><span class=\"surfdoc-segmented-chevron\" aria-hidden=\"true\"><svg"), "{html}");
+        assert!(html.contains("</span></summary><div class=\"surfdoc-segmented-menu\"><button type=\"button\" role=\"radio\" class=\"surfdoc-segment\" data-id=\"all\""), "{html}");
+        assert!(html.contains("Docs</button></div></details></div>"), "{html}");
+        assert_eq!(html.matches("role=\"radio\"").count(), 2);
+        assert!(!html.contains("<script"), "{html}");
+
+        let none = crate::parse("::segmented-control[fold=always]\n- all \"All\"\n- docs \"Docs\"\n::").doc.to_html();
+        assert!(none.contains("<span class=\"surfdoc-segmented-trigger-label\">All</span>"), "{none}");
+        assert!(none.contains("data-id=\"all\" aria-checked=\"false\""), "{none}");
+    }
+
+    /// 0.38: `::filter-bar` carries `size=compact` and `inline=true` as data
+    /// attributes, absent by default (a 0.37 document is byte-identical).
+    #[test]
+    fn html_filter_bar_size_and_inline() {
+        let plain = crate::parse("::filter-bar[target=docs]\n- Sort (select: newest|oldest)\n::").doc.to_html();
+        assert!(plain.contains("<div class=\"surfdoc-filter-bar\" data-surf-target=\"docs\"><label class=\"surfdoc-filter-field\">Sort<select name=\"sort\">"), "{plain}");
+        let chip = crate::parse("::filter-bar[target=docs size=compact inline=true]\n- Sort (select: newest|oldest)\n::").doc.to_html();
+        assert!(chip.contains("<div class=\"surfdoc-filter-bar\" data-surf-target=\"docs\" data-size=\"compact\" data-inline=\"true\">"), "{chip}");
+    }
+
     #[test]
     fn html_segmented_control_duplicate_active_ids_single_pill() {
         let doc = doc_with(vec![Block::SegmentedControl {
+            fold: "never".into(),
             active: Some("posts".into()),
             size: "regular".into(),
             action: None,
             segments: vec![
-                SegmentItem { id: "posts".into(), label: "Posts (first)".into() },
-                SegmentItem { id: "all".into(), label: "All".into() },
-                SegmentItem { id: "posts".into(), label: "Posts (dup)".into() },
+                SegmentItem { id: "posts".into(), label: "Posts (first)".into(), icon: None, tint: None },
+                SegmentItem { id: "all".into(), label: "All".into(), icon: None, tint: None },
+                SegmentItem { id: "posts".into(), label: "Posts (dup)".into(), icon: None, tint: None },
             ],
             span: span(),
         }]);
@@ -15642,12 +15729,13 @@ About
     #[test]
     fn html_segmented_control() {
         let doc = doc_with(vec![Block::SegmentedControl {
+            fold: "never".into(),
             active: Some("posts".into()),
             size: "compact".into(),
             action: Some("filter_posts".into()),
             segments: vec![
-                SegmentItem { id: "all".into(), label: "All".into() },
-                SegmentItem { id: "posts".into(), label: "Posts".into() },
+                SegmentItem { id: "all".into(), label: "All".into(), icon: None, tint: None },
+                SegmentItem { id: "posts".into(), label: "Posts".into(), icon: None, tint: None },
             ],
             span: span(),
         }]);

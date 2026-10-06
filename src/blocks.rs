@@ -4021,6 +4021,12 @@ fn parse_action(attrs: &Attrs, content: &str, span: Span) -> Block {
 
 fn parse_filter_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     let target_selector = attr_string(attrs, "target").unwrap_or_default();
+    // 0.38: size=compact and inline=true for a navigator head.
+    let size = match attr_string(attrs, "size").as_deref() {
+        Some("compact") => "compact".to_string(),
+        _ => "default".to_string(),
+    };
+    let inline = attr_bool(attrs, "inline");
 
     let mut fields = Vec::new();
     for line in content.lines() {
@@ -4060,6 +4066,8 @@ fn parse_filter_bar(attrs: &Attrs, content: &str, span: Span) -> Block {
     Block::FilterBar {
         target_selector,
         fields,
+        size,
+        inline,
         span,
     }
 }
@@ -6123,22 +6131,52 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
     let active = attr_string(attrs, "active");
     let size = attr_string(attrs, "size").unwrap_or_else(|| "compact".to_string());
     let action = attr_string(attrs, "action");
+    // 0.38: fold=never|always; anything else reads as never.
+    let fold = match attr_string(attrs, "fold").as_deref() {
+        Some("always") => "always".to_string(),
+        _ => "never".to_string(),
+    };
     let mut segments = Vec::new();
     for line in content.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("- ") {
-            // Expected format: id "Label" — flat single-select, no icons.
-            let rest = rest.trim();
+            // Expected format: id "Label" {icon=token tint=name} — the
+            // trailing brace group is the `::tab-bar` idiom (0.38).
+            let mut rest = rest.trim();
+            let mut icon = None;
+            let mut tint = None;
+            if let Some(brace_start) = rest.rfind('{')
+                && let Some(brace) = rest[brace_start + 1..].strip_suffix('}')
+            {
+                for tok in brace.split_whitespace() {
+                    if let Some(v) = tok.strip_prefix("icon=") {
+                        let v = v.trim_matches('"').trim();
+                        if !v.is_empty() {
+                            icon = Some(v.to_string());
+                        }
+                    } else if let Some(v) = tok.strip_prefix("tint=") {
+                        let v = v.trim_matches('"').trim();
+                        if crate::types::SEGMENT_TINTS.contains(&v) {
+                            tint = Some(v.to_string());
+                        }
+                    }
+                }
+                rest = rest[..brace_start].trim_end();
+            }
             if let Some((id, label_part)) = rest.split_once(' ') {
                 let label = label_part.trim().trim_matches('"').to_string();
                 segments.push(SegmentItem {
                     id: id.to_string(),
                     label,
+                    icon,
+                    tint,
                 });
             } else if !rest.is_empty() {
                 segments.push(SegmentItem {
                     id: rest.to_string(),
                     label: rest.to_string(),
+                    icon,
+                    tint,
                 });
             }
         }
@@ -6147,6 +6185,7 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
         active,
         size,
         action,
+        fold,
         segments,
         span,
     }
