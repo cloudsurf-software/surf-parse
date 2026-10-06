@@ -1,0 +1,113 @@
+---
+title: "Every admitted kind once — the registry's own snippets, in one page"
+type: website
+version: 1
+author: "surf-parse fixtures"
+status: active
+---
+
+::site
+name: Every Kind
+description: One instance of each kind the field module admits, in the registry's own minimal grammar.
+accent: #336699
+theme: light
+::
+
+::page[route="/" title="All kinds"]
+
+::hero[id=all-hero badge="NEW"]
+# Build once
+Render everywhere
+[Start](/start){primary}
+::
+
+::cta[label="Go" href=/go primary=true id=all-cta]
+::
+
+::product-card[badge="Popular" badge-color="green" id=all-product-card]
+## Pro
+For teams
+
+- Everything
+
+[Start](/pricing)
+::
+
+::form[submit="Send" id=all-form]
+group: Contact
+- Name (text, "Your name") *
+- Email (email)
+group: Preferences
+- Plan (radio: Free | Pro)
+- Subscribe (checkbox)
+- Dark mode (toggle)
+- Resume (file)
+- Source (hidden, "pricing")
+::
+
+::callout[type=warning title="Heads up" id=all-callout]
+Body
+::
+
+::stats[id=all-stats]
+- value="95" label="Blocks"
+::
+
+::features[id=all-features]
+- icon=bolt title="Fast" body="Rust"
+::
+
+::data[sortable=true id=all-data]
+| A | B |
+|---|---|
+| 1 | 2 |
+::
+
+::testimonial[author="Ada" role="Engineer" company="Co" id=all-testimonial]
+Great.
+::
+
+::pricing-table[id=all-pricing-table]
+| Plan | Price |
+|------|-------|
+| Free | $0 |
+::
+
+::faq[id=all-faq]
+- q="Fast?" a="Yes."
+::
+
+::steps[id=all-steps]
+1. Write
+2. Ship
+::
+
+::metric[label="Tests" value=42 trend=up unit=tests id=all-metric]
+::
+
+::gallery[columns=2 id=all-gallery]
+- src=/img/a.png alt="A" caption="First"
+::
+
+::quote[by="Ada" cite="Notes" id=all-quote]
+All that is gold.
+::
+
+::infocard[intent=success image="/img/a.png" id=all-infocard]
+# Card
+Subtitle
+
+Summary text.
+
+1. Step one
+
+Version: 1.0
+::
+
+::comparison[highlight="SurfDoc" id=all-comparison]
+| Feature | SurfDoc | Other |
+|---|---|---|
+| One source | Yes | No |
+::
+
+::

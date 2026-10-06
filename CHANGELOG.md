@@ -3,7 +3,9 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
-## 0.38.0 — 2026-10-02 (the workbook learns pipe tables and the DOM twin: `type: spreadsheet` on the web; TASK-1314)
+## 0.38.0 — 2026-10-06 (the workbook learns pipe tables and the DOM twin: `type: spreadsheet` on the web, TASK-1314; and blocks as named fields: `fields`, `surf-fields`, field rows in the registry, TASK-1446)
+
+### The workbook (TASK-1314)
 
 A `type: spreadsheet` document opened as a workbook in the Mac app and as prose on app.cloudsurf.com: the web's
 player draws every doc through the constructive DOM renderer, which had no workbook, and the HTML workbook counted
@@ -30,6 +32,31 @@ top-level `::data` blocks only — a register written as twelve markdown pipe ta
 - Tests: `src/workbook.rs` (the plan over the invented register fixture `tests/fixtures/workbook-register.surf`,
   the label rule, the splitter), `tests/render_dom_identity.rs` (the workbook byte-identity pair on the register,
   a `::data` workbook and an empty one), `tests/data_preview_contract.rs` (the markup pins).
+
+### Blocks as named fields (TASK-1446)
+
+A model never writes block source: `surf_parse::fields` reads any admitted block as named fields and lists and
+writes them back, and the `surf-fields` binary (`--features cli`) speaks that over JSON on stdin and stdout —
+`kinds`, `stamp`, `pages`, `read`, `apply` (every op or none) and `admit`.
+
+- **One registry.** Each block's field rows (`fields`, `lists`, `fields_raw`, `fields_admitted`) sit beside its
+  `attributes` in `spec/blocks.toml`; the module reads its schema from `spec_registry::BLOCKS_TOML`. Seventeen kinds
+  carry rows: hero, cta, product-card, form, callout, stats, features, data, testimonial, pricing-table, faq, steps,
+  metric, gallery, quote, infocard, comparison. Loose Markdown reads as the pseudo-kind `text`.
+- **One write path.** A write mutates the typed block's JSON, builds the block back, serializes that one block at
+  its authored fence (`builder::serialize_block_at`), carries over every authored opener token the serializer did
+  not write (`id=` first), splices, and refuses itself when the result does not parse back to the intended block.
+- **Admission by round trip.** `surf-fields admit <file.surf>...` reports, per kind, instances · no-change round
+  trips · same-HTML renders · set-then-read-back per field, and the admitted list.
+- **product-card serializer:** a card with a body and no subtitle now writes its title on the opener; the `## title`
+  form made the parser read the first body line as the subtitle, so such a card never round-tripped.
+- **form field rows:** `name` follows the label (derived by the parser) and is not a field; `type` and
+  `placeholder` failed set-then-read-back on choice fields in the corpus and are not exposed.
+- **Two shapes the write path refuses rather than corrupts** (found by `admit` over `tests/corpus`): a hero
+  without a `#` headline cannot take a `subtitle` (the parser reads the first body line as prose), and a form range
+  field with constraints loses them when its label is rewritten (the serializer does not write `constraints`).
+  Both are refused by name at apply time; the fixture `tests/fixtures/fields/all-kinds.surf` carries one canonical
+  instance of every admitted kind so `admit` over `tests/fixtures/fields/` is the crate's own gate.
 
 ## 0.37.2 — 2026-10-02 (the allow-list passes the host's own pages: the scheme grammar, and a scoped door only a host can open; TASK-1300)
 

@@ -300,7 +300,7 @@ fn scope_words(route: Option<&str>) -> String {
 }
 
 /// Resolve `id` (optionally inside `route`) to exactly one block.
-fn find(source: &str, route: Option<&str>, id: &str) -> Result<BlockRef, EditError> {
+pub(crate) fn find(source: &str, route: Option<&str>, id: &str) -> Result<BlockRef, EditError> {
     let all = list_blocks(source);
     if let Some(route) = route {
         let known = routes(source);
@@ -396,7 +396,7 @@ fn opener(source: &str, start_offset: usize) -> (usize, usize) {
 
 /// Rewrite one directive opener so `key=value` is set (added or replaced),
 /// every other attribute kept in its authored order and spelling.
-fn opener_with_attr(line: &str, key: &str, value: &str) -> String {
+pub(crate) fn opener_with_attr(line: &str, key: &str, value: &str) -> String {
     let (head, bracket) = match line.find('[') {
         Some(open) if line.trim_end().ends_with(']') => {
             let close = line.rfind(']').unwrap_or(line.len());
@@ -436,7 +436,7 @@ fn render_attr(key: &str, value: &str) -> String {
 }
 
 /// Split a bracket's inside into its attribute tokens, quotes respected.
-fn split_attr_tokens(inner: &str) -> Vec<String> {
+pub(crate) fn split_attr_tokens(inner: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
@@ -478,7 +478,7 @@ fn opener_has_id(line: &str) -> bool {
 }
 
 /// Splice `replacement` over `[start, end)` of `source`.
-fn splice(source: &str, start: usize, end: usize, replacement: &str) -> String {
+pub(crate) fn splice(source: &str, start: usize, end: usize, replacement: &str) -> String {
     let mut out = String::with_capacity(source.len() + replacement.len());
     out.push_str(&source[..start]);
     out.push_str(replacement);
@@ -731,14 +731,14 @@ pub fn set_text(
     })
 }
 
-fn ids_on_page(all: &[BlockRef], route: Option<&str>) -> BTreeSet<String> {
+pub(crate) fn ids_on_page(all: &[BlockRef], route: Option<&str>) -> BTreeSet<String> {
     all.iter()
         .filter(|b| b.route.as_deref() == route)
         .filter_map(|b| b.id.clone())
         .collect()
 }
 
-fn next_free_id(kind: &str, taken: &BTreeSet<String>) -> String {
+pub(crate) fn next_free_id(kind: &str, taken: &BTreeSet<String>) -> String {
     let mut n = 1usize;
     loop {
         let candidate = format!("b-{kind}-{n}");

@@ -1,0 +1,80 @@
+---
+title: "Saltmere Kayak Co"
+type: website
+version: 1
+created: 2026-10-04
+updated: 2026-10-04
+author: "Study 10"
+status: active
+---
+
+::site
+name: Saltmere Kayak Co
+description: Guided sea kayak tours and rentals on Saltmere Harbour.
+accent: #0b6e8a
+theme: light
+::
+
+::page[route="/" title="Tours"]
+
+::hero[align=center]
+# Paddle the quiet side of Saltmere Harbour
+The Harbour Loop Tour takes small groups past the seal rocks and the old lighthouse in three easy hours.
+[Book a tour](/contact){primary}
+[See prices](/prices)
+::
+
+::features[cols=3]
+### Small groups
+Never more than eight paddlers per guide, so nobody gets left behind.
+### All gear included
+Every Harbour Loop Tour comes with a kayak, paddle, spray skirt and dry bag.
+### Beginner friendly
+Our guides teach the basics on the beach before anyone gets wet.
+::
+
+::
+
+::page[route="/pricing" title="Pricing"]
+
+# Tours and rentals
+
+Prices are per person and include all safety gear.
+
+::pricing-table
+| Option | Price | Includes |
+|--------|-------|----------|
+| Harbour Loop Tour | $45 | Three hour guided tour |
+| Sunset Paddle | $62 | Evening tour with hot drinks |
+| Full Day Rental | $80 | Single kayak from nine to five |
+::
+
+::faq
+### Do I need experience?
+No. Most of our guests have never paddled before.
+### What should I bring?
+Bring water, sunscreen and a change of clothes.
+### What if the weather is bad?
+We reschedule or refund any tour cancelled for weather.
+::
+
+::
+
+::page[route="/contact" title="Contact"]
+
+# Get in touch
+
+Ask about the Harbour Loop Tour, group bookings or anything else.
+
+::form[submit="Send message"]
+- Full name (text) *
+- Email (email) *
+- Message (textarea) *
+::
+
+## Find us
+
+- **Address** - 4 Slipway Road, Saltmere Harbour
+- **Phone** - (555) 0142
+
+::

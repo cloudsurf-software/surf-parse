@@ -22,6 +22,7 @@ pub mod citation;
 pub(crate) mod diagram;
 pub mod diagram_scene;
 pub mod edit;
+pub mod fields;
 pub mod error;
 pub mod icons;
 mod icons_vendored;

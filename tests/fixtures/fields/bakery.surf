@@ -1,0 +1,80 @@
+---
+title: "Lantern Street Bakery"
+type: website
+version: 1
+created: 2026-10-04
+updated: 2026-10-04
+author: "Study 10"
+status: active
+---
+
+::site
+name: Lantern Street Bakery
+description: Naturally leavened bread and pastry baked every morning in Saltmere Harbour.
+accent: #b4541a
+theme: light
+::
+
+::page[route="/" title="Bakery"]
+
+::hero[align=center]
+# Bread worth getting up early for
+The Saltmere Sourdough Box brings two fresh loaves and a pastry to your door each week.
+[Order a box](/contact){primary}
+[See prices](/prices)
+::
+
+::features[cols=3]
+### Baked at dawn
+Every loaf leaves the oven before six and is on the shelf by seven.
+### Local flour
+The Saltmere Sourdough Box uses stoneground flour from the mill upriver.
+### No shortcuts
+Our dough ferments for a full day and contains only flour, water and salt.
+::
+
+::
+
+::page[route="/pricing" title="Pricing"]
+
+# Boxes and loaves
+
+Weekly boxes are delivered on Saturday morning.
+
+::pricing-table
+| Option | Price | Includes |
+|--------|-------|----------|
+| Saltmere Sourdough Box | $18 | Two loaves and a pastry each week |
+| Family Box | $31 | Four loaves and six pastries each week |
+| Single Loaf | $7 | One country loaf from the counter |
+::
+
+::faq
+### Do you deliver?
+Yes. We deliver anywhere inside the harbour wall.
+### Can I pause my box?
+You can pause or cancel any week before Thursday noon.
+### Do you bake gluten free bread?
+Not yet. Our kitchen handles wheat every day.
+::
+
+::
+
+::page[route="/contact" title="Contact"]
+
+# Talk to the bakery
+
+Questions about the Saltmere Sourdough Box or a large order? Write to us.
+
+::form[submit="Send note"]
+- Full name (text) *
+- Email (email) *
+- Message (textarea) *
+::
+
+## Find us
+
+- **Address** - 17 Lantern Street, Saltmere Harbour
+- **Phone** - (555) 0167
+
+::

@@ -1,0 +1,80 @@
+---
+title: "Gullwing Bike Hire"
+type: website
+version: 1
+created: 2026-10-04
+updated: 2026-10-04
+author: "Study 10"
+status: active
+---
+
+::site
+name: Gullwing Bike Hire
+description: Bike hire and repairs at the start of the Saltmere coast path.
+accent: #2f7d4f
+theme: light
+::
+
+::page[route="/" title="Bikes"]
+
+::hero[align=center]
+# Ride the coast path at your own pace
+A Coast Path Day Pass gets you a tuned bike, a helmet and a map of the best stops.
+[Reserve a bike](/contact){primary}
+[See prices](/prices)
+::
+
+::features[cols=3]
+### Well kept bikes
+Every bike is serviced weekly by our own mechanics.
+### Helmet and lock
+A Coast Path Day Pass includes a helmet, a lock and a repair kit.
+### Open early
+We open at seven so you can beat the afternoon wind.
+::
+
+::
+
+::page[route="/pricing" title="Pricing"]
+
+# Hire prices
+
+All hires include a helmet and a lock.
+
+::pricing-table
+| Option | Price | Includes |
+|--------|-------|----------|
+| Coast Path Day Pass | $28 | One bike from seven to six |
+| Half Day Hire | $19 | One bike for four hours |
+| Electric Bike Day | $54 | One electric bike with a charged battery |
+::
+
+::faq
+### Do you have child seats?
+Yes. Child seats and trailers are free with any hire.
+### Is a deposit required?
+We hold a card on file but take no deposit.
+### Can I return the bike late?
+Late returns are charged at the half day rate.
+::
+
+::
+
+::page[route="/contact" title="Contact"]
+
+# Contact the shop
+
+Reserve a Coast Path Day Pass or ask about repairs.
+
+::form[submit="Send request"]
+- Full name (text) *
+- Email (email) *
+- Message (textarea) *
+::
+
+## Find us
+
+- **Address** - 2 Seawall Parade, Saltmere Harbour
+- **Phone** - (555) 0119
+
+::

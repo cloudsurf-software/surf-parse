@@ -38,6 +38,15 @@ degradation = "markdown table"
 enum_variant = "Alternatives"
 
 [blocks.callout]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "type", kind = "choice", member = "callout_type", required = true, choices = ["info", "warning", "danger", "tip", "note", "success", "context"] },
+    { name = "title", kind = "text", max = 80 },
+    { name = "body", kind = "richtext", member = "content", max = 800 },
+]
+lists = [
+]
+fields_admitted = true
 status = "implemented"
 category = "core"
 purpose = "Styled callout"
@@ -86,6 +95,15 @@ degradation = "omitted"
 enum_variant = "Css"
 
 [blocks.cta]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "label", kind = "text", max = 60, required = true },
+    { name = "href", kind = "link", required = true },
+    { name = "primary", kind = "flag" },
+]
+lists = [
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Call-to-action button"
@@ -94,6 +112,15 @@ degradation = "markdown link"
 enum_variant = "Cta"
 
 [blocks.data]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "caption", kind = "text", max = 160 },
+]
+lists = [
+    { name = "rows", max = 200, item = "columns" },
+]
+fields_raw = ["raw_content"]
+fields_admitted = true
 status = "implemented"
 category = "data"
 purpose = "Structured data table, or one sheet of a `type: spreadsheet` workbook; a trailing `total: a | b | c` line becomes the summary row; `source=` references out-of-line rows carrying `rows=`/`cols=` counts"
@@ -143,6 +170,13 @@ degradation = "link to source"
 enum_variant = "Embed"
 
 [blocks.faq]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "items", max = 30, item = [{ name = "question", kind = "text", max = 200 }, { name = "answer", kind = "richtext", max = 1000 }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Accordion FAQ"
@@ -175,6 +209,18 @@ degradation = "inline parenthetical"
 enum_variant = "Footnote"
 
 [blocks.form]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "submit_label", kind = "text", max = 40 },
+]
+# A form field's `name` follows its label (the parser derives it), so the write
+# check leaves it out; `type` and `placeholder` failed set-then-read-back on
+# choice fields and are not exposed.
+fields_raw = ["name"]
+lists = [
+    { name = "fields", max = 20, blank = { name = "", field_type = "text", options = [] }, item = [{ name = "label", kind = "text", max = 60 }, { name = "required", kind = "flag" }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden, range); a `group: Label` line or a `:::step[title=…]` child opens a fieldset; steps=true (0.32.0) makes every fieldset one step of a CSS-only stepped form; model= (0.33.0) posts one row to /_api/{model} and reads the model's own field lines"
@@ -183,6 +229,13 @@ degradation = "labeled list"
 enum_variant = "Form"
 
 [blocks.gallery]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "items", max = 60, item = [{ name = "src", kind = "image" }, { name = "caption", kind = "text", max = 160 }, { name = "alt", kind = "text", max = 160 }, { name = "category", kind = "text", max = 40 }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Image gallery. The attribute is spelled columns here (cols on ::features); it accepts a per-size-class triple and, when absent, falls back to the item-count heuristic"
@@ -215,6 +268,16 @@ degradation = "bulleted list of names"
 enum_variant = "LogoCloud"
 
 [blocks.metric]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "label", kind = "text", max = 60, required = true },
+    { name = "value", kind = "text", max = 40, required = true },
+    { name = "unit", kind = "text", max = 16 },
+    { name = "trend", kind = "choice", choices = ["up", "down", "flat"] },
+]
+lists = [
+]
+fields_admitted = true
 status = "implemented"
 category = "data"
 purpose = "Single metric display; with max= it also draws a gauge"
@@ -255,6 +318,13 @@ degradation = "bulleted link list"
 enum_variant = "ProductGrid"
 
 [blocks.pricing-table]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "rows", max = 40, item = "columns" },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Pricing comparison; highlight= features a tier, current= marks the viewer's own"
@@ -287,6 +357,15 @@ degradation = "ordered list of step labels"
 enum_variant = "Progress"
 
 [blocks.quote]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "text", kind = "richtext", member = "content", max = 600 },
+    { name = "attribution", kind = "text", max = 80 },
+    { name = "cite", kind = "text", max = 160 },
+]
+lists = [
+]
+fields_admitted = true
 status = "implemented"
 category = "core"
 purpose = "Attributed quotation"
@@ -351,6 +430,16 @@ degradation = "checkbox list"
 enum_variant = "Tasks"
 
 [blocks.testimonial]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "quote", kind = "richtext", member = "content", max = 600 },
+    { name = "author", kind = "text", max = 80 },
+    { name = "role", kind = "text", max = 80 },
+    { name = "company", kind = "text", max = 80 },
+]
+lists = [
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Customer quote"
@@ -377,6 +466,19 @@ enum_variant = "Turn"
 # ----- Landing-page / marketing blocks -----
 
 [blocks.hero]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "headline", kind = "text", max = 120 },
+    { name = "subtitle", kind = "richtext", max = 300 },
+    { name = "badge", kind = "text", max = 40 },
+    { name = "image", kind = "image" },
+    { name = "image_alt", kind = "text", max = 160 },
+]
+lists = [
+    { name = "buttons", max = 3, item = [{ name = "label", kind = "text", max = 40 }, { name = "href", kind = "link" }, { name = "primary", kind = "flag" }] },
+]
+fields_raw = ["content"]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Full hero section with headline, subtitle, badge, and CTA buttons — `video=` (0.37.0) plays a muted, looping background video behind the headline, with `poster=` (else `image`) as its still picture"
@@ -385,6 +487,13 @@ degradation = "heading with subtitle and links"
 enum_variant = "Hero"
 
 [blocks.features]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "cards", max = 12, item = [{ name = "title", kind = "text", max = 80 }, { name = "body", kind = "richtext", max = 400 }, { name = "icon", kind = "text", max = 40 }, { name = "link_label", kind = "text", max = 40, with = "link_href" }, { name = "link_href", kind = "link", with = "link_label" }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Card grid for features, products, or value propositions. cols accepts a per-size-class triple (cols=\"1 2 3\", mobile/tablet/desktop order); a single value broadcasts to all classes"
@@ -393,6 +502,13 @@ degradation = "heading/body pairs"
 enum_variant = "Features"
 
 [blocks.steps]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "steps", max = 12, item = [{ name = "title", kind = "text", max = 80 }, { name = "time", kind = "text", max = 40 }, { name = "body", kind = "richtext", max = 400 }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Numbered process or timeline steps with optional time estimates"
@@ -401,6 +517,13 @@ degradation = "ordered list with headings"
 enum_variant = "Steps"
 
 [blocks.stats]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "items", max = 8, item = [{ name = "value", kind = "text", max = 24 }, { name = "label", kind = "text", max = 60 }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Row of metric/stat cards with value and label"
@@ -409,6 +532,13 @@ degradation = "bulleted value list"
 enum_variant = "Stats"
 
 [blocks.comparison]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+]
+lists = [
+    { name = "rows", max = 40, item = "columns" },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Feature comparison matrix with check/dash rendering and column highlight"
@@ -457,6 +587,21 @@ degradation = "heading with content"
 enum_variant = "Section"
 
 [blocks.product-card]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "title", kind = "text", max = 80, required = true },
+    { name = "subtitle", kind = "text", max = 160 },
+    { name = "badge", kind = "text", max = 30 },
+    { name = "body", kind = "richtext", max = 600 },
+    { name = "price", kind = "price", max = 24 },
+    { name = "currency", kind = "text", max = 8 },
+    { name = "cta_label", kind = "text", max = 40, with = "cta_href" },
+    { name = "cta_href", kind = "link", with = "cta_label" },
+]
+lists = [
+    { name = "features", max = 12, shape = "string", item = [{ name = "text", kind = "text", max = 120 }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "web"
 purpose = "Rich product card with badge, body text, feature list, and CTA"
@@ -741,6 +886,18 @@ degradation = "single-line description"
 enum_variant = "Row"
 
 [blocks.infocard]
+# Field rows (the AI harness reads and writes these names, never block source).
+fields = [
+    { name = "title", kind = "text", max = 80 },
+    { name = "subtitle", kind = "text", max = 160 },
+    { name = "summary", kind = "richtext", max = 400 },
+    { name = "image", kind = "image" },
+]
+lists = [
+    { name = "facts", max = 12, shape = "pair", item = [{ name = "label", kind = "text", max = 40 }, { name = "value", kind = "text", max = 120 }] },
+    { name = "steps", max = 12, shape = "string", item = [{ name = "text", kind = "text", max = 160 }] },
+]
+fields_admitted = true
 status = "implemented"
 category = "utility"
 purpose = "Knowledge/info card with title, subtitle, summary, facts table, and optional image"

@@ -19,6 +19,11 @@ crate-type = ["cdylib", "rlib"]
 # (e.g. `cargo build --features cli`, `cargo test --features cli`), so
 # `cdylib`/wasm consumers never inherit clap.
 [[bin]]
+name = "surf-fields"
+path = "src/bin/surf-fields.rs"
+required-features = ["cli"]
+
+[[bin]]
 name = "surf-lint"
 path = "src/bin/surf-lint.rs"
 required-features = ["cli"]
