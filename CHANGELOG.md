@@ -29,6 +29,36 @@ document renders byte for byte (`fold=never` and `fold=always` are untouched).
   bucket from an authored value, two estimates, the last bucket, the older folds untouched), the builder round trip,
   the DOM identity fixture's third block, and `css_coverage` pins the row's rule and every bucket's query.
 
+## 0.39.1 — 2026-10-06 (the AI harness arranges by id and changes kind by table — TASK-1446, steps 2.3 and 2.4 of the in-the-app plan)
+
+The harness's round 3 on laguna-s (97.3% first try on the thirty edit tasks) left arranging at 77.5%: a FAQ turned
+into cards copied each question into the card's icon and link label (the model was asked to map fields and mapped
+the two that are not words), and a new block landed at the top of a page the request put it at the bottom of. Both
+are the module's to fix, not the model's. Additive — a 0.39.0 document renders byte for byte.
+
+- **Two-id arrange ops.** `put_before {block, before}`, `put_after {block, after}` and `switch_positions {block,
+  other}` name two blocks on one page and nothing else; the words that pick a position are gone from the offered
+  set (`move_block` stays in the module for the raw lane). `add_block` takes `after = "top"` and `after = "end"`
+  as words beside a block id (`null` still means the top).
+- **A change of kind carries words by table.** `[fields].synonyms` in `spec/blocks.toml` lists the names that mean
+  the same thing to a reader (`title · headline · question · name · label · caption`; `body · answer · text ·
+  summary · quote · content`; `attribution · author`; `items · rows · steps · cards · facts · features`).
+  `swap_block` carries the old block's fields into the new one by name first, then by synonym — prose fields only
+  (text, richtext, price); an icon, a link, an image, a flag or a choice never carries and nothing is invented for a
+  field with no counterpart — and one list onto one list (the same name, a synonym, or the only list there is), item
+  by item, the same way. A field that only means something beside another (`with`) is carried only with its
+  partner. What the op writes itself wins over the carry. The caller names the new kind and nothing else.
+- **Keyword rows.** Every admitted kind carries `keywords = [...]` in the registry — the words a person uses for it
+  (`prices` → pricing-table, `questions` → faq, `photos` → gallery, `sign up` → form, cta) — exposed by
+  `surf-fields kinds` as `keywords` per kind, with the synonym rows as `synonyms`.
+- **Principal fields are required.** A hero's headline, a testimonial's quote, a quote's text, a callout's body, an
+  infocard's and a product-card's title, a card's and a step's title, a question and its answer, a stat's value and
+  label, a gallery item's src and a form field's label carry `required = true`: a schema built from the rows asks
+  the model for them, and a write cannot clear them (round 3 added a testimonial with no quote).
+- Tests: the two-id ops and the words top and end; the three carries (FAQ → cards with empty icon and link,
+  cards → steps, testimonial → quote) and the op winning over the carry; the keyword and synonym rows and the
+  required refusal.
+
 ## 0.39.0 — 2026-10-06 (the navigator controls — `::segmented-control` icons, tints and `fold=always`; `::filter-bar` as a chip row; TASK-1373's walk, the CloudSurf web Docs panel)
 
 The web Docs panel at app.cloudsurf.com is spec-driven, and its head read as a form because the two navigator

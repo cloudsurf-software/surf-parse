@@ -13,6 +13,18 @@ spec_version = "0.1"
 total_blocks = 131
 registry_updated = "2026-10-01"
 
+[fields]
+# Change of kind (the AI harness, 0.39.1): a field or a list in one row means the same thing to a reader, so a swap
+# from one kind to another carries text across the row when the names differ (a FAQ's question becomes a card's
+# title, its answer the card's body). Prose only — text, richtext and price fields; an icon, a link, an image, a flag
+# or a choice never carries, and nothing is invented for a field with no counterpart.
+synonyms = [
+    ["title", "headline", "question", "name", "label", "caption"],
+    ["body", "answer", "text", "summary", "quote", "content"],
+    ["attribution", "author"],
+    ["items", "rows", "steps", "cards", "facts", "features"],
+]
+
 [blocks.ai-context]
 status = "implemented"
 category = "advanced"
@@ -42,10 +54,12 @@ enum_variant = "Alternatives"
 fields = [
     { name = "type", kind = "choice", member = "callout_type", required = true, choices = ["info", "warning", "danger", "tip", "note", "success", "context"] },
     { name = "title", kind = "text", max = 80 },
-    { name = "body", kind = "richtext", member = "content", max = 800 },
+    { name = "body", kind = "richtext", member = "content", max = 800, required = true },
 ]
 lists = [
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["note", "warning", "tip", "notice", "alert", "important", "heads up"]
 fields_admitted = true
 status = "implemented"
 category = "core"
@@ -103,6 +117,8 @@ fields = [
 ]
 lists = [
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["button", "call to action", "sign up", "book", "contact us", "subscribe", "link", "get started"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -120,6 +136,8 @@ lists = [
     { name = "rows", max = 200, item = "columns" },
 ]
 fields_raw = ["raw_content"]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["table", "rows", "data", "schedule", "hours", "opening hours", "timetable", "list"]
 fields_admitted = true
 status = "implemented"
 category = "data"
@@ -174,8 +192,10 @@ enum_variant = "Embed"
 fields = [
 ]
 lists = [
-    { name = "items", max = 30, item = [{ name = "question", kind = "text", max = 200 }, { name = "answer", kind = "richtext", max = 1000 }] },
+    { name = "items", max = 30, item = [{ name = "question", kind = "text", max = 200, required = true }, { name = "answer", kind = "richtext", max = 1000, required = true }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["questions", "answers", "faq", "ask", "help", "common questions", "q and a"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -218,8 +238,10 @@ fields = [
 # choice fields and are not exposed.
 fields_raw = ["name"]
 lists = [
-    { name = "fields", max = 20, blank = { name = "", field_type = "text", options = [] }, item = [{ name = "label", kind = "text", max = 60 }, { name = "required", kind = "flag" }] },
+    { name = "fields", max = 20, blank = { name = "", field_type = "text", options = [] }, item = [{ name = "label", kind = "text", max = 60, required = true }, { name = "required", kind = "flag" }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["form", "sign up", "sign-up", "updates", "contact form", "subscribe", "email", "newsletter", "register", "enquiry", "booking"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -233,8 +255,10 @@ enum_variant = "Form"
 fields = [
 ]
 lists = [
-    { name = "items", max = 60, item = [{ name = "src", kind = "image" }, { name = "caption", kind = "text", max = 160 }, { name = "alt", kind = "text", max = 160 }, { name = "category", kind = "text", max = 40 }] },
+    { name = "items", max = 60, item = [{ name = "src", kind = "image", required = true }, { name = "caption", kind = "text", max = 160 }, { name = "alt", kind = "text", max = 160 }, { name = "category", kind = "text", max = 40 }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["photos", "pictures", "images", "gallery", "portfolio", "shots", "photographs"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -277,6 +301,8 @@ fields = [
 ]
 lists = [
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["number", "figure", "kpi", "value", "count", "one number"]
 fields_admitted = true
 status = "implemented"
 category = "data"
@@ -324,6 +350,8 @@ fields = [
 lists = [
     { name = "rows", max = 40, item = "columns" },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["prices", "pricing", "plans", "rates", "tiers", "cost", "fees", "how much"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -359,12 +387,14 @@ enum_variant = "Progress"
 [blocks.quote]
 # Field rows (the AI harness reads and writes these names, never block source).
 fields = [
-    { name = "text", kind = "richtext", member = "content", max = 600 },
+    { name = "text", kind = "richtext", member = "content", max = 600, required = true },
     { name = "attribution", kind = "text", max = 80 },
     { name = "cite", kind = "text", max = 160 },
 ]
 lists = [
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["quote", "saying", "pull quote", "words", "cite", "line"]
 fields_admitted = true
 status = "implemented"
 category = "core"
@@ -432,13 +462,15 @@ enum_variant = "Tasks"
 [blocks.testimonial]
 # Field rows (the AI harness reads and writes these names, never block source).
 fields = [
-    { name = "quote", kind = "richtext", member = "content", max = 600 },
+    { name = "quote", kind = "richtext", member = "content", max = 600, required = true },
     { name = "author", kind = "text", max = 80 },
     { name = "role", kind = "text", max = 80 },
     { name = "company", kind = "text", max = 80 },
 ]
 lists = [
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["review", "customer quote", "customer", "said", "feedback", "rating", "what people say"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -468,7 +500,7 @@ enum_variant = "Turn"
 [blocks.hero]
 # Field rows (the AI harness reads and writes these names, never block source).
 fields = [
-    { name = "headline", kind = "text", max = 120 },
+    { name = "headline", kind = "text", max = 120, required = true },
     { name = "subtitle", kind = "richtext", max = 300 },
     { name = "badge", kind = "text", max = 40 },
     { name = "image", kind = "image" },
@@ -478,6 +510,8 @@ lists = [
     { name = "buttons", max = 3, item = [{ name = "label", kind = "text", max = 40 }, { name = "href", kind = "link" }, { name = "primary", kind = "flag" }] },
 ]
 fields_raw = ["content"]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["headline", "banner", "top of the page", "intro", "welcome", "cover", "opening"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -491,8 +525,10 @@ enum_variant = "Hero"
 fields = [
 ]
 lists = [
-    { name = "cards", max = 12, item = [{ name = "title", kind = "text", max = 80 }, { name = "body", kind = "richtext", max = 400 }, { name = "icon", kind = "text", max = 40 }, { name = "link_label", kind = "text", max = 40, with = "link_href" }, { name = "link_href", kind = "link", with = "link_label" }] },
+    { name = "cards", max = 12, item = [{ name = "title", kind = "text", max = 80, required = true }, { name = "body", kind = "richtext", max = 400 }, { name = "icon", kind = "text", max = 40 }, { name = "link_label", kind = "text", max = 40, with = "link_href" }, { name = "link_href", kind = "link", with = "link_label" }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["cards", "feature", "benefits", "services", "highlights", "grid", "why us", "what we offer"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -506,8 +542,10 @@ enum_variant = "Features"
 fields = [
 ]
 lists = [
-    { name = "steps", max = 12, item = [{ name = "title", kind = "text", max = 80 }, { name = "time", kind = "text", max = 40 }, { name = "body", kind = "richtext", max = 400 }] },
+    { name = "steps", max = 12, item = [{ name = "title", kind = "text", max = 80, required = true }, { name = "time", kind = "text", max = 40 }, { name = "body", kind = "richtext", max = 400 }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["steps", "how it works", "process", "numbered", "stages", "instructions", "in order"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -521,8 +559,10 @@ enum_variant = "Steps"
 fields = [
 ]
 lists = [
-    { name = "items", max = 8, item = [{ name = "value", kind = "text", max = 24 }, { name = "label", kind = "text", max = 60 }] },
+    { name = "items", max = 8, item = [{ name = "value", kind = "text", max = 24, required = true }, { name = "label", kind = "text", max = 60, required = true }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["numbers", "figures", "stat", "count", "key numbers", "at a glance", "how many"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -538,6 +578,8 @@ fields = [
 lists = [
     { name = "rows", max = 40, item = "columns" },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["compare", "compare plans", "versus", "vs", "side by side", "difference", "which plan", "plans"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -601,6 +643,8 @@ fields = [
 lists = [
     { name = "features", max = 12, shape = "string", item = [{ name = "text", kind = "text", max = 120 }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["product", "price", "prices", "item", "offer", "buy", "pass", "package", "deal"]
 fields_admitted = true
 status = "implemented"
 category = "web"
@@ -888,7 +932,7 @@ enum_variant = "Row"
 [blocks.infocard]
 # Field rows (the AI harness reads and writes these names, never block source).
 fields = [
-    { name = "title", kind = "text", max = 80 },
+    { name = "title", kind = "text", max = 80, required = true },
     { name = "subtitle", kind = "text", max = 160 },
     { name = "summary", kind = "richtext", max = 400 },
     { name = "image", kind = "image" },
@@ -897,6 +941,8 @@ lists = [
     { name = "facts", max = 12, shape = "pair", item = [{ name = "label", kind = "text", max = 40 }, { name = "value", kind = "text", max = 120 }] },
     { name = "steps", max = 12, shape = "string", item = [{ name = "text", kind = "text", max = 160 }] },
 ]
+# Keyword row: the words a person uses for this kind (search_blocks and `sdd catalogue` read it).
+keywords = ["card", "profile", "summary", "info", "about", "facts", "bio", "who we are"]
 fields_admitted = true
 status = "implemented"
 category = "utility"

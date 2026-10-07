@@ -15,6 +15,12 @@
 //! write (`id=` first of all), splices the result over the old span, and then
 //! checks its own work by parsing the result. A write that does not parse back
 //! to the intended block is refused, not returned.
+//!
+//! Arranging is by id, never by position: `put_before`, `put_after` and
+//! `switch_positions` name two blocks; `add_block` names the block the new one
+//! follows, or the words `top` and `end`. A change of kind (`swap_block`)
+//! carries the old block's words into the new one through the registry's
+//! synonym rows, so the caller names the new kind and nothing else.
 
 use crate::edit::{self, BlockRef};
 use crate::types::Block;
@@ -134,11 +140,14 @@ pub struct KindSchema {
     pub raw: Vec<String>,
     /// The admission gate's verdict, recorded in the registry.
     pub admitted: bool,
+    /// The words a person uses for this kind (`keywords` in the registry): what
+    /// a block search ranks by, beside the key and the purpose.
+    pub keywords: Vec<String>,
 }
 
 impl KindSchema {
     fn json(&self) -> Value {
-        json!({"kind": self.kind, "purpose": self.purpose, "admitted": self.admitted,
+        json!({"kind": self.kind, "purpose": self.purpose, "admitted": self.admitted, "keywords": self.keywords,
                "fields": self.fields.iter().map(FieldRow::json).collect::<Vec<_>>(),
                "lists": self.lists.iter().map(|l| l.json(None)).collect::<Vec<_>>()})
     }
@@ -162,9 +171,28 @@ pub fn kinds() -> Vec<KindSchema> {
                 lists: rows("lists").try_into().expect("list rows are well formed"),
                 raw: rows("fields_raw").try_into().unwrap_or_default(),
                 admitted: t.get("fields_admitted").and_then(|v| v.as_bool()).unwrap_or(false),
+                keywords: rows("keywords").try_into().unwrap_or_default(),
             }
         })
         .collect()
+}
+
+/// The registry's synonym rows (`[fields].synonyms`): names that mean the same
+/// thing to a reader, so a change of kind carries text across them.
+pub fn synonyms() -> Vec<Vec<String>> {
+    let value: toml::Value = toml::from_str(crate::spec_registry::BLOCKS_TOML).expect("spec/blocks.toml parses");
+    value.get("fields").and_then(|f| f.get("synonyms")).cloned().and_then(|v| v.try_into().ok()).unwrap_or_default()
+}
+
+/// The same name, or two names of one synonym row.
+fn same_name(a: &str, b: &str) -> bool {
+    a == b || synonyms().iter().any(|row| row.iter().any(|x| x == a) && row.iter().any(|x| x == b))
+}
+
+/// A field that holds words: the only kind a change of kind carries by
+/// synonym. An icon, a link, an image, a flag or a choice never does.
+fn prose(f: &FieldRow) -> bool {
+    matches!(f.kind.as_str(), "text" | "richtext" | "price") && f.choices.is_none()
 }
 
 /// The field schema of one kind, `None` when the registry has no rows for it.
@@ -619,14 +647,8 @@ fn fresh(kind: &str, op: &Value, carry_from: Option<(&KindSchema, &Value)>, id: 
         v["headers"] = Value::Array(first.keys().map(|k| json!(k)).collect());
     }
     if let Some((old_sch, old)) = carry_from {
-        for f in &sch.fields {
-            if let Some(o) = old_sch.fields.iter().find(|o| o.name == f.name) {
-                let cur = shown(&old[o.member()]);
-                if check(f, &cur, false).is_ok() && !cur.is_null() {
-                    put(&mut v, f, &cur);
-                }
-            }
-        }
+        carry_fields(&mut v, &sch, old_sch, old);
+        carry_lists(&mut v, &sch, old_sch, old, op)?;
     }
     set_fields(&mut v, &sch.fields, &op["fields"])?;
     for (name, items) in op["lists"].as_object().into_iter().flatten() {
@@ -644,6 +666,96 @@ fn fresh(kind: &str, op: &Value, carry_from: Option<(&KindSchema, &Value)>, id: 
     }
     let b = edit::list_blocks(&stub).into_iter().next().ok_or_else(|| no("the stub did not parse"))?;
     write_block(&stub, &b, &mut v, &sch).map_err(no)
+}
+
+/// A change of kind carries the old block's fields into the new one: by name
+/// first (any kind of field), then by synonym (prose only), each old value
+/// landing once. A field that is only meaningful beside another (`with`) is
+/// carried only when its partner is.
+fn carry_fields(v: &mut Value, sch: &KindSchema, old_sch: &KindSchema, old: &Value) {
+    let (mut filled, mut used): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    for by_name in [true, false] {
+        for f in &sch.fields {
+            if filled.contains(&f.name) {
+                continue;
+            }
+            let fits = |o: &&FieldRow| !used.contains(&o.name) && if by_name { o.name == f.name } else { prose(f) && prose(o) && same_name(&f.name, &o.name) };
+            let Some(o) = old_sch.fields.iter().find(fits) else { continue };
+            let cur = shown(&old[o.member()]);
+            if !cur.is_null() && check(f, &cur, false).is_ok() {
+                put(v, f, &cur);
+                filled.push(f.name.clone());
+                used.push(o.name.clone());
+            }
+        }
+    }
+    for f in sch.fields.iter().filter(|f| filled.contains(&f.name)) {
+        if let Some(w) = &f.with {
+            if !filled.contains(w) {
+                put(v, f, &Value::Null);
+            }
+        }
+    }
+}
+
+/// A change of kind carries one list onto one list — the same name, a
+/// synonym, or the only list there is — item by item, prose fields by name
+/// then by synonym. A list the op writes itself is left to the op.
+fn carry_lists(v: &mut Value, sch: &KindSchema, old_sch: &KindSchema, old: &Value, op: &Value) -> Result<(), Refusal> {
+    let plain = |l: &ListRow| !l.is_table() && l.shape.is_none();
+    let had: Vec<&ListRow> = old_sch.lists.iter().filter(|l| plain(l) && old[l.member()].as_array().is_some_and(|a| !a.is_empty())).collect();
+    for l in sch.lists.iter().filter(|l| plain(l) && op["lists"][&l.name].is_null()) {
+        let ol = had.iter().find(|o| o.name == l.name).or_else(|| had.iter().find(|o| same_name(&l.name, &o.name)))
+            .or_else(|| if had.len() == 1 { had.first() } else { None });
+        let Some(ol) = ol else { continue };
+        let (new_rows, old_rows) = (l.item_fields(v), ol.item_fields(old));
+        let mut raws = Vec::new();
+        for item in old[ol.member()].as_array().into_iter().flatten().take(l.max) {
+            let was = item_out(ol, old, item);
+            let (mut fields, mut used): (Map<String, Value>, Vec<String>) = (Map::new(), Vec::new());
+            for by_name in [true, false] {
+                for nf in new_rows.iter().filter(|nf| prose(nf)) {
+                    if fields.contains_key(&nf.name) {
+                        continue;
+                    }
+                    let fits = |of: &&FieldRow| prose(of) && !used.contains(&of.name) && if by_name { of.name == nf.name } else { same_name(&nf.name, &of.name) };
+                    let Some(of) = old_rows.iter().find(fits) else { continue };
+                    let cur = &was[&of.name];
+                    if !cur.is_null() && check(nf, cur, false).is_ok() {
+                        fields.insert(nf.name.clone(), cur.clone());
+                        used.push(of.name.clone());
+                    }
+                }
+            }
+            if fields.is_empty() {
+                continue;
+            }
+            let mut raw = Value::Null;
+            item_in(l, v, &mut raw, &Value::Object(fields))?;
+            raws.push(raw);
+        }
+        if !raws.is_empty() {
+            v[l.member()] = Value::Array(raws);
+        }
+    }
+    Ok(())
+}
+
+/// The end of a page's body: where a block goes that comes last.
+fn page_end(src: &str, page: &BlockRef) -> usize {
+    src[..page.end_offset].trim_end_matches('\n').rfind('\n').map(|n| n + 1).unwrap_or(page.end_offset)
+}
+
+/// Two blocks of one op, on one page, as `(first, second)` by position.
+fn two(src: &str, route: Option<&str>, a: &str, b: &str) -> Result<(BlockRef, BlockRef), Refusal> {
+    if a == b {
+        return Err(no("the two blocks are one block"));
+    }
+    let (x, y) = (edit::find(src, route, a).map_err(ed)?, edit::find(src, route, b).map_err(ed)?);
+    if x.route != y.route {
+        return Err(no(format!("{a} and {b} are on different pages")));
+    }
+    Ok((x, y))
 }
 
 fn page_ref(src: &str, route: &str) -> Result<BlockRef, Refusal> {
@@ -694,8 +806,12 @@ fn apply_one(src: &str, op: &Value) -> Result<(String, Option<String>), Refusal>
             let id = edit::next_free_id(kind, &edit::ids_on_page(&edit::list_blocks(src), Some(r)));
             let text = fresh(kind, op, None, &id)?;
             let out = match s(op, "after") {
-                Some(after) => edit::insert_after(src, route, after, &text).map_err(ed)?,
-                None => {
+                Some("end") => {
+                    let at = page_end(src, &page);
+                    edit::splice(src, at, at, &format!("\n{text}"))
+                }
+                Some(after) if after != "top" => edit::insert_after(src, route, after, &text).map_err(ed)?,
+                _ => {
                     let open_end = src[page.start_offset..].find('\n').map(|n| page.start_offset + n + 1).unwrap_or(src.len());
                     edit::splice(src, open_end, open_end, &format!("{text}\n"))
                 }
@@ -709,6 +825,25 @@ fn apply_one(src: &str, op: &Value) -> Result<(String, Option<String>), Refusal>
             Ok((edit::replace_block(src, route, &id, &text).map_err(ed)?, b.id))
         }
         "remove_block" => Ok((edit::remove_block(src, route, need(op, "block")?).map_err(ed)?, None)),
+        "put_before" => {
+            let (id, before) = (need(op, "block")?, need(op, "before")?);
+            two(src, route, id, before)?;
+            Ok((edit::move_block(src, route, id, before).map_err(ed)?, Some(id.to_string())))
+        }
+        "put_after" => {
+            let (id, after) = (need(op, "block")?, need(op, "after")?);
+            let (a, _) = two(src, route, id, after)?;
+            let text = src[a.start_offset..a.end_offset].to_string();
+            let cut = edit::remove_block(src, route, id).map_err(ed)?;
+            Ok((edit::insert_after(&cut, route, after, &text).map_err(ed)?, Some(id.to_string())))
+        }
+        "switch_positions" => {
+            let (id, other) = (need(op, "block")?, need(op, "other")?);
+            let (a, b) = two(src, route, id, other)?;
+            let (a, b) = if a.start_offset < b.start_offset { (a, b) } else { (b, a) };
+            let out = format!("{}{}{}{}{}", &src[..a.start_offset], &src[b.start_offset..b.end_offset], &src[a.end_offset..b.start_offset], &src[a.start_offset..a.end_offset], &src[b.end_offset..]);
+            Ok((out, Some(id.to_string())))
+        }
         "move_block" => {
             let id = need(op, "block")?;
             let out = match s(op, "before") {
@@ -909,7 +1044,7 @@ pub fn admit(sources: &[(String, String)]) -> Value {
 pub fn handle(req: &Value) -> Result<Value, String> {
     let source = || req["source"].as_str().ok_or_else(|| "the request needs `source`".to_string());
     match req["cmd"].as_str() {
-        Some("kinds") => Ok(json!({"crate_version": crate::spec_registry::CRATE_VERSION,
+        Some("kinds") => Ok(json!({"crate_version": crate::spec_registry::CRATE_VERSION, "synonyms": synonyms(),
                                    "kinds": kinds().iter().map(KindSchema::json).collect::<Vec<_>>()})),
         Some("stamp") => Ok(json!({"source": edit::stamp_ids(source()?)})),
         Some("pages") => Ok(pages(source()?)),

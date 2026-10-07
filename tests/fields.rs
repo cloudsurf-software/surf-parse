@@ -265,3 +265,82 @@ fn the_fixtures_pass_admission_for_every_kind_with_field_rows() {
     }
     assert_eq!(out["admitted"].as_array().unwrap().len(), 17);
 }
+
+fn order(source: &str, route: &str) -> Vec<String> {
+    read(source, route)["blocks"].as_array().unwrap().iter().filter_map(|b| b["id"].as_str().map(str::to_string)).collect()
+}
+
+#[test]
+fn arranging_is_by_id_put_before_put_after_switch_positions_and_the_words_top_and_end() {
+    let src = stamped(KAYAK);
+    assert_eq!(order(&src, "/pricing"), ["b-pricing-table-1", "b-faq-1"]);
+    let out = applied(&src, json!([{"op": "put_before", "route": "/pricing", "block": "b-faq-1", "before": "b-pricing-table-1"}]));
+    assert_eq!(order(&out, "/pricing"), ["b-faq-1", "b-pricing-table-1"]);
+    let out = applied(&src, json!([{"op": "put_after", "route": "/", "block": "b-hero-1", "after": "b-features-1"}]));
+    assert_eq!(order(&out, "/"), ["b-features-1", "b-hero-1"]);
+    let out = applied(&src, json!([{"op": "switch_positions", "route": "/", "block": "b-hero-1", "other": "b-features-1"}]));
+    assert_eq!(order(&out, "/"), ["b-features-1", "b-hero-1"]);
+    // The blocks themselves are untouched by a move, and the other pages are.
+    assert_eq!(block(&read(&out, "/"), "b-hero-1"), block(&read(&src, "/"), "b-hero-1"));
+    assert_eq!(read(&out, "/pricing"), read(&src, "/pricing"));
+    assert_eq!(refusal(&src, json!([{"op": "switch_positions", "route": "/", "block": "b-hero-1", "other": "b-hero-1"}]))["reason"], "the two blocks are one block");
+    assert!(refusal(&src, json!([{"op": "put_after", "block": "b-hero-1", "after": "b-faq-1"}]))["reason"].as_str().unwrap().contains("different pages"));
+    assert!(refusal(&src, json!([{"op": "put_before", "route": "/", "block": "b-hero-1", "before": "b-nowhere-9"}]))["reason"].as_str().unwrap().contains("b-nowhere-9"));
+    // add_block names the block the new one follows, or the words top and end.
+    let cta = json!({"label": "Book a tour", "href": "/contact"});
+    let out = applied(&src, json!([{"op": "add_block", "route": "/pricing", "after": "end", "kind": "cta", "fields": cta}]));
+    assert_eq!(order(&out, "/pricing"), ["b-pricing-table-1", "b-faq-1", "b-cta-1"]);
+    assert_eq!(field(block(&read(&out, "/pricing"), "b-cta-1"), "label"), "Book a tour");
+    let out = applied(&src, json!([{"op": "add_block", "route": "/pricing", "after": "top", "kind": "cta", "fields": cta}]));
+    assert_eq!(order(&out, "/pricing"), ["b-cta-1", "b-pricing-table-1", "b-faq-1"]);
+    let out = applied(&src, json!([{"op": "add_block", "route": "/pricing", "after": "b-pricing-table-1", "kind": "cta", "fields": cta}]));
+    assert_eq!(order(&out, "/pricing"), ["b-pricing-table-1", "b-cta-1", "b-faq-1"]);
+}
+
+#[test]
+fn a_change_of_kind_carries_words_by_synonym_and_never_an_icon_or_a_link() {
+    let src = stamped(KAYAK);
+    // A FAQ becomes cards: each question is a card's title, each answer its body; the icon and the link stay empty.
+    let out = applied(&src, json!([{"op": "swap_block", "route": "/pricing", "block": "b-faq-1", "kind": "features"}]));
+    let cards = items(block(&read(&out, "/pricing"), "b-faq-1"), "cards").clone();
+    let qs = items(block(&read(&src, "/pricing"), "b-faq-1"), "items").clone();
+    assert_eq!(cards.len(), qs.len());
+    for (c, q) in cards.iter().zip(&qs) {
+        assert_eq!((&c["title"], &c["body"]), (&q["question"], &q["answer"]));
+        assert!(c["icon"].is_null() && c["link_label"].is_null() && c["link_href"].is_null(), "{c}");
+    }
+    assert!(!out.contains("{icon=") && !out.contains("[]()"));
+    // Cards become steps with their titles and text.
+    let out = applied(&src, json!([{"op": "swap_block", "route": "/", "block": "b-features-1", "kind": "steps"}]));
+    let steps = items(block(&read(&out, "/"), "b-features-1"), "steps").clone();
+    let cards = items(block(&read(&src, "/"), "b-features-1"), "cards").clone();
+    let pair = |x: &Value| (x["title"].clone(), x["body"].clone());
+    assert_eq!(steps.iter().map(pair).collect::<Vec<_>>(), cards.iter().map(pair).collect::<Vec<_>>());
+    assert!(steps.iter().all(|s| s["time"].is_null()));
+    // A testimonial becomes a quote: the quote is its text, the author its attribution.
+    let all = every_kind();
+    let page = read(&all, "/all");
+    let id = page["blocks"].as_array().unwrap().iter().find(|b| b["kind"] == "testimonial").unwrap()["id"].as_str().unwrap().to_string();
+    let out = applied(&all, json!([{"op": "swap_block", "route": "/all", "block": id, "kind": "quote"}]));
+    let q = read(&out, "/all");
+    let q = block(&q, &id);
+    assert_eq!((q["kind"].as_str(), field(q, "text").as_str(), field(q, "attribution").as_str()), (Some("quote"), Some("Best morning of the trip."), Some("A paddler")));
+    // What the op writes itself wins over the carry.
+    let out = applied(&src, json!([{"op": "swap_block", "route": "/pricing", "block": "b-faq-1", "kind": "features", "lists": {"cards": [{"title": "One", "body": "Only"}]}}]));
+    assert_eq!(items(block(&read(&out, "/pricing"), "b-faq-1"), "cards").len(), 1);
+}
+
+#[test]
+fn the_registry_carries_keywords_and_synonyms_and_a_principal_field_cannot_be_cleared() {
+    let out = fields::handle(&json!({"cmd": "kinds"})).unwrap();
+    assert!(out["synonyms"].as_array().unwrap().iter().any(|r| r.as_array().unwrap().contains(&json!("question")) && r.as_array().unwrap().contains(&json!("title"))));
+    for k in out["kinds"].as_array().unwrap() {
+        assert!(!k["keywords"].as_array().unwrap().is_empty(), "{} has no keyword row", k["kind"]);
+    }
+    let required = |kind: &str, name: &str| out["kinds"].as_array().unwrap().iter().find(|k| k["kind"] == kind).unwrap()["fields"]
+        .as_array().unwrap().iter().find(|f| f["name"] == name).unwrap()["required"] == true;
+    assert!(required("hero", "headline") && required("testimonial", "quote") && required("quote", "text") && required("callout", "body"));
+    assert!(fields::schema("faq").unwrap().keywords.contains(&"questions".to_string()));
+    let r = refusal(&stamped(KAYAK), json!([{"op": "set_fields", "route": "/", "block": "b-hero-1", "fields": {"headline": null}}]));
+    assert_eq!((r["field"].as_str(), r["reason"].as_str()), (Some("headline"), Some("required, cannot be cleared")));
+}
