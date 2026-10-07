@@ -15794,9 +15794,9 @@ About
         // No fold-at: the estimate — two short labels with icons sit under 240.
         let est = crate::parse("::segmented-control[fold=auto]\n- all \"All\" {icon=layers}\n- docs \"Docs\"\n::").doc.to_html();
         assert!(est.contains("data-fold=\"auto\" data-fold-at=\"240\""), "{est}");
-        // The seven Docs kinds with glyphs estimate past 480 and under 560.
+        // The seven Docs kinds with glyphs estimate to 590 (seven icons, 46 label characters) — the 640 bucket.
         let seven = crate::parse("::segmented-control[active=all fold=auto]\n- all \"All\" {icon=layers}\n- docs \"Docs\" {icon=file-text}\n- spreadsheets \"Sheets\" {icon=clipboard}\n- presentations \"Decks\" {icon=layout}\n- notes \"Notes\" {icon=notebook}\n- folders \"Folders\" {icon=folder}\n- starred \"Starred\" {icon=star}\n::").doc.to_html();
-        assert!(seven.contains("data-fold-at=\"560\""), "{seven}");
+        assert!(seven.contains("data-fold-at=\"640\""), "{seven}");
         // Above the last bucket the last bucket holds; the two older folds never carry the attribute.
         let big = crate::parse("::segmented-control[fold=auto fold-at=9000]\n- a \"A\"\n::").doc.to_html();
         assert!(big.contains("data-fold-at=\"720\""), "{big}");
