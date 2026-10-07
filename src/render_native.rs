@@ -50,6 +50,9 @@
 //!   Executive summary box.
 //! - **`Figure`**
 //!   Image with optional caption and alt text.
+//! - **`SegmentedControl`** segments carry `icon` and `tint` (schema v16)
+//!   The brace group of a `::segmented-control` line, for the client's own
+//!   kind menu; `None` on a bare segment.
 //! - **`Video`** (schema v15)
 //!   A video for the client's own player. `src` and `poster` cross AS
 //!   AUTHORED — `media:<file-id>` / `media:<file-id>/poster` are library
@@ -1860,6 +1863,16 @@ pub struct NativeSegmentItem {
     pub id: String,
     /// The segment's display label (the id itself when none was quoted).
     pub label: String,
+    /// Schema v16 (0.40.0): the segment's glyph name from the brace group
+    /// (`{icon=file-text}`), `None` when the line carries none — the Mac
+    /// and iPhone draw the crate's kind menu from it instead of their own
+    /// glyph table. The name is the icon set's; an unknown name draws nothing.
+    pub icon: Option<String>,
+    /// Schema v16 (0.40.0): the segment's tint from the brace group
+    /// (`{tint=blue}`), one of [`crate::SEGMENT_TINTS`] or `None`; the
+    /// parser already dropped any other word, so a client may map it
+    /// straight to its palette.
+    pub tint: Option<String>,
 }
 
 /// One typed field within a native `Model` — a `- name: type [constraints]`
@@ -2547,7 +2560,12 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// (`::hero[video= poster=]`). `media:<file-id>` sources cross as authored
 /// for the client to resolve. `NativeBlock` is now a 132-variant enum
 /// (131 structural + `Markdown`).
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 15;
+/// v16 (0.40.0) — the navigator controls reach native: `NativeSegmentItem`
+/// gains `icon` (the glyph name) and `tint` (a `SEGMENT_TINTS` word), both
+/// `Option` and `None` for a bare segment, so the Mac and iPhone draw the
+/// crate's kind menu from the document instead of their own glyph table.
+/// Additive — a client that ignores the two fields reads v15's shape.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 16;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -3570,6 +3588,8 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .map(|s| NativeSegmentItem {
                     id: s.id.clone(),
                     label: s.label.clone(),
+                    icon: s.icon.clone(),
+                    tint: s.tint.clone(),
                 })
                 .collect(),
         },
@@ -6569,8 +6589,8 @@ mod tests {
                 assert_eq!(
                     segments,
                     vec![
-                        NativeSegmentItem { id: "all".into(), label: "All".into() },
-                        NativeSegmentItem { id: "mine".into(), label: "Mine".into() },
+                        NativeSegmentItem { id: "all".into(), label: "All".into(), icon: None, tint: None },
+                        NativeSegmentItem { id: "mine".into(), label: "Mine".into(), icon: None, tint: None },
                     ]
                 );
             }
@@ -6578,6 +6598,24 @@ mod tests {
         }
     }
 
+
+    /// Schema v16 (0.40.0): a segment's brace group reaches native — the
+    /// icon name and the palette tint ride `NativeSegmentItem`; a bare
+    /// segment carries `None` for both.
+    #[test]
+    fn segmented_control_segments_carry_icon_and_tint_v16() {
+        let doc = crate::parse("::segmented-control[active=docs action=pickKind fold=always]\n- all \"All\" {icon=layers tint=slate}\n- docs \"Docs\" {icon=file-text tint=blue}\n- notes \"Notes\"\n::").doc;
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 16);
+        let blocks = to_native_blocks(&doc);
+        let seg = blocks.iter().find_map(|b| match b {
+            NativeBlock::SegmentedControl { segments, .. } => Some(segments.clone()),
+            _ => None,
+        }).expect("the segmented control");
+        assert_eq!(seg[0], NativeSegmentItem { id: "all".into(), label: "All".into(), icon: Some("layers".into()), tint: Some("slate".into()) });
+        assert_eq!(seg[1].icon.as_deref(), Some("file-text"));
+        assert_eq!(seg[1].tint.as_deref(), Some("blue"));
+        assert_eq!(seg[2], NativeSegmentItem { id: "notes".into(), label: "Notes".into(), icon: None, tint: None });
+    }
     #[test]
     fn dropdown_select_converts_structurally() {
         let source = "::dropdown-select[label=\"Sort\" icon=arrow selected=\"Newest\" align=right]\n\
@@ -8343,7 +8381,7 @@ mod tests {
         // 0.27: the panels layout — `PanelSlot` + `Preset` — schema v12.
         // 0.33.0: the backends grammar — schema v14.
         // 0.37.0: video — `Video`, `Hero.video` / `Hero.poster` — schema v15.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 16);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

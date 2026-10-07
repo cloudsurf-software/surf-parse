@@ -3,7 +3,7 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
-## 0.40.0 — 2026-10-06 (`::segmented-control` `fold=auto` — pills while they fit, the menu when they would not; `fold-at=<px>`)
+## 0.40.0 — 2026-10-06 (`::segmented-control` `fold=auto` — pills while they fit, the menu when they would not; `fold-at=<px>`; native schema v16 — a segment's icon and tint)
 
 The navigator controls' `fold=always` (0.39) is the chip for a 320 px panel; a wider panel or a builder's page wants the
 pill row while it fits. Script-free is impossible for a true measure, so the rule is the CSS one. Additive — a 0.39
@@ -20,6 +20,10 @@ document renders byte for byte (`fold=never` and `fold=always` are untouched).
   ESTIMATED from the segments (`segmented_fold_at`: ~7 px a label character, 23 px an icon, 22 px of pill padding,
   2 px between pills, 4 px of control padding) and rounded up the same way — the row folds a little early rather than
   clip. The authored value survives the builder round trip; the estimate is never written.
+- **Native schema v16: `NativeSegmentItem` carries `icon` and `tint`** (the brace group of a segment line, `None` on
+  a bare one), so the Mac and iPhone draw the crate's kind menu from the document instead of their own glyph table.
+  Additive — a client that ignores the two fields reads v15's shape; the uniffi bindings regenerate for Swift and
+  Kotlin on the consumer's repin.
 - The constructive DOM renderer mirrors the new markup byte for byte; `spec/blocks.toml` lists `fold-at`.
 - Tests: the parser (auto, fold-at, fold-at dropped under other folds), `render_html` (the two sets of buttons, the
   bucket from an authored value, two estimates, the last bucket, the older folds untouched), the builder round trip,
