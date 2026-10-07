@@ -1854,8 +1854,16 @@ pub enum Block {
         /// 0.39: `fold=never|always` — `always` renders the control as a
         /// single-select menu (a `<details>` trigger showing the active
         /// segment's icon and label, the segments as rows beneath); `never`
-        /// is the pill row and the default, byte-identical to 0.37.
+        /// is the pill row and the default, byte-identical to 0.37. 0.40:
+        /// `auto` — pills while they fit, the menu when they would not: BOTH
+        /// are rendered and the stylesheet's container query flips them at
+        /// the block's bucketed width ([`segmented_fold_at`]); no script.
         fold: String,
+        /// 0.40: `fold-at=<px>` — the width under which `fold=auto` folds,
+        /// authored; `None` = estimated from the segments' labels and icons.
+        /// Either way the rendered `data-fold-at` is one of
+        /// [`SEGMENT_FOLD_BUCKETS`]. Ignored unless `fold=auto`.
+        fold_at: Option<u32>,
         segments: Vec<SegmentItem>,
         span: Span,
     },
@@ -2402,6 +2410,36 @@ pub struct SegmentItem {
 pub const SEGMENT_TINTS: &[&str] = &[
     "blue", "green", "amber", "red", "violet", "teal", "pink", "orange", "yellow", "slate",
 ];
+
+/// 0.40: the widths (px) a `fold=auto` segmented control may fold at — the
+/// stylesheet carries one container query per bucket, so a block's
+/// `data-fold-at` is always one of these (an authored `fold-at=` rounds UP to
+/// the next bucket; above the last it is the last).
+pub const SEGMENT_FOLD_BUCKETS: [u32; 7] = [240, 320, 400, 480, 560, 640, 720];
+
+/// 0.40: the bucket a `fold=auto` control folds at. An authored `fold-at`
+/// rounds up to the next [`SEGMENT_FOLD_BUCKETS`] entry; without one the
+/// pill row's width is ESTIMATED from the segments (about 7 px a label
+/// character, 23 px an icon, 22 px of pill padding, 2 px between pills,
+/// 4 px of control padding) and rounded up the same way — a script-free
+/// stand-in for a measure, so the row folds a little early rather than clip.
+pub fn segmented_fold_at(fold_at: Option<u32>, segments: &[SegmentItem]) -> u32 {
+    let want = match fold_at {
+        Some(px) => px,
+        None => {
+            let pills: u32 = segments
+                .iter()
+                .map(|s| s.label.chars().count() as u32 * 7 + if s.icon.is_some() { 23 } else { 0 } + 22)
+                .sum();
+            pills + 2 * segments.len().saturating_sub(1) as u32 + 4
+        }
+    };
+    SEGMENT_FOLD_BUCKETS
+        .iter()
+        .copied()
+        .find(|b| *b >= want)
+        .unwrap_or(SEGMENT_FOLD_BUCKETS[SEGMENT_FOLD_BUCKETS.len() - 1])
+}
 
 /// An option within a `DropdownSelect` block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

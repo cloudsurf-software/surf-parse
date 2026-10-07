@@ -685,6 +685,25 @@ enum AttrVal<'v> {
 /// through it (the signature enforces `'static`), so it is not an HTML
 /// injection sink. `<script>`/`<style>` bodies are consumed as rawtext.
 /// 0.39: the segment icon span, the DOM twin of `render_html::segment_icon_html`.
+/// The segmented control's radio buttons (render_html.rs's `segment_buttons`):
+/// drawn once for the pill row, once for the menu, both for `fold=auto`.
+fn segment_buttons_dom<S: DomSink>(dom: &mut Dom<'_, S>, segments: &[crate::types::SegmentItem], active_idx: Option<usize>) -> Result<(), RenderDomError> {
+    for (i, seg) in segments.iter().enumerate() {
+        let is_active = active_idx == Some(i);
+        let cls = if is_active { "surfdoc-segment is-active" } else { "surfdoc-segment" };
+        dom.open("button", CloseStyle::Normal);
+        dom.attr("type", AttrVal::Markup("button"));
+        dom.attr("role", AttrVal::Markup("radio"));
+        dom.attr("class", AttrVal::Markup(cls));
+        dom.attr("data-id", AttrVal::Markup(&seg.id));
+        dom.attr("aria-checked", AttrVal::Markup(if is_active { "true" } else { "false" }));
+        segment_icon_dom(dom, seg)?;
+        dom.text_markup(&seg.label);
+        dom.close();
+    }
+    Ok(())
+}
+
 fn segment_icon_dom<S: DomSink>(dom: &mut Dom<'_, S>, seg: &crate::types::SegmentItem) -> Result<(), RenderDomError> {
     if let Some(svg) = seg.icon.as_deref().and_then(crate::icons::get_icon) {
         dom.open("span", CloseStyle::Normal);
@@ -3966,13 +3985,19 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         }
 
         // render_html.rs:5627
-        Block::SegmentedControl { active, size, action, fold, segments, .. } => {
-            let folded = fold == "always";
+        Block::SegmentedControl { active, size, action, fold, fold_at, segments, .. } => {
+            // 0.40: fold=auto — the row, then the menu (render_html.rs's twin).
+            let auto = fold == "auto";
+            let folded = fold == "always" || auto;
             dom.open("div", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-segmented-control"));
             dom.attr("role", AttrVal::Markup("radiogroup"));
             dom.attr("data-size", AttrVal::Markup(size));
-            if folded {
+            if auto {
+                dom.attr("data-fold", AttrVal::Markup("auto"));
+                let at = crate::types::segmented_fold_at(*fold_at, segments).to_string();
+                dom.attr("data-fold-at", AttrVal::Markup(&at));
+            } else if folded {
                 dom.attr("data-fold", AttrVal::Markup("always"));
             }
             if let Some(a) = action {
@@ -3982,6 +4007,12 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             let active_idx = segments
                 .iter()
                 .position(|seg| active.as_ref().is_some_and(|a| a == &seg.id));
+            if auto {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-segmented-row"));
+                segment_buttons_dom(dom, segments, active_idx)?;
+                dom.close();
+            }
             if folded {
                 let shown = active_idx.and_then(|i| segments.get(i)).or_else(|| segments.first());
                 dom.open("details", CloseStyle::Normal);
@@ -4006,23 +4037,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 dom.open("div", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-segmented-menu"));
             }
-            for (i, seg) in segments.iter().enumerate() {
-                let is_active = active_idx == Some(i);
-                let cls = if is_active {
-                    "surfdoc-segment is-active"
-                } else {
-                    "surfdoc-segment"
-                };
-                dom.open("button", CloseStyle::Normal);
-                dom.attr("type", AttrVal::Markup("button"));
-                dom.attr("role", AttrVal::Markup("radio"));
-                dom.attr("class", AttrVal::Markup(cls));
-                dom.attr("data-id", AttrVal::Markup(&seg.id));
-                dom.attr("aria-checked", AttrVal::Markup(if is_active { "true" } else { "false" }));
-                segment_icon_dom(dom, seg)?;
-                dom.text_markup(&seg.label);
-                dom.close();
-            }
+            segment_buttons_dom(dom, segments, active_idx)?;
             if folded {
                 dom.close();
                 dom.close();

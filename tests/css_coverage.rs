@@ -173,6 +173,24 @@ fn stepped_form_classes_have_css_rules() {
     assert!(seen >= 7, "the stepped classes rendered: {html}");
 }
 
+/// 0.40: `fold=auto` renders the pill row (`surfdoc-segmented-row`) beside
+/// the menu, which the one-snippet-per-kind table's `::segmented-control`
+/// does not set — pin the row's rule and one container query per bucket.
+#[test]
+fn segmented_fold_auto_classes_have_css_rules() {
+    let css = surf_parse::SURFDOC_CSS;
+    let html = surf_parse::parse("::segmented-control[active=a fold=auto]\n- a \"A\"\n- b \"B\"\n::").doc.to_html();
+    assert!(html.contains("surfdoc-segmented-row") && html.contains("surfdoc-segmented-fold"), "{html}");
+    for token in ["surfdoc-segmented-row", "surfdoc-segmented-fold", "surfdoc-segmented-menu"] {
+        assert!(css_has_rule(css, token), "fold=auto class .{token} has no rule in assets/surfdoc.css");
+    }
+    assert!(css.contains("container-type: inline-size"), "the control is the container");
+    for b in surf_parse::SEGMENT_FOLD_BUCKETS {
+        let q = format!("@container (max-width: {b}px) {{ .surfdoc .surfdoc-segmented-control[data-fold=\"auto\"][data-fold-at=\"{b}\"] > .surfdoc-segmented-row {{ display: none; }}");
+        assert!(css.contains(&q), "no container query for the {b} bucket");
+    }
+}
+
 /// Toolbar overflow pin (R5): a crowded toolbar must scroll or wrap
 /// instead of clipping — the app-shell sets overflow:hidden and the grid
 /// track can shrink below the bar's natural width. The guard requires the

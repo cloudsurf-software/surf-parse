@@ -7100,7 +7100,7 @@ fn render_block_inner(block: &Block) -> String {
             html
         }
 
-        Block::SegmentedControl { active, size, action, fold, segments, .. } => {
+        Block::SegmentedControl { active, size, action, fold, fold_at, segments, .. } => {
             // A filter idiom, not a content-pane switcher: radiogroup role,
             // no tablist markup and no tab-switching script.
             let action_attr = match action {
@@ -7110,8 +7110,18 @@ fn render_block_inner(block: &Block) -> String {
             // 0.39: fold=always wraps the pills in a <details> menu whose
             // summary shows the segment on show; no script is emitted (the
             // host owns selection; a static page opens and closes natively).
-            let folded = fold == "always";
-            let fold_attr = if folded { " data-fold=\"always\"" } else { "" };
+            // 0.40: fold=auto renders BOTH — the pill row, then the same
+            // menu — and `data-fold-at` names the bucket the stylesheet's
+            // container query folds at; still no script.
+            let auto = fold == "auto";
+            let folded = fold == "always" || auto;
+            let fold_attr = if auto {
+                format!(" data-fold=\"auto\" data-fold-at=\"{}\"", crate::types::segmented_fold_at(*fold_at, segments))
+            } else if folded {
+                " data-fold=\"always\"".to_string()
+            } else {
+                String::new()
+            };
             let mut html = format!(
                 "<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"{}\"{}{}>",
                 escape_html(size), fold_attr, action_attr,
@@ -7121,6 +7131,25 @@ fn render_block_inner(block: &Block) -> String {
             let active_idx = segments
                 .iter()
                 .position(|seg| active.as_ref().is_some_and(|a| a == &seg.id));
+            let segment_buttons = |html: &mut String| {
+                for (i, seg) in segments.iter().enumerate() {
+                    let is_active = active_idx == Some(i);
+                    let active_cls = if is_active { " is-active" } else { "" };
+                    html.push_str(&format!(
+                        "<button type=\"button\" role=\"radio\" class=\"surfdoc-segment{}\" data-id=\"{}\" aria-checked=\"{}\">{}{}</button>",
+                        active_cls,
+                        escape_html(&seg.id),
+                        is_active,
+                        segment_icon_html(seg),
+                        escape_html(&seg.label),
+                    ));
+                }
+            };
+            if auto {
+                html.push_str("<div class=\"surfdoc-segmented-row\">");
+                segment_buttons(&mut html);
+                html.push_str("</div>");
+            }
             if folded {
                 // The trigger shows the active segment, else the first.
                 let shown = active_idx.and_then(|i| segments.get(i)).or_else(|| segments.first());
@@ -7137,18 +7166,7 @@ fn render_block_inner(block: &Block) -> String {
                     get_icon("chevron-down").unwrap_or("")
                 ));
             }
-            for (i, seg) in segments.iter().enumerate() {
-                let is_active = active_idx == Some(i);
-                let active_cls = if is_active { " is-active" } else { "" };
-                html.push_str(&format!(
-                    "<button type=\"button\" role=\"radio\" class=\"surfdoc-segment{}\" data-id=\"{}\" aria-checked=\"{}\">{}{}</button>",
-                    active_cls,
-                    escape_html(&seg.id),
-                    is_active,
-                    segment_icon_html(seg),
-                    escape_html(&seg.label),
-                ));
-            }
+            segment_buttons(&mut html);
             if folded {
                 html.push_str("</div></details>");
             }
@@ -15758,6 +15776,36 @@ About
         assert!(none.contains("data-id=\"all\" aria-checked=\"false\""), "{none}");
     }
 
+    /// 0.40: `fold=auto` renders the pill row AND the chip menu (the same
+    /// radio buttons twice, no script) with `data-fold-at` naming the bucket
+    /// the stylesheet folds at — authored `fold-at` rounded up, else an
+    /// estimate from the labels; `never` and `always` are untouched.
+    #[test]
+    fn html_segmented_control_fold_auto() {
+        let src = "::segmented-control[active=docs action=pickKind fold=auto fold-at=330]\n- all \"All\" {icon=layers}\n- docs \"Docs\" {icon=file-text tint=blue}\n::";
+        let html = crate::parse(src).doc.to_html();
+        assert!(html.contains("<div class=\"surfdoc-segmented-control\" role=\"radiogroup\" data-size=\"compact\" data-fold=\"auto\" data-fold-at=\"400\" data-action=\"pickKind\"><div class=\"surfdoc-segmented-row\"><button type=\"button\" role=\"radio\" class=\"surfdoc-segment\" data-id=\"all\""), "{html}");
+        assert!(html.contains("Docs</button></div><details class=\"surfdoc-segmented-fold\"><summary class=\"surfdoc-segmented-trigger\"><span class=\"surfdoc-icon\" data-tint=\"blue\"><svg"), "{html}");
+        assert!(html.contains("<span class=\"surfdoc-segmented-trigger-label\">Docs</span>"), "{html}");
+        assert!(html.contains("Docs</button></div></details></div>"), "{html}");
+        assert_eq!(html.matches("role=\"radio\"").count(), 4, "the row and the menu carry the same buttons");
+        assert_eq!(html.matches("is-active").count(), 2);
+        assert!(!html.contains("<script"), "{html}");
+        // No fold-at: the estimate — two short labels with icons sit under 240.
+        let est = crate::parse("::segmented-control[fold=auto]\n- all \"All\" {icon=layers}\n- docs \"Docs\"\n::").doc.to_html();
+        assert!(est.contains("data-fold=\"auto\" data-fold-at=\"240\""), "{est}");
+        // The seven Docs kinds with glyphs estimate past 480 and under 560.
+        let seven = crate::parse("::segmented-control[active=all fold=auto]\n- all \"All\" {icon=layers}\n- docs \"Docs\" {icon=file-text}\n- spreadsheets \"Sheets\" {icon=clipboard}\n- presentations \"Decks\" {icon=layout}\n- notes \"Notes\" {icon=notebook}\n- folders \"Folders\" {icon=folder}\n- starred \"Starred\" {icon=star}\n::").doc.to_html();
+        assert!(seven.contains("data-fold-at=\"560\""), "{seven}");
+        // Above the last bucket the last bucket holds; the two older folds never carry the attribute.
+        let big = crate::parse("::segmented-control[fold=auto fold-at=9000]\n- a \"A\"\n::").doc.to_html();
+        assert!(big.contains("data-fold-at=\"720\""), "{big}");
+        let always = crate::parse("::segmented-control[fold=always]\n- a \"A\"\n::").doc.to_html();
+        assert!(!always.contains("data-fold-at") && !always.contains("surfdoc-segmented-row"), "{always}");
+        let never = crate::parse("::segmented-control\n- a \"A\"\n::").doc.to_html();
+        assert!(!never.contains("data-fold") && !never.contains("surfdoc-segmented-row") && !never.contains("<details"), "{never}");
+    }
+
     /// 0.39: `::filter-bar` carries `size=compact` and `inline=true` as data
     /// attributes, absent by default (a 0.37 document is byte-identical).
     #[test]
@@ -15772,6 +15820,7 @@ About
     fn html_segmented_control_duplicate_active_ids_single_pill() {
         let doc = doc_with(vec![Block::SegmentedControl {
             fold: "never".into(),
+            fold_at: None,
             active: Some("posts".into()),
             size: "regular".into(),
             action: None,
@@ -15795,6 +15844,7 @@ About
     fn html_segmented_control() {
         let doc = doc_with(vec![Block::SegmentedControl {
             fold: "never".into(),
+            fold_at: None,
             active: Some("posts".into()),
             size: "compact".into(),
             action: Some("filter_posts".into()),

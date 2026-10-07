@@ -224,6 +224,11 @@ fn identity_navigator_controls() {
     assert!(html.contains("<details class=\"surfdoc-segmented-fold\"><summary class=\"surfdoc-segmented-trigger\"><span class=\"surfdoc-icon\" data-tint=\"blue\">"));
     assert!(html.contains("<span class=\"surfdoc-segmented-trigger-label\">Docs</span>"));
     assert!(!html.contains("#ff0000") && !html.contains("not-a-glyph"));
+    // 0.40: fold=auto — the row and the menu, the bucket on the block (330 rounds up to 400).
+    assert!(html.contains("data-fold=\"auto\" data-fold-at=\"400\""), "{html}");
+    assert!(html.contains("<div class=\"surfdoc-segmented-row\"><button"), "{html}");
+    assert!(html.contains("Theirs</button></div><details class=\"surfdoc-segmented-fold\">"), "{html}");
+    assert!(html.contains("<span class=\"surfdoc-segmented-trigger-label\">Mine</span>"), "{html}");
 }
 
 #[test]

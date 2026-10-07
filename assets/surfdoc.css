@@ -3546,6 +3546,21 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc .surfdoc-segmented-control[data-size="compact"] .surfdoc-segmented-menu .surfdoc-segment { font-size: 0.8125rem; padding: 8px 10px; }
 .surfdoc .surfdoc-segmented-menu .surfdoc-segment.is-active { background: var(--accent-soft, #e3ebff); color: var(--accent, #2563eb); }
 .surfdoc .surfdoc-segmented-menu .surfdoc-segment.is-active::after { content: ""; margin-left: auto; width: 6px; height: 10px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+/* 0.40: fold=auto — pills while they fit, the menu when they would not. The control renders BOTH the pill row and the
+   chip menu; the control is an inline-size container, the stylesheet shows the row and hides the menu, and ONE container
+   query per bucket (data-fold-at, SEGMENT_FOLD_BUCKETS) flips them under that width — no script; the host owns selection
+   (the same radio buttons twice; the hidden set is out of the accessibility tree). The control is block-level here, so a
+   one-row head beside an inline filter bar wants fold=always. */
+.surfdoc .surfdoc-segmented-control[data-fold="auto"] { display: block; width: 100%; container-type: inline-size; position: relative; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.surfdoc .surfdoc-segmented-control[data-fold="auto"] > .surfdoc-segmented-row { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--surface, #fff); border: 1px solid var(--border, #30363d); border-radius: 999px; }
+.surfdoc .surfdoc-segmented-control[data-fold="auto"] > .surfdoc-segmented-fold { display: none; }
+@container (max-width: 240px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="240"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="240"] > .surfdoc-segmented-fold { display: inline-block; } }
+@container (max-width: 320px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="320"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="320"] > .surfdoc-segmented-fold { display: inline-block; } }
+@container (max-width: 400px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="400"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="400"] > .surfdoc-segmented-fold { display: inline-block; } }
+@container (max-width: 480px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="480"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="480"] > .surfdoc-segmented-fold { display: inline-block; } }
+@container (max-width: 560px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="560"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="560"] > .surfdoc-segmented-fold { display: inline-block; } }
+@container (max-width: 640px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="640"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="640"] > .surfdoc-segmented-fold { display: inline-block; } }
+@container (max-width: 720px) { .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="720"] > .surfdoc-segmented-row { display: none; } .surfdoc .surfdoc-segmented-control[data-fold="auto"][data-fold-at="720"] > .surfdoc-segmented-fold { display: inline-block; } }
 
 /* ============================================================
    72b. DROPDOWN SELECT

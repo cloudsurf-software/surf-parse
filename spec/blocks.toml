@@ -990,8 +990,8 @@ enum_variant = "Modal"
 [blocks.segmented-control]
 status = "implemented"
 category = "advanced"
-purpose = "Compact pill single-select control for filtering — a filter idiom, not a tab-bar style; a segment line may carry `{icon=name tint=blue}` (0.39) and `fold=always` renders the control as one chip opening a menu of the segments as rows"
-attributes = ["active", "size", "action", "fold"]
+purpose = "Compact pill single-select control for filtering — a filter idiom, not a tab-bar style; a segment line may carry `{icon=name tint=blue}` (0.39) and `fold=always` renders the control as one chip opening a menu of the segments as rows; `fold=auto` (0.40) renders both the pill row and the menu and the stylesheet folds at `fold-at=<px>` (bucketed; estimated from the labels when absent)"
+attributes = ["active", "size", "action", "fold", "fold-at"]
 degradation = "inline segment list with active bolded"
 enum_variant = "SegmentedControl"
 

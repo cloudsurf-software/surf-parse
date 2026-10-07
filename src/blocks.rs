@@ -6131,11 +6131,13 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
     let active = attr_string(attrs, "active");
     let size = attr_string(attrs, "size").unwrap_or_else(|| "compact".to_string());
     let action = attr_string(attrs, "action");
-    // 0.39: fold=never|always; anything else reads as never.
+    // 0.39: fold=never|always; 0.40: fold=auto (+ fold-at=<px>); anything else reads as never.
     let fold = match attr_string(attrs, "fold").as_deref() {
         Some("always") => "always".to_string(),
+        Some("auto") => "auto".to_string(),
         _ => "never".to_string(),
     };
+    let fold_at = if fold == "auto" { attr_u32(attrs, "fold-at") } else { None };
     let mut segments = Vec::new();
     for line in content.lines() {
         let trimmed = line.trim();
@@ -6186,6 +6188,7 @@ fn parse_segmented_control(attrs: &Attrs, content: &str, span: Span) -> Block {
         size,
         action,
         fold,
+        fold_at,
         segments,
         span,
     }
@@ -11612,6 +11615,40 @@ Note
                 assert_eq!(segments[2].id, "docs");
                 assert_eq!(segments[2].label, "Docs");
             }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
+        }
+    }
+
+    /// 0.40: `fold=auto` parses with its optional `fold-at`; the attribute is
+    /// dropped under any other fold; an unknown fold word reads as never.
+    #[test]
+    fn parse_segmented_control_fold_auto() {
+        let auto = crate::parse("::segmented-control[active=all fold=auto fold-at=330]\n- all \"All\"\n- docs \"Docs\"\n::");
+        match &auto.doc.blocks[0] {
+            Block::SegmentedControl { fold, fold_at, .. } => {
+                assert_eq!(fold, "auto");
+                assert_eq!(*fold_at, Some(330));
+            }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
+        }
+        let bare = crate::parse("::segmented-control[fold=auto]\n- all \"All\"\n::");
+        match &bare.doc.blocks[0] {
+            Block::SegmentedControl { fold, fold_at, .. } => {
+                assert_eq!(fold, "auto");
+                assert_eq!(*fold_at, None);
+            }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
+        }
+        let always = crate::parse("::segmented-control[fold=always fold-at=330]\n- all \"All\"\n::");
+        match &always.doc.blocks[0] {
+            Block::SegmentedControl { fold, fold_at, .. } => {
+                assert_eq!(fold, "always");
+                assert_eq!(*fold_at, None, "fold-at rides fold=auto alone");
+            }
+            other => panic!("Expected SegmentedControl, got {:?}", other),
+        }
+        match &crate::parse("::segmented-control[fold=sometimes]\n- all \"All\"\n::").doc.blocks[0] {
+            Block::SegmentedControl { fold, .. } => assert_eq!(fold, "never"),
             other => panic!("Expected SegmentedControl, got {:?}", other),
         }
     }

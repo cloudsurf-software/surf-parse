@@ -20,3 +20,9 @@ type: doc
 - mine "Mine" {icon=user}
 - theirs "Theirs" {icon=not-a-glyph tint=#ff0000}
 ::
+
+::segmented-control[active=mine fold=auto fold-at=330]
+- all "All" {icon=layers tint=slate}
+- mine "Mine" {icon=user tint=blue}
+- theirs "Theirs"
+::

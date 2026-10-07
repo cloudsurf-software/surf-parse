@@ -3,6 +3,28 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.40.0 — 2026-10-06 (`::segmented-control` `fold=auto` — pills while they fit, the menu when they would not; `fold-at=<px>`)
+
+The navigator controls' `fold=always` (0.39) is the chip for a 320 px panel; a wider panel or a builder's page wants the
+pill row while it fits. Script-free is impossible for a true measure, so the rule is the CSS one. Additive — a 0.39
+document renders byte for byte (`fold=never` and `fold=always` are untouched).
+
+- **`fold=auto`** renders BOTH the pill row (`<div class="surfdoc-segmented-row">`) and the 0.39 chip menu (the same
+  `role=radio` buttons with the same `data-id`, no script; the host owns selection and lights both sets or either).
+  The control is an inline-size container (`display: block; container-type: inline-size`); the stylesheet shows the
+  row and hides the menu, and one `@container (max-width: …)` query per bucket flips them under the block's
+  `data-fold-at`. The control is block-level under `fold=auto`, so a one-row head beside an inline filter bar keeps
+  `fold=always`.
+- **`fold-at=<px>`** names the width the block folds at; it is rounded UP to one of `SEGMENT_FOLD_BUCKETS` (240 · 320 ·
+  400 · 480 · 560 · 640 · 720) because the stylesheet carries one query per bucket. Without it the pill row's width is
+  ESTIMATED from the segments (`segmented_fold_at`: ~7 px a label character, 23 px an icon, 22 px of pill padding,
+  2 px between pills, 4 px of control padding) and rounded up the same way — the row folds a little early rather than
+  clip. The authored value survives the builder round trip; the estimate is never written.
+- The constructive DOM renderer mirrors the new markup byte for byte; `spec/blocks.toml` lists `fold-at`.
+- Tests: the parser (auto, fold-at, fold-at dropped under other folds), `render_html` (the two sets of buttons, the
+  bucket from an authored value, two estimates, the last bucket, the older folds untouched), the builder round trip,
+  the DOM identity fixture's third block, and `css_coverage` pins the row's rule and every bucket's query.
+
 ## 0.39.0 — 2026-10-06 (the navigator controls — `::segmented-control` icons, tints and `fold=always`; `::filter-bar` as a chip row; TASK-1373's walk, the CloudSurf web Docs panel)
 
 The web Docs panel at app.cloudsurf.com is spec-driven, and its head read as a form because the two navigator

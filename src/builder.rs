@@ -3486,12 +3486,14 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             }
         }
 
-        Block::SegmentedControl { active, size, action, fold, segments, .. } => {
+        Block::SegmentedControl { active, size, action, fold, fold_at, segments, .. } => {
             let mut attrs_parts = Vec::new();
             if let Some(a) = active { attrs_parts.push(format!("active={a}")); }
             if size != "compact" { attrs_parts.push(format!("size={size}")); }
             if let Some(a) = action { attrs_parts.push(format!("action={a}")); }
             if fold != "never" { attrs_parts.push(format!("fold={fold}")); }
+            // 0.40: the authored fold-at rides fold=auto alone (the estimate is never written).
+            if fold == "auto" && let Some(px) = fold_at { attrs_parts.push(format!("fold-at={px}")); }
             let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
             let lines: Vec<String> = segments
                 .iter()
@@ -5174,6 +5176,24 @@ mod tests {
                 assert_eq!(segments[1].label, "Posts");
             }
             other => panic!("Expected SegmentedControl, got {:?}", other),
+        }
+    }
+
+    /// 0.40: `fold=auto fold-at=330` survives the round trip; a bare
+    /// `fold=auto` writes no fold-at (the estimate is the renderer's).
+    #[test]
+    fn test_roundtrip_segmented_control_fold_auto() {
+        for src in ["::segmented-control[active=docs fold=auto fold-at=330]\n- all \"All\"\n- docs \"Docs\" {icon=file-text tint=blue}\n::", "::segmented-control[fold=auto]\n- all \"All\"\n::"] {
+            let parsed = parse::parse(src);
+            let written = to_surf_source(&parsed.doc);
+            assert_eq!(written.trim(), src, "fixed point");
+            match &parse::parse(&written).doc.blocks[0] {
+                Block::SegmentedControl { fold, fold_at, .. } => {
+                    assert_eq!(fold, "auto");
+                    assert_eq!(*fold_at, if src.contains("fold-at") { Some(330) } else { None });
+                }
+                other => panic!("Expected SegmentedControl, got {other:?}"),
+            }
         }
     }
 
