@@ -55,6 +55,62 @@ pub fn install_image_context(map: HashMap<String, String>) -> ImageScope {
     ImageScope { _private: () }
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Ambient diagram context (0.41.0, the same shape as the image map)
+//
+// A `::diagram` draws the SAME svg the web draws (`diagram::render_block_svg`),
+// registered by the PDF pipeline as a virtual `.svg` file the engine can
+// `image()`; the arm below looks its block up by type + body and emits a
+// sized figure. Outside the pipeline (no map installed) the arm keeps the
+// title + raw-DSL fence, so a bare `to_typst` string never names a file
+// that is not there.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// One registered diagram: its virtual path and the svg's declared size
+/// (CSS px) — the figure is drawn at that size, capped to the text width.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiagramImage {
+    pub path: String,
+    pub width_px: f64,
+    pub height_px: f64,
+}
+
+thread_local! {
+    static ACTIVE_DIAGRAMS: RefCell<Option<HashMap<String, DiagramImage>>> = const { RefCell::new(None) };
+}
+
+/// RAII guard that clears the ambient diagram map when dropped.
+pub struct DiagramScope {
+    _private: (),
+}
+
+impl Drop for DiagramScope {
+    fn drop(&mut self) {
+        ACTIVE_DIAGRAMS.with(|c| *c.borrow_mut() = None);
+    }
+}
+
+/// The key a `::diagram` block is registered under: its type and its body,
+/// so two identical blocks share one file and a changed body is a new one.
+pub fn diagram_key(diagram_type: &str, content: &str) -> String {
+    format!("{diagram_type}\n{content}")
+}
+
+/// Install `map` ([`diagram_key`] → the registered svg) as the ambient
+/// diagram context for the current thread for the lifetime of the returned
+/// guard. The PDF renderer installs this before [`to_typst`] after
+/// registering the paths with the engine's static file resolver.
+pub fn install_diagram_context(map: HashMap<String, DiagramImage>) -> DiagramScope {
+    ACTIVE_DIAGRAMS.with(|c| *c.borrow_mut() = Some(map));
+    DiagramScope { _private: () }
+}
+
+/// The registered svg for a block, if the ambient context has one.
+fn resolved_diagram(diagram_type: &str, content: &str) -> Option<DiagramImage> {
+    let key = diagram_key(diagram_type, content);
+    ACTIVE_DIAGRAMS.with(|c| c.borrow().as_ref().and_then(|m| m.get(&key).cloned()))
+}
+
 /// The virtual file path registered for `src`, if the ambient context has one.
 fn resolved_image(src: &str) -> Option<String> {
     ACTIVE_IMAGES.with(|c| c.borrow().as_ref().and_then(|m| m.get(src).cloned()))
@@ -1759,13 +1815,34 @@ fn render_block(block: &Block, out: &mut String) {
             // Interactive widgets — no meaningful PDF representation
         }
 
-        Block::Diagram { title, content, .. } => {
-            // No vector rendering in PDF yet — emit the bold title plus the
-            // raw DSL in a raw block so diagrams aren't silently dropped.
-            if let Some(t) = title {
-                out.push_str(&format!("*{}* \\\n", escape_typst(t)));
+        Block::Diagram { diagram_type, title, content, .. } => {
+            // 0.41.0: the svg the web draws, as a figure — when the PDF
+            // pipeline registered it (`install_diagram_context`). The image
+            // is its natural size (1 px = 0.75 pt), capped to the text width
+            // by `layout`, so a small diagram is not blown up and a wide one
+            // fits the page; the title is the caption, unnumbered, as the
+            // web's `<figcaption>`. Without a registered file (a bare
+            // `to_typst`, or a body that does not draw) the bold title plus
+            // the raw DSL in a raw block, so a diagram is never dropped.
+            match resolved_diagram(diagram_type, content) {
+                Some(img) => {
+                    let w = img.width_px * 0.75;
+                    out.push_str(&format!(
+                        "#figure(\n  layout(size => image(\"{}\", width: calc.min(size.width, {w:.2}pt))),\n  numbering: none",
+                        escape_typst(&img.path),
+                    ));
+                    if let Some(t) = title {
+                        out.push_str(&format!(",\n  caption: [{}]", escape_typst(t)));
+                    }
+                    out.push_str("\n)\n");
+                }
+                None => {
+                    if let Some(t) = title {
+                        out.push_str(&format!("*{}* \\\n", escape_typst(t)));
+                    }
+                    out.push_str(&format!("```\n{}\n```\n", content));
+                }
             }
-            out.push_str(&format!("```\n{}\n```\n", content));
         }
 
         Block::Unknown { name, content, .. } => {

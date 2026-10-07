@@ -1,0 +1,169 @@
+---
+title: "Every diagram type"
+type: doc
+---
+
+# Every diagram type
+
+One small block per type the crate draws — the seventeen native types and the four chart aliases. The constructive DOM test, the PDF page test and the CloudSurf web walk share this file: a type that draws on the web draws here, through every sink.
+
+::diagram[type=architecture title="Architecture"]
+web: Web
+api: API
+db: Postgres
+web -> api: HTTPS
+api <-> db: SQL
+::
+
+::diagram[type=erd title="Schema"]
+users: id pk, email unique
+docs: id pk, owner_id fk
+users 1--* docs: owns
+::
+
+::diagram[type=flowchart title="Flow"]
+start [terminator]: Start
+check [diamond]: Valid?
+save: Persist
+start -> check
+check -> save: yes
+check -> start: no
+::
+
+::diagram[type=sequence title="Sequence with a return"]
+actor user: User
+actor api: API
+user -> api: POST /login
+activate api
+api --> user: 200 OK
+deactivate api
+::
+
+::diagram[type=gantt title="Gantt"]
+section Planning
+Research: 2026-01-01, 5
+Design: 2026-01-06, 3
+section Build
+Implementation: 2026-01-09, 10
+::
+
+::diagram[type=state title="State"]
+[*] -> Idle
+Idle -> Running: start
+Running -> Idle: stop
+Running -> [*]
+::
+
+::diagram[type=mindmap title="Mindmap"]
+Root
+  Branch A
+    Leaf A1
+  Branch B
+::
+
+::diagram[type=class title="Class with composition and aggregation"]
+User: +id, -email, +save()
+Role: enum, Admin, Member
+Team: +name
+Admin ^-> User
+User *-> Role: has
+Team o-> User: members
+::
+
+::diagram[type=timeline title="Timeline"]
+2026-01: Kickoff
+2026-03: Private beta
+2026-06-15: Launch
+::
+
+::diagram[type=journey title="Journey"]
+section Onboarding
+Sign up: 3
+Verify email: 2
+section Daily use
+Open app: 5
+::
+
+::diagram[type=quadrant title="Quadrant"]
+x-axis Low effort --> High effort
+y-axis Low impact --> High impact
+quadrant-1: Quick wins
+Task A: 0.3, 0.7
+Task B: 0.8, 0.2
+::
+
+::diagram[type=kanban title="Kanban"]
+column To do
+  Write spec
+Doing:
+  Build parser
+Done:
+  Ship v1
+::
+
+::diagram[type=usecase title="Use case with an include"]
+actor customer: Customer
+usecase browse: Browse catalog
+usecase pay: Enter payment
+customer -> browse
+browse ^-> pay: includes
+::
+
+::diagram[type=gitgraph title="Git graph"]
+commit: init
+branch feature
+commit: draft
+checkout main
+merge feature: ship
+::
+
+::diagram[type=c4 title="C4 with a boundary"]
+person user: Customer
+boundary Platform {
+  container api: API App: Rust
+  container db: Database: Postgres
+}
+system mail: Mail Provider [ext]
+user -> api: Uses
+api -> db: SQL
+api -> mail: SMTP
+::
+
+::diagram[type=requirement title="Requirement"]
+requirement r1: Fast render: SVG in under 5ms
+element parser: surf-parse
+parser -> r1: satisfies
+::
+
+::diagram[type=sankey title="Sankey"]
+Wind -> Grid: 40
+Solar -> Grid: 30
+Grid -> Homes: 50
+Grid -> Industry: 20
+::
+
+::diagram[type=pie title="Pie"]
+Share | Percent
+Web | 60
+Phone | 40
+::
+
+::diagram[type=donut title="Donut"]
+Share | Percent
+Mac | 55
+iPhone | 45
+::
+
+::diagram[type=radar title="Radar"]
+Axis | Score
+Speed | 4
+Reach | 3
+Depth | 5
+::
+
+::diagram[type=xychart title="Line"]
+Month | Users
+Jan | 10
+Feb | 25
+Mar | 40
+::

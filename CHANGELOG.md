@@ -3,6 +3,36 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.41.0 — 2026-10-07 (diagrams draw everywhere the web draws a doc — the constructive sink admits every attribute a diagram emits, the PDF pages draw the svg as a figure, `VERSION` + `wasm::version` for a host's pin gate; TASK-1455)
+
+A `::diagram[type=c4]` opened in the CloudSurf web app showed as text. Measured 2026-10-07: the Doc tab's Read mode
+renders the whole doc through `render_dom`, whose `build_verified_markup` refuses any attribute outside `attr_allowed`
+— a c4 boundary's `stroke-dasharray` declined the WHOLE document to its prose fallback; the tab's Preview mode is the
+PDF pages, where `render_typst` printed the bold title and the raw DSL in a fence ("no vector rendering in PDF yet").
+Additive — a 0.40 document that drew before draws the same bytes.
+
+- **One decision for every renderer: `diagram::render_block_svg`** (mermaid translation, the chart aliases, the
+  parse, the svg — or `None` for the prose fallback). `render_html` and `render_dom` call it (byte-identical output,
+  pinned by the identity corpus); the PDF pipeline calls it too.
+- **`render_dom::attr_allowed` admits `stroke-dasharray`, `marker-start` and `fill-opacity`** — the three names
+  `tests/render_dom_diagrams.rs` measured missing by drawing ONE block of every type (17 natives + 4 chart aliases,
+  `tests/fixtures/diagrams-every-type.surf`) through the native sink: a sequence `-->` return, a usecase `^->`
+  include, a c4 `boundary`; a class `*->` / `o->` and an architecture `<->`; the xychart area and points and the
+  radar polygon. All paint, never script. NEVER-WEAKEN: a new diagram type joins the fixture.
+- **The PDF pages draw a diagram as a figure.** `render_pdf::compile` registers every drawable `::diagram` (recursing
+  into containers, one file per distinct type + body) as a virtual `/surf-diagram-<n>.svg` beside the images, and
+  `render_typst` — under the new ambient `install_diagram_context` — emits
+  `#figure(layout(size => image(path, width: calc.min(size.width, <natural>pt))), numbering: none, caption: [title])`:
+  the svg's natural size (1 px = 0.75 pt) capped to the text width, the title as an unnumbered caption, the web's
+  `<figcaption>`. `typst_source` resolves diagrams (they need no bytes from the caller). A bare `to_typst`, or a body
+  that does not draw, keeps the title + fence, so a diagram is never dropped and no file the engine lacks is named.
+  The degrade-don't-die retry now covers diagrams as it covers images.
+- **`surf_parse::VERSION`** (`CARGO_PKG_VERSION`) and **`wasm::version()`** — what a consumer's drift test reads back
+  off a shipped build, so a web shell's wasm can never lag the tag its manifest names.
+- Tests: `render_dom_diagrams` (every type alone, the whole fixture covered and byte-identical, the allowlist's three
+  admitted and the scripted names still refused), `pdf_diagrams` (21 sized figures in the typst source and no fence,
+  the bare-`to_typst` fence, the half-written body's fence, the pages compile and carry the svg).
+
 ## 0.40.0 — 2026-10-06 (`::segmented-control` `fold=auto` — pills while they fit, the menu when they would not; `fold-at=<px>`; native schema v16 — a segment's icon and tint)
 
 The navigator controls' `fold=always` (0.39) is the chip for a 320 px panel; a wider panel or a builder's page wants the

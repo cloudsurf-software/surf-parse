@@ -167,6 +167,19 @@ pub fn attr_allowed(name: &str) -> bool {
             // emitted by `crate::diagram` or `crate::chart`, and all six are
             // geometry/paint, never script.
             | "marker-end" | "markerWidth" | "markerHeight" | "orient" | "refX" | "refY"
+            // 0.41.0 — measured by `tests/render_dom_diagrams.rs`, which draws
+            // ONE block of every diagram type through the native sink and
+            // names the attribute that declined it. Three were missing, so
+            // the whole-doc constructive render of any doc carrying one of
+            // these blocks declined to the prose fallback (TASK-1455):
+            //   `stroke-dasharray` — a sequence `-->` return, a usecase
+            //     `^->` include/extend, a c4 `boundary` (diagram.rs edge
+            //     tail + boundary outline);
+            //   `marker-start` — a class `*->` / `o->` diamond and an
+            //     architecture `<->` (diagram.rs edge tail);
+            //   `fill-opacity` — the xychart area, its points and the radar
+            //     polygon (chart.rs). All three are paint, never script.
+            | "stroke-dasharray" | "marker-start" | "fill-opacity"
     )
 }
 
@@ -3935,34 +3948,15 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
         }
 
         Block::Diagram { diagram_type, title, content, .. } => {
-            // Mermaid-syntax bodies (sniffed, or explicit `type=mermaid`)
-            // translate to the native DSL first; the prose fallback always
-            // shows the AUTHOR'S source, never the translation.
-            let translated = crate::mermaid_compat::translate(diagram_type, content);
-            let (eff_type, eff_content) = match &translated {
-                Some(t) => (t.diagram_type, t.content.as_str()),
-                None => (diagram_type.as_str(), content.as_str()),
-            };
-            // `svg` is the rendered body when the source parsed; `None` is the
-            // prose fallback (malformed DSL, or an empty/unknown type) — a
-            // diagram NEVER fails the render.
-            let (class, svg) = match crate::diagram::chart_alias(eff_type) {
-                // Chart-alias types (pie/donut/radar/xychart) forward the body
-                // to the `::chart` pipeline — same pipe-delimited table.
-                Some(chart_type) => match crate::blocks::parse_chart_data(eff_content) {
-                    Some(data) => (
-                        format!("surfdoc-diagram surfdoc-diagram-{eff_type}"),
-                        Some(crate::chart::render_svg(chart_type, &data, title.as_deref())),
-                    ),
-                    None => ("surfdoc-diagram surfdoc-diagram-fallback".to_string(), None),
-                },
-                None => match crate::diagram::parse_diagram_source(eff_type, eff_content) {
-                    Ok(model) => (
-                        format!("surfdoc-diagram surfdoc-diagram-{eff_type}"),
-                        Some(crate::diagram::render_svg(&model, title.as_deref())),
-                    ),
-                    Err(_) => ("surfdoc-diagram surfdoc-diagram-fallback".to_string(), None),
-                },
+            // ONE decision for every renderer (0.41.0, `diagram::render_block_svg`,
+            // render_html's twin): `svg` is the rendered body when the source
+            // parsed; `None` is the prose fallback (malformed DSL, or an
+            // empty/unknown type) — a diagram NEVER fails the render.
+            let (eff_type, svg) =
+                crate::diagram::render_block_svg(diagram_type, content, title.as_deref());
+            let class = match svg {
+                Some(_) => format!("surfdoc-diagram surfdoc-diagram-{eff_type}"),
+                None => "surfdoc-diagram surfdoc-diagram-fallback".to_string(),
             };
             dom.open("figure", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup(&class));

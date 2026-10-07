@@ -738,8 +738,9 @@ mod native {
     use surf_parse::render_native::{NativeBlock, NATIVE_DOC_SCHEMA_VERSION};
 
     #[test]
-    fn native_schema_is_fifteen() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
+    fn native_schema_is_sixteen() {
+        // 15 was 0.37.0's (this lane); 0.40.0 moved it to 16.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 16);
     }
 
     #[test]

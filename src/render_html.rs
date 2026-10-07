@@ -4229,46 +4229,19 @@ fn render_block_inner(block: &Block) -> String {
                 ),
                 None => String::new(),
             };
-            // Mermaid-syntax bodies (sniffed, or explicit `type=mermaid`)
-            // translate to the native DSL first; the translated type and
-            // body then flow through the exact same pipeline below. The
-            // prose fallback always shows the AUTHOR'S source, never the
-            // translation.
-            let translated = crate::mermaid_compat::translate(diagram_type, content);
-            let (eff_type, eff_content) = match &translated {
-                Some(t) => (t.diagram_type, t.content.as_str()),
-                None => (diagram_type.as_str(), content.as_str()),
-            };
-            // Chart-alias types (pie/donut/radar/xychart) forward the body to
-            // the `::chart` pipeline — the body is the same pipe-delimited
-            // table `::chart` accepts. An unusable body degrades to the same
-            // prose fallback as any other diagram.
-            if let Some(chart_type) = crate::diagram::chart_alias(eff_type) {
-                return match crate::blocks::parse_chart_data(eff_content) {
-                    Some(data) => {
-                        let svg = crate::chart::render_svg(chart_type, &data, title.as_deref());
-                        format!(
-                            "<figure class=\"surfdoc-diagram surfdoc-diagram-{}\">{caption_html}{svg}</figure>",
-                            escape_html(eff_type),
-                        )
-                    }
-                    None => format!(
-                        "<figure class=\"surfdoc-diagram surfdoc-diagram-fallback\">{caption_html}<pre class=\"surfdoc-diagram-src\">{}</pre></figure>",
-                        escape_html(content),
-                    ),
-                };
-            }
-            match crate::diagram::parse_diagram_source(eff_type, eff_content) {
-                Ok(model) => {
-                    let svg = crate::diagram::render_svg(&model, title.as_deref());
-                    format!(
-                        "<figure class=\"surfdoc-diagram surfdoc-diagram-{}\">{caption_html}{svg}</figure>",
-                        escape_html(eff_type),
-                    )
-                }
-                // Malformed DSL or empty/unknown type NEVER fails the render —
-                // degrade to a preformatted prose fallback.
-                Err(_) => format!(
+            // ONE decision for every renderer (0.41.0, `diagram::render_block_svg`):
+            // a mermaid body translates first, a chart alias rides the
+            // `::chart` pipeline, malformed DSL or an unknown type NEVER
+            // fails the render — the preformatted prose fallback shows the
+            // AUTHOR'S source. The DOM twin and the PDF pages call the same.
+            let (eff_type, svg) =
+                crate::diagram::render_block_svg(diagram_type, content, title.as_deref());
+            match svg {
+                Some(svg) => format!(
+                    "<figure class=\"surfdoc-diagram surfdoc-diagram-{}\">{caption_html}{svg}</figure>",
+                    escape_html(&eff_type),
+                ),
+                None => format!(
                     "<figure class=\"surfdoc-diagram surfdoc-diagram-fallback\">{caption_html}<pre class=\"surfdoc-diagram-src\">{}</pre></figure>",
                     escape_html(content),
                 ),

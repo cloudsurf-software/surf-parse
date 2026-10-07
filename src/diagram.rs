@@ -557,6 +557,49 @@ pub(crate) fn chart_alias(diagram_type: &str) -> Option<crate::types::ChartType>
     }
 }
 
+/// The SVG a `::diagram` block draws, or `None` for the prose fallback
+/// (malformed DSL, an empty or unknown type, an unusable chart body) — ONE
+/// decision every renderer shares (0.41.0: `render_html`, `render_dom` and
+/// the PDF pages), so a diagram that draws on the web draws the same bytes
+/// on a page. Returns the EFFECTIVE type (after a mermaid translation; the
+/// figure's class) beside the svg. The prose fallback always shows the
+/// AUTHOR'S source, never the translation — the caller keeps `content`.
+pub(crate) fn render_block_svg(
+    diagram_type: &str,
+    content: &str,
+    title: Option<&str>,
+) -> (String, Option<String>) {
+    let translated = crate::mermaid_compat::translate(diagram_type, content);
+    let (eff_type, eff_content) = match &translated {
+        Some(t) => (t.diagram_type, t.content.as_str()),
+        None => (diagram_type, content),
+    };
+    let svg = match chart_alias(eff_type) {
+        // Chart-alias types (pie/donut/radar/xychart) forward the body to
+        // the `::chart` pipeline — the same pipe-delimited table.
+        Some(chart_type) => crate::blocks::parse_chart_data(eff_content)
+            .map(|data| crate::chart::render_svg(chart_type, &data, title)),
+        None => parse_diagram_source(eff_type, eff_content)
+            .ok()
+            .map(|model| render_svg(&model, title)),
+    };
+    (eff_type.to_string(), svg)
+}
+
+/// The `width` and `height` the svg head declares (CSS px), read back off
+/// the bytes [`render_svg`] / `chart::render_svg` wrote — the page renderer
+/// sizes the figure from them. `None` on anything that is not one of ours.
+#[cfg_attr(not(feature = "pdf"), allow(dead_code))]
+pub(crate) fn svg_size(svg: &str) -> Option<(f64, f64)> {
+    fn attr(svg: &str, name: &str) -> Option<f64> {
+        let head = svg.get(..svg.find('>')?)?;
+        let at = head.find(&format!(" {name}=\""))? + name.len() + 3;
+        let rest = &head[at..];
+        rest[..rest.find('"')?].parse().ok()
+    }
+    Some((attr(svg, "width")?, attr(svg, "height")?))
+}
+
 /// True for characters allowed in node/entity ids: `[A-Za-z0-9_-]`.
 fn is_id_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_' || c == '-'

@@ -5,6 +5,14 @@
 
 use wasm_bindgen::prelude::*;
 
+/// The crate version compiled into this wasm (0.41.0) — a host's pin gate
+/// compares it with the tag its manifest names, so a shipped bundle can
+/// never lag the crate it claims to be (TASK-1455).
+#[wasm_bindgen]
+pub fn version() -> String {
+    crate::VERSION.to_string()
+}
+
 /// Render a SurfDoc source string to an HTML fragment.
 ///
 /// Returns semantic HTML with `surfdoc-*` CSS classes, suitable for

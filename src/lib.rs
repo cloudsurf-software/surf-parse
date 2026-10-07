@@ -74,6 +74,12 @@ pub mod workbook;
 /// `--font-heading`, `--font-body`) for site-level theming.
 pub const SURFDOC_CSS: &str = include_str!("../assets/surfdoc.css");
 
+/// This crate's version, `CARGO_PKG_VERSION` (0.41.0) — what a consumer's
+/// drift test reads back off a shipped build (the web shell's wasm pin gate,
+/// TASK-1455) and what `wasm::version` returns; the same string
+/// `spec_registry::CRATE_VERSION` stamps on the spec.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub use blocks::{parse_schema_field_type, parse_schema_constraint};
 pub use builder::SurfDocBuilder;
 pub use citation::{

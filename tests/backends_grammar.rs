@@ -395,8 +395,9 @@ mod native {
     #[test]
     fn moodmap_crosses_the_native_schema() {
         // The backends grammar crossed at v14 (0.33.0); the schema has moved
-        // on since (v15, 0.37.0 video) and its variants still cross.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
+        // on since (v15, 0.37.0 video; v16, 0.40.0 segment icon + tint) and
+        // its variants still cross.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 16);
         let doc = surf_parse::parse(&fixture()).doc;
         for b in doc.blocks.iter().filter(|b| {
             matches!(

@@ -213,6 +213,10 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     // 0.38.0: the invented contract register (thirteen pipe-table sheets
     // under headings) — the workbook identity fixture, well-formed.
     ("workbook-register.surf", &[]),
+    // 0.41.0: one block of every diagram type (17 natives + 4 chart
+    // aliases) — the constructive-sink, PDF-page and web-walk fixture,
+    // well-formed.
+    ("diagrams-every-type.surf", &[]),
 ];
 
 #[test]

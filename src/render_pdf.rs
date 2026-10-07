@@ -344,15 +344,73 @@ fn compile(doc: &SurfDoc, config: &PdfConfig) -> Result<typst::layout::PagedDocu
         binaries.push((vpath, bytes.clone()));
     }
 
-    match compile_once(doc, config, &virtual_map, &binaries) {
+    // 0.41.0: every `::diagram` that draws, as a virtual svg beside the images.
+    let (diagram_map, diagram_files) = diagram_files(doc);
+    binaries.extend(diagram_files);
+
+    match compile_once(doc, config, &virtual_map, &diagram_map, &binaries) {
         Ok(compiled) => Ok(compiled),
-        // Degrade-don't-die: if compilation failed WITH images registered,
-        // retry once with all images as placeholders before giving up.
-        Err(PdfError::Compilation(first)) if !virtual_map.is_empty() => {
-            compile_once(doc, config, &HashMap::new(), &[]).map_err(|_| PdfError::Compilation(first))
+        // Degrade-don't-die: if compilation failed WITH images or diagrams
+        // registered, retry once with all of them as placeholders (the
+        // images) and fences (the diagrams) before giving up.
+        Err(PdfError::Compilation(first)) if !virtual_map.is_empty() || !diagram_map.is_empty() => {
+            compile_once(doc, config, &HashMap::new(), &HashMap::new(), &[])
+                .map_err(|_| PdfError::Compilation(first))
         }
         Err(e) => Err(e),
     }
+}
+
+/// Every `::diagram` block of `doc` that draws (0.41.0), recursing into
+/// container blocks: the ambient map `render_typst` reads (type + body →
+/// the virtual path and the svg's size) and the files the engine serves.
+/// Deterministic: numbered in document order, one file per distinct block.
+fn diagram_files(doc: &SurfDoc) -> (HashMap<String, render_typst::DiagramImage>, Vec<(String, Vec<u8>)>) {
+    let mut map: HashMap<String, render_typst::DiagramImage> = HashMap::new();
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    fn walk(
+        blocks: &[Block],
+        map: &mut HashMap<String, render_typst::DiagramImage>,
+        files: &mut Vec<(String, Vec<u8>)>,
+    ) {
+        for b in blocks {
+            match b {
+                Block::Diagram { diagram_type, title, content, .. } => {
+                    let key = render_typst::diagram_key(diagram_type, content);
+                    if map.contains_key(&key) {
+                        continue;
+                    }
+                    let (_eff, svg) =
+                        crate::diagram::render_block_svg(diagram_type, content, title.as_deref());
+                    let Some(svg) = svg else { continue };
+                    let Some((width_px, height_px)) = crate::diagram::svg_size(&svg) else { continue };
+                    let path = format!("/surf-diagram-{}.svg", files.len());
+                    files.push((path.clone(), svg.into_bytes()));
+                    map.insert(key, render_typst::DiagramImage { path, width_px, height_px });
+                }
+                Block::Page { children, .. }
+                | Block::Slide { children, .. }
+                | Block::Section { children, .. }
+                | Block::App { children, .. }
+                | Block::AppShell { children, .. }
+                | Block::PanelSlot { children, .. }
+                | Block::Sidebar { children, .. }
+                | Block::Panel { children, .. }
+                | Block::TabContent { children, .. }
+                | Block::Drawer { children, .. }
+                | Block::Modal { children, .. }
+                | Block::When { children, .. } => walk(children, map, files),
+                Block::Flow { steps, .. } => {
+                    for step in steps {
+                        walk(&step.children, map, files);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    walk(&doc.blocks, &mut map, &mut files);
+    (map, files)
 }
 
 /// One compile pass: render Typst markup under the given ambient image map,
@@ -361,12 +419,15 @@ fn compile_once(
     doc: &SurfDoc,
     config: &PdfConfig,
     virtual_map: &HashMap<String, String>,
+    diagram_map: &HashMap<String, render_typst::DiagramImage>,
     binaries: &[(String, Vec<u8>)],
 ) -> Result<typst::layout::PagedDocument, PdfError> {
     // Generate Typst markup from the SurfDoc block tree, with the src →
-    // virtual-path map ambient so image emissions resolve (CiteScope pattern).
+    // virtual-path map (and the diagram map, 0.41.0) ambient so image and
+    // diagram emissions resolve (CiteScope pattern).
     let markup = {
         let _images = render_typst::install_image_context(virtual_map.clone());
+        let _diagrams = render_typst::install_diagram_context(diagram_map.clone());
         render_typst::to_typst(doc)
     };
     let typst_source = assemble_source(markup, config);
@@ -489,11 +550,14 @@ pub fn collect_image_srcs(doc: &SurfDoc) -> Vec<String> {
 /// for `doc` under `config` (surf-parse 0.34.0): the page geometry, the page
 /// furniture, then the profile template + the document's markup (images
 /// unresolved — the same text the compile sees when no image bytes are
-/// given). The seam the profile tests read the running footer through: the
-/// page SVGs draw glyphs as paths, so the words are not greppable there.
+/// given; diagrams resolved, 0.41.0 — they need no bytes from the caller).
+/// The seam the profile tests read the running footer through: the page
+/// SVGs draw glyphs as paths, so the words are not greppable there.
 pub fn typst_source(doc: &SurfDoc, config: &PdfConfig) -> String {
+    let (diagram_map, _files) = diagram_files(doc);
     let markup = {
         let _images = render_typst::install_image_context(HashMap::new());
+        let _diagrams = render_typst::install_diagram_context(diagram_map);
         render_typst::to_typst(doc)
     };
     assemble_source(markup, config)
