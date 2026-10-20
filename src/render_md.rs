@@ -250,6 +250,31 @@ pub(crate) fn render_block(block: &Block) -> String {
             lines.join("\n")
         }
 
+        // A player degrades to the record's name and its track list: a
+        // streaming track links to its file, a locked one says so.
+        Block::Player { title, artist, buy, buy_label, tracks, .. } => {
+            let mut lines = Vec::new();
+            match (title, artist) {
+                (Some(t), Some(a)) => lines.push(format!("**{t}** · {a}")),
+                (Some(t), None) => lines.push(format!("**{t}**")),
+                (None, Some(a)) => lines.push(format!("**{a}**")),
+                (None, None) => {}
+            }
+            let lock = buy_label.as_deref().unwrap_or("Full album");
+            for (i, t) in tracks.iter().enumerate() {
+                let length = t.duration.as_deref().map(|d| format!(" · {d}")).unwrap_or_default();
+                let line = match crate::render_html::player_track_url(t) {
+                    Some(url) => format!("{}. [{}]({url}){length}", i + 1, t.title),
+                    None => match buy {
+                        Some(b) => format!("{}. {}{length} · [{lock}]({b})", i + 1, t.title),
+                        None => format!("{}. {}{length} · {lock}", i + 1, t.title),
+                    },
+                };
+                lines.push(line);
+            }
+            lines.join("\n")
+        }
+
         Block::Diagram {
             diagram_type,
             title,

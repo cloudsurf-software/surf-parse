@@ -1,0 +1,63 @@
+---
+title: "::player — the music player (0.42.0)"
+type: doc
+version: 1
+created: 2026-10-19
+updated: 2026-10-19
+status: current
+scope: surf-parse
+tags: [surfdoc, player, audio, music]
+---
+
+# ::player — the music player
+
+::summary
+A record's tracks on one persistent player per page. Each row plays in place; a locked row links to the record's buy door; a mini bar at the foot opens into a now-playing sheet. Nothing to install: the block carries its own runtime and the stylesheet carries its look, in tokens.
+::
+
+## The grammar
+
+```surf
+::player[title="Time Traveler" artist="Scouter" art="/img/cover.png" buy="#buy" buy-label="Full album"]
+- Broken Hearted | 1:55 | | Chapter 1 · Ordinary World
+- Time Traveler | 2:54 | /audio/time-traveler.mp3 | Chapter 4 · Meeting the Mentor
+- Without Rain | 3:16 | locked
+::
+```
+
+| Attribute | What |
+|---|---|
+| `title` (or `album`) | The record's name: the album line in the bar and the sheet. |
+| `artist` | The artist's name. |
+| `art` (or `cover`) | The cover: a site path or an `https:` URL. Without it the mark's chip stands in. |
+| `buy` | Where a locked row and the row layout's button lead (`#buy`, `/music/record#buy`). |
+| `buy-label` | The locked row's chip (default `Full album`) and the row layout's button (default `Buy`). |
+| `line` | The row layout's line under the title. |
+| `layout` | `list` (default) or `row`: the one-row now-playing strip for the first streaming track. |
+
+A body line is one track: `- Title | length | source | line`. Everything after the title is optional. An empty source, or the word `locked`, is a LOCKED track: the record sells it rather than streams it. A source is a site path, an `https:` URL or a `media:<file-id>` the host resolves; any other scheme is locked.
+
+## The row layout
+
+```surf
+::player[layout=row title="Time Traveler" artist="Scouter" art="/img/cover.png" line="The title track streams free. The record is $9.99." buy="/music/scouter/time-traveler#buy" buy-label="Buy the album"]
+- Time Traveler | 2:54 | /audio/time-traveler.mp3
+::
+```
+
+The cover, play, `Title · Artist`, the line, the length, the button. The same player: start the row on the home page, open the album page, the bar is still there.
+
+## What the runtime does
+
+- One `<audio>` for every `::player` on the page; a block's streaming rows are its queue.
+- A row plays or pauses its track; a different row replaces the queue.
+- The mini bar: a progress line on its top edge, the whole bar opens the sheet, play / pause and next.
+- The sheet: the cover, the titles, seek with elapsed and total, shuffle, previous, play, next. Escape, the backdrop, the collapse button or a swipe down closes it; Tab stays inside it; the page does not scroll behind it and does not jump when it opens.
+- Previous restarts the track when more than three seconds in. Shuffle never repeats until the queue is spent, and previous retraces the path.
+- Space, Left, Right and Escape drive the transport on a keyboard, never from an input or a button, never on a touch device.
+- The OS media surface (lock screen, headphones, the system tray) shows the track and takes play, pause, next, previous and seek.
+- Reduced motion: the bar fades, the sheet fades, the equaliser holds still.
+
+## Everywhere else
+
+Markdown, the terminal, LaTeX and Typst draw the record's name and a numbered track list; the native schema (v17) carries `NativeBlock::Player` with its tracks for the Mac and the phone to draw on their own player.

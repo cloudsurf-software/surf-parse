@@ -3,6 +3,49 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.42.0 — 2026-10-19 (`::player` — a record's tracks on one persistent player: rows that play in place, the mini bar and the now-playing sheet, shuffle, the OS media surface, keyboard transport; native schema v17)
+
+desertfuzz.com's album page streams its title track and sells the record, and its React player (a persistent
+`<audio>` under the Music section, a mini bar that opens into a now-playing sheet, Media Session, Space / Left /
+Right / Escape) had no SurfDoc. Measured 2026-10-19: the SurfDoc edition of the site drew `::embed[type=audio]` as
+a bare `<audio controls>` through a host-side rewrite. Additive — a 0.41 document renders byte for byte.
+
+- **`::player[title= artist= art= buy= buy-label= line= layout=]`** — one body line per track:
+  `- Title | 2:54 | /audio/a.mp3 | Chapter 4`: the title, the length, the source and a second line, each optional
+  after the title. An empty source (or the word `locked`) is a LOCKED track: the record sells it rather than
+  streams it, and its row is a link to `buy` labelled `buy-label` (default "Full album"); without a door it is a
+  plain row. A source is a site path, an `https:` URL or a `media:<file-id>` the host resolves through
+  `install_media_resolver` (unresolved = locked); any other scheme is locked too. `layout=row` is the one-row
+  now-playing strip (the cover or the mark's chip, play, "Title · Artist", `line=`, the length, a `buy` button) for
+  the record's first streaming track.
+- **The HTML** is a `<section class="surfdoc-player" data-player data-layout data-album data-artist data-art
+  data-buy>`: an `<ol>` of rows — a streaming row is a `<button data-src data-title data-duration>` with the
+  number and the equaliser glyph in its first cell, a locked row an `<a data-locked>` with the lock chip — and the
+  runtime after every section. The runtime runs once per page: every section's rows join ONE `<audio>`; the mini
+  bar (a progress line on its top edge, the whole bar a button that opens the sheet, play / pause and next on
+  top), the backdrop and the now-playing sheet (the cover, the titles, seek with times, shuffle, previous, the big
+  play, next) are built on first play; previous restarts a track more than three seconds in; shuffle never
+  repeats until the queue is spent and previous retraces it; the queue is the block's streaming rows, so the
+  next track plays what the record lets you hear; the OS media surface carries the metadata, the position and
+  the actions; Space / Left / Right / Escape drive the transport on a keyboard, never from an input, a button or
+  a touch device; the sheet traps focus, locks scroll with the gutter compensated, collapses on Escape (capture
+  phase, so Escape never also closes), the backdrop, the handle or a swipe down past a quarter of its height or a
+  flick; reduced motion fades instead of sliding and never tracks the finger. Glyphs are CSS masks in
+  `currentColor`; the stylesheet is tokens only.
+- **The DOM twin** builds the section element for element and replays the runtime as static text; the gate
+  declines the document as script-emitting (`player`), like `gallery`.
+- **Native schema v17: `NativeBlock::Player`** (`title`, `artist`, `art`, `buy`, `buy_label`, `line`, `layout` =
+  `list` | `row`, `tracks` of `NativePlayerTrack`: `title`, `duration_seconds`, `src` as authored, `line`,
+  `locked`); content tier. Additive — a client that ignores the variant reads v16's shape.
+- Markdown, the terminal, LaTeX and Typst degrade to the record's name and a numbered track list (a streaming
+  track links to its file, a locked one says so); the PDF pages list the cover among the images; the serializer
+  round-trips the block to a fixed point; `spec/blocks.toml` lists it (132 blocks); the coverage sweep has its
+  snippet.
+- Tests: `tests/player.rs` (the grammar and its defaults, the list, the locked row, the row layout, the disabled
+  row, hostile sources and text, the resolver seam, the stylesheet, the DOM twin's byte identity and decline, the
+  native shape, every degrading renderer, the fixed point) and the corpus tier `tier10-player` (html + native
+  snapshots).
+
 ## 0.41.0 — 2026-10-07 (diagrams draw everywhere the web draws a doc — the constructive sink admits every attribute a diagram emits, the PDF pages draw the svg as a figure, `VERSION` + `wasm::version` for a host's pin gate; TASK-1455)
 
 A `::diagram[type=c4]` opened in the CloudSurf web app showed as text. Measured 2026-10-07: the Doc tab's Read mode

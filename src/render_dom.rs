@@ -1919,6 +1919,206 @@ fn build_video<S: DomSink>(dom: &mut Dom<'_, S>, spec: &crate::media::VideoSpec<
     dom.close();
 }
 
+/// A `::player` block — the twin of `render_html::player_section_html`
+/// (element for element, attribute for attribute), then the runtime as
+/// static text. The gate declines the document as script-emitting; the
+/// twin still serializes it so the byte-identity property is pinned.
+#[allow(clippy::too_many_arguments)]
+fn build_player<S: DomSink>(
+    dom: &mut Dom<'_, S>,
+    title: Option<&str>,
+    artist: Option<&str>,
+    art: Option<&str>,
+    buy: Option<&str>,
+    buy_label: Option<&str>,
+    line: Option<&str>,
+    layout: crate::types::PlayerLayout,
+    tracks: &[crate::types::PlayerTrack],
+) -> Result<(), RenderDomError> {
+    use crate::types::PlayerLayout;
+    let art_url = art.and_then(|a| safe_url(a, UrlKind::Image));
+    let buy_href = buy.map(link_href);
+    dom.open("section", CloseStyle::Normal);
+    dom.attr(
+        "class",
+        AttrVal::Markup(if layout == PlayerLayout::Row { "surfdoc-player surfdoc-player-row" } else { "surfdoc-player" }),
+    );
+    dom.attr("data-player", AttrVal::Markup(""));
+    dom.attr("data-layout", AttrVal::Markup(layout.as_str()));
+    if let Some(t) = title.filter(|t| !t.is_empty()) {
+        dom.attr("data-album", AttrVal::Markup(t));
+    }
+    if let Some(a) = artist.filter(|a| !a.is_empty()) {
+        dom.attr("data-artist", AttrVal::Markup(a));
+    }
+    if let Some(a) = art_url {
+        dom.attr("data-art", AttrVal::Markup(a));
+    }
+    if let Some(b) = buy_href {
+        dom.attr("data-buy", AttrVal::Markup(b));
+    }
+    let main = |dom: &mut Dom<'_, S>, heading: &[&str], line: Option<&str>| {
+        dom.open("span", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-player-main"));
+        dom.open("span", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-player-title"));
+        for (i, h) in heading.iter().enumerate() {
+            if i > 0 {
+                dom.text_raw(" · ");
+            }
+            dom.text_markup(h);
+        }
+        dom.close();
+        if let Some(l) = line.filter(|l| !l.is_empty()) {
+            dom.open("span", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-player-line"));
+            dom.text_markup(l);
+            dom.close();
+        }
+        dom.close();
+    };
+    let time = |dom: &mut Dom<'_, S>, d: Option<&str>| {
+        dom.open("span", CloseStyle::Normal);
+        dom.attr("class", AttrVal::Markup("surfdoc-player-time"));
+        dom.text_markup(d.unwrap_or("-:--"));
+        dom.close();
+    };
+    match layout {
+        PlayerLayout::Row => {
+            let streaming = tracks
+                .iter()
+                .find_map(|t| render_html::player_track_url(t).map(|u| (t, Some(u))))
+                .or_else(|| tracks.first().map(|t| (t, None)));
+            dom.open("span", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-player-art"));
+            match art_url {
+                Some(a) => {
+                    dom.open("img", CloseStyle::Void);
+                    dom.attr("src", AttrVal::Markup(a));
+                    dom.attr("alt", AttrVal::Markup(&format!("{} cover art", title.unwrap_or("The record"))));
+                    dom.attr("loading", AttrVal::Markup("lazy"));
+                    dom.close();
+                }
+                None => dom.attr("data-art-missing", AttrVal::Markup("")),
+            }
+            dom.close();
+            if let Some((t, url)) = streaming {
+                dom.open("button", CloseStyle::Normal);
+                dom.attr("type", AttrVal::Markup("button"));
+                dom.attr("class", AttrVal::Markup("surfdoc-player-track surfdoc-player-now"));
+                match url {
+                    Some(u) => dom.attr("data-src", AttrVal::Markup(&u)),
+                    None => dom.attr("aria-disabled", AttrVal::Markup("true")),
+                }
+                dom.attr("data-title", AttrVal::Markup(&t.title));
+                if let Some(d) = &t.duration {
+                    dom.attr("data-duration", AttrVal::Markup(d));
+                }
+                dom.attr("aria-label", AttrVal::Markup(&format!("Play {}", t.title)));
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-player-glyph"));
+                dom.attr("aria-hidden", AttrVal::Markup("true"));
+                dom.close();
+                dom.close();
+                let mut heading: Vec<&str> = vec![&t.title];
+                if let Some(a) = artist.filter(|a| !a.is_empty()) {
+                    heading.push(a);
+                }
+                main(dom, &heading, line);
+                time(dom, t.duration.as_deref());
+            }
+            if let Some(b) = buy_href {
+                dom.open("a", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-player-buy-btn"));
+                dom.attr("href", AttrVal::Markup(b));
+                dom.text_markup(buy_label.filter(|l| !l.is_empty()).unwrap_or("Buy"));
+                dom.close();
+            }
+        }
+        PlayerLayout::List => {
+            let lock_label = buy_label.filter(|l| !l.is_empty()).unwrap_or("Full album");
+            dom.open("ol", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-player-tracks"));
+            for (i, t) in tracks.iter().enumerate() {
+                let n = (i + 1).to_string();
+                dom.open("li", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-player-item"));
+                match render_html::player_track_url(t) {
+                    Some(url) => {
+                        dom.open("button", CloseStyle::Normal);
+                        dom.attr("type", AttrVal::Markup("button"));
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-track"));
+                        dom.attr("data-src", AttrVal::Markup(&url));
+                        dom.attr("data-title", AttrVal::Markup(&t.title));
+                        if let Some(d) = &t.duration {
+                            dom.attr("data-duration", AttrVal::Markup(d));
+                        }
+                        dom.attr("aria-label", AttrVal::Markup(&format!("Play {}", t.title)));
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-num"));
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-index"));
+                        dom.text_raw(&n);
+                        dom.close();
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-eq"));
+                        dom.attr("aria-hidden", AttrVal::Markup("true"));
+                        for _ in 0..3 {
+                            dom.open("span", CloseStyle::Normal);
+                            dom.close();
+                        }
+                        dom.close();
+                        dom.close();
+                        main(dom, &[&t.title], t.line.as_deref());
+                        time(dom, t.duration.as_deref());
+                        dom.close();
+                    }
+                    None => {
+                        let label = format!("{}, on the full album", t.title);
+                        match buy_href {
+                            Some(b) => {
+                                dom.open("a", CloseStyle::Normal);
+                                dom.attr("class", AttrVal::Markup("surfdoc-player-track surfdoc-player-locked"));
+                                dom.attr("href", AttrVal::Markup(b));
+                            }
+                            None => {
+                                dom.open("span", CloseStyle::Normal);
+                                dom.attr("class", AttrVal::Markup("surfdoc-player-track surfdoc-player-locked"));
+                            }
+                        }
+                        dom.attr("data-locked", AttrVal::Markup(""));
+                        dom.attr("aria-label", AttrVal::Markup(&label));
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-num"));
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-index"));
+                        dom.text_raw(&n);
+                        dom.close();
+                        dom.close();
+                        main(dom, &[&t.title], t.line.as_deref());
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-buy"));
+                        dom.open("span", CloseStyle::Normal);
+                        dom.attr("class", AttrVal::Markup("surfdoc-player-lock"));
+                        dom.attr("aria-hidden", AttrVal::Markup("true"));
+                        dom.close();
+                        dom.open("span", CloseStyle::Normal);
+                        dom.text_markup(lock_label);
+                        dom.close();
+                        dom.close();
+                        time(dom, t.duration.as_deref());
+                        dom.close();
+                    }
+                }
+                dom.close();
+            }
+            dom.close();
+        }
+    }
+    dom.close();
+    build_static(dom, render_html::PLAYER_JS)
+}
+
 /// The hero's background `<video>` — the twin of
 /// `render_html::hero_video_html`.
 fn build_hero_video<S: DomSink>(dom: &mut Dom<'_, S>, player: &crate::media::VideoPlayer) {
@@ -3946,6 +4146,18 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
                 }
             }
         }
+
+        Block::Player { title, artist, art, buy, buy_label, line, layout, tracks, .. } => build_player(
+            dom,
+            title.as_deref(),
+            artist.as_deref(),
+            art.as_deref(),
+            buy.as_deref(),
+            buy_label.as_deref(),
+            line.as_deref(),
+            *layout,
+            tracks,
+        )?,
 
         Block::Diagram { diagram_type, title, content, .. } => {
             // ONE decision for every renderer (0.41.0, `diagram::render_block_svg`,
@@ -6064,6 +6276,8 @@ fn script_emitting_kind(block: &Block) -> Option<&'static str> {
         Block::Store { .. } => Some("store"),
         Block::Booking { .. } => Some("booking"),
         Block::Gallery { .. } => Some("gallery"),
+        // 0.42.0: `::player` emits its runtime after every section.
+        Block::Player { .. } => Some("player"),
         // Chrome (C1 → 0.19.0): every tab-bar emits its switch script. The
         // app-shell right-panel drawer no longer does — its toggle behavior
         // is runtime-owned from 0.19.0 (markup + state attributes only), so

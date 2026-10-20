@@ -1341,6 +1341,43 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             format!("{fence}video{attrs}\n{fence}")
         }
 
+        Block::Player { title, artist, art, buy, buy_label, line, layout, tracks, .. } => {
+            let mut attr_parts = Vec::new();
+            if let Some(t) = title {
+                attr_parts.push(format!("title=\"{}\"", escape_attr(t)));
+            }
+            if let Some(a) = artist {
+                attr_parts.push(format!("artist=\"{}\"", escape_attr(a)));
+            }
+            if let Some(a) = art {
+                attr_parts.push(format!("art=\"{}\"", escape_attr(a)));
+            }
+            if let Some(b) = buy {
+                attr_parts.push(format!("buy=\"{}\"", escape_attr(b)));
+            }
+            if let Some(l) = buy_label {
+                attr_parts.push(format!("buy-label=\"{}\"", escape_attr(l)));
+            }
+            if let Some(l) = line {
+                attr_parts.push(format!("line=\"{}\"", escape_attr(l)));
+            }
+            if *layout == crate::types::PlayerLayout::Row {
+                attr_parts.push("layout=row".to_string());
+            }
+            let attrs = if attr_parts.is_empty() { String::new() } else { format!("[{}]", attr_parts.join(" ")) };
+            let mut body = String::new();
+            for t in tracks {
+                let mut fields = vec![t.title.clone()];
+                let tail = [t.duration.as_deref(), t.src.as_deref(), t.line.as_deref()];
+                let last = tail.iter().rposition(|f| f.is_some()).map(|i| i + 1).unwrap_or(0);
+                for f in &tail[..last] {
+                    fields.push(f.unwrap_or("").to_string());
+                }
+                body.push_str(&format!("- {}\n", fields.join(" | ")));
+            }
+            format!("{fence}player{attrs}\n{body}{fence}")
+        }
+
         Block::Tabs { tabs, .. } => {
             let mut content_parts = Vec::new();
             for tab in tabs {

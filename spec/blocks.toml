@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 131
-registry_updated = "2026-10-01"
+total_blocks = 132
+registry_updated = "2026-10-19"
 
 [fields]
 # Change of kind (the AI harness, 0.39.1): a field or a list in one row means the same thing to a reader, so a swap
@@ -1245,6 +1245,14 @@ purpose = "Horizontal scroll-snap carousel — `:::slide[image= alt=]` children 
 attributes = ["id", "aspect"]
 degradation = "the slides in order as heading, image and body"
 enum_variant = "Carousel"
+
+[blocks.player]
+status = "implemented"
+category = "site"
+purpose = "A record's tracks on ONE persistent player per page — each `- Title | 2:54 | /audio/a.mp3 | Chapter` row plays in place (an empty source = locked: sold, not streamed, the row links to `buy`); a mini bar at the foot opens into a now-playing sheet with seek, previous, play / pause, next and shuffle; the OS media surface; keyboard transport; `layout=row` is the one-row now-playing strip"
+attributes = ["title", "artist", "art", "buy", "buy-label", "line", "layout"]
+degradation = "the record's name and a numbered track list — a streaming track links to its file, a locked one says so"
+enum_variant = "Player"
 
 # ----- Stateful app blocks added in 0.33.0 (the backends grammar) -----
 # Inert markup the platform runtime reads through data-* attributes; no

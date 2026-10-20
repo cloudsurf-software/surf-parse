@@ -7,7 +7,7 @@
 use crate::citation::{self, CiteRef};
 use crate::icons::get_icon;
 use crate::url_policy::{css_url, css_value, link_href, safe_url, src_or_empty, UrlKind};
-use crate::types::{Block, CalloutType, CarouselSlide, ChartType, DecisionStatus, Format, FormField, FormFieldType, HoursRow, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
+use crate::types::{Block, CalloutType, CarouselSlide, PlayerLayout, PlayerTrack, ChartType, DecisionStatus, Format, FormField, FormFieldType, HoursRow, HttpMethod, ListDisplay, NavGroup, NavItem, PerClass, RowState, SizeClass, RenderProfile, StyleProperty, SurfDoc, Trend, DATA_PREVIEW_ROWS, DATA_WIDE_COLS};
 
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
@@ -3583,6 +3583,201 @@ pub(crate) fn hero_video_html(player: &crate::media::VideoPlayer) -> String {
     tag
 }
 
+/// The audio URL a `::player` track plays, or `None` when the track is
+/// locked or its source is not one the renderers may emit (a `media:` id
+/// with no resolver, an unusable scheme).
+pub(crate) fn player_track_url(track: &PlayerTrack) -> Option<String> {
+    let src = track.src.as_deref()?.trim();
+    if src.is_empty() {
+        return None;
+    }
+    crate::media::media_url(src, crate::media::MediaUse::Video)
+}
+
+/// The `::player` section without its script — the DOM twin builds the
+/// same tree element by element, and `tests/player.rs` pins the bytes.
+pub(crate) fn player_section_html(
+    title: Option<&str>,
+    artist: Option<&str>,
+    art: Option<&str>,
+    buy: Option<&str>,
+    buy_label: Option<&str>,
+    line: Option<&str>,
+    layout: PlayerLayout,
+    tracks: &[PlayerTrack],
+) -> String {
+    let art_url = art.and_then(|a| safe_url(a, UrlKind::Image));
+    let buy_href = buy.map(link_href);
+    let mut html = String::from("<section class=\"surfdoc-player");
+    if layout == PlayerLayout::Row {
+        html.push_str(" surfdoc-player-row");
+    }
+    html.push_str(&format!("\" data-player=\"\" data-layout=\"{}\"", layout.as_str()));
+    if let Some(t) = title.filter(|t| !t.is_empty()) {
+        html.push_str(&format!(" data-album=\"{}\"", escape_html(t)));
+    }
+    if let Some(a) = artist.filter(|a| !a.is_empty()) {
+        html.push_str(&format!(" data-artist=\"{}\"", escape_html(a)));
+    }
+    if let Some(a) = art_url {
+        html.push_str(&format!(" data-art=\"{}\"", escape_html(a)));
+    }
+    if let Some(b) = buy_href {
+        html.push_str(&format!(" data-buy=\"{}\"", escape_html(b)));
+    }
+    html.push('>');
+    match layout {
+        PlayerLayout::Row => {
+            let streaming = tracks
+                .iter()
+                .find_map(|t| player_track_url(t).map(|u| (t, Some(u))))
+                .or_else(|| tracks.first().map(|t| (t, None)));
+            // The cover, or the mark when there is none.
+            match art_url {
+                Some(a) => html.push_str(&format!(
+                    "<span class=\"surfdoc-player-art\"><img src=\"{}\" alt=\"{} cover art\" loading=\"lazy\"></span>",
+                    escape_html(a),
+                    escape_html(title.unwrap_or("The record")),
+                )),
+                None => html.push_str("<span class=\"surfdoc-player-art\" data-art-missing=\"\"></span>"),
+            }
+            if let Some((t, url)) = streaming {
+                html.push_str("<button type=\"button\" class=\"surfdoc-player-track surfdoc-player-now\"");
+                match url {
+                    Some(u) => html.push_str(&format!(" data-src=\"{}\"", escape_html(&u))),
+                    None => html.push_str(" aria-disabled=\"true\""),
+                }
+                html.push_str(&format!(" data-title=\"{}\"", escape_html(&t.title)));
+                if let Some(d) = &t.duration {
+                    html.push_str(&format!(" data-duration=\"{}\"", escape_html(d)));
+                }
+                html.push_str(&format!(
+                    " aria-label=\"Play {}\"><span class=\"surfdoc-player-glyph\" aria-hidden=\"true\"></span></button>",
+                    escape_html(&t.title)
+                ));
+                let mut heading = escape_html(&t.title);
+                if let Some(a) = artist.filter(|a| !a.is_empty()) {
+                    heading.push_str(" · ");
+                    heading.push_str(&escape_html(a));
+                }
+                html.push_str(&format!("<span class=\"surfdoc-player-main\"><span class=\"surfdoc-player-title\">{heading}</span>"));
+                if let Some(l) = line.filter(|l| !l.is_empty()) {
+                    html.push_str(&format!("<span class=\"surfdoc-player-line\">{}</span>", escape_html(l)));
+                }
+                html.push_str("</span>");
+                html.push_str(&format!(
+                    "<span class=\"surfdoc-player-time\">{}</span>",
+                    escape_html(t.duration.as_deref().unwrap_or("-:--"))
+                ));
+            }
+            if let Some(b) = buy_href {
+                html.push_str(&format!(
+                    "<a class=\"surfdoc-player-buy-btn\" href=\"{}\">{}</a>",
+                    escape_html(b),
+                    escape_html(buy_label.filter(|l| !l.is_empty()).unwrap_or("Buy")),
+                ));
+            }
+        }
+        PlayerLayout::List => {
+            let lock_label = buy_label.filter(|l| !l.is_empty()).unwrap_or("Full album");
+            html.push_str("<ol class=\"surfdoc-player-tracks\">");
+            for (i, t) in tracks.iter().enumerate() {
+                let n = i + 1;
+                html.push_str("<li class=\"surfdoc-player-item\">");
+                let main = {
+                    let mut m = format!(
+                        "<span class=\"surfdoc-player-main\"><span class=\"surfdoc-player-title\">{}</span>",
+                        escape_html(&t.title)
+                    );
+                    if let Some(l) = t.line.as_deref().filter(|l| !l.is_empty()) {
+                        m.push_str(&format!("<span class=\"surfdoc-player-line\">{}</span>", escape_html(l)));
+                    }
+                    m.push_str("</span>");
+                    m
+                };
+                let time = format!(
+                    "<span class=\"surfdoc-player-time\">{}</span>",
+                    escape_html(t.duration.as_deref().unwrap_or("-:--"))
+                );
+                match player_track_url(t) {
+                    Some(url) => {
+                        html.push_str(&format!(
+                            "<button type=\"button\" class=\"surfdoc-player-track\" data-src=\"{}\" data-title=\"{}\"",
+                            escape_html(&url),
+                            escape_html(&t.title)
+                        ));
+                        if let Some(d) = &t.duration {
+                            html.push_str(&format!(" data-duration=\"{}\"", escape_html(d)));
+                        }
+                        html.push_str(&format!(
+                            " aria-label=\"Play {}\"><span class=\"surfdoc-player-num\"><span class=\"surfdoc-player-index\">{n}</span><span class=\"surfdoc-player-eq\" aria-hidden=\"true\"><span></span><span></span><span></span></span></span>{main}{time}</button>",
+                            escape_html(&t.title)
+                        ));
+                    }
+                    None => {
+                        let label = format!("{}, on the full album", t.title);
+                        let (open, close) = match buy_href {
+                            Some(b) => (
+                                format!(
+                                    "<a class=\"surfdoc-player-track surfdoc-player-locked\" href=\"{}\" data-locked=\"\" aria-label=\"{}\">",
+                                    escape_html(b),
+                                    escape_html(&label)
+                                ),
+                                "</a>",
+                            ),
+                            None => (
+                                format!(
+                                    "<span class=\"surfdoc-player-track surfdoc-player-locked\" data-locked=\"\" aria-label=\"{}\">",
+                                    escape_html(&label)
+                                ),
+                                "</span>",
+                            ),
+                        };
+                        html.push_str(&open);
+                        html.push_str(&format!(
+                            "<span class=\"surfdoc-player-num\"><span class=\"surfdoc-player-index\">{n}</span></span>{main}<span class=\"surfdoc-player-buy\"><span class=\"surfdoc-player-lock\" aria-hidden=\"true\"></span><span>{}</span></span>{time}",
+                            escape_html(lock_label)
+                        ));
+                        html.push_str(close);
+                    }
+                }
+                html.push_str("</li>");
+            }
+            html.push_str("</ol>");
+        }
+    }
+    html.push_str("</section>");
+    html
+}
+
+/// The player runtime, emitted after every `::player` section. It runs
+/// once per page (a second copy returns at once): every section's rows
+/// join one shared `<audio>`; the mini bar, the backdrop and the
+/// now-playing sheet are built on first play; previous restarts a track
+/// more than three seconds in; shuffle never repeats until the queue is
+/// spent; Space / Left / Right / Escape drive the transport on a keyboard
+/// (never from an input, a button or a touch device); the OS media surface
+/// (lock screen, headphones) carries the metadata and the actions; the
+/// sheet traps focus, locks scroll without a layout jump and collapses on
+/// a swipe down, Escape or the backdrop.
+pub(crate) const PLAYER_JS: &str = r##"<script>(function(){if(window.__surfdocPlayer)return;var doc=document,sections=[].slice.call(doc.querySelectorAll('.surfdoc-player[data-player]'));if(!sections.length)return;var P=window.__surfdocPlayer={};var audio=doc.createElement('audio');audio.preload='none';audio.setAttribute('aria-hidden','true');var queue=[],index=-1,shuffle=false,shuffleQueue=[],history=[],status='idle',currentSrc=null,justEnded=false,expanded=false,tracks=[];var bar=null,sheet=null,backdrop=null,ui={},drag=null,lock=null,focusBack=null;function fmt(s){if(!isFinite(s)||s<0)return '0:00';var m=Math.floor(s/60),x=Math.floor(s%60);return m+':'+(x<10?'0':'')+x}function reduced(){try{return !!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)}catch(e){return false}}function coarse(){try{return !!(window.matchMedia&&matchMedia('(pointer: coarse)').matches)}catch(e){return false}}function shuffled(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}sections.forEach(function(s,si){var rows=[].slice.call(s.querySelectorAll('.surfdoc-player-track[data-src]'));var q=[];rows.forEach(function(r){if(!r.dataset.src)return;var t={el:r,id:'p'+si+':'+r.dataset.src,src:r.dataset.src,title:r.dataset.title||'',duration:r.dataset.duration||'',album:s.dataset.album||'',artist:s.dataset.artist||'',art:s.dataset.art||'',buy:s.dataset.buy||''};q.push(t);tracks.push(t);r.addEventListener('click',function(){toggleTrack(t)})});q.forEach(function(t){t.queue=q})});if(!tracks.length)return;function current(){return index>=0&&index<queue.length?queue[index]:null}function el(tag,cls,html){var e=doc.createElement(tag);if(cls)e.className=cls;if(html)e.innerHTML=html;return e}function glyph(k){var g=doc.createElement('span');g.className='surfdoc-player-glyph'+(k?' surfdoc-player-glyph-'+k:'');g.setAttribute('aria-hidden','true');return g.outerHTML}function chrome(){if(bar)return;bar=el('div','surfdoc-player-bar','<button type="button" class="surfdoc-player-expand" aria-expanded="false"></button><div class="surfdoc-player-bar-inner"><div class="surfdoc-player-bar-meta"><span class="surfdoc-player-bar-art"><img alt=""></span><span class="surfdoc-player-bar-titles"><span class="surfdoc-player-bar-title"></span><span class="surfdoc-player-bar-artist"></span></span></div><div class="surfdoc-player-bar-controls"><button type="button" class="surfdoc-player-btn surfdoc-player-toggle" aria-label="Play">'+glyph('')+'</button><button type="button" class="surfdoc-player-btn surfdoc-player-next" aria-label="Next">'+glyph('next')+'</button></div></div>');bar.setAttribute('role','region');bar.setAttribute('aria-label','Player');backdrop=el('div','surfdoc-player-backdrop');backdrop.setAttribute('aria-hidden','true');sheet=el('div','surfdoc-player-sheet','<div class="surfdoc-player-handle" aria-hidden="true"></div><button type="button" class="surfdoc-player-btn surfdoc-player-collapse" aria-label="Collapse player">'+glyph('down')+'</button><span class="surfdoc-player-sheet-art"><img alt=""></span><div class="surfdoc-player-sheet-titles"><span class="surfdoc-player-sheet-title"></span><span class="surfdoc-player-sheet-sub"></span></div><div class="surfdoc-player-seek"><span class="surfdoc-player-time surfdoc-player-elapsed">0:00</span><input type="range" class="surfdoc-player-scrubber" min="0" max="0" step="0.1" value="0" aria-label="Seek"><span class="surfdoc-player-time surfdoc-player-total">-:--</span></div><div class="surfdoc-player-transport"><button type="button" class="surfdoc-player-btn surfdoc-player-shuffle" aria-label="Toggle shuffle" aria-pressed="false">'+glyph('shuffle')+'</button><div class="surfdoc-player-transport-main"><button type="button" class="surfdoc-player-btn surfdoc-player-skip surfdoc-player-prev" aria-label="Previous">'+glyph('prev')+'</button><button type="button" class="surfdoc-player-btn surfdoc-player-play surfdoc-player-toggle" aria-label="Play">'+glyph('')+'</button><button type="button" class="surfdoc-player-btn surfdoc-player-skip surfdoc-player-next" aria-label="Next">'+glyph('next')+'</button></div><span aria-hidden="true"></span></div>');sheet.setAttribute('role','dialog');sheet.setAttribute('aria-modal','true');sheet.setAttribute('aria-label','Now playing');sheet.tabIndex=-1;doc.body.appendChild(audio);doc.body.appendChild(bar);doc.body.appendChild(backdrop);doc.body.appendChild(sheet);doc.documentElement.classList.add('surfdoc-player-open');ui.expand=bar.querySelector('.surfdoc-player-expand');ui.barArt=bar.querySelector('.surfdoc-player-bar-art');ui.barImg=ui.barArt.querySelector('img');ui.barTitle=bar.querySelector('.surfdoc-player-bar-title');ui.barArtist=bar.querySelector('.surfdoc-player-bar-artist');ui.sheetArt=sheet.querySelector('.surfdoc-player-sheet-art');ui.sheetImg=ui.sheetArt.querySelector('img');ui.sheetTitle=sheet.querySelector('.surfdoc-player-sheet-title');ui.sheetSub=sheet.querySelector('.surfdoc-player-sheet-sub');ui.elapsed=sheet.querySelector('.surfdoc-player-elapsed');ui.total=sheet.querySelector('.surfdoc-player-total');ui.scrub=sheet.querySelector('.surfdoc-player-scrubber');ui.shuffle=sheet.querySelector('.surfdoc-player-shuffle');ui.toggles=[].slice.call(doc.querySelectorAll('.surfdoc-player-bar .surfdoc-player-toggle,.surfdoc-player-sheet .surfdoc-player-toggle'));ui.expand.addEventListener('click',function(){expand()});[].forEach.call(doc.querySelectorAll('.surfdoc-player-bar .surfdoc-player-next,.surfdoc-player-sheet .surfdoc-player-next'),function(b){b.addEventListener('click',next)});sheet.querySelector('.surfdoc-player-prev').addEventListener('click',previous);ui.toggles.forEach(function(b){b.addEventListener('click',toggle)});sheet.querySelector('.surfdoc-player-collapse').addEventListener('click',function(){collapse()});backdrop.addEventListener('click',function(){collapse()});ui.shuffle.addEventListener('click',function(){setShuffle(!shuffle)});ui.scrub.addEventListener('input',function(){seek(Number(ui.scrub.value))});sheet.addEventListener('keydown',trapTab);sheet.addEventListener('touchstart',onTouchStart,{passive:true});sheet.addEventListener('touchmove',onTouchMove,{passive:true});sheet.addEventListener('touchend',onTouchEnd);sheet.addEventListener('touchcancel',onTouchCancel);audio.addEventListener('loadedmetadata',render);audio.addEventListener('timeupdate',onTime);audio.addEventListener('play',function(){justEnded=false;status='playing';render()});audio.addEventListener('pause',function(){if(justEnded)return;if(status!=='errored')status='paused';render()});audio.addEventListener('ended',function(){justEnded=true;status='idle';next()});audio.addEventListener('error',function(){status='errored';render()});window.addEventListener('keydown',onKey);mediaSessionActions();}function art(span,img,t){if(t&&t.art){img.src=t.art;img.alt=(t.album||t.title)+' cover art';span.removeAttribute('data-art-missing')}else{img.removeAttribute('src');img.alt='';span.setAttribute('data-art-missing','')}}function render(){var t=current();tracks.forEach(function(x){var on=t&&x.id===t.id;var playing=on&&status==='playing';if(on)x.el.setAttribute('data-current','');else x.el.removeAttribute('data-current');if(playing)x.el.setAttribute('data-playing','');else x.el.removeAttribute('data-playing');x.el.setAttribute('aria-label',(playing?'Pause ':'Play ')+x.title)});if(!bar)return;var open=!!t;bar.classList.toggle('is-open',open);doc.documentElement.classList.toggle('surfdoc-player-open',open);if(!open)return;var playing=status==='playing',loading=status==='loading',errored=status==='errored';ui.barTitle.textContent=t.title;ui.barArtist.textContent=errored?'Unable to play':t.artist;art(ui.barArt,ui.barImg,t);art(ui.sheetArt,ui.sheetImg,t);ui.sheetTitle.textContent=t.title;ui.sheetSub.textContent=errored?'Unable to play':(t.artist+(t.album?' · '+t.album:''));ui.expand.setAttribute('aria-label','Now playing: '+t.title+(t.artist?' by '+t.artist:'')+'. Show full player');ui.toggles.forEach(function(b){b.classList.toggle('is-playing',playing);b.classList.toggle('is-loading',loading);b.disabled=loading||errored;b.setAttribute('aria-label',(playing?'Pause ':'Play ')+t.title);if(loading)b.setAttribute('aria-busy','true');else b.removeAttribute('aria-busy')});ui.shuffle.setAttribute('aria-pressed',shuffle?'true':'false');ui.shuffle.classList.toggle('is-active',shuffle);var d=isFinite(audio.duration)?audio.duration:0;ui.scrub.max=d||0;ui.scrub.disabled=errored||!d;ui.total.textContent=d?fmt(d):(t.duration||'-:--');ui.scrub.setAttribute('aria-label','Seek within '+t.title);onTime();if('mediaSession' in navigator){try{navigator.mediaSession.playbackState=playing?'playing':'paused'}catch(e){}}}function onTime(){if(!bar)return;var d=isFinite(audio.duration)?audio.duration:0,c=audio.currentTime||0,pct=d>0?(c/d*100):0;bar.style.setProperty('--surfdoc-progress',pct+'%');ui.scrub.style.setProperty('--surfdoc-progress',pct+'%');if(doc.activeElement!==ui.scrub)ui.scrub.value=c;ui.elapsed.textContent=fmt(c);ui.scrub.setAttribute('aria-valuetext',fmt(c)+' of '+(d?fmt(d):'unknown'));if('mediaSession' in navigator&&navigator.mediaSession.setPositionState&&d>0&&isFinite(c)){try{navigator.mediaSession.setPositionState({duration:d,position:Math.min(c,d),playbackRate:1})}catch(e){}}}function play(t){justEnded=false;if(t.src!==currentSrc){audio.src=t.src;audio.currentTime=0;currentSrc=t.src;status='loading';render()}var p=audio.play();if(p&&p.then)p.then(function(){status='playing';render()},function(){status='errored';render()});if('mediaSession' in navigator&&window.MediaMetadata){try{navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.artist,album:t.album,artwork:t.art?[{src:t.art,sizes:'512x512'}]:[]})}catch(e){}}}function playByIndex(i){if(i<0||i>=queue.length)return;index=i;chrome();play(queue[i])}function playQueue(q,i){if(!q.length)return;queue=q;shuffleQueue=[];history=[];playByIndex(Math.min(Math.max(i||0,0),q.length-1))}function toggleTrack(t){var c=current();if(c&&c.id===t.id){toggle();return}playQueue(t.queue,t.queue.indexOf(t))}function toggle(){var c=current();if(!c)return;if(status==='playing'){audio.pause();return}play(c)}function next(){var c=current();if(!c){return}if(shuffle){history.push(c.id);if(!shuffleQueue.length){shuffleQueue=shuffled(queue.map(function(t){return t.id}).filter(function(id){return id!==c.id}))}var nid=shuffleQueue.shift(),ni=-1;queue.forEach(function(t,i){if(t.id===nid)ni=i});if(ni<0){close();return}playByIndex(ni);return}if(index>=queue.length-1){close();return}playByIndex(index+1)}function previous(){var c=current();if(!c)return;if(audio.currentTime>3){seek(0);return}if(shuffle){var pid=history.pop(),pi=-1;queue.forEach(function(t,i){if(t.id===pid)pi=i});if(pi<0){seek(0);return}playByIndex(pi);return}if(index<=0){seek(0);return}playByIndex(index-1)}function seek(s){audio.currentTime=s;onTime()}function setShuffle(b){shuffle=!!b;shuffleQueue=[];history=[];render()}function close(){audio.pause();index=-1;shuffleQueue=[];history=[];collapse();if('mediaSession' in navigator){try{navigator.mediaSession.playbackState='none';navigator.mediaSession.metadata=null}catch(e){}}render()}function lockScroll(on){var b=doc.body;if(on){if(lock)return;var g=window.innerWidth-doc.documentElement.clientWidth;lock={o:b.style.overflow,p:b.style.paddingRight};b.style.overflow='hidden';if(g>0){b.style.paddingRight=((parseFloat(getComputedStyle(b).paddingRight)||0)+g)+'px'}}else if(lock){b.style.overflow=lock.o;b.style.paddingRight=lock.p;lock=null}}function expand(){if(!bar||!current())return;expanded=true;sheet.setAttribute('data-open','');backdrop.setAttribute('data-open','');ui.expand.setAttribute('aria-expanded','true');lockScroll(true);focusBack=ui.expand;sheet.focus({preventScroll:true})}function collapse(){if(!expanded)return;expanded=false;sheet.removeAttribute('data-open');backdrop.removeAttribute('data-open');ui.expand.setAttribute('aria-expanded','false');lockScroll(false);sheet.removeAttribute('data-dragging');sheet.style.transform='';if(focusBack){focusBack.focus({preventScroll:true});focusBack=null}}function trapTab(e){if(e.key!=='Tab')return;var f=sheet.querySelectorAll('button:not(:disabled),input:not(:disabled)');if(!f.length)return;var a=doc.activeElement,first=f[0],last=f[f.length-1];if(e.shiftKey&&(a===first||a===sheet)){e.preventDefault();last.focus({preventScroll:true})}else if(!e.shiftKey&&a===last){e.preventDefault();first.focus({preventScroll:true})}}function onTouchStart(e){if(e.target.closest&&e.target.closest('input[type="range"]'))return;var t=e.touches[0],n=performance.now();drag={startY:t.clientY,prevY:t.clientY,prevT:n,lastY:t.clientY,lastT:n,dragging:false}}function onTouchMove(e){if(!drag)return;var y=e.touches[0].clientY;drag.prevY=drag.lastY;drag.prevT=drag.lastT;drag.lastY=y;drag.lastT=performance.now();var dy=y-drag.startY;if(!drag.dragging&&dy>10){drag.dragging=true;sheet.setAttribute('data-dragging','')}if(drag.dragging&&!reduced()){sheet.style.transform='translateY('+Math.max(0,dy)+'px)'}}function onTouchEnd(){var d=drag;drag=null;if(!d||!d.dragging)return;sheet.removeAttribute('data-dragging');sheet.style.transform='';var dy=d.lastY-d.startY,h=sheet.offsetHeight||0,dt=d.lastT-d.prevT,v=dt>0?(d.lastY-d.prevY)/dt:0;if((h>0&&dy>h*0.25)||(dy>0&&v>0.5))collapse()}function onTouchCancel(){drag=null;sheet.removeAttribute('data-dragging');sheet.style.transform=''}function onKey(e){if(e.key==='Escape'&&expanded){e.preventDefault();collapse();return}if(!current()||coarse())return;var t=e.target,tag=t&&t.tagName;if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable))return;if(e.key===' '||e.key==='Spacebar'){if(tag==='BUTTON'||tag==='A'||(t&&t.getAttribute&&t.getAttribute('role')==='button'))return;e.preventDefault();toggle()}else if(e.key==='ArrowRight'){e.preventDefault();next()}else if(e.key==='ArrowLeft'){e.preventDefault();previous()}else if(e.key==='Escape'){e.preventDefault();close()}}function mediaSessionActions(){if(!('mediaSession' in navigator)||!navigator.mediaSession.setActionHandler)return;var ms=navigator.mediaSession,h={play:toggle,pause:toggle,nexttrack:next,previoustrack:previous,seekto:function(d){if(d&&typeof d.seekTime==='number')seek(d.seekTime)}};for(var k in h){try{ms.setActionHandler(k,h[k])}catch(e){}}}P.play=function(i){var t=tracks[i||0];if(t)toggleTrack(t)};P.toggle=toggle;P.next=next;P.previous=previous;P.seek=seek;P.setShuffle=setShuffle;P.close=close;P.current=current;P.tracks=tracks;})()</script>"##;
+
+/// A `::player` block: the section and its runtime.
+pub(crate) fn player_html(
+    title: Option<&str>,
+    artist: Option<&str>,
+    art: Option<&str>,
+    buy: Option<&str>,
+    buy_label: Option<&str>,
+    line: Option<&str>,
+    layout: PlayerLayout,
+    tracks: &[PlayerTrack],
+) -> String {
+    let mut html = player_section_html(title, artist, art, buy, buy_label, line, layout, tracks);
+    html.push_str(PLAYER_JS);
+    html
+}
+
 pub(crate) const CAROUSEL_DEFAULT_ID: &str = "carousel";
 
 /// Render a `::carousel` (0.32.0): a scroll-snap track of slide articles and
@@ -4215,6 +4410,17 @@ fn render_block_inner(block: &Block) -> String {
             width: width.as_deref(),
             aspect: aspect.as_deref(),
         }),
+
+        Block::Player { title, artist, art, buy, buy_label, line, layout, tracks, .. } => player_html(
+            title.as_deref(),
+            artist.as_deref(),
+            art.as_deref(),
+            buy.as_deref(),
+            buy_label.as_deref(),
+            line.as_deref(),
+            *layout,
+            tracks,
+        ),
 
         Block::Diagram {
             diagram_type,

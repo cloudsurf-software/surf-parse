@@ -6,7 +6,7 @@
 use crate::citation::{parse_authors, Reference, RefType};
 use crate::types::{
     AttrValue, Attrs, AuthProvider, BeforeAfterItem, BindingEvent, Block, BookingDay,
-    BookingService, CalloutType, CarouselSlide, ChartData, ChartSeries, ChartType, ChatMessage, ChatReaction,
+    BookingService, CalloutType, CarouselSlide, PlayerLayout, PlayerTrack, ChartData, ChartSeries, ChartType, ChatMessage, ChatReaction,
     Format, StoreItem,
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
@@ -50,6 +50,7 @@ pub fn resolve_block(block: Block) -> Block {
         "bibliography" | "references" => parse_bibliography(attrs, *span),
         "figure" => parse_figure(attrs, *span),
         "video" => parse_video(attrs, *span),
+        "player" => parse_player(attrs, content, *span),
         "diagram" => parse_diagram(attrs, content, *span),
         "tabs" => parse_tabs(content, *span),
         "columns" => parse_columns(content, *span),
@@ -939,6 +940,57 @@ fn parse_video(attrs: &Attrs, span: Span) -> Block {
         alt: attr_string(attrs, "alt"),
         width: attr_string(attrs, "width"),
         aspect: attr_string(attrs, "aspect"),
+        span,
+    }
+}
+
+/// `::player` (0.42.0). A body line is one track:
+/// `- Title | 2:54 | /audio/a.mp3 | Chapter 4 · The bar` — the title, the
+/// length, the source (empty or `locked` = the record sells this track
+/// rather than streams it) and a second line, each optional after the
+/// title. `layout=row` draws the one-row now-playing strip.
+fn parse_player(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let layout = match attr_string(attrs, "layout")
+        .map(|s| s.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("row") | Some("now") | Some("now-playing") => PlayerLayout::Row,
+        _ => PlayerLayout::List,
+    };
+    let mut tracks = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let rest = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| {
+                let (num, tail) = trimmed.split_once(". ")?;
+                num.chars().all(|c| c.is_ascii_digit()).then_some(tail)
+            });
+        let Some(rest) = rest else { continue };
+        let parts: Vec<&str> = rest.split('|').map(|p| p.trim()).collect();
+        let title = parts.first().copied().unwrap_or("").to_string();
+        if title.is_empty() {
+            continue;
+        }
+        let field = |i: usize| parts.get(i).filter(|s| !s.is_empty()).map(|s| s.to_string());
+        tracks.push(PlayerTrack {
+            title,
+            duration: field(1),
+            src: field(2).filter(|s| !s.eq_ignore_ascii_case("locked")),
+            line: field(3),
+        });
+    }
+    let text = |key: &str| attr_string(attrs, key).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    Block::Player {
+        title: text("title").or_else(|| text("album")),
+        artist: text("artist"),
+        art: text("art").or_else(|| text("cover")),
+        buy: text("buy"),
+        buy_label: text("buy-label"),
+        line: text("line"),
+        layout,
+        tracks,
         span,
     }
 }

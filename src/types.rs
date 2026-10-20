@@ -836,6 +836,30 @@ pub enum Block {
         aspect: Option<String>,
         span: Span,
     },
+    /// A music player (`::player`, 0.42.0): the tracks of a record, each a
+    /// row that plays in place, on ONE persistent player per page — a mini
+    /// bar at the foot that opens into a now-playing sheet (seek, previous,
+    /// play / pause, next, shuffle), the OS media surface and keyboard
+    /// transport. A track with no `src` is LOCKED: the record sells it rather
+    /// than streams it, and its row links to `buy`.
+    Player {
+        /// The record's title (the album line in the bar and the sheet).
+        title: Option<String>,
+        /// The artist's name.
+        artist: Option<String>,
+        /// Cover art: a site-relative path or an `https:` URL.
+        art: Option<String>,
+        /// Where a locked row and the row layout's button lead (`#buy`).
+        buy: Option<String>,
+        /// The locked row's label (default "Full album") and the row
+        /// layout's button label (default "Buy").
+        buy_label: Option<String>,
+        /// The row layout's line under the title.
+        line: Option<String>,
+        layout: PlayerLayout,
+        tracks: Vec<PlayerTrack>,
+        span: Span,
+    },
     /// Native diagram block (`::diagram`) — architecture diagrams + ERDs.
     /// `content` is the raw DSL source, preserved verbatim for lossless
     /// round-trip; unknown `diagram_type` values degrade to prose at render.
@@ -2142,6 +2166,7 @@ impl Block {
             | Block::Bibliography { span, .. }
             | Block::Figure { span, .. }
             | Block::Video { span, .. }
+            | Block::Player { span, .. }
             | Block::Diagram { span, .. }
             | Block::Tabs { span, .. }
             | Block::Columns { span, .. }
@@ -2871,6 +2896,68 @@ pub struct CarouselSlide {
     pub image: Option<String>,
     /// Image alt text.
     pub alt: Option<String>,
+}
+
+/// Layout of a `::player` block (0.42.0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PlayerLayout {
+    /// The track list (the default).
+    #[default]
+    List,
+    /// One row — the cover, play, the title, the line, the length and a Buy
+    /// button — for the record's one streaming track.
+    Row,
+}
+
+impl PlayerLayout {
+    /// The `data-layout` word.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PlayerLayout::List => "list",
+            PlayerLayout::Row => "row",
+        }
+    }
+}
+
+/// One track of a `Player` block: `- Title | 2:54 | /audio/a.mp3 | Chapter 4`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerTrack {
+    pub title: String,
+    /// The length as authored (`2:54`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<String>,
+    /// The audio source: a site-relative path, an `https:` URL or a
+    /// `media:<file-id>` the host resolves. `None` = locked (sold, not
+    /// streamed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src: Option<String>,
+    /// A second line under the title (a chapter, a note).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
+}
+
+impl PlayerTrack {
+    /// The record sells this track rather than streams it.
+    pub fn locked(&self) -> bool {
+        self.src.as_deref().map_or(true, |s| s.trim().is_empty())
+    }
+
+    /// The authored length in seconds (`m:ss` or `h:mm:ss`); `None` when
+    /// there is none or it does not parse.
+    pub fn duration_seconds(&self) -> Option<u32> {
+        let d = self.duration.as_deref()?.trim();
+        let mut total: u32 = 0;
+        let parts: Vec<&str> = d.split(':').collect();
+        if parts.is_empty() || parts.len() > 3 {
+            return None;
+        }
+        for p in parts {
+            let n: u32 = p.trim().parse().ok()?;
+            total = total.checked_mul(60)?.checked_add(n)?;
+        }
+        Some(total)
+    }
 }
 
 /// A card within a `Features` block.

@@ -1817,6 +1817,134 @@ ul.surfdoc-tasks { padding-left: 0; }
     .surfdoc-video-still { display: block; }
 }
 
+/* ── ::player (0.42.0) ────────────────────────────────────────────────────
+   A record's tracks as rows that play in place, and ONE player per page:
+   a mini bar fixed at the foot that opens into a now-playing sheet. The
+   list and the row are markup; the bar, the backdrop and the sheet are
+   built by the block's script on first play. Tokens only, so both themes
+   read. Glyphs are CSS masks in currentColor (no inline SVG, no font). */
+.surfdoc-player { margin: var(--ws-space-lg, 1.5rem) 0; font-family: var(--ws-font-body); }
+.surfdoc-player-tracks { list-style: none; margin: 0; padding: 0; }
+.surfdoc-player-item { margin: 0; padding: 0; }
+.surfdoc-player-track {
+    display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 14px;
+    width: 100%; min-height: 48px; padding: 6px 12px; box-sizing: border-box;
+    border: none; border-radius: var(--ws-control-radius, 8px); background: transparent;
+    color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: none;
+}
+.surfdoc-player-locked { grid-template-columns: 32px minmax(0, 1fr) auto auto; cursor: default; }
+a.surfdoc-player-locked { cursor: pointer; }
+@media (hover: hover) {
+    .surfdoc-player-track:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+    a.surfdoc-player-locked:hover .surfdoc-player-buy { border-color: var(--accent); color: var(--accent); }
+}
+.surfdoc-player-track:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.surfdoc-player-num { display: inline-flex; align-items: center; justify-content: center; font-size: var(--font-size-ui); font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.surfdoc-player-main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.surfdoc-player-title { font-size: var(--font-size-body); font-weight: var(--font-weight-medium, 500); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-player-track[data-current] .surfdoc-player-title { color: var(--accent); }
+.surfdoc-player-locked .surfdoc-player-title { color: var(--text-secondary); }
+.surfdoc-player-line { font-size: var(--font-size-ui); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-player-time { font-size: var(--font-size-ui); font-variant-numeric: tabular-nums; color: var(--text-muted); flex-shrink: 0; min-width: 34px; text-align: center; }
+.surfdoc-player-buy { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--font-size-ui); font-weight: var(--font-weight-semibold, 600); color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 480px) { .surfdoc-player-buy span:not(.surfdoc-player-glyph) { display: none; } }
+/* The equaliser on the playing row takes the number's place. */
+.surfdoc-player-eq { display: none; align-items: flex-end; gap: 2px; height: 14px; }
+.surfdoc-player-eq span { width: 3px; border-radius: 1px; background: var(--accent); animation: surfdoc-player-eq 0.9s ease-in-out infinite; }
+.surfdoc-player-eq span:nth-child(1) { height: 60%; animation-delay: -0.3s; }
+.surfdoc-player-eq span:nth-child(2) { height: 100%; }
+.surfdoc-player-eq span:nth-child(3) { height: 75%; animation-delay: -0.6s; }
+.surfdoc-player-track[data-playing] .surfdoc-player-eq { display: inline-flex; }
+.surfdoc-player-track[data-playing] .surfdoc-player-num > .surfdoc-player-index { display: none; }
+@keyframes surfdoc-player-eq { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+/* Glyphs: play (the default), pause while playing, next, previous, shuffle,
+   the sheet's chevron, the lock. All masks in currentColor. */
+.surfdoc-player-glyph { display: inline-block; width: 18px; height: 18px; background: currentColor; -webkit-mask: var(--surfdoc-glyph) center / contain no-repeat; mask: var(--surfdoc-glyph) center / contain no-repeat; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='7 4 21 12 7 20 7 4'/%3E%3C/svg%3E"); transform: translateX(1px); }
+.is-playing > .surfdoc-player-glyph { transform: none; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='4' width='4' height='16' rx='1'/%3E%3Crect x='14' y='4' width='4' height='16' rx='1'/%3E%3C/svg%3E"); }
+.surfdoc-player-glyph-next { transform: none; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='5 4 15 12 5 20 5 4'/%3E%3Crect x='17' y='4' width='3' height='16' rx='1'/%3E%3C/svg%3E"); }
+.surfdoc-player-glyph-prev { transform: none; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='19 20 9 12 19 4 19 20'/%3E%3Crect x='4' y='4' width='3' height='16' rx='1'/%3E%3C/svg%3E"); }
+.surfdoc-player-glyph-shuffle { transform: none; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='16 3 21 3 21 8'/%3E%3Cline x1='4' y1='20' x2='21' y2='3'/%3E%3Cpolyline points='21 16 21 21 16 21'/%3E%3Cline x1='15' y1='15' x2='21' y2='21'/%3E%3Cline x1='4' y1='4' x2='9' y2='9'/%3E%3C/svg%3E"); }
+.surfdoc-player-glyph-down { transform: none; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+.surfdoc-player-lock { display: inline-block; width: 13px; height: 13px; background: currentColor; -webkit-mask: var(--surfdoc-glyph) center / contain no-repeat; mask: var(--surfdoc-glyph) center / contain no-repeat; --surfdoc-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E"); }
+.is-loading > .surfdoc-player-glyph { -webkit-mask: none; mask: none; background: transparent; width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; transform: none; animation: surfdoc-player-spin 0.8s linear infinite; }
+@keyframes surfdoc-player-spin { to { transform: rotate(360deg); } }
+/* The row layout: the cover, play, the title, the line, the length, Buy. */
+.surfdoc-player-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--ws-radius-card); background: var(--surface); box-shadow: var(--ws-shadow); }
+.surfdoc-player-art, .surfdoc-player-bar-art, .surfdoc-player-sheet-art { display: inline-grid; place-items: center; flex-shrink: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--ws-radius-img); background: var(--surface-alt); }
+.surfdoc-player-art { width: 56px; height: 56px; }
+.surfdoc-player-art img, .surfdoc-player-bar-art img, .surfdoc-player-sheet-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+[data-art-missing] img { display: none; }
+[data-art-missing]::after { content: ""; display: block; width: 45%; height: 45%; background: var(--text-muted); opacity: 0.5; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center / contain no-repeat; }
+.surfdoc-player-now { display: inline-grid; place-items: center; width: 44px; height: 44px; min-height: 0; padding: 0; border-radius: 50%; background: var(--accent); color: var(--accent-text, #fff); border: none; cursor: pointer; }
+.surfdoc-player-now:hover { background: var(--accent-hover); }
+.surfdoc-player-now[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+.surfdoc-player-now .surfdoc-player-glyph { width: 20px; height: 20px; }
+.surfdoc-player-row .surfdoc-player-title { font-weight: var(--font-weight-semibold, 600); }
+.surfdoc-player-row .surfdoc-player-line { white-space: normal; }
+.surfdoc-player-buy-btn { display: inline-flex; align-items: center; min-height: 36px; padding: 0 16px; border-radius: var(--ws-radius-btn); background: var(--ws-btn-bg); border: 1px solid var(--ws-btn-border); color: var(--ws-btn-color); font-size: var(--font-size-ui); font-weight: var(--font-weight-semibold, 600); text-decoration: none; white-space: nowrap; }
+.surfdoc-player-buy-btn:hover { filter: brightness(0.94); }
+@media (max-width: 640px) { .surfdoc-player-row { grid-template-columns: auto auto minmax(0, 1fr); } .surfdoc-player-row .surfdoc-player-time { display: none; } .surfdoc-player-row .surfdoc-player-buy-btn { grid-column: 1 / -1; justify-content: center; } }
+/* The mini bar: fixed at the foot, a thin progress line on its top edge,
+   the whole bar a button that opens the sheet, the transport on top. */
+.surfdoc-player-bar { position: fixed; inset: auto 0 0 0; z-index: 50; display: none; background: var(--surface); border-top: 1px solid var(--border); box-shadow: var(--ws-shadow-hover); color: var(--text); font-family: var(--ws-font-body); padding: 6px max(16px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); animation: surfdoc-player-rise 180ms ease-out; }
+.surfdoc-player-bar.is-open { display: block; }
+html.surfdoc-player-open body { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+.surfdoc-player-bar::before { content: ""; position: absolute; top: -1px; left: 0; right: 0; height: 2px; pointer-events: none; background: linear-gradient(to right, var(--accent) var(--surfdoc-progress, 0%), transparent var(--surfdoc-progress, 0%)); }
+@keyframes surfdoc-player-rise { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.surfdoc-player-expand { position: absolute; inset: 0; border: none; background: transparent; padding: 0; cursor: pointer; }
+.surfdoc-player-expand:focus-visible { outline: none; box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.surfdoc-player-bar-inner { position: relative; max-width: var(--ws-band-inner, 1100px); margin: 0 auto; min-height: 56px; display: flex; align-items: center; gap: 10px; pointer-events: none; }
+.surfdoc-player-bar-meta { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.surfdoc-player-bar-controls { display: flex; align-items: center; flex-shrink: 0; pointer-events: auto; }
+.surfdoc-player-bar-art { width: 44px; height: 44px; }
+.surfdoc-player-bar-titles { min-width: 0; display: flex; flex-direction: column; }
+.surfdoc-player-bar-title { font-size: 0.875rem; font-weight: var(--font-weight-semibold, 600); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-player-bar-artist { font-size: var(--font-size-ui); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-player-btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 0; font: inherit; }
+.surfdoc-player-btn:hover { color: var(--text); }
+.surfdoc-player-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.surfdoc-player-btn.is-active { color: var(--accent); }
+.surfdoc-player-btn:disabled { cursor: not-allowed; }
+/* The sheet: a bottom sheet on phones, a centred panel on wider screens. */
+.surfdoc-player-backdrop { position: fixed; inset: 0; z-index: 54; background: transparent; pointer-events: none; transition: background 240ms ease; }
+.surfdoc-player-backdrop[data-open] { background: rgba(0, 0, 0, 0.35); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); pointer-events: auto; }
+.surfdoc-player-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 55; margin-inline: auto; width: 100%; height: min(92vh, 720px); height: min(92dvh, 720px); display: flex; flex-direction: column; align-items: center; box-sizing: border-box; background: var(--surface); color: var(--text); font-family: var(--ws-font-body); border: 1px solid var(--border); border-bottom: none; border-radius: var(--ws-radius-card) var(--ws-radius-card) 0 0; box-shadow: var(--ws-shadow-hover); padding: 10px max(20px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); transform: translateY(105%); visibility: hidden; transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 280ms; touch-action: none; outline: none; }
+.surfdoc-player-sheet[data-open] { transform: translateY(0); visibility: visible; transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1); }
+.surfdoc-player-sheet[data-dragging] { transition: none; }
+@media (min-width: 768px) { .surfdoc-player-sheet { width: min(100%, 420px); } }
+.surfdoc-player-handle { flex-shrink: 0; width: 40px; height: 5px; margin: 2px 0 0; border-radius: 999px; background: var(--border); }
+.surfdoc-player-collapse { position: absolute; top: 8px; right: max(8px, env(safe-area-inset-right)); }
+.surfdoc-player-sheet-art { width: min(78vw, 340px); max-width: 100%; aspect-ratio: 1; height: auto; border-radius: var(--ws-radius-card); box-shadow: var(--ws-shadow-hover); margin: auto 0; }
+.surfdoc-player-sheet-titles { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; margin-bottom: 16px; }
+.surfdoc-player-sheet-title { font-size: 1.25rem; font-weight: var(--font-weight-bold, 700); color: var(--text); max-width: 100%; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.surfdoc-player-sheet-sub { font-size: var(--font-size-body); color: var(--text-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-player-seek { width: 100%; display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 4px; }
+.surfdoc-player-transport { width: 100%; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.surfdoc-player-shuffle { justify-self: start; }
+.surfdoc-player-transport-main { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.surfdoc-player-skip { min-width: 56px; min-height: 56px; }
+.surfdoc-player-skip .surfdoc-player-glyph { width: 30px; height: 30px; }
+.surfdoc-player-play { width: 64px; height: 64px; flex-shrink: 0; background: var(--accent); color: var(--accent-text, #fff); }
+.surfdoc-player-play:hover { background: var(--accent-hover); color: var(--accent-text, #fff); }
+.surfdoc-player-play:disabled { opacity: 0.55; }
+.surfdoc-player-play .surfdoc-player-glyph { width: 26px; height: 26px; }
+input[type="range"].surfdoc-player-scrubber { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 44px; margin: 0; background: transparent; cursor: pointer; touch-action: none; }
+input[type="range"].surfdoc-player-scrubber:disabled { opacity: 0.4; cursor: default; }
+input[type="range"].surfdoc-player-scrubber::-webkit-slider-runnable-track { height: 5px; border-radius: 999px; background: linear-gradient(to right, var(--accent) var(--surfdoc-progress, 0%), var(--border) var(--surfdoc-progress, 0%)); }
+input[type="range"].surfdoc-player-scrubber::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -4.5px; border: none; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+input[type="range"].surfdoc-player-scrubber::-moz-range-track { height: 5px; border-radius: 999px; background: var(--border); }
+input[type="range"].surfdoc-player-scrubber::-moz-range-progress { height: 5px; border-radius: 999px; background: var(--accent); }
+input[type="range"].surfdoc-player-scrubber::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+@media (pointer: coarse) { input[type="range"].surfdoc-player-scrubber::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -6.5px; } input[type="range"].surfdoc-player-scrubber::-moz-range-thumb { width: 18px; height: 18px; } }
+@media (prefers-reduced-motion: reduce) {
+    .surfdoc-player-bar { animation: surfdoc-player-fade 180ms ease-out; }
+    @keyframes surfdoc-player-fade { from { opacity: 0; } to { opacity: 1; } }
+    .surfdoc-player-sheet { transform: none; opacity: 0; transition: opacity 180ms ease, visibility 0s linear 180ms; }
+    .surfdoc-player-sheet[data-open] { transform: none; opacity: 1; transition: opacity 180ms ease; }
+    .surfdoc-player-backdrop { transition: none; }
+    .surfdoc-player-eq span { animation: none; }
+}
+
 /* ============================================================
    33. SURFDOC UNKNOWN BLOCKS
    ============================================================ */

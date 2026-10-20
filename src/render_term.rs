@@ -486,6 +486,26 @@ fn render_block(block: &Block) -> String {
             }
         }
 
+        Block::Player { title, artist, tracks, .. } => {
+            let mut out = Vec::new();
+            let head = match (title, artist) {
+                (Some(t), Some(a)) => format!("{t} · {a}"),
+                (Some(t), None) => t.clone(),
+                (None, Some(a)) => a.clone(),
+                (None, None) => "Player".to_string(),
+            };
+            out.push(format!("{}", head.bold()));
+            for (i, t) in tracks.iter().enumerate() {
+                let length = t.duration.as_deref().unwrap_or("-:--");
+                let row = match crate::render_html::player_track_url(t) {
+                    Some(url) => format!("  {}. {}  {length}  ({url})", i + 1, t.title),
+                    None => format!("  {}. {}  {length}  (on the full album)", i + 1, t.title),
+                };
+                out.push(format!("{}", row.dimmed()));
+            }
+            out.join("\n")
+        }
+
         Block::Embed { src, title, .. } => {
             let label = title.as_deref().unwrap_or("Embed");
             format!("{} {}", format!("[{label}]").cyan(), src.dimmed())

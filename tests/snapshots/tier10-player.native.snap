@@ -1,0 +1,76 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# The player\n\nThe music player (0.42.0): a record's tracks on one persistent player — a\nstreaming row plays in place, a locked row links to the record's buy door —\nand the one-row now-playing strip."
+  },
+  {
+    "type": "player",
+    "title": "Time Traveler",
+    "artist": "Scouter",
+    "art": "/img/time-traveler.png",
+    "buy": "#buy",
+    "buy_label": "Full album",
+    "layout": "list",
+    "tracks": [
+      {
+        "title": "Broken Hearted",
+        "duration_seconds": 115,
+        "line": "Chapter 1 · Ordinary World",
+        "locked": true
+      },
+      {
+        "title": "Where the Cold Wind Blows",
+        "duration_seconds": 126,
+        "locked": true
+      },
+      {
+        "title": "Time Traveler",
+        "duration_seconds": 174,
+        "src": "/audio/time-traveler.mp3",
+        "line": "Chapter 4 · Meeting the Mentor",
+        "locked": false
+      },
+      {
+        "title": "Without Rain",
+        "duration_seconds": 196,
+        "src": "https://cdn.example.com/without-rain.mp3",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "type": "player",
+    "title": "Time Traveler",
+    "artist": "Scouter",
+    "buy": "/music/time-traveler#buy",
+    "buy_label": "Buy the album",
+    "line": "The title track streams free. The record is $9.99.",
+    "layout": "row",
+    "tracks": [
+      {
+        "title": "Time Traveler",
+        "duration_seconds": 174,
+        "src": "/audio/time-traveler.mp3",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "type": "player",
+    "title": "Demos",
+    "layout": "list",
+    "tracks": [
+      {
+        "title": "One",
+        "duration_seconds": 60,
+        "src": "media:3f6c0a1e",
+        "locked": false
+      },
+      {
+        "title": "Two",
+        "src": "javascript:alert(1)",
+        "locked": false
+      }
+    ]
+  }
+]

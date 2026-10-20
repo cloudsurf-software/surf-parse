@@ -54,6 +54,9 @@
 //!   The brace group of a `::segmented-control` line, for the client's own
 //!   kind menu; `None` on a bare segment.
 //! - **`Video`** (schema v15)
+//!   A video the workspace owns.
+//! - **`Player`** (schema v17)
+//!   A record's tracks on one persistent player; `layout` is `list` or `row`.
 //!   A video for the client's own player. `src` and `poster` cross AS
 //!   AUTHORED — `media:<file-id>` / `media:<file-id>/poster` are library
 //!   references the client maps to URLs it can authorise; a path or an
@@ -617,6 +620,24 @@ pub enum NativeBlock {
         alt: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         aspect: Option<String>,
+    },
+
+    /// ::player
+    Player {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        artist: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        art: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        buy: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        buy_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        line: Option<String>,
+        layout: String,
+        tracks: Vec<NativePlayerTrack>,
     },
 
     /// ::tabs
@@ -1521,6 +1542,22 @@ pub struct NativeTaskItem {
     pub done: bool,
     pub text: String,
     pub assignee: Option<String>,
+}
+
+/// One track of a `::player` (schema v17): the title, the authored length
+/// in seconds, the source as authored (`None` = locked — the record sells
+/// it rather than streams it), a second line, and the locked flag.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativePlayerTrack {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2565,7 +2602,13 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// `Option` and `None` for a bare segment, so the Mac and iPhone draw the
 /// crate's kind menu from the document instead of their own glyph table.
 /// Additive — a client that ignores the two fields reads v15's shape.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 16;
+/// v17 (0.42.0) — the music player: a new variant `Player` (`title`,
+/// `artist`, `art`, `buy`, `buy_label`, `line`, `layout` = `list` | `row`,
+/// `tracks` of `NativePlayerTrack`: `title`, `duration_seconds`, `src` as
+/// authored or `None` when locked, `line`, `locked`; content tier) —
+/// `::player`. Additive — a client that ignores the variant reads v16's
+/// shape.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 17;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -3011,6 +3054,26 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             alt.clone(),
             aspect.clone(),
         ),
+
+        Block::Player { title, artist, art, buy, buy_label, line, layout, tracks, .. } => NativeBlock::Player {
+            title: title.clone(),
+            artist: artist.clone(),
+            art: art.clone(),
+            buy: buy.clone(),
+            buy_label: buy_label.clone(),
+            line: line.clone(),
+            layout: layout.as_str().to_string(),
+            tracks: tracks
+                .iter()
+                .map(|t| NativePlayerTrack {
+                    title: t.title.clone(),
+                    duration_seconds: t.duration_seconds(),
+                    src: t.src.clone().filter(|s| !s.trim().is_empty()),
+                    line: t.line.clone(),
+                    locked: t.locked(),
+                })
+                .collect(),
+        },
 
         // Native gets the laid-out geometry scene (typed shapes, same
         // layout the web SVG is serialized from) plus the raw DSL for the
@@ -5053,6 +5116,7 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Tasks { .. }
         | Block::Figure { .. }
         | Block::Video { .. }
+        | Block::Player { .. }
         | Block::Diagram { .. }
         | Block::Quote { .. }
         | Block::Divider { .. }
@@ -6605,7 +6669,7 @@ mod tests {
     #[test]
     fn segmented_control_segments_carry_icon_and_tint_v16() {
         let doc = crate::parse("::segmented-control[active=docs action=pickKind fold=always]\n- all \"All\" {icon=layers tint=slate}\n- docs \"Docs\" {icon=file-text tint=blue}\n- notes \"Notes\"\n::").doc;
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 16);
+        assert!(NATIVE_DOC_SCHEMA_VERSION >= 16);
         let blocks = to_native_blocks(&doc);
         let seg = blocks.iter().find_map(|b| match b {
             NativeBlock::SegmentedControl { segments, .. } => Some(segments.clone()),
@@ -8381,7 +8445,9 @@ mod tests {
         // 0.27: the panels layout — `PanelSlot` + `Preset` — schema v12.
         // 0.33.0: the backends grammar — schema v14.
         // 0.37.0: video — `Video`, `Hero.video` / `Hero.poster` — schema v15.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 16);
+        // 0.40.0: a segment's icon and tint — schema v16.
+        // 0.42.0: the music player — `Player` — schema v17.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 17);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

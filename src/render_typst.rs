@@ -1255,6 +1255,23 @@ fn render_block(block: &Block, out: &mut String) {
             }
         }
 
+        Block::Player { title, artist, tracks, .. } => {
+            let head = match (title, artist) {
+                (Some(t), Some(a)) => format!("{t} · {a}"),
+                (Some(t), None) => t.clone(),
+                (None, Some(a)) => a.clone(),
+                (None, None) => String::new(),
+            };
+            if !head.is_empty() {
+                out.push_str(&format!("*{}*\n\n", escape_typst(&head)));
+            }
+            for (i, t) in tracks.iter().enumerate() {
+                let length = t.duration.as_deref().map(|d| format!(" ({d})")).unwrap_or_default();
+                out.push_str(&format!("{}. {}{}\n", i + 1, escape_typst(&t.title), escape_typst(&length)));
+            }
+            out.push('\n');
+        }
+
         Block::Quote {
             content,
             attribution,

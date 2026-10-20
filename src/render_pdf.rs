@@ -516,6 +516,8 @@ pub fn collect_image_srcs(doc: &SurfDoc) -> Vec<String> {
                         push(&p, out, seen);
                     }
                 }
+                // A player prints its cover.
+                Block::Player { art: Some(a), .. } => push(a, out, seen),
                 Block::Gallery { items, .. } => {
                     for item in items {
                         push(&item.src, out, seen);

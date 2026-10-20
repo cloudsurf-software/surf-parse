@@ -1,0 +1,26 @@
+---
+title: "Corpus — Tier 10: the music player"
+type: document
+---
+
+# The player
+
+The music player (0.42.0): a record's tracks on one persistent player — a
+streaming row plays in place, a locked row links to the record's buy door —
+and the one-row now-playing strip.
+
+::player[title="Time Traveler" artist="Scouter" art="/img/time-traveler.png" buy="#buy" buy-label="Full album"]
+- Broken Hearted | 1:55 | | Chapter 1 · Ordinary World
+- Where the Cold Wind Blows | 2:06 | locked
+- Time Traveler | 2:54 | /audio/time-traveler.mp3 | Chapter 4 · Meeting the Mentor
+- Without Rain | 3:16 | https://cdn.example.com/without-rain.mp3
+::
+
+::player[layout=row title="Time Traveler" artist="Scouter" line="The title track streams free. The record is $9.99." buy="/music/time-traveler#buy" buy-label="Buy the album"]
+- Time Traveler | 2:54 | /audio/time-traveler.mp3
+::
+
+::player[title="Demos"]
+- One | 1:00 | media:3f6c0a1e
+- Two | | javascript:alert(1)
+::

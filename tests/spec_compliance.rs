@@ -48,6 +48,8 @@ const ENUM_VARIANTS: &[&str] = &[
     "Picker", "When", "Compute", "Flow", "Schedule",
     // Video, 0.37.0
     "Video",
+    // The music player, 0.42.0
+    "Player",
 ];
 
 #[derive(Debug, Deserialize)]
