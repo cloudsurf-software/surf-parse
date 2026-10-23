@@ -4806,13 +4806,18 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.close();
         }
 
-        Block::Subscribe { action, placeholder, content, .. } => {
+        // Twin of render_html's 0.43.0 arm: a `::form` named `newsletter`.
+        Block::Subscribe { action, placeholder, button, consent, content, .. } => {
             dom.open("form", CloseStyle::Normal);
-            dom.attr("class", AttrVal::Markup("surfdoc-subscribe"));
-            dom.attr("method", AttrVal::Markup("post"));
-            if let Some(a) = action.as_deref().and_then(|a| safe_url(a, UrlKind::FormAction)) {
+            dom.attr("class", AttrVal::Markup("surfdoc-form"));
+            dom.attr("data-form-name", AttrVal::Markup(crate::types::SUBSCRIBE_FORM_NAME));
+            if let Some(a) = action.as_deref().filter(|a| *a != "#").and_then(|a| safe_url(a, UrlKind::FormAction)) {
+                dom.attr("method", AttrVal::Markup("post"));
                 dom.attr("action", AttrVal::Markup(a));
             }
+            build_static(dom, render_html::FORM_HONEYPOT_HTML)?;
+            dom.open("div", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-subscribe"));
             if !content.trim().is_empty() {
                 dom.open("p", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-subscribe-pitch"));
@@ -4826,12 +4831,19 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.attr("type", AttrVal::Markup("email"));
             dom.attr("name", AttrVal::Markup("email"));
             dom.attr("placeholder", AttrVal::Markup(placeholder.as_deref().unwrap_or("you@example.com")));
+            dom.attr("autocomplete", AttrVal::Markup("email"));
+            dom.attr("aria-label", AttrVal::Markup("Email address"));
             dom.bool_attr("required");
             dom.close();
             dom.open("button", CloseStyle::Normal);
             dom.attr("class", AttrVal::Markup("surfdoc-subscribe-button"));
             dom.attr("type", AttrVal::Markup("submit"));
-            dom.text_raw("Subscribe");
+            dom.text_markup(button.as_deref().unwrap_or(crate::types::SUBSCRIBE_DEFAULT_BUTTON));
+            dom.close();
+            dom.close();
+            dom.open("p", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-subscribe-consent"));
+            build_phrasing(dom, consent.as_deref().unwrap_or(crate::types::SUBSCRIBE_DEFAULT_CONSENT))?;
             dom.close();
             dom.close();
             dom.close();

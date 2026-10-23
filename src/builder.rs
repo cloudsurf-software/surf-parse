@@ -3982,10 +3982,12 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             format!("{fence}logo-cloud{attrs_str}\n{}\n{fence}", lines.join("\n"))
         }
 
-        Block::Subscribe { action, placeholder, content, .. } => {
+        Block::Subscribe { action, placeholder, button, consent, content, .. } => {
             let mut attrs_parts = Vec::new();
             if let Some(a) = action { attrs_parts.push(format!("action=\"{}\"", escape_attr(a))); }
             if let Some(p) = placeholder { attrs_parts.push(format!("placeholder=\"{}\"", escape_attr(p))); }
+            if let Some(b) = button { attrs_parts.push(format!("button=\"{}\"", escape_attr(b))); }
+            if let Some(c) = consent { attrs_parts.push(format!("consent=\"{}\"", escape_attr(c))); }
             let attrs_str = if attrs_parts.is_empty() { String::new() } else { format!("[{}]", attrs_parts.join(" ")) };
             if content.is_empty() {
                 format!("{fence}subscribe{attrs_str}\n{fence}")

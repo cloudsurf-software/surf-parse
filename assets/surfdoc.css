@@ -5417,6 +5417,14 @@ button.surfdoc-booking-day.is-sel { background: var(--accent); color: var(--acce
 .surfdoc-subscribe-email { flex: 1 1 200px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--ws-control-radius); background: var(--surface); color: var(--text); font: inherit; }
 .surfdoc-subscribe-button { padding: 8px 16px; border: 0; border-radius: var(--ws-control-radius); background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: var(--font-weight-semibold); cursor: pointer; }
 .surfdoc-subscribe-button:hover { background: var(--accent-hover); }
+/* 0.43.0: the subscribe block is a `::form` named newsletter — the form is the
+   wrapper, the subscribe card sits inside it with no extra margin. */
+.surfdoc-form[data-form-name="newsletter"] { gap: 0; }
+.surfdoc-form > .surfdoc-subscribe { margin: 0; }
+.surfdoc-subscribe-consent { margin: var(--ws-space-sm) 0 0; font-size: 0.85em; color: var(--text-muted); }
+/* The `_honey` field (every `::form[honeypot]` and every `::subscribe`) is off
+   screen for people and still in the form for bots. */
+.surfdoc-form-honey { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
 /* ::notes — presenter notes outside a deck: a labelled aside. */
 .surfdoc-notes { margin: var(--ws-space-md) 0; padding: 10px 14px; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--font-size-caption); }

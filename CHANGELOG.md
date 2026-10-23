@@ -3,6 +3,58 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.43.0 — 2026-10-23 (the newsletter: the email profile — one SurfDoc to an email's HTML and text parts — and `::subscribe` as a `::form` named `newsletter`; native schema v18)
+
+A newsletter issue in CloudSurf is a SurfDoc sent from Posts (the modules-in-the-menu plan, lanes N2 TASK-1975 and
+N3 TASK-1972). The crate had no way to turn a doc into mail — `to_html` leans on `surfdoc.css`, which Gmail strips,
+and writes forms, scripts and relative URLs — and `::subscribe` drew a `<form class="surfdoc-subscribe">` with no
+target that the host's form wiring never saw (it keys on `class="surfdoc-form"`), so a published subscribe block
+posted nowhere.
+
+- **`render_email` — `to_email(&doc, &EmailProfile) -> EmailParts { html, text }`** (also `SurfDoc::to_email`,
+  `to_email_html`, `to_email_text`). The HTML is a whole document with inline styles only — no `<style>`, no class
+  names; the head is charset, viewport, `color-scheme: light` and the title — painted from the house tokens (the
+  light palette, the type scale and the card / button / image radii of `assets/surfdoc.css`, pinned by a drift
+  test), laid out in tables: a full-width page table, a 600 px card, bulletproof table-cell buttons, one-pixel
+  table rules, an optional hidden preheader and an optional "View this email in your browser" line.
+- **`EmailProfile { base_url, footer, preheader, web_url }`.** Every `src` / `href` joins onto `base_url`
+  (`absolutize_url`, public: `/a.png` → the origin + `/a.png`, `a.png` → the base's directory, `//host` →
+  `https://host`); a link with any scheme but http(s) / mailto / tel keeps its text and loses its target; an image
+  that is not http(s) after joining (a `data:` or an unresolved `media:` reference) is left out.
+- **`EmailFooter { postal_address, unsubscribe_url, sender_name, sent_with_cloudsurf }`** — the slot the caller
+  fills, under the card: the reason line when `sender_name` is set, the Unsubscribe link and the postal address
+  always, "Sent with CloudSurf" only when asked. The text part ends with the same lines after `--`.
+- **No scripts, no forms — by one table, `email_disposition(block, profile) -> EmailDisposition`** (`Render` ·
+  `Degrade` · `Link(label, url)` · `Drop`). Content blocks have an email arm (markdown, callout, quote,
+  testimonial, code, figure, hero image, gallery, CTA, hero, banner, divider, data, details, columns and tabs
+  stacked, section and page children); content-shaped web blocks degrade through their markdown form (features,
+  steps, stats, FAQ, pricing, comparison, tasks …); a `::form` becomes a link to `web_url` (or nothing without
+  one), a `::subscribe` is dropped (whoever reads the issue subscribed), a video or embed with an http(s) source
+  becomes a link to it, a player links to `web_url`; every other block (navigation, site chrome, app and infra
+  blocks, and any block added later) is dropped. A final scrub removes any `<script>`, `<style>`, `<iframe>`,
+  `<form>` or form control that got through, in both parts. Task items keep `[x]` / `[ ]` as text.
+- **The text part** is `render_md`'s degradation of the same blocks with the same drops and links, every
+  markdown link target made absolute.
+- **`::subscribe` renders as a `::form` named `newsletter`**: `<form class="surfdoc-form"
+  data-form-name="newsletter">`, the `_honey` field first (as `::form[honeypot]`), then the
+  `div.surfdoc-subscribe` card — the pitch, the email field (`autocomplete="email"`, an accessible name) and the
+  button, and the consent line `p.surfdoc-subscribe-consent`. With no `action=` the form carries no target, so the
+  host's form wiring posts it where every `::form` posts; an authored `action=` (the form-action rule) posts there.
+  New attributes `button=` (default "Subscribe") and `consent=` (inline markdown; default
+  `SUBSCRIBE_DEFAULT_CONSENT`); `SUBSCRIBE_FORM_NAME` = `newsletter`. The host reads `data-form-name` for the
+  `_form` control value (surf's side of N3). The DOM twin draws the same bytes; markdown still degrades to a link.
+  **Changed output** for every `::subscribe` (the corpus `tier6` html snapshot moves); the CSS keeps the card's
+  look (`.surfdoc-form > .surfdoc-subscribe`, the consent line) and now hides `.surfdoc-form-honey` off screen.
+- **Native schema v18:** `NativeBlock::Subscribe` gains `button` and `consent` (`Option`, absent when not
+  authored). Additive — a client that ignores the two fields reads v17's shape.
+- `spec/blocks.toml`: `subscribe` declares `button` and `consent` (still 132 blocks). The serializer round-trips
+  both.
+- Tests: `tests/email.rs` (the fixture issue `tests/fixtures/newsletter-issue.surf` → the HTML and text snapshots
+  `tests/snapshots/newsletter-issue.email.{html,txt}.snap`, the table layout and inline styles, no script / form,
+  absolute URLs, the disposition table, the footer rules, the text part, `::subscribe` parse · render · action ·
+  round trip · markdown) and `render_email`'s unit tests (the token drift pin, the URL join, the styler, the
+  scrub, the task markers, markdown link targets).
+
 ## 0.42.0 — 2026-10-19 (`::player` — a record's tracks on one persistent player: rows that play in place, the mini bar and the now-playing sheet, shuffle, the OS media surface, keyboard transport; native schema v17)
 
 desertfuzz.com's album page streams its title track and sells the record, and its React player (a persistent

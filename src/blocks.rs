@@ -2889,11 +2889,16 @@ fn parse_logo_cloud(attrs: &Attrs, content: &str, span: Span) -> Block {
 }
 
 /// Parse a `::subscribe` block: `action=` (the form's target, scheme-checked
-/// like a link), `placeholder=`; the body is the pitch.
+/// like a link), `placeholder=`, `button=` (the label) and `consent=` (the
+/// consent line, 0.43.0); the body is the pitch. A blank `button=` or
+/// `consent=` reads as absent (the defaults apply).
 fn parse_subscribe(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let non_blank = |key: &str| attr_string(attrs, key).filter(|v| !v.trim().is_empty());
     Block::Subscribe {
         action: attr_string(attrs, "action").map(|a| sanitize_href(&a)),
         placeholder: attr_string(attrs, "placeholder"),
+        button: non_blank("button"),
+        consent: non_blank("consent"),
         content: content.to_string(),
         span,
     }

@@ -11,7 +11,7 @@
 [meta]
 spec_version = "0.1"
 total_blocks = 132
-registry_updated = "2026-10-19"
+registry_updated = "2026-10-23"
 
 [fields]
 # Change of kind (the AI harness, 0.39.1): a field or a list in one row means the same thing to a reader, so a swap
@@ -430,8 +430,8 @@ enum_variant = "Style"
 [blocks.subscribe]
 status = "implemented"
 category = "web"
-purpose = "Email subscription"
-attributes = ["action", "placeholder"]
+purpose = "Email subscription — renders as a `::form` named `newsletter` (0.43.0): the pitch, an email field, the button and a consent line, with the `_honey` field"
+attributes = ["action", "placeholder", "button", "consent"]
 degradation = "link to subscription page"
 enum_variant = "Subscribe"
 

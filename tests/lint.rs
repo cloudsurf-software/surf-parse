@@ -217,6 +217,9 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     // aliases) — the constructive-sink, PDF-page and web-walk fixture,
     // well-formed.
     ("diagrams-every-type.surf", &[]),
+    // 0.43.0: the newsletter issue (the email profile's fixture) —
+    // well-formed; its raw `<script>` is markdown, not a parse matter.
+    ("newsletter-issue.surf", &[]),
 ];
 
 #[test]

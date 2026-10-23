@@ -12,7 +12,7 @@ use crate::types::{Block, CalloutType, CarouselSlide, PlayerLayout, PlayerTrack,
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
 /// Tables are wrapped in `<div class="surfdoc-table-wrap">` for responsive scrolling.
-fn render_markdown(content: &str) -> String {
+pub(crate) fn render_markdown(content: &str) -> String {
     render_markdown_capped(content, Some(DATA_PREVIEW_ROWS))
 }
 
@@ -7990,12 +7990,24 @@ fn render_block_inner(block: &Block) -> String {
             html
         }
 
-        Block::Subscribe { action, placeholder, content, .. } => {
-            let mut html = String::from("<form class=\"surfdoc-subscribe\" method=\"post\"");
-            if let Some(a) = action.as_deref().and_then(|a| safe_url(a, UrlKind::FormAction)) {
-                html.push_str(&format!(" action=\"{}\"", escape_html(a)));
+        // 0.43.0: a `::form` named `newsletter` — `class="surfdoc-form"`
+        // verbatim (the host's form wiring keys on it), the form name as
+        // `data-form-name`, the `_honey` field first like `::form`, then the
+        // pitch, the email field + button and the consent line. An authored
+        // `action=` (form-action rule) posts there instead of the host route.
+        Block::Subscribe { action, placeholder, button, consent, content, .. } => {
+            let mut html = format!(
+                "<form class=\"surfdoc-form\" data-form-name=\"{}\"",
+                crate::types::SUBSCRIBE_FORM_NAME
+            );
+            // `#` is what the parser leaves of a refused `action=` — no target,
+            // so the host wires the form like any other.
+            if let Some(a) = action.as_deref().filter(|a| *a != "#").and_then(|a| safe_url(a, UrlKind::FormAction)) {
+                html.push_str(&format!(" method=\"post\" action=\"{}\"", escape_html(a)));
             }
             html.push('>');
+            html.push_str(FORM_HONEYPOT_HTML);
+            html.push_str("<div class=\"surfdoc-subscribe\">");
             if !content.trim().is_empty() {
                 html.push_str(&format!(
                     "<p class=\"surfdoc-subscribe-pitch\">{}</p>",
@@ -8003,8 +8015,15 @@ fn render_block_inner(block: &Block) -> String {
                 ));
             }
             html.push_str(&format!(
-                "<div class=\"surfdoc-subscribe-field\"><input class=\"surfdoc-subscribe-email\" type=\"email\" name=\"email\" placeholder=\"{}\" required><button class=\"surfdoc-subscribe-button\" type=\"submit\">Subscribe</button></div></form>",
-                escape_html(placeholder.as_deref().unwrap_or("you@example.com"))
+                "<div class=\"surfdoc-subscribe-field\"><input class=\"surfdoc-subscribe-email\" type=\"email\" name=\"email\" placeholder=\"{}\" autocomplete=\"email\" aria-label=\"Email address\" required><button class=\"surfdoc-subscribe-button\" type=\"submit\">{}</button></div>",
+                escape_html(placeholder.as_deref().unwrap_or("you@example.com")),
+                escape_html(button.as_deref().unwrap_or(crate::types::SUBSCRIBE_DEFAULT_BUTTON)),
+            ));
+            html.push_str(&format!(
+                "<p class=\"surfdoc-subscribe-consent\">{}</p></div></form>",
+                render_inline_markdown_phrasing(
+                    consent.as_deref().unwrap_or(crate::types::SUBSCRIBE_DEFAULT_CONSENT)
+                )
             ));
             html
         }

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>The Example Letter — Issue 3</title>
+</head>
+<body style="margin:0;padding:0;width:100%;background-color:#f7f8fc;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#f7f8fc;">Three things shipped, one essay read.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f8fc" style="width:100%;background-color:#f7f8fc;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+<tr>
+<td align="center" style="padding:0 0 12px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:12px;line-height:1.5;color:#636a7e;"><a href="https://letter.example.com/issues/3" style="color:#636a7e;text-decoration:underline;">View this email in your browser</a></td>
+</tr>
+</table>
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #dde2ec;border-radius:16px;">
+<tr>
+<td style="padding:32px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;text-align:left;">
+<img src="https://letter.example.com/img/issue-3.png" alt="A desert road at dusk" width="536" style="display:block;width:100%;max-width:536px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;margin:0 0 12px;">
+<h1 style="margin:0px 0 12px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:28px;line-height:1.25;font-weight:800;color:#0f1422;">The Example Letter — Issue 3</h1>
+<p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;">Hello again. This month we shipped <strong style="font-weight:700;">three things</strong> and read <a href="https://letter.example.com/reading/essay" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">one good essay</a>.</p>
+<ul style="margin:0 0 16px;padding:0 0 0 24px;">
+<li style="margin:0 0 6px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;">[x] The new studio</li>
+<li style="margin:0 0 6px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;">[ ] The tour dates</li>
+</ul>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 16px;">
+<tr>
+<td bgcolor="#e3ebff" style="padding:16px 20px;background-color:#e3ebff;border:1px solid #2563eb;border-radius:10px;text-align:left;">
+<p style="margin:0 0 6px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.4;font-weight:700;color:#0f1422;">Try it</p>
+<p style="margin:0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;">Open the app and press <strong style="font-weight:700;">New</strong> — your first doc is one tap away.</p>
+</td>
+</tr>
+</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 16px;">
+<tr>
+<td bgcolor="#eef1f7" style="padding:16px 20px;background-color:#eef1f7;border:1px solid #dde2ec;border-radius:10px;text-align:left;">
+<p style="margin:0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:21px;line-height:1.5;font-style:italic;color:#0f1422;">Make the thing you wish existed.</p>
+<p style="margin:8px 0 0;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;color:#636a7e;">&mdash; A. Writer</p>
+</td>
+</tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;">
+<tr>
+<td align="center" bgcolor="#2563eb" style="background-color:#2563eb;border:1px solid #2563eb;border-radius:10px;"><a href="https://letter.example.com/tour" style="display:inline-block;padding:12px 22px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.2;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">See the tour</a></td>
+</tr>
+</table>
+<p style="margin:24px 0 8px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:12px;line-height:1.4;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#636a7e;text-align:center;">Also</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:16px 0 24px;">
+<tr>
+<td height="1" bgcolor="#dde2ec" style="height:1px;line-height:1px;font-size:1px;background-color:#dde2ec;">&nbsp;</td>
+</tr>
+</table>
+<table role="table" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:0 0 16px;">
+<tr><th style="padding:8px 10px;border:1px solid #dde2ec;background-color:#eef1f7;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;font-weight:700;color:#0f1422;text-align:left;">Date</th><th style="padding:8px 10px;border:1px solid #dde2ec;background-color:#eef1f7;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;font-weight:700;color:#0f1422;text-align:left;">City</th></tr>
+<tr><td style="padding:8px 10px;border:1px solid #dde2ec;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;color:#0f1422;text-align:left;">Nov 7</td><td style="padding:8px 10px;border:1px solid #dde2ec;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;color:#0f1422;text-align:left;">Reno</td></tr>
+<tr><td style="padding:8px 10px;border:1px solid #dde2ec;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;color:#0f1422;text-align:left;">Nov 9</td><td style="padding:8px 10px;border:1px solid #dde2ec;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.4;color:#0f1422;text-align:left;">Boise</td></tr>
+</table>
+<p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.5;color:#636a7e;text-align:left;">Two dates</p>
+<pre style="margin:0 0 16px;padding:14px 16px;background-color:#f7f8fc;border:1px solid #dde2ec;border-radius:10px;font-family:'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas, monospace;font-size:14px;line-height:1.5;color:#0f1422;white-space:pre-wrap;word-break:break-word;">surf open issue-3</pre>
+<p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;"><a href="https://letter.example.com/issues/3" style="color:#2563eb;text-decoration:underline;">Open the form on the web</a></p>
+<p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;"><a href="https://media.example.com/clip.mp4" style="color:#2563eb;text-decoration:underline;">The studio, in one minute</a></p>
+
+<p style="margin:0 0 16px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:17px;line-height:1.6;color:#0f1422;">That's all for now.</p>
+</td>
+</tr>
+</table>
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+<tr>
+<td align="center" style="padding:24px 32px 0;text-align:center;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:12px;line-height:1.6;color:#636a7e;">
+<p style="margin:0 0 8px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:12px;line-height:1.6;color:#636a7e;">You're receiving this because you subscribed to The Example Letter.</p>
+<p style="margin:0 0 8px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:12px;line-height:1.6;color:#636a7e;"><a href="https://app.cloudsurf.com/n/u/tok-abc" style="color:#636a7e;text-decoration:underline;">Unsubscribe</a></p>
+<p style="margin:0 0 8px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:12px;line-height:1.6;color:#636a7e;">Example Press<br>1 Main St<br>Reno, NV 89501</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>

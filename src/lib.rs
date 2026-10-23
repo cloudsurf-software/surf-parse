@@ -32,6 +32,7 @@ pub mod lint;
 pub mod media;
 pub(crate) mod mermaid_compat;
 pub mod parse;
+pub mod render_email;
 pub mod render_html;
 pub mod render_latex;
 pub mod render_md;
@@ -74,7 +75,7 @@ pub mod workbook;
 /// `--font-heading`, `--font-body`) for site-level theming.
 pub const SURFDOC_CSS: &str = include_str!("../assets/surfdoc.css");
 
-/// This crate's version, `CARGO_PKG_VERSION` (0.42.0) — what a consumer's
+/// This crate's version, `CARGO_PKG_VERSION` (0.43.0) — what a consumer's
 /// drift test reads back off a shipped build (the web shell's wasm pin gate,
 /// TASK-1455) and what `wasm::version` returns; the same string
 /// `spec_registry::CRATE_VERSION` stamps on the spec.
@@ -115,6 +116,10 @@ pub use render_html::{
     render_site_single_file,
     accent_ink_color, contrast_ratio, to_shell_page, HeadIcon, HeadScript,
     hours_opening_specification, render_hours_with_now, OpeningHoursSpec, SITE_NAV_CSS,
+};
+pub use render_email::{
+    absolutize_url, email_disposition, to_email, to_email_html, to_email_text, EmailDisposition,
+    EmailFooter, EmailParts, EmailProfile,
 };
 pub use slots::{resolve_slot_markers, IMG_SLOT_PLACEHOLDER_URI};
 #[cfg(feature = "slides")]

@@ -14,6 +14,16 @@ let result = surf_parse::parse("# Hello\n\n::callout[type=tip]\nThis is a tip.\n
 // Render to HTML
 let config = surf_parse::PageConfig::default();
 let html = result.doc.to_html_page(&config);
+
+// Render as an email (0.43.0): the HTML and text parts of one message
+let footer = surf_parse::EmailFooter {
+    postal_address: "1 Main St, Reno NV".into(),
+    unsubscribe_url: "https://app.cloudsurf.com/n/u/token".into(),
+    sender_name: Some("The Letter".into()),
+    sent_with_cloudsurf: false,
+};
+let email = result.doc.to_email(&surf_parse::EmailProfile::new("https://example.com", footer));
+assert!(email.html.contains("Unsubscribe") && email.text.contains("Unsubscribe"));
 ```
 
 ## Block Types (131 registered · 131 implemented)
@@ -44,6 +54,7 @@ app-shell layout). The implemented variants:
 - YAML front matter parsing
 - 122 implemented block directives (every registered one) with attribute parsing
 - Renderers: HTML (with embedded CSS), markdown degradation, LaTeX, Typst, ANSI terminal, slides, native block tree (feature `native`), PDF (feature `pdf`)
+- Email (0.43.0): `to_email(&doc, &EmailProfile)` returns an email's HTML part (inline styles from the house tokens, a 600 px table layout, absolute URLs, no scripts or forms, a caller-filled footer) and its text part
 - Bindings: UniFFI (feature `uniffi`) and WASM (feature `wasm`)
 - `surf-lint` CLI (feature `cli`) — format/style lint with auto-fixes
 - SurfDocBuilder for programmatic document construction

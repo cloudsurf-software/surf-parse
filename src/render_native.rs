@@ -490,7 +490,8 @@
 //!   optional — the client derives an alt from the file name). v10.
 //! - **`Subscribe`**
 //!   `::subscribe` — `action=`, `placeholder=`; `content` the pitch. The
-//!   client posts nothing itself. v10.
+//!   client posts nothing itself. v10. `button` and `consent` (both
+//!   optional, as authored) since v18.
 //! - **`Notes`**
 //!   `::notes` standalone (a slide folds its own into `Slide.notes`) —
 //!   `content` verbatim. v10.
@@ -1525,6 +1526,14 @@ pub enum NativeBlock {
     Subscribe {
         action: Option<String>,
         placeholder: Option<String>,
+        /// The button label as authored (`button=`, v18); `None` = the
+        /// client's "Subscribe".
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        button: Option<String>,
+        /// The consent line as authored (`consent=`, v18); `None` = the
+        /// crate's `SUBSCRIBE_DEFAULT_CONSENT`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        consent: Option<String>,
         content: String,
     },
 
@@ -2608,7 +2617,11 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// authored or `None` when locked, `line`, `locked`; content tier) —
 /// `::player`. Additive — a client that ignores the variant reads v16's
 /// shape.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 17;
+/// v18 (0.43.0) — the newsletter: `Subscribe` gains `button` (the label)
+/// and `consent` (the consent line), both `Option` and absent when not
+/// authored. Additive — a client that ignores the two fields reads v17's
+/// shape.
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 18;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -4814,9 +4827,11 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
                 .collect(),
         },
 
-        Block::Subscribe { action, placeholder, content, .. } => NativeBlock::Subscribe {
+        Block::Subscribe { action, placeholder, button, consent, content, .. } => NativeBlock::Subscribe {
             action: action.clone(),
             placeholder: placeholder.clone(),
+            button: button.clone(),
+            consent: consent.clone(),
             content: content.clone(),
         },
 
@@ -6559,7 +6574,7 @@ mod tests {
             other => panic!("expected LogoCloud, got {other:?}"),
         }
         match convert_first("::subscribe[action=https://api.example.com/newsletter placeholder=\"you@email.com\"]\nGet notified when we launch.\n::\n") {
-            NativeBlock::Subscribe { action, placeholder, content } => {
+            NativeBlock::Subscribe { action, placeholder, content, .. } => {
                 assert_eq!(action.as_deref(), Some("https://api.example.com/newsletter"));
                 assert_eq!(placeholder.as_deref(), Some("you@email.com"));
                 assert_eq!(content, "Get notified when we launch.");
@@ -8447,7 +8462,8 @@ mod tests {
         // 0.37.0: video — `Video`, `Hero.video` / `Hero.poster` — schema v15.
         // 0.40.0: a segment's icon and tint — schema v16.
         // 0.42.0: the music player — `Player` — schema v17.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 17);
+        // 0.43.0: the newsletter — `Subscribe.button` / `.consent` — v18.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 18);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the
