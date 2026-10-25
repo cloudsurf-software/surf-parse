@@ -3038,6 +3038,30 @@ ol.surfdoc-steps { padding-left: 1rem; }
 .surfdoc-chip-input-remove { appearance: none; border: none; background: transparent; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--accent, #2e8ad8); cursor: pointer; padding: 0; }
 .surfdoc-chip-input-remove:hover { background: var(--surface-alt, #eef1f7); }
 .surfdoc-chip-input-field { flex: 1; min-width: 130px; background: none; border: none; outline: none; color: var(--text, #0f1422); font: inherit; font-size: 0.845rem; padding: 3px 0; }
+/* 0.44.0 — the chip-input's suggestion list (the web's New message wears this block, TASK-1982): a listbox under
+   the line on the surface, 44 px option rows (a 28 px avatar circle · the name in 600 · the email muted and ellipsised),
+   the highlighted row an accent-soft wash (no one-sided accent border), an empty row; `.is-chrome` drops the document
+   margin so the block sits flush in an app's pane. Under 640 px the email drops beneath the name and the field keeps
+   16 px type so iOS Safari does not zoom. The list is CSS only: the host draws the rows (role=listbox / role=option,
+   aria-selected on the highlighted one); the block's spec carries no `suggestions` attribute yet. */
+.surfdoc-chip-input.is-chrome { margin: 0; }
+.surfdoc-chip-input:focus-within { border-color: var(--accent, #2e8ad8); }
+.surfdoc-chip-input-suggestions { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 0; padding: 4px; border: var(--ws-border-w, 1px) var(--ws-border-style, solid) var(--border, #dde2ec); border-radius: var(--ws-radius-btn, 10px); background: var(--surface, #fff); box-shadow: var(--shadow-sm, none); }
+.surfdoc-chip-input-suggestions:empty { display: none; }
+.surfdoc-chip-input-option { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; width: 100%; min-height: 44px; margin: 0; padding: 6px 10px; border: none; border-radius: calc(var(--ws-radius-btn, 10px) - 4px); background: transparent; color: var(--text, #0f1422); font: inherit; text-align: left; cursor: pointer; }
+.surfdoc-chip-input-option:hover { background: var(--surface-alt, #eef1f7); }
+.surfdoc-chip-input-option[aria-selected="true"] { background: var(--accent-soft, #e3ebff); }
+.surfdoc-chip-input-option:focus-visible { outline: 2px solid var(--accent, #2e8ad8); outline-offset: -2px; }
+.surfdoc-chip-input-avatar { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; background: var(--surface-alt, #eef1f7); color: var(--text-muted, #64748b); font-size: 0.75rem; font-weight: 700; }
+.surfdoc-chip-input-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.surfdoc-chip-input-name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-chip-input-email { max-width: 18rem; color: var(--text-muted, #64748b); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surfdoc-chip-input-empty { padding: 10px 12px; color: var(--text-muted, #64748b); font-size: 0.8125rem; }
+@media (max-width: 640px) {
+  .surfdoc-chip-input-option { grid-template-columns: 28px minmax(0, 1fr); }
+  .surfdoc-chip-input-email { grid-column: 2; max-width: none; }
+  .surfdoc-chip-input-field { font-size: 16px; }
+}
 
 /* Feed */
 .surfdoc-feed { margin: 1rem 0; }

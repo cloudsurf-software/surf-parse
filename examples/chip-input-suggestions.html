@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chip-input with a suggestion list — surf-parse 0.44.0 fixture</title>
+<!-- A static fixture over the crate's stylesheet: the ::chip-input block as the renderer emits it, plus the suggestion
+     list a host draws under it (0.44.0 — CSS only). Open from the repo root; the stylesheet is linked relatively. -->
+<link rel="stylesheet" href="../assets/surfdoc.css">
+<style>
+  body { margin: 0; padding: 24px; background: var(--background, #fff); color: var(--text, #0f1422); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .fixture { max-width: 52rem; margin: 0 auto 32px; }
+  .fixture h2 { font-size: 0.8125rem; font-weight: 600; color: var(--text-muted, #64748b); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .fixture[data-theme="dark"] { padding: 16px; border-radius: 12px; background: var(--background, #0f1724); color: var(--text, #e6edf3); }
+</style>
+</head>
+<body>
+
+<section class="fixture surfdoc">
+  <h2>In a document (the 1rem margin stays)</h2>
+  <div class="surfdoc-chip-input">
+    <span class="surfdoc-chip-input-label">To:</span>
+    <span class="surfdoc-chip-input-chip">Rae Member<button type="button" class="surfdoc-chip-input-remove" aria-label="Remove Rae Member"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>
+    <span class="surfdoc-chip-input-chip">Sol Writer<button type="button" class="surfdoc-chip-input-remove" aria-label="Remove Sol Writer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>
+    <input type="text" class="surfdoc-chip-input-field" placeholder="Name or email" value="ki" aria-activedescendant="opt-kim">
+  </div>
+  <div class="surfdoc-chip-input-suggestions" role="listbox" aria-label="People">
+    <button type="button" class="surfdoc-chip-input-option" role="option" id="opt-kim" aria-selected="true"><span class="surfdoc-chip-input-avatar" aria-hidden="true">K</span><span class="surfdoc-chip-input-name">Kim Nakamura</span><span class="surfdoc-chip-input-email">kim@example.test</span></button>
+    <button type="button" class="surfdoc-chip-input-option" role="option" id="opt-kit" aria-selected="false"><span class="surfdoc-chip-input-avatar" aria-hidden="true">K</span><span class="surfdoc-chip-input-name">Kit Okafor</span><span class="surfdoc-chip-input-email">kit.okafor@example.test</span></button>
+    <button type="button" class="surfdoc-chip-input-option" role="option" id="opt-kir" aria-selected="false"><span class="surfdoc-chip-input-avatar" aria-hidden="true">K</span><span class="surfdoc-chip-input-name">Kira Lindqvist-Abernathy</span><span class="surfdoc-chip-input-email">kira.lindqvist-abernathy@a-very-long-domain.example.test</span></button>
+    <button type="button" class="surfdoc-chip-input-option" role="option" id="opt-aki" aria-selected="false"><span class="surfdoc-chip-input-avatar" aria-hidden="true">A</span><span class="surfdoc-chip-input-name">Akira</span><span class="surfdoc-chip-input-email"></span></button>
+  </div>
+</section>
+
+<section class="fixture surfdoc">
+  <h2>In an app's pane (.is-chrome: flush) · nothing matches</h2>
+  <div class="surfdoc-chip-input is-chrome">
+    <span class="surfdoc-chip-input-label">To:</span>
+    <input type="text" class="surfdoc-chip-input-field" placeholder="Name or email" value="zz">
+  </div>
+  <div class="surfdoc-chip-input-suggestions" role="listbox" aria-label="People">
+    <div class="surfdoc-chip-input-empty">No one by that name or email.</div>
+  </div>
+</section>
+
+<section class="fixture surfdoc" data-theme="dark">
+  <h2>The same on dark</h2>
+  <div class="surfdoc-chip-input is-chrome">
+    <span class="surfdoc-chip-input-label">To:</span>
+    <span class="surfdoc-chip-input-chip">Rae Member<button type="button" class="surfdoc-chip-input-remove" aria-label="Remove Rae Member"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>
+    <input type="text" class="surfdoc-chip-input-field" placeholder="Name or email" value="s" aria-activedescendant="opt-sol-d">
+  </div>
+  <div class="surfdoc-chip-input-suggestions" role="listbox" aria-label="People">
+    <button type="button" class="surfdoc-chip-input-option" role="option" id="opt-sol-d" aria-selected="true"><span class="surfdoc-chip-input-avatar" aria-hidden="true">S</span><span class="surfdoc-chip-input-name">Sol Writer</span><span class="surfdoc-chip-input-email">sol@example.test</span></button>
+    <button type="button" class="surfdoc-chip-input-option" role="option" id="opt-sam-d" aria-selected="false"><span class="surfdoc-chip-input-avatar" aria-hidden="true">S</span><span class="surfdoc-chip-input-name">Sam Reyes</span><span class="surfdoc-chip-input-email">sam@example.test</span></button>
+  </div>
+</section>
+
+</body>
+</html>

@@ -3,6 +3,34 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.44.0 — 2026-10-25 (the chip-input's suggestion list — the stylesheet grows the rows a host draws under `::chip-input`, and `.is-chrome` lets the block sit flush in an app; TASK-1982 under TASK-1980)
+
+The web's New message (CloudSurf's `/cloud`, TASK-1982) wears SurfDoc's own `::chip-input` for its To: line — the block
+the iPhone and the Mac already draw through SurfDocKit — but the block had no suggestion list, so the web drew its own
+bare rows. Stylesheet only; no block, attribute, renderer or schema changes (native schema stays v18).
+
+- **`assets/surfdoc.css`.** Next to the 0.17 chip-input rules: `.surfdoc-chip-input-suggestions` (a listbox under the
+  line — the surface, a full hairline, the button radius, `--shadow-sm`; hidden when empty), `.surfdoc-chip-input-option`
+  (a 44 px row on a three-column grid: a 28 px `.surfdoc-chip-input-avatar` circle, `.surfdoc-chip-input-name` in 600,
+  `.surfdoc-chip-input-email` muted and ellipsised; `:hover` the soft surface, `[aria-selected="true"]` the
+  `--accent-soft` wash — a wash, never a one-sided accent border — and a `:focus-visible` ring) and
+  `.surfdoc-chip-input-empty`. The block itself takes `:focus-within` (the accent hairline) and a modifier,
+  `.surfdoc-chip-input.is-chrome`, that drops the `1rem` document margin so an app can sit it flush in a pane. Under
+  640 px the option row is two columns (the email under the name) and `.surfdoc-chip-input-field` keeps 16 px type so
+  iOS Safari does not zoom the page on focus. Every colour is a crate token (`--surface`, `--surface-alt`, `--border`,
+  `--accent`, `--accent-soft`, `--text`, `--text-muted`), so the dark block tunes the list with the rest of the sheet.
+- **The host draws the rows.** The renderer emits the block as before (the label, the chips with their close mark, the
+  field); a host that offers suggestions appends `div.surfdoc-chip-input-suggestions[role=listbox]` holding
+  `button.surfdoc-chip-input-option[role=option]` rows (avatar · name · email), marks the highlighted one
+  `aria-selected="true"` and points the field's `aria-activedescendant` at it. The spec takes no `suggestions`
+  attribute in this release (the open question of the plan: CSS alone serves the web; the attribute can follow).
+- **`examples/chip-input-suggestions.html`.** A static page over `assets/surfdoc.css` that draws the block with two chips,
+  a four-row list (one highlighted), the empty row, and the same block inside a dark `data-theme` — so the look can be
+  shot without an app. Open it in a browser from the repo root (the stylesheet is linked relatively).
+- **`tests/chip_input_suggestions.rs`.** Pins the new rules in `SURFDOC_CSS` (each selector present once, the highlight a
+  background and not a border, the phone block carrying the 16 px field) and that the renderer's chip-input markup is
+  unchanged.
+
 ## 0.43.0 — 2026-10-23 (the newsletter: the email profile — one SurfDoc to an email's HTML and text parts — and `::subscribe` as a `::form` named `newsletter`; native schema v18)
 
 A newsletter issue in CloudSurf is a SurfDoc sent from Posts (the modules-in-the-menu plan, lanes N2 TASK-1975 and
