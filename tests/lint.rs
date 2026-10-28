@@ -187,6 +187,7 @@ const PARSE_BASELINE: &[(&str, &[Severity])] = &[
     // real container (surplus-closer rule), so the file parses clean — the
     // former P006 orphan-closer warning was the flat-emission bug.
     ("gallery-form.surf", &[]),
+    ("hero-scrim-columns.surf", &[]),
     ("literate.surf", &[]),
     ("malformed.surf", &[Severity::Error]),
     // 0.11 nesting fix: the trailing `::` at EOF is `::app`'s own closer
