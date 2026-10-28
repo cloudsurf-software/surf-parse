@@ -3,6 +3,30 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.42.1 — 2026-10-28 (a patch line off v0.42.0: the scrim over a centred hero, and a button link's brace suffix inside `:::columns`)
+
+Two render defects a site repair exposed (TASK-2227). Cut from the v0.42.0 tag; 0.43.0 and 0.44.0 are not in this
+line — the two fixes forward-port to main as 0.44.1.
+
+- **The scrim over a centred hero.** Measured in Chromium and WebKit at 1280 and 390 (a forced red `::before`, a
+  generic author sheet that lays the hero's picture full-bleed at `z-index: -1`): the red never showed over the
+  picture. The cause is stacking, not the scrim: `.surfdoc-hero-inner` was `position: relative; z-index: 1` — a
+  stacking context — and the centred hero's picture lives INSIDE it, so its `z-index: -1` is relative to the inner
+  and the whole inner (picture included) painted above the hero's `::before` (z-index 0). Now the centred hero
+  (plain and `-cover`) is the one stacking context (`isolation: isolate`), its `::before` sits at 1, the inner is no
+  longer a context (`z-index: auto`) and the inner's children sit at 2 through a zero-specificity `:where()` rule,
+  so an author sheet that re-places the picture wins. Measured after: the red paints over the picture in both
+  engines at both widths; the cover hero, the default centred hero and the `-left` hero are pixel-identical to 0.42.0.
+  The `-left` hero's rules are unchanged.
+- **`[Label](href){primary}` inside `:::columns`.** A column's content went through the plain markdown path, which
+  left `{primary}` as text after the link. A line that is wholly a button link with known flags — `{primary}`,
+  `{.primary}`, `{external}`, in any combination — now draws as a button with the `::cta` classes
+  (`surfdoc-cta surfdoc-cta-primary` / `-secondary`, `target="_blank" rel="noopener"` for external), consecutive
+  buttons in one `surfdoc-cta-group`. An unknown flag (`{shiny}`), an empty `{}`, a link with words after its brace
+  and a fenced code block stay exactly as written; a column with no button line renders byte for byte as before.
+  The DOM twin draws the same markup (`render_dom_identity::identity_hero_scrim_columns`). The native, markdown,
+  terminal and print renderers still pass a column's text through as written.
+
 ## 0.42.0 — 2026-10-19 (`::player` — a record's tracks on one persistent player: rows that play in place, the mini bar and the now-playing sheet, shuffle, the OS media surface, keyboard transport; native schema v17)
 
 desertfuzz.com's album page streams its title track and sells the record, and its React player (a persistent

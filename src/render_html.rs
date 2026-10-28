@@ -12,6 +12,36 @@ use crate::types::{Block, CalloutType, CarouselSlide, PlayerLayout, PlayerTrack,
 /// Render a markdown string to HTML using pulldown-cmark with GFM extensions.
 ///
 /// Tables are wrapped in `<div class="surfdoc-table-wrap">` for responsive scrolling.
+/// A `:::column`'s content (0.42.1): prose through the markdown path, and a
+/// line that is wholly `[Label](href){primary}` / `{.primary}` / `{external}`
+/// drawn as a button — the `::cta` classes, consecutive buttons in one
+/// `surfdoc-cta-group` — as the brace suffix already works in a hero or a
+/// banner. `render_dom` mirrors this byte for byte.
+fn render_column_content(content: &str) -> String {
+    let mut out = String::new();
+    for part in crate::blocks::split_column_buttons(content) {
+        match part {
+            crate::blocks::ColumnPart::Markdown(md) => out.push_str(&render_markdown(&md)),
+            crate::blocks::ColumnPart::Buttons(buttons) => {
+                out.push_str("<div class=\"surfdoc-cta-group\">");
+                for btn in &buttons {
+                    let cls = if btn.primary { "surfdoc-cta surfdoc-cta-primary" } else { "surfdoc-cta surfdoc-cta-secondary" };
+                    let target = if btn.external { " target=\"_blank\" rel=\"noopener\"" } else { "" };
+                    out.push_str(&format!(
+                        "<a href=\"{}\" class=\"{}\"{}>{}</a>",
+                        escape_html(link_href(&btn.href)),
+                        cls,
+                        target,
+                        escape_html(&btn.label)
+                    ));
+                }
+                out.push_str("</div>");
+            }
+        }
+    }
+    out
+}
+
 fn render_markdown(content: &str) -> String {
     render_markdown_capped(content, Some(DATA_PREVIEW_ROWS))
 }
@@ -4492,7 +4522,7 @@ fn render_block_inner(block: &Block) -> String {
                 count
             );
             for col in columns {
-                let col_html = render_markdown(&col.content);
+                let col_html = render_column_content(&col.content);
                 html.push_str(&format!(
                     "<div class=\"surfdoc-column\">{}</div>",
                     col_html

@@ -2356,6 +2356,18 @@ img.broken::after { content: attr(alt); display: block; position: absolute; bott
 }
 .surfdoc-hero { position: relative; }
 .surfdoc-hero-inner { position: relative; z-index: 1; }
+/* 0.42.1 — the scrim over a CENTRED hero (plain and -cover). The inner was a
+   stacking context (position + z-index 1), so a picture placed inside it — an
+   author's full-bleed .surfdoc-hero-image at z-index -1 — stayed trapped above
+   the hero's ::before and the scrim painted under the picture (measured in
+   Chromium + WebKit, 1280 + 390: a forced red ::before invisible). The hero is
+   now the one stacking context: the scrim at 1, the inner no longer a context,
+   the copy at 2 (zero specificity, so an author sheet re-places the picture).
+   The -left hero keeps the rules above unchanged. */
+.surfdoc-hero:not(.surfdoc-hero-left) { isolation: isolate; }
+.surfdoc-hero:not(.surfdoc-hero-left)::before { z-index: 1; }
+.surfdoc-hero:not(.surfdoc-hero-left) .surfdoc-hero-inner { z-index: auto; }
+:where(.surfdoc-hero:not(.surfdoc-hero-left) .surfdoc-hero-inner) > * { position: relative; z-index: 2; }
 /* layout=cover — the image IS the hero background (home-page header): give it
    presence and vertically center the headline over it. */
 .surfdoc-hero-cover { min-height: min(74vh, 44rem); display: flex; align-items: center; justify-content: center; padding-top: 6rem; padding-bottom: 6rem; }

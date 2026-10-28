@@ -1,0 +1,32 @@
+::hero[image="/img/sky.jpg" layout=cover]
+# A centred cover hero
+Words over a picture.
+
+[Start](/start){primary}
+::
+
+::hero[image="/img/mark.png"]
+# A centred hero
+Its picture above the headline.
+::
+
+::columns
+:::column
+### Plans
+Pick one.
+
+[Choose a plan](/plans){primary}
+[Compare](/compare)
+:::
+:::column
+### Help
+[Read the guide](/guide){.primary}
+
+[Ask us](https://example.com/ask){external}
+[Odd](/odd){shiny}
+
+```
+[Not a button](/code){primary}
+```
+:::
+::

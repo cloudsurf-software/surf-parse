@@ -2133,6 +2133,79 @@ fn parse_button_flags(suffix: &str) -> (bool, bool) {
     (primary, external)
 }
 
+/// One run of a `:::column`'s content: prose for the markdown path, or the
+/// button links written one per line (0.42.1).
+#[derive(Debug, Clone)]
+pub(crate) enum ColumnPart {
+    Markdown(String),
+    Buttons(Vec<HeroButton>),
+}
+
+/// A line that is wholly `[Label](href){flags}` where every flag is a known
+/// button flag (`primary` / `external`, `.`-prefixed forms accepted) → the
+/// button. A bare link, an unknown flag (`{shiny}`) or an empty `{}` is not a
+/// button: the line stays prose and its braces stay text.
+pub(crate) fn column_button_line(line: &str) -> Option<HeroButton> {
+    let trimmed = line.trim();
+    let rest = trimmed.strip_prefix('[')?;
+    let label_end = rest.find("](")?;
+    let label = &rest[..label_end];
+    let after = &rest[label_end + 2..];
+    let href_end = after.find(')')?;
+    let href = &after[..href_end];
+    let suffix = after[href_end + 1..].trim();
+    let inner = suffix.strip_prefix('{')?.strip_suffix('}')?;
+    if label.is_empty() || label.contains(']') || href.is_empty() || inner.contains(['{', '}']) {
+        return None;
+    }
+    let flags: Vec<&str> = inner.split_whitespace().map(|f| f.trim_start_matches('.')).collect();
+    if flags.is_empty() || flags.iter().any(|f| *f != "primary" && *f != "external") {
+        return None;
+    }
+    let (primary, external) = parse_button_flags(suffix);
+    Some(HeroButton { label: label.to_string(), href: href.to_string(), primary, external })
+}
+
+/// Split a column's content into prose and button runs (consecutive button
+/// lines form one run; a fenced code block is never read for buttons). A
+/// column with no button line comes back as ONE part holding its content
+/// unchanged, so every column without a button renders exactly as before.
+pub(crate) fn split_column_buttons(content: &str) -> Vec<ColumnPart> {
+    let mut parts: Vec<ColumnPart> = Vec::new();
+    let mut prose: Vec<&str> = Vec::new();
+    let mut in_fence = false;
+    let mut any = false;
+    for line in content.lines() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            in_fence = !in_fence;
+        }
+        let button = if in_fence { None } else { column_button_line(line) };
+        match button {
+            Some(btn) => {
+                any = true;
+                // Blank lines between two buttons keep one run.
+                if prose.iter().any(|l| !l.trim().is_empty()) {
+                    parts.push(ColumnPart::Markdown(prose.join("\n")));
+                }
+                prose.clear();
+                match parts.last_mut() {
+                    Some(ColumnPart::Buttons(run)) => run.push(btn),
+                    _ => parts.push(ColumnPart::Buttons(vec![btn])),
+                }
+            }
+            None => prose.push(line),
+        }
+    }
+    if !any {
+        return vec![ColumnPart::Markdown(content.to_string())];
+    }
+    if prose.iter().any(|l| !l.trim().is_empty()) {
+        parts.push(ColumnPart::Markdown(prose.join("\n")));
+    }
+    parts
+}
+
 fn parse_hero(attrs: &Attrs, content: &str, span: Span) -> Block {
     let badge = attr_string(attrs, "badge");
     let align = attr_string(attrs, "align").unwrap_or_else(|| "center".to_string());

@@ -1025,6 +1025,35 @@ fn heading_level(level: HeadingLevel) -> u8 {
     }
 }
 
+/// A `:::column`'s content (0.42.1) — `render_html::render_column_content`'s
+/// twin: prose through the markdown path, a whole-line `[Label](href){primary}`
+/// drawn as a `::cta`-classed button, consecutive buttons in one group.
+fn build_column_content<S: DomSink>(dom: &mut Dom<'_, S>, content: &str) -> Result<(), RenderDomError> {
+    for part in crate::blocks::split_column_buttons(content) {
+        match part {
+            crate::blocks::ColumnPart::Markdown(md) => build_markdown(dom, &md)?,
+            crate::blocks::ColumnPart::Buttons(buttons) => {
+                dom.open("div", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-cta-group"));
+                for btn in &buttons {
+                    let cls = if btn.primary { "surfdoc-cta surfdoc-cta-primary" } else { "surfdoc-cta surfdoc-cta-secondary" };
+                    dom.open("a", CloseStyle::Normal);
+                    dom.attr("href", AttrVal::Markup(link_href(&btn.href)));
+                    dom.attr("class", AttrVal::Markup(cls));
+                    if btn.external {
+                        dom.attr("target", AttrVal::Markup("_blank"));
+                        dom.attr("rel", AttrVal::Markup("noopener"));
+                    }
+                    dom.text_markup(&btn.label);
+                    dom.close();
+                }
+                dom.close();
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Full markdown block content (`Block::Markdown`, callout bodies after
 /// pre-escaping, …).
 fn build_markdown<S: DomSink>(dom: &mut Dom<'_, S>, content: &str) -> Result<(), RenderDomError> {
@@ -5001,7 +5030,7 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             for col in columns {
                 dom.open("div", CloseStyle::Normal);
                 dom.attr("class", AttrVal::Markup("surfdoc-column"));
-                build_markdown(dom, &col.content)?;
+                build_column_content(dom, &col.content)?;
                 dom.close();
             }
             dom.close();

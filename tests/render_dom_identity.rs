@@ -151,6 +151,13 @@ fn identity_carousel_and_stepped_form() {
 /// and for a hostile source), `::hero[video=]` and the video-file `::embed`
 /// — constructively whole and byte-equal, unresolved and with a host's
 /// resolver installed.
+/// 0.42.1: a button link inside `:::columns` draws the same `::cta` markup
+/// through the DOM twin, and the centred heroes stay identical.
+#[test]
+fn identity_hero_scrim_columns() {
+    assert_identity("hero-scrim-columns.surf");
+}
+
 #[test]
 fn identity_video() {
     assert_identity("video.surf");
