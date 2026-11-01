@@ -621,6 +621,20 @@ pub enum RenderProfile {
     Spreadsheet,
 }
 
+/// The form name a `::subscribe` block submits under (0.43.0): its
+/// `<form>` carries `data-form-name="newsletter"`, which the host's form
+/// wiring turns into the `_form` control value, so the submission lands as a
+/// newsletter subscriber instead of a form-inbox row.
+pub const SUBSCRIBE_FORM_NAME: &str = "newsletter";
+
+/// The button label of a `::subscribe` block without `button=` (0.43.0).
+pub const SUBSCRIBE_DEFAULT_BUTTON: &str = "Subscribe";
+
+/// The consent line of a `::subscribe` block without `consent=` (0.43.0) —
+/// true whether the block posts to the host or to an authored `action=`.
+pub const SUBSCRIBE_DEFAULT_CONSENT: &str =
+    "By subscribing, you agree to get this newsletter by email. Unsubscribe at any time.";
+
 /// Resolve a `(DocType, Option<Format>)` pair to a [`RenderProfile`].
 ///
 /// Pure and total: every [`DocType`] maps to exactly one profile, and every
@@ -2127,11 +2141,21 @@ pub enum Block {
         items: Vec<LogoItem>,
         span: Span,
     },
-    /// Email subscription (`::subscribe[action=… placeholder=…]`) with a
-    /// pitch as the body.
+    /// Email subscription (`::subscribe[action=… placeholder=… button=…
+    /// consent=…]`) with a pitch as the body. Since 0.43.0 it renders as a
+    /// `::form` named [`SUBSCRIBE_FORM_NAME`] (`class="surfdoc-form"`,
+    /// `data-form-name="newsletter"`, the `_honey` field): an email field,
+    /// the button and a consent line.
     Subscribe {
         action: Option<String>,
         placeholder: Option<String>,
+        /// The button's label (`button=`, 0.43.0); `None` = "Subscribe".
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        button: Option<String>,
+        /// The consent line under the field (`consent=`, 0.43.0); `None` =
+        /// [`SUBSCRIBE_DEFAULT_CONSENT`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        consent: Option<String>,
         content: String,
         span: Span,
     },

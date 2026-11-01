@@ -1,0 +1,54 @@
+---
+title: "The Example Letter — Issue 3"
+type: doc
+---
+
+::hero-image[src=/img/issue-3.png alt="A desert road at dusk"]
+::
+
+# The Example Letter — Issue 3
+
+Hello again. This month we shipped **three things** and read [one good essay](/reading/essay).
+
+- [x] The new studio
+- [ ] The tour dates
+
+::callout[type=tip title="Try it"]
+Open the app and press **New** — your first doc is one tap away.
+::
+
+::quote[by="A. Writer"]
+Make the thing you wish existed.
+::
+
+::cta[label="See the tour" href=/tour primary=true]
+::
+
+::divider[label="Also"]
+::
+
+::data[caption="Two dates"]
+| Date | City |
+|------|------|
+| Nov 7 | Reno |
+| Nov 9 | Boise |
+::
+
+::code[lang=sh]
+surf open issue-3
+::
+
+::form[submit="Send"]
+- Name (text) *
+::
+
+::subscribe[button="Join"]
+Get the next issue.
+::
+
+::video[src=https://media.example.com/clip.mp4 caption="The studio, in one minute"]
+::
+
+<script>alert("x")</script>
+
+That's all for now.

@@ -3,10 +3,10 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
-## 0.42.1 — 2026-10-28 (a patch line off v0.42.0: the scrim over a centred hero, and a button link's brace suffix inside `:::columns`)
+## 0.44.1 — 2026-10-31 (forward-port of the 0.42.1 patch line: the scrim over a centred hero, and a button link's brace suffix inside `:::columns`)
 
-Two render defects a site repair exposed (TASK-2227). Cut from the v0.42.0 tag; 0.43.0 and 0.44.0 are not in this
-line — the two fixes forward-port to main as 0.44.1.
+Two render defects a site repair exposed (TASK-2227). First cut as 0.42.1 off the v0.42.0 tag; forward-ported onto
+0.44.0 here, so 0.44.1 carries 0.43.0 and 0.44.0 as well.
 
 - **The scrim over a centred hero.** Measured in Chromium and WebKit at 1280 and 390 (a forced red `::before`, a
   generic author sheet that lays the hero's picture full-bleed at `z-index: -1`): the red never showed over the
@@ -26,6 +26,85 @@ line — the two fixes forward-port to main as 0.44.1.
   and a fenced code block stay exactly as written; a column with no button line renders byte for byte as before.
   The DOM twin draws the same markup (`render_dom_identity::identity_hero_scrim_columns`). The native, markdown,
   terminal and print renderers still pass a column's text through as written.
+## 0.44.0 — 2026-10-25 (the chip-input's suggestion list — the stylesheet grows the rows a host draws under `::chip-input`, and `.is-chrome` lets the block sit flush in an app; TASK-1982 under TASK-1980)
+
+The web's New message (CloudSurf's `/cloud`, TASK-1982) wears SurfDoc's own `::chip-input` for its To: line — the block
+the iPhone and the Mac already draw through SurfDocKit — but the block had no suggestion list, so the web drew its own
+bare rows. Stylesheet only; no block, attribute, renderer or schema changes (native schema stays v18).
+
+- **`assets/surfdoc.css`.** Next to the 0.17 chip-input rules: `.surfdoc-chip-input-suggestions` (a listbox under the
+  line — the surface, a full hairline, the button radius, `--shadow-sm`; hidden when empty), `.surfdoc-chip-input-option`
+  (a 44 px row on a three-column grid: a 28 px `.surfdoc-chip-input-avatar` circle, `.surfdoc-chip-input-name` in 600,
+  `.surfdoc-chip-input-email` muted and ellipsised; `:hover` the soft surface, `[aria-selected="true"]` the
+  `--accent-soft` wash — a wash, never a one-sided accent border — and a `:focus-visible` ring) and
+  `.surfdoc-chip-input-empty`. The block itself takes `:focus-within` (the accent hairline) and a modifier,
+  `.surfdoc-chip-input.is-chrome`, that drops the `1rem` document margin so an app can sit it flush in a pane. Under
+  640 px the option row is two columns (the email under the name) and `.surfdoc-chip-input-field` keeps 16 px type so
+  iOS Safari does not zoom the page on focus. Every colour is a crate token (`--surface`, `--surface-alt`, `--border`,
+  `--accent`, `--accent-soft`, `--text`, `--text-muted`), so the dark block tunes the list with the rest of the sheet.
+- **The host draws the rows.** The renderer emits the block as before (the label, the chips with their close mark, the
+  field); a host that offers suggestions appends `div.surfdoc-chip-input-suggestions[role=listbox]` holding
+  `button.surfdoc-chip-input-option[role=option]` rows (avatar · name · email), marks the highlighted one
+  `aria-selected="true"` and points the field's `aria-activedescendant` at it. The spec takes no `suggestions`
+  attribute in this release (the open question of the plan: CSS alone serves the web; the attribute can follow).
+- **`examples/chip-input-suggestions.html`.** A static page over `assets/surfdoc.css` that draws the block with two chips,
+  a four-row list (one highlighted), the empty row, and the same block inside a dark `data-theme` — so the look can be
+  shot without an app. Open it in a browser from the repo root (the stylesheet is linked relatively).
+- **`tests/chip_input_suggestions.rs`.** Pins the new rules in `SURFDOC_CSS` (each selector present once, the highlight a
+  background and not a border, the phone block carrying the 16 px field) and that the renderer's chip-input markup is
+  unchanged.
+
+## 0.43.0 — 2026-10-23 (the newsletter: the email profile — one SurfDoc to an email's HTML and text parts — and `::subscribe` as a `::form` named `newsletter`; native schema v18)
+
+A newsletter issue in CloudSurf is a SurfDoc sent from Posts (the modules-in-the-menu plan, lanes N2 TASK-1975 and
+N3 TASK-1972). The crate had no way to turn a doc into mail — `to_html` leans on `surfdoc.css`, which Gmail strips,
+and writes forms, scripts and relative URLs — and `::subscribe` drew a `<form class="surfdoc-subscribe">` with no
+target that the host's form wiring never saw (it keys on `class="surfdoc-form"`), so a published subscribe block
+posted nowhere.
+
+- **`render_email` — `to_email(&doc, &EmailProfile) -> EmailParts { html, text }`** (also `SurfDoc::to_email`,
+  `to_email_html`, `to_email_text`). The HTML is a whole document with inline styles only — no `<style>`, no class
+  names; the head is charset, viewport, `color-scheme: light` and the title — painted from the house tokens (the
+  light palette, the type scale and the card / button / image radii of `assets/surfdoc.css`, pinned by a drift
+  test), laid out in tables: a full-width page table, a 600 px card, bulletproof table-cell buttons, one-pixel
+  table rules, an optional hidden preheader and an optional "View this email in your browser" line.
+- **`EmailProfile { base_url, footer, preheader, web_url }`.** Every `src` / `href` joins onto `base_url`
+  (`absolutize_url`, public: `/a.png` → the origin + `/a.png`, `a.png` → the base's directory, `//host` →
+  `https://host`); a link with any scheme but http(s) / mailto / tel keeps its text and loses its target; an image
+  that is not http(s) after joining (a `data:` or an unresolved `media:` reference) is left out.
+- **`EmailFooter { postal_address, unsubscribe_url, sender_name, sent_with_cloudsurf }`** — the slot the caller
+  fills, under the card: the reason line when `sender_name` is set, the Unsubscribe link and the postal address
+  always, "Sent with CloudSurf" only when asked. The text part ends with the same lines after `--`.
+- **No scripts, no forms — by one table, `email_disposition(block, profile) -> EmailDisposition`** (`Render` ·
+  `Degrade` · `Link(label, url)` · `Drop`). Content blocks have an email arm (markdown, callout, quote,
+  testimonial, code, figure, hero image, gallery, CTA, hero, banner, divider, data, details, columns and tabs
+  stacked, section and page children); content-shaped web blocks degrade through their markdown form (features,
+  steps, stats, FAQ, pricing, comparison, tasks …); a `::form` becomes a link to `web_url` (or nothing without
+  one), a `::subscribe` is dropped (whoever reads the issue subscribed), a video or embed with an http(s) source
+  becomes a link to it, a player links to `web_url`; every other block (navigation, site chrome, app and infra
+  blocks, and any block added later) is dropped. A final scrub removes any `<script>`, `<style>`, `<iframe>`,
+  `<form>` or form control that got through, in both parts. Task items keep `[x]` / `[ ]` as text.
+- **The text part** is `render_md`'s degradation of the same blocks with the same drops and links, every
+  markdown link target made absolute.
+- **`::subscribe` renders as a `::form` named `newsletter`**: `<form class="surfdoc-form"
+  data-form-name="newsletter">`, the `_honey` field first (as `::form[honeypot]`), then the
+  `div.surfdoc-subscribe` card — the pitch, the email field (`autocomplete="email"`, an accessible name) and the
+  button, and the consent line `p.surfdoc-subscribe-consent`. With no `action=` the form carries no target, so the
+  host's form wiring posts it where every `::form` posts; an authored `action=` (the form-action rule) posts there.
+  New attributes `button=` (default "Subscribe") and `consent=` (inline markdown; default
+  `SUBSCRIBE_DEFAULT_CONSENT`); `SUBSCRIBE_FORM_NAME` = `newsletter`. The host reads `data-form-name` for the
+  `_form` control value (surf's side of N3). The DOM twin draws the same bytes; markdown still degrades to a link.
+  **Changed output** for every `::subscribe` (the corpus `tier6` html snapshot moves); the CSS keeps the card's
+  look (`.surfdoc-form > .surfdoc-subscribe`, the consent line) and now hides `.surfdoc-form-honey` off screen.
+- **Native schema v18:** `NativeBlock::Subscribe` gains `button` and `consent` (`Option`, absent when not
+  authored). Additive — a client that ignores the two fields reads v17's shape.
+- `spec/blocks.toml`: `subscribe` declares `button` and `consent` (still 132 blocks). The serializer round-trips
+  both.
+- Tests: `tests/email.rs` (the fixture issue `tests/fixtures/newsletter-issue.surf` → the HTML and text snapshots
+  `tests/snapshots/newsletter-issue.email.{html,txt}.snap`, the table layout and inline styles, no script / form,
+  absolute URLs, the disposition table, the footer rules, the text part, `::subscribe` parse · render · action ·
+  round trip · markdown) and `render_email`'s unit tests (the token drift pin, the URL join, the styler, the
+  scrub, the task markers, markdown link targets).
 
 ## 0.42.0 — 2026-10-19 (`::player` — a record's tracks on one persistent player: rows that play in place, the mini bar and the now-playing sheet, shuffle, the OS media surface, keyboard transport; native schema v17)
 

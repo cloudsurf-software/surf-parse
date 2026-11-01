@@ -86,7 +86,7 @@ pub const SNIPPETS: &[(&str, &str)] = &[
     ("footnote", "::footnote[id=1]\nGartner, 2025.\n::"),
     ("kernel", "::kernel[lang=python env=analysis]\nruntime: python3.12\npackages: [numpy, pandas]\nsandbox: strict\n::"),
     ("logo-cloud", "::logo-cloud[title=\"Trusted by\"]\n- assets/logos/acme.svg\n- assets/logos/initech.svg | Initech\n::"),
-    ("subscribe", "::subscribe[action=/subscribe placeholder=\"you@email.com\"]\nGet notified.\n::"),
+    ("subscribe", "::subscribe[action=/subscribe placeholder=\"you@email.com\" button=\"Join\" consent=\"One email a month.\"]\nGet notified.\n::"),
     ("notes", "::notes\nPause here.\n::"),
     ("metric", "::metric[label=\"Tests\" value=42 trend=up unit=tests]\n::"),
     ("nav", "::nav[logo=\"Co\"]\n- Home /\n- Pricing /pricing\n::"),
