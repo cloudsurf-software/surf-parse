@@ -3,6 +3,25 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.42.2 — 2026-11-02 (hotfix off the v0.42.0 tag: a bare URL or an in-word emphasis marker no longer fails a doc's PDF)
+
+Cut from tag v0.42.0 (the tag surf pins), not main — the same render_typst change as 0.44.2 on main, so a repin can
+ship it without carrying 0.43.0–0.44.1. 0.42.1 was never tagged (forward-ported as 0.44.1); this tag is not on main.
+
+Measured 2026-11-02 on app.cloudsurf.com: after Surfy added a "Sources" list of bare Wikipedia URLs to a doc, its PDF
+(`GET /api/docs/{id}/export`) answered 500 — `Typst compilation failed: unclosed delimiter` ×2. `md_to_typst_inline`
+escaped every `_` in a bare URL to `\_`, which ended Typst's own autolink early, and the `_` after the `:` in
+`Star_Trek:_The_Original_Series` opened emphasis whose closer sat inside a word, where Typst reads `_` as text.
+
+- **A bare URL is a link.** `https://…` / `http://…` at a word's start becomes `#link("…");` — the address a string
+  literal, followed whole (underscores, `*`, `#`, balanced `(…)`), trailing sentence punctuation and an unbalanced
+  `)` / `]` left as text; the `;` ends the call so a following `[4]` or `(…)` stays text.
+- **Emphasis only at a word's edge.** `**…**`, `__…__`, `*…*` and `_…_` become Typst emphasis only when neither
+  outer side is a letter or digit (Typst's own rule); otherwise the characters are escaped. `*foo*bar`, `x_foo_`,
+  `a**b**c` compiled to an unclosed delimiter before and draw as their literal characters now.
+
+Tests: `tests/pdf_bare_urls.rs` (the sources list compiles to a PDF; the emitted links; four in-word cases compile).
+
 ## 0.42.0 — 2026-10-19 (`::player` — a record's tracks on one persistent player: rows that play in place, the mini bar and the now-playing sheet, shuffle, the OS media surface, keyboard transport; native schema v17)
 
 desertfuzz.com's album page streams its title track and sells the record, and its React player (a persistent

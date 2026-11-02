@@ -2197,6 +2197,19 @@ pub fn md_to_typst_inline(text: &str) -> String {
             continue;
         }
 
+        // Bare URL: `https://…` / `http://…` → `#link("…");`. Left as markup
+        // it broke the compile: the escaper turned `_` into `\_`, ending
+        // Typst's own autolink early, and an `_` after `:` (Wikipedia's
+        // `Star_Trek:_The_Original_Series`) opened emphasis that an in-word
+        // `_` can never close — "unclosed delimiter", a 500 on the doc's PDF.
+        // The `;` ends the call, so a following `[4]` or `(…)` stays text.
+        if let Some(end) = bare_url_end(&chars, i) {
+            let url: String = chars[i..end].iter().collect();
+            out.push_str(&format!("#link({});", typst_str_literal(&url)));
+            i = end;
+            continue;
+        }
+
         // Image: ![alt](src) — only a src the ambient image context resolves
         // becomes an `image()` call; anything else degrades to a muted alt
         // label (an unregistered path would fail the whole Typst compile).
@@ -2245,7 +2258,7 @@ pub fn md_to_typst_inline(text: &str) -> String {
 
         // Bold: **text** or __text__
         if i + 1 < len && chars[i] == '*' && chars[i + 1] == '*' {
-            if let Some((content, end)) = parse_delimited(&chars, i, "**") {
+            if let Some((content, end)) = parse_delimited(&chars, i, "**").filter(|(_, end)| typst_delims_at_word_edges(&chars, i, *end)) {
                 out.push('*');
                 out.push_str(&md_to_typst_inline(&content));
                 out.push('*');
@@ -2254,7 +2267,7 @@ pub fn md_to_typst_inline(text: &str) -> String {
             }
         }
         if i + 1 < len && chars[i] == '_' && chars[i + 1] == '_' {
-            if let Some((content, end)) = parse_delimited(&chars, i, "__") {
+            if let Some((content, end)) = parse_delimited(&chars, i, "__").filter(|(_, end)| typst_delims_at_word_edges(&chars, i, *end)) {
                 out.push('*');
                 out.push_str(&md_to_typst_inline(&content));
                 out.push('*');
@@ -2268,7 +2281,7 @@ pub fn md_to_typst_inline(text: &str) -> String {
             // Only treat as italic opener if left-flanking: next char is not whitespace
             let next_not_space = i + 1 < len && !chars[i + 1].is_whitespace();
             if next_not_space {
-                if let Some((content, end)) = parse_delimited(&chars, i, "*") {
+                if let Some((content, end)) = parse_delimited(&chars, i, "*").filter(|(_, end)| typst_delims_at_word_edges(&chars, i, *end)) {
                     out.push('_');
                     out.push_str(&md_to_typst_inline(&content));
                     out.push('_');
@@ -2281,7 +2294,7 @@ pub fn md_to_typst_inline(text: &str) -> String {
             // Only treat as italic if not in middle of word
             let prev_space = i == 0 || !chars[i - 1].is_alphanumeric();
             if prev_space {
-                if let Some((content, end)) = parse_delimited(&chars, i, "_") {
+                if let Some((content, end)) = parse_delimited(&chars, i, "_").filter(|(_, end)| typst_delims_at_word_edges(&chars, i, *end)) {
                     out.push('_');
                     out.push_str(&md_to_typst_inline(&content));
                     out.push('_');
@@ -2457,6 +2470,75 @@ pub(crate) fn split_ordered_list(line: &str) -> Option<(&str, &str)> {
 }
 
 // --- Helpers ---
+
+/// Typst reads `*` and `_` as delimiters only at a word's edge: an opener
+/// right after a letter or digit, or a closer right before one, is literal
+/// text, and the pair is left unclosed — a failed compile, not a styled word
+/// (`*foo*bar`, `x_foo_`). A markdown pair spanning `start..end` is emitted
+/// as Typst emphasis only when both outer sides are not alphanumeric;
+/// otherwise its characters fall through to the escaper.
+fn typst_delims_at_word_edges(chars: &[char], start: usize, end: usize) -> bool {
+    let before_ok = start == 0 || !chars[start - 1].is_alphanumeric();
+    let after_ok = end >= chars.len() || !chars[end].is_alphanumeric();
+    before_ok && after_ok
+}
+
+/// The end (exclusive) of a bare `http://` / `https://` URL starting at
+/// `start`, or None. The URL must begin a word, runs to whitespace or a
+/// character no URL carries in prose (`<>"` and backtick), and gives back
+/// trailing sentence punctuation and any unbalanced closing `)` or `]` —
+/// `(see https://a.com/x_(y)).` keeps `x_(y)` and leaves `).` as text.
+fn bare_url_end(chars: &[char], start: usize) -> Option<usize> {
+    if start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '/') {
+        return None;
+    }
+    let rest: String = chars[start..chars.len().min(start + 8)].iter().collect();
+    let scheme = if rest.starts_with("https://") {
+        8
+    } else if rest.starts_with("http://") {
+        7
+    } else {
+        return None;
+    };
+    let mut end = start;
+    while end < chars.len() && !chars[end].is_whitespace() && !matches!(chars[end], '<' | '>' | '"' | '`') {
+        end += 1;
+    }
+    loop {
+        if end <= start + scheme {
+            return None;
+        }
+        let last = chars[end - 1];
+        let opens = |o: char| chars[start..end].iter().filter(|&&c| c == o).count();
+        let trim = match last {
+            '.' | ',' | ';' | ':' | '!' | '?' | '\'' | '*' | '_' => true,
+            ')' => opens(')') > opens('('),
+            ']' => opens(']') > opens('['),
+            _ => false,
+        };
+        if !trim {
+            break;
+        }
+        end -= 1;
+    }
+    Some(end)
+}
+
+/// A Typst string literal: only `\\` and `"` escaped (a URL shown and
+/// followed verbatim, never read as markup).
+fn typst_str_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
 
 /// Escape Typst special characters in a string.
 fn escape_typst(s: &str) -> String {
