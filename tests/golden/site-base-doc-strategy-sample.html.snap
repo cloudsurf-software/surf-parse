@@ -1,0 +1,69 @@
+<section class="surfdoc-section">
+<h1 id="q1-2026-product-strategy-review">Q1 2026 Product Strategy Review</h1>
+
+<div class="surfdoc-summary" role="doc-abstract"><div class="surfdoc-summary-label">Summary</div><p>CloudSurf is executing a multi-product strategy with TaskSurf as the lead product.
+Revenue target is $5K MRR by end of Q2, driven by TaskSurf subscriptions and
+Wavesite upsells. Patent portfolio provides defensive moat with 16 families filed.</p></div>
+</section>
+<section class="surfdoc-section">
+<h2 id="current-product-status">Current Product Status</h2>
+
+<div class="surfdoc-table-wrap"><table class="surfdoc-data"><thead><tr><th scope="col" aria-sort="none">Product</th><th scope="col" aria-sort="none">Stage</th><th scope="col" aria-sort="none">MRR</th><th scope="col" aria-sort="none">Users</th><th scope="col" aria-sort="none">Priority</th></tr></thead><tbody><tr><td>TaskSurf</td><td>Beta</td><td class="num">$0</td><td class="num">12</td><td>P0</td></tr><tr><td>Wavesite</td><td>Production</td><td class="num">$500</td><td class="num">45</td><td>P1</td></tr><tr><td>NoteSurf</td><td>Alpha</td><td class="num">$0</td><td class="num">8</td><td>P2</td></tr><tr><td>SurfContext</td><td>OSS</td><td class="num">$0</td><td class="num">0</td><td>P1</td></tr></tbody></table></div>
+<div class="surfdoc-callout surfdoc-callout-tip" role="note"><svg class="surfdoc-callout-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><div class="surfdoc-callout-body"><div class="surfdoc-callout-title">Revenue Priority</div><p>Focus engineering effort on TaskSurf billing activation. Every week of delay
+costs approximately $2K in potential MRR based on pipeline conversations.</p>
+</div></div>
+</section>
+<section class="surfdoc-section">
+<h2 id="key-decisions">Key Decisions</h2>
+
+<article class="surfdoc-decision surfdoc-decision-accepted" role="note" aria-label="Decision: accepted"><div class="surfdoc-decision-header"><span class="surfdoc-decision-status surfdoc-decision-status--accepted">Accepted</span><span class="surfdoc-decision-date">2026-02-08</span></div><div class="surfdoc-decision-body"><p>Absorb CloudSurf HQ into TaskSurf. The standalone dashboard adds maintenance
+overhead without differentiated value. AI chat, agent personas, and strategy
+features become TaskSurf premium tier capabilities.</p>
+</div></article>
+<article class="surfdoc-decision surfdoc-decision-proposed" role="note" aria-label="Decision: proposed"><div class="surfdoc-decision-header"><span class="surfdoc-decision-status surfdoc-decision-status--proposed">Proposed</span><span class="surfdoc-decision-date">2026-02-10</span></div><div class="surfdoc-decision-body"><p>Evaluate SST v3 migration for TaskSurf backend. Amplify Gen 2 is blocking
+custom domain configuration and advanced caching. Migration cost estimated
+at 2-3 engineering days.</p>
+</div></article>
+</section>
+<section class="surfdoc-section">
+<h2 id="growth-metrics">Growth Metrics</h2>
+
+<div class="surfdoc-metric-row"><div class="surfdoc-metric" role="group" aria-label="MRR: $500 USD, trending up"><div class="surfdoc-metric-value">$500 <span class="surfdoc-metric-unit">USD</span></div><div class="surfdoc-metric-label">MRR<span class="surfdoc-trend surfdoc-trend--up">▲</span></div></div></div>
+<div class="surfdoc-metric-row"><div class="surfdoc-metric" role="group" aria-label="Active Users: 65, trending up"><div class="surfdoc-metric-value">65</div><div class="surfdoc-metric-label">Active Users<span class="surfdoc-trend surfdoc-trend--up">▲</span></div></div></div>
+<div class="surfdoc-metric-row"><div class="surfdoc-metric" role="group" aria-label="Churn Rate: 2.1% monthly, trending down"><div class="surfdoc-metric-value">2.1% <span class="surfdoc-metric-unit">monthly</span></div><div class="surfdoc-metric-label">Churn Rate<span class="surfdoc-trend surfdoc-trend--down">▼</span></div></div></div>
+</section>
+<section class="surfdoc-section">
+<h2 id="technical-roadmap">Technical Roadmap</h2>
+
+<ul class="surfdoc-tasks"><li class="surfdoc-task is-done"><span class="surfdoc-check">✓</span><span class="surfdoc-task-text">TaskSurf billing integration</span></li><li class="surfdoc-task is-done"><span class="surfdoc-check">✓</span><span class="surfdoc-task-text">Knowledge docs feature</span></li><li class="surfdoc-task is-done"><span class="surfdoc-check">✓</span><span class="surfdoc-task-text">GitHub App infrastructure</span></li><li class="surfdoc-task"><span class="surfdoc-check"></span><span class="surfdoc-task-text">First paying customer</span></li><li class="surfdoc-task"><span class="surfdoc-check"></span><span class="surfdoc-task-text">iOS app submission</span><span class="surfdoc-assignee">@brady</span></li><li class="surfdoc-task"><span class="surfdoc-check"></span><span class="surfdoc-task-text">SST migration evaluation</span></li></ul>
+</section>
+<section class="surfdoc-section">
+<h2 id="risk-assessment">Risk Assessment</h2>
+
+<div class="surfdoc-callout surfdoc-callout-danger" role="alert"><svg class="surfdoc-callout-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><div class="surfdoc-callout-body"><p>Single-founder dependency remains the highest operational risk. Brady is the
+sole engineer, designer, and business operator. Any extended absence would
+halt all product development across the portfolio.</p>
+</div></div>
+<figure class="surfdoc-code"><figcaption class="surfdoc-code-head"><span class="surfdoc-code-file">risk-matrix.toml</span><span class="surfdoc-code-lang">TOML</span></figcaption><pre aria-label="toml code" data-lang="toml"><code class="language-toml">[risks.founder-dependency]
+severity = &quot;critical&quot;
+likelihood = &quot;medium&quot;
+mitigation = &quot;Document everything, automate CI/CD, maintain ARDS&quot;
+
+[risks.runway]
+severity = &quot;high&quot;
+likelihood = &quot;low&quot;
+mitigation = &quot;Client services revenue covers burn for 12+ months&quot;</code></pre></figure>
+</section>
+<section class="surfdoc-section">
+<h2 id="next-steps">Next Steps</h2>
+<ol>
+<li>Activate TaskSurf billing for first customers</li>
+<li>Submit iOS app to App Store</li>
+<li>File remaining patent provisionals before public ARDS launch</li>
+<li>Apply to StartUpNV accelerator</li>
+</ol>
+
+<div class="surfdoc-callout surfdoc-callout-info" role="note"><svg class="surfdoc-callout-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><div class="surfdoc-callout-body"><p>Quarterly review scheduled for March 31, 2026. All metrics will be
+re-evaluated against targets at that time.</p>
+</div></div>
+</section>

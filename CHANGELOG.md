@@ -3,6 +3,41 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.45.0 — 2026-11-05 (the site base — five rhythm variables, a site page's own column, one gap between blocks, and the author's `theme:` line as the default)
+
+Measured 2026-11-05 on a published site wearing the Atelier style (headless Chrome, 1440 and 390, re-shot from
+origin/main): the page-level gaps ran 32 · 86 · 86 · 16 · 144 px — the base's own block margins (2rem, 1.5rem, 1rem)
+survived under the style's, and the footer sat under the column's 4rem bottom pad plus its own 4rem; the column was
+the doc's `max-width: 48rem`, so a three-column stats strip wrapped "12K+" at 96 px; `.surfdoc-section-inner` added
+a second 1.5rem gutter inside the column's; and a site whose `theme:` line said `light` drew dark on a dark device,
+because the resolver asked the device first and treated the line as a fallback hint.
+
+- **Five variables on `:root`.** `--ws-wrap` (72rem), `--ws-side` (1.5rem), `--ws-section-pad` (already there),
+  `--ws-block-gap` (2rem) and `--ws-hero-min-h` (`min(74vh, 44rem)`) — the page rhythm a style sets once, in its own
+  `:root`. They live on `:root` rather than `main.surfdoc` so a style's `:root` values are not shadowed.
+- **The doc is unchanged.** The `margin: 2rem 0` family of page-level blocks (features, stats, steps, logo,
+  before/after, pipeline, divider, footer block) reads `margin-block: var(--ws-block-gap)`, and the cover hero's
+  floor reads `--ws-hero-min-h` — each default the literal it replaced. The doc's 48rem column rule is untouched, and
+  no renderer emits new markup for a doc: three doc renders are pinned against 0.44.2 byte for byte.
+- **A site page has its own column.** A site page is the one whose wrapper is `main#surfdoc-main` (only
+  `render_site_page` and `render_site_single_file` emit that id), so the markup is unchanged and a host's needle on
+  `<main id="surfdoc-main" class="surfdoc">` still matches. There, at the end of the sheet and at one-class weight
+  (the id sits in `:where()`): the column is `--ws-wrap` wide with one `--ws-side` gutter and no bottom pad; features,
+  stats, steps, logo, before/after, pipeline, testimonial, pricing, FAQ, gallery, the left hero and the CTA group take
+  one `--ws-block-gap` (bands — the centred hero, banner, section, product and post grids — keep theirs); the section
+  inner stops adding a second gutter; the site footer's top margin is `var(--ws-block-gap, 4rem)`, so the last block
+  and the footer meet at the one gap.
+- **The author's `theme:` line is the default.** `SiteConfig` grows `theme_default`, which `extract_site` fills from
+  the `::site` block's `theme:` line. `light` or `dark` puts `data-theme` on `<html>` in the served markup — the page
+  draws that way under either device scheme, with or without script — and the resolver only lets a visitor's stored
+  toggle replace it. `theme: auto` (new) and no line follow the device exactly as before. `theme` stays the palette's
+  no-preference hint, and a `SiteConfig` built by hand that leaves `theme_default` unset renders the 0.44.2 resolver
+  byte for byte, so a host that passes its palette's hint today sees no change until it passes the line.
+
+Tests: `tests/site_base_layers.rs` (three doc snapshots written by 0.44.2 under `tests/golden/site-base-doc-*`, the
+five declarations and their defaults, the site column and gap rules, `theme: light` · `dark` · `auto` · none on the
+page and single-file renderers, the hand-built config unchanged).
+
 ## 0.44.2 — 2026-11-02 (a bare URL or an in-word emphasis marker no longer fails a doc's PDF)
 
 Measured 2026-11-02 on app.cloudsurf.com: after Surfy added a "Sources" list of bare Wikipedia URLs to a doc, its PDF

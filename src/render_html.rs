@@ -8362,6 +8362,15 @@ pub struct SiteConfig {
     /// theme — this hint only orders the no-preference fallback
     /// (BR-SITE-THEME).
     pub theme: Option<String>,
+    /// The author's `theme:` line as the page's DEFAULT (0.45.0, D-LOOK-7):
+    /// `light` or `dark` set `data-theme` on `<html>` in the served markup, so
+    /// the page draws that way whatever the device prefers — a visitor's
+    /// stored toggle still wins; `auto`, any other value, or `None` follow the
+    /// device exactly as before. [`extract_site`] fills it from the `::site`
+    /// block's `theme:` line; a caller building a `SiteConfig` by hand that
+    /// leaves it `None` keeps the 0.44 behaviour byte for byte (`theme` stays
+    /// the palette's no-preference hint).
+    pub theme_default: Option<String>,
     pub accent: Option<String>,
     pub font: Option<String>,
     /// The site's serving prefix (e.g. `/s/{slug}`), used to scope the
@@ -8439,7 +8448,10 @@ pub fn extract_site(doc: &SurfDoc) -> (Option<SiteConfig>, Vec<PageEntry>, Vec<B
                         "name" => config.name = Some(prop.value.clone()),
                         "description" => config.description = Some(prop.value.clone()),
                         "tagline" => config.tagline = Some(prop.value.clone()),
-                        "theme" => config.theme = Some(prop.value.clone()),
+                        "theme" => {
+                            config.theme = Some(prop.value.clone());
+                            config.theme_default = Some(prop.value.clone());
+                        }
                         "accent" => config.accent = Some(prop.value.clone()),
                         "font" => config.font = Some(prop.value.clone()),
                         _ => {}
@@ -8574,7 +8586,7 @@ html:has(.site-nav-toggle:checked) { overflow: hidden; }
 .surfdoc-site-nav a:focus-visible, .site-nav-theme-toggle:focus-visible, .surfdoc-skip-link:focus-visible, .site-nav-close:focus-visible { outline: 2px solid var(--accent-ink, var(--accent)); outline-offset: 2px; }
 
 /* Site footer */
-.surfdoc-site-footer { margin-top: 4rem; padding: 1.5rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-faint); font-size: 0.8rem; }
+.surfdoc-site-footer { margin-top: var(--ws-block-gap, 4rem); padding: 1.5rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-faint); font-size: 0.8rem; }
 
 /* Single-file multi-page (SPA): one <section> per route; the client router
    toggles [hidden] to show exactly one at a time. !important defends against
@@ -8764,6 +8776,49 @@ fn site_style_block(config: &PageConfig, override_block: &str) -> String {
     out
 }
 
+/// The theme a site page is served with: the `data-theme` attribute for
+/// `<html>` (empty, or ` data-theme="light"` / ` data-theme="dark"`) and the
+/// pre-paint resolver script.
+///
+/// - No author default (`theme_default` `None`, `auto`, anything else) —
+///   BR-SITE-THEME unchanged, byte for byte: no attribute; the resolver picks
+///   the visitor's stored per-site choice → the device preference → the
+///   palette's designed-for hint (`theme`, only when the device expresses
+///   nothing). Without JS the `:root:not([data-theme])` media arms in
+///   SURFDOC_CSS follow the device.
+/// - `light` / `dark` (D-LOOK-7, 0.45.0) — the author's line is the default:
+///   the attribute is in the served markup (so the page draws that way with
+///   no script and under either device scheme), and the resolver only lets a
+///   visitor's stored toggle replace it.
+fn site_theme_head(site: &SiteConfig, theme_key: &str) -> (String, String) {
+    let pin = match site.theme_default.as_deref().map(str::trim) {
+        Some(v) if v.eq_ignore_ascii_case("light") => Some("light"),
+        Some(v) if v.eq_ignore_ascii_case("dark") => Some("dark"),
+        _ => None,
+    };
+    if let Some(pin) = pin {
+        let resolver = format!(
+            "<script>(function(){{var d=document.documentElement;var s=null;\
+             try{{s=localStorage.getItem('{theme_key}')}}catch(e){{}}\
+             if(s==='light'||s==='dark'){{d.setAttribute('data-theme',s);}}}})();</script>"
+        );
+        return (format!(" data-theme=\"{pin}\""), resolver);
+    }
+    let theme_hint = match site.theme.as_deref() {
+        Some("dark") => "dark",
+        _ => "light",
+    };
+    let resolver = format!(
+        "<script>(function(){{var d=document.documentElement;var s=null;\
+         try{{s=localStorage.getItem('{theme_key}')}}catch(e){{}}\
+         var mm=window.matchMedia;\
+         var t=s||((mm&&mm('(prefers-color-scheme: dark)').matches)?'dark':\
+         (mm&&mm('(prefers-color-scheme: light)').matches)?'light':'{theme_hint}');\
+         d.setAttribute('data-theme',t);}})();</script>"
+    );
+    (String::new(), resolver)
+}
+
 /// Render a full HTML page for one route within a multi-page site.
 ///
 /// Produces a `<!DOCTYPE html>` page with site-level `<nav>`, page content,
@@ -8900,28 +8955,13 @@ pub fn render_site_page(
         ));
     }
 
-    // BR-SITE-THEME: no hard-pinned data-theme. The pre-paint resolver sets
-    // it before first paint: stored per-site choice → device preference →
-    // the palette's designed-for hint (only when the device expresses
-    // nothing). Without JS, the :root:not([data-theme]) media arms in
-    // SURFDOC_CSS follow the device theme.
-    let theme_hint = match site.theme.as_deref() {
-        Some("dark") => "dark",
-        _ => "light",
-    };
-    let theme_resolver = format!(
-        "<script>(function(){{var d=document.documentElement;var s=null;\
-         try{{s=localStorage.getItem('{theme_key}')}}catch(e){{}}\
-         var mm=window.matchMedia;\
-         var t=s||((mm&&mm('(prefers-color-scheme: dark)').matches)?'dark':\
-         (mm&&mm('(prefers-color-scheme: light)').matches)?'light':'{theme_hint}');\
-         d.setAttribute('data-theme',t);}})();</script>"
-    );
+    // BR-SITE-THEME + D-LOOK-7: see [`site_theme_head`].
+    let (theme_attr, theme_resolver) = site_theme_head(site, &theme_key);
 
     crate::slots::resolve_slot_markers(format!(
         r##"<!-- Built with SurfDoc — source: {source_path} -->
 <!DOCTYPE html>
-<html lang="{lang}">
+<html lang="{lang}"{theme_attr}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8946,6 +8986,7 @@ pub fn render_site_page(
         meta_extra = meta_extra,
         style_block = site_style_block(config, &override_block),
         theme_resolver = theme_resolver,
+        theme_attr = theme_attr,
         nav = nav_html,
         body = body,
         footer = footer_html,
@@ -9053,23 +9094,13 @@ fn render_site_document(
         ));
     }
 
-    let theme_hint = match site.theme.as_deref() {
-        Some("dark") => "dark",
-        _ => "light",
-    };
-    let theme_resolver = format!(
-        "<script>(function(){{var d=document.documentElement;var s=null;\
-         try{{s=localStorage.getItem('{theme_key}')}}catch(e){{}}\
-         var mm=window.matchMedia;\
-         var t=s||((mm&&mm('(prefers-color-scheme: dark)').matches)?'dark':\
-         (mm&&mm('(prefers-color-scheme: light)').matches)?'light':'{theme_hint}');\
-         d.setAttribute('data-theme',t);}})();</script>"
-    );
+    // BR-SITE-THEME + D-LOOK-7: see [`site_theme_head`].
+    let (theme_attr, theme_resolver) = site_theme_head(site, &theme_key);
 
     format!(
         r##"<!-- Built with SurfDoc — source: {source_path} -->
 <!DOCTYPE html>
-<html lang="{lang}">
+<html lang="{lang}"{theme_attr}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9095,6 +9126,7 @@ fn render_site_document(
         meta_extra = meta_extra,
         style_block = site_style_block(config, &override_block),
         theme_resolver = theme_resolver,
+        theme_attr = theme_attr,
         nav = nav_html,
         body = body,
         footer = footer_html,
