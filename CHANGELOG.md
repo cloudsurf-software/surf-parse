@@ -3,6 +3,22 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.44.2 — 2026-11-02 (a bare URL or an in-word emphasis marker no longer fails a doc's PDF)
+
+Measured 2026-11-02 on app.cloudsurf.com: after Surfy added a "Sources" list of bare Wikipedia URLs to a doc, its PDF
+(`GET /api/docs/{id}/export`) answered 500 — `Typst compilation failed: unclosed delimiter` ×2. `md_to_typst_inline`
+escaped every `_` in a bare URL to `\_`, which ended Typst's own autolink early, and the `_` after the `:` in
+`Star_Trek:_The_Original_Series` opened emphasis whose closer sat inside a word, where Typst reads `_` as text.
+
+- **A bare URL is a link.** `https://…` / `http://…` at a word's start becomes `#link("…");` — the address a string
+  literal, followed whole (underscores, `*`, `#`, balanced `(…)`), trailing sentence punctuation and an unbalanced
+  `)` / `]` left as text; the `;` ends the call so a following `[4]` or `(…)` stays text.
+- **Emphasis only at a word's edge.** `**…**`, `__…__`, `*…*` and `_…_` become Typst emphasis only when neither
+  outer side is a letter or digit (Typst's own rule); otherwise the characters are escaped. `*foo*bar`, `x_foo_`,
+  `a**b**c` compiled to an unclosed delimiter before and draw as their literal characters now.
+
+Tests: `tests/pdf_bare_urls.rs` (the sources list compiles to a PDF; the emitted links; four in-word cases compile).
+
 ## 0.44.1 — 2026-10-31 (forward-port of the 0.42.1 patch line: the scrim over a centred hero, and a button link's brace suffix inside `:::columns`)
 
 Two render defects a site repair exposed (TASK-2227). First cut as 0.42.1 off the v0.42.0 tag; forward-ported onto
