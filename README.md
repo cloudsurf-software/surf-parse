@@ -1,8 +1,8 @@
 # surf-parse
 
-The **SurfDoc reference implementation** — parser and renderers for the SurfDoc format, a typed document format with block directives for structured documents. Backward-compatible with Markdown.
+The **SurfDoc reference implementation**: parser and renderers for SurfDoc, a plain-text document format whose typed `::` blocks a parser validates. One `.surf` file renders to HTML, PDF, slides, the terminal, and a native block tree that Swift and Kotlin receive through UniFFI.
 
-SurfDoc uses `::directive` blocks to represent data tables, callouts, decisions, metrics, tasks, code, figures, FAQ, pricing tables, landing page sections, and full multi-page site structures. Every block is typed, validated, and renderable to HTML, markdown, LaTeX, Typst, PDF, slides, native block trees, or ANSI terminal output. A `.surf` file without a renderer is still readable plain text.
+SurfDoc uses `::directive` blocks to represent data tables, callouts, decisions, metrics, tasks, code, figures, FAQ, pricing tables, landing page sections, and full multi-page site structures. Every block is typed, validated, and renderable to HTML, LaTeX, Typst, PDF, slides, ANSI terminal output, or a native block tree exported through UniFFI to Swift and Kotlin. A `.surf` file without a renderer is still readable plain text.
 
 This crate is the open half of an open-core split (since 0.10.0): it contains everything needed to parse, validate, lint, and render `.surf` documents — the complete format surface. Application-platform tooling built on top of the format (e.g. compiling an app description document into a running service) is out of scope here and not part of this crate's API.
 
@@ -50,10 +50,10 @@ app-shell layout). The implemented variants:
 
 ## Features
 
-- CommonMark-compatible inline text rendering
+- Inline text rendering: emphasis, links, inline code, lists and headings
 - YAML front matter parsing
 - 122 implemented block directives (every registered one) with attribute parsing
-- Renderers: HTML (with embedded CSS), markdown degradation, LaTeX, Typst, ANSI terminal, slides, native block tree (feature `native`), PDF (feature `pdf`)
+- Renderers: HTML (with embedded CSS), plain-text degradation, LaTeX, Typst, ANSI terminal, slides, native block tree (feature `native`), PDF (feature `pdf`)
 - Email (0.43.0): `to_email(&doc, &EmailProfile)` returns an email's HTML part (inline styles from the house tokens, a 600 px table layout, absolute URLs, no scripts or forms, a caller-filled footer) and its text part
 - Bindings: UniFFI (feature `uniffi`) and WASM (feature `wasm`)
 - `surf-lint` CLI (feature `cli`) — format/style lint with auto-fixes

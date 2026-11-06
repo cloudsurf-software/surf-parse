@@ -4,11 +4,11 @@ version = "0.45.0"
 edition = "2024"
 license = "MIT"
 authors = ["CloudSurf Software LLC <hello@cloudsurf.com>"]
-description = "Parser for the SurfDoc format — typed document format with block directives, Markdown-compatible"
+description = "SurfDoc reference implementation: parser and renderers for a typed, validated plain-text document format — HTML, PDF, slides, terminal, native (UniFFI) and WASM"
 repository = "https://github.com/cloudsurf-software/surf-parse"
-homepage = "https://surfcontext.org"
-documentation = "https://doc.surf/spec"
-keywords = ["surfdoc", "markdown", "parser", "document", "accessibility"]
+homepage = "https://cloudsurf.com/surfdoc"
+documentation = "https://docs.rs/surf-parse"
+keywords = ["surfdoc", "document", "parser", "uniffi", "wasm"]
 categories = ["parser-implementations", "text-processing", "web-programming"]
 readme = "README.md"
 
