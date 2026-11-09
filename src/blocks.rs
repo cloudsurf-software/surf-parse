@@ -10,7 +10,7 @@ use crate::types::{
     Format, StoreItem,
     ColumnContent, CommandItem, CrateDep, CrateEntry, DataFormat, DecisionStatus, DomainEntry, DropdownOption,
     EmbedType, EnvEntry, EnvVar, FaqItem, FeatureCard, FieldConstraint, FilterField, FooterSection,
-    FlowStep, FormField, FormFieldType, GalleryItem, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
+    FlowStep, FormField, FormFieldType, GalleryItem, GameField, GameValue, HeroButton, HoursRow, HttpMethod, ListDisplay, ListFilter,
     LogoItem, RelatedItem, TimelineEntry,
     AdaptiveLayout, AdaptiveMode, AppShellLayout, PanelSlotRole, PresetSpan,
     ModelField, ModelFieldType, NavGroup, NavItem, PerClass, PickerRow, PipelineStep, PostItem, ProductGroup, ProductItem, ProgressStep,
@@ -145,6 +145,7 @@ pub fn resolve_block(block: Block) -> Block {
         "compute" => parse_compute(attrs, content, *span),
         "flow" => parse_flow(attrs, content, *span),
         "schedule" => parse_schedule(attrs, content, *span),
+        "game" => parse_game(attrs, content, *span),
         // App format blocks (schema, deps, config, deploy)
         "schema" => parse_schema(attrs, content, *span),
         "use" => parse_use(attrs, content, *span),
@@ -5402,6 +5403,76 @@ fn parse_schedule(attrs: &Attrs, _content: &str, span: Span) -> Block {
         link: attr_text(attrs, "link").map(|l| safe_url(&l)),
         span,
     }
+}
+
+/// Parse `::game[engine=runner version=1]` (0.46.0) — a made game's spec.
+/// The body is kept verbatim; its `key: value` lines and `key:` lists are
+/// read for the card. Nothing is checked against an engine: an unknown
+/// engine parses, and a missing one is `""` (lint L049 says so).
+fn parse_game(attrs: &Attrs, content: &str, span: Span) -> Block {
+    let (fields, _) = read_game_body(content);
+    Block::Game {
+        engine: attr_text(attrs, "engine").unwrap_or_default(),
+        version: attr_usize(attrs, "version").and_then(|v| u32::try_from(v).ok()),
+        fields,
+        body: content.to_string(),
+        span,
+    }
+}
+
+/// Read a `::game` body into its keys (0.46.0). A line `key: value` is a
+/// scalar; a line `key:` with nothing after the colon opens a list, and each
+/// `- item` (or `* item`) line after it, at any indent, is one of its items;
+/// a list with no items reads as an empty scalar. A key is one word of
+/// letters, digits, `_`, `-` or `.`. Blank lines are skipped. Any other line
+/// is left out of the keys (it stays in the verbatim body) and its 0-based
+/// index within the body is returned beside them, for the lint.
+pub(crate) fn read_game_body(body: &str) -> (Vec<GameField>, Vec<usize>) {
+    let mut fields: Vec<GameField> = Vec::new();
+    let mut unread = Vec::new();
+    let mut open: Option<usize> = None;
+    for (i, line) in body.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let item = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .map(str::trim);
+        if let Some(item) = item {
+            match open.and_then(|at| fields.get_mut(at)) {
+                Some(GameField { value: GameValue::List(items), .. }) if !item.is_empty() => {
+                    items.push(item.to_string());
+                }
+                _ => unread.push(i),
+            }
+            continue;
+        }
+        let key_value = trimmed.split_once(':').and_then(|(k, v)| {
+            let k = k.trim();
+            let word = !k.is_empty()
+                && k.chars().all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'));
+            word.then(|| (k.to_string(), v.trim().to_string()))
+        });
+        match key_value {
+            Some((key, value)) if value.is_empty() => {
+                fields.push(GameField { key, value: GameValue::List(Vec::new()) });
+                open = Some(fields.len() - 1);
+            }
+            Some((key, value)) => {
+                fields.push(GameField { key, value: GameValue::Scalar(value) });
+                open = None;
+            }
+            None => unread.push(i),
+        }
+    }
+    for f in &mut fields {
+        if matches!(&f.value, GameValue::List(items) if items.is_empty()) {
+            f.value = GameValue::Scalar(String::new());
+        }
+    }
+    (fields, unread)
 }
 
 /// Parse `::flow[model=Entry]` — `:::step[title="…" repeat=true]` children,

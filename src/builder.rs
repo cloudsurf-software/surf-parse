@@ -3198,6 +3198,23 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             format!("{fence}schedule[{}]\n{fence}", attr_parts.join(" "))
         }
 
+        // 0.46.0: the body is the spec as authored, so it goes back verbatim.
+        Block::Game { engine, version, body, .. } => {
+            let mut attr_parts = Vec::new();
+            if !engine.is_empty() {
+                attr_parts.push(format!("engine=\"{}\"", escape_attr(engine)));
+            }
+            if let Some(v) = version {
+                attr_parts.push(format!("version={v}"));
+            }
+            let attrs = if attr_parts.is_empty() { String::new() } else { format!("[{}]", attr_parts.join(" ")) };
+            if body.is_empty() {
+                format!("{fence}game{attrs}\n{fence}")
+            } else {
+                format!("{fence}game{attrs}\n{body}\n{fence}")
+            }
+        }
+
         Block::Schema { name, fields, .. } => {
             let attrs_str = if name.is_empty() {
                 String::new()

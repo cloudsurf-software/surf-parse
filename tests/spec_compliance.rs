@@ -50,6 +50,8 @@ const ENUM_VARIANTS: &[&str] = &[
     "Video",
     // The music player, 0.42.0
     "Player",
+    // A made game's spec, 0.46.0
+    "Game",
 ];
 
 #[derive(Debug, Deserialize)]

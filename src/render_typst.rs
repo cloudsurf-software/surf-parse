@@ -1272,6 +1272,30 @@ fn render_block(block: &Block, out: &mut String) {
             out.push('\n');
         }
 
+        // 0.46.0: a game degrades to its title, its engine line and its keys.
+        Block::Game { engine, version, fields, .. } => {
+            use crate::types::GameValue;
+            out.push_str(&format!("*{}*\n\n", escape_typst(crate::types::game_title(fields))));
+            let engine_line = crate::render_md::game_engine_line(engine, *version);
+            if !engine_line.is_empty() {
+                out.push_str(&format!("{}\n\n", escape_typst(&engine_line)));
+            }
+            for f in crate::types::game_card_fields(fields) {
+                match &f.value {
+                    GameValue::Scalar(v) => {
+                        out.push_str(&format!("- {}: {}\n", escape_typst(&f.key), escape_typst(v)));
+                    }
+                    GameValue::List(items) => {
+                        out.push_str(&format!("- {}:\n", escape_typst(&f.key)));
+                        for item in items {
+                            out.push_str(&format!("  - {}\n", escape_typst(item)));
+                        }
+                    }
+                }
+            }
+            out.push('\n');
+        }
+
         Block::Quote {
             content,
             attribution,

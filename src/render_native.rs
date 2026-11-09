@@ -2621,6 +2621,9 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// and `consent` (the consent line), both `Option` and absent when not
 /// authored. Additive — a client that ignores the two fields reads v17's
 /// shape.
+/// 0.46.0 keeps v18: `::game` crosses as an open `Details` card (its title,
+/// then the engine line and the keys as Markdown), a shape every v18 client
+/// already draws.
 pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 18;
 
 /// One block's authored addressing attributes, keyed by source span.
@@ -4363,6 +4366,24 @@ fn convert_block(block: &Block, depth: u32) -> NativeBlock {
             link: link.clone(),
         },
 
+        // 0.46.0: a made game's spec crosses as an open card of lines on the
+        // existing Details variant — the title as its heading, the engine
+        // line and the keys as Markdown — so the schema does not move.
+        Block::Game { engine, version, fields, .. } => {
+            let engine_line = crate::render_md::game_engine_line(engine, *version);
+            let keys = crate::render_md::game_key_lines(fields);
+            let content = match (engine_line.is_empty(), keys.is_empty()) {
+                (true, _) => keys,
+                (false, true) => engine_line,
+                (false, false) => format!("{engine_line}\n\n{keys}"),
+            };
+            NativeBlock::Details {
+                title: Some(crate::types::game_title(fields).to_string()),
+                open: true,
+                content,
+            }
+        }
+
         Block::App {
             name,
             binary,
@@ -5132,6 +5153,8 @@ pub fn block_tier(block: &Block) -> BlockTier {
         | Block::Figure { .. }
         | Block::Video { .. }
         | Block::Player { .. }
+        // 0.46.0: a game's spec is a Details card of lines.
+        | Block::Game { .. }
         | Block::Diagram { .. }
         | Block::Quote { .. }
         | Block::Divider { .. }

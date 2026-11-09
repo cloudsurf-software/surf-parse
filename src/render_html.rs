@@ -4112,6 +4112,67 @@ fn data_attrs_html(attrs: &[(&'static str, &str)]) -> String {
         .collect()
 }
 
+/// The `data-*` attributes of a `::game` card (0.46.0), in emission order,
+/// values unescaped: the engine when one is named, the version when one is
+/// set. Shared with `render_dom`.
+pub(crate) fn game_attrs(engine: &str, version: Option<u32>) -> Vec<(&'static str, String)> {
+    let mut out = Vec::new();
+    if !engine.is_empty() {
+        out.push(("data-engine", engine.to_string()));
+    }
+    if let Some(v) = version {
+        out.push(("data-version", v.to_string()));
+    }
+    out
+}
+
+/// `::game` (0.46.0): one inert card — the `title:` key as the heading (else
+/// "Game"), the engine's word beside it, the other scalar keys as a
+/// definition list and each list key as an unordered list under its name.
+/// Every value is text, escaped; no script, no inline style, no handler.
+/// `render_dom` builds the same tree element for element.
+pub(crate) fn game_html(engine: &str, version: Option<u32>, fields: &[crate::types::GameField]) -> String {
+    use crate::types::GameValue;
+    let attrs = game_attrs(engine, version);
+    let attrs: Vec<(&'static str, &str)> = attrs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let mut out = format!("<section class=\"surfdoc-game\"{}>", data_attrs_html(&attrs));
+    out.push_str("<header class=\"surfdoc-game-head\"><h3 class=\"surfdoc-game-title\">");
+    out.push_str(&escape_html(crate::types::game_title(fields)));
+    out.push_str("</h3>");
+    if let Some(word) = crate::types::game_engine_word(engine) {
+        out.push_str(&format!("<span class=\"surfdoc-game-engine\">{}</span>", escape_html(word)));
+    }
+    out.push_str("</header>");
+    let shown = crate::types::game_card_fields(fields);
+    let scalars: Vec<(&str, &str)> = shown
+        .iter()
+        .filter_map(|f| match &f.value {
+            GameValue::Scalar(v) => Some((f.key.as_str(), v.as_str())),
+            GameValue::List(_) => None,
+        })
+        .collect();
+    if !scalars.is_empty() {
+        out.push_str("<dl class=\"surfdoc-game-keys\">");
+        for (k, v) in scalars {
+            out.push_str(&format!("<dt>{}</dt><dd>{}</dd>", escape_html(k), escape_html(v)));
+        }
+        out.push_str("</dl>");
+    }
+    for f in &shown {
+        if let GameValue::List(items) = &f.value {
+            out.push_str("<div class=\"surfdoc-game-list\">");
+            out.push_str(&format!("<span class=\"surfdoc-game-list-key\">{}</span>", escape_html(&f.key)));
+            out.push_str("<ul class=\"surfdoc-game-items\">");
+            for item in items {
+                out.push_str(&format!("<li>{}</li>", escape_html(item)));
+            }
+            out.push_str("</ul></div>");
+        }
+    }
+    out.push_str("</section>");
+    out
+}
+
 // ------------------------------------------------------------------
 // The fourteen planned blocks (0.25.0): the small rules both the string
 // renderer and the constructive DOM twin (render_dom.rs) read, so the two
@@ -5057,6 +5118,8 @@ fn render_block_inner(block: &Block) -> String {
             let attrs = schedule_attrs(bind, tz, title.as_deref(), body.as_deref(), link.as_deref());
             format!("<span class=\"surfdoc-schedule\"{} hidden></span>", data_attrs_html(&attrs))
         }
+
+        Block::Game { engine, version, fields, .. } => game_html(engine, *version, fields),
 
         Block::ProductGrid { groups, tiles: true, .. } => {
             // apple.com-style promo tiles: a full-bleed (site-capped) 2-up band;

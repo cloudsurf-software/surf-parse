@@ -34,12 +34,13 @@ pub const CORPUS: &[(&str, &str)] = &[
     ("tier9-backends", include_str!("../tests/corpus/tier9-backends.surf")),
     ("tier10-video", include_str!("../tests/corpus/tier10-video.surf")),
     ("tier10-player", include_str!("../tests/corpus/tier10-player.surf")),
+    ("tier10-game", include_str!("../tests/corpus/tier10-game.surf")),
 ];
 
 /// One minimal source document per implemented registry kind — the
 /// coverage suite's table, exported (0.27) so every block has an example
-/// (spec/blocks.toml, status = "implemented"; registry currently has 132
-/// implemented of 132 total). When a kind is added to the registry, the
+/// (spec/blocks.toml, status = "implemented"; registry currently has 133
+/// implemented of 133 total). When a kind is added to the registry, the
 /// companion completeness check below fails until it gets a snippet here.
 pub const SNIPPETS: &[(&str, &str)] = &[
     ("banner", "::banner[id=contact]\n# Talk to us\nWe reply within one business day.\n[Book a call](/book)\n::"),
@@ -150,6 +151,8 @@ pub const SNIPPETS: &[(&str, &str)] = &[
     ("compute", "::compute[name=daily_score expr=\"avg(entries.weighted)\" source=/_api/Entry]\n::"),
     ("flow", "::flow[model=Entry]\n:::step[title=\"How strong is it?\"]\n- intensity: range [required, min=1, max=10, labels=\"Barely felt it|All-consuming\"]\n:::\n:::step[title=\"What caused it?\" repeat=true]\n- note: textarea [max=500, sentences=1..4, prompt=\"What caused you to feel this way?\"]\n:::\n::"),
     ("schedule", "::schedule[bind=preference.reminder_time tz=viewer title=\"MoodMap\" body=\"How are you feeling today?\" link=/log]\n::"),
+    // 0.46.0: a made game's spec — scalars, a list, the engine's word.
+    ("game", "::game[engine=runner version=1]\ntitle: Fox Run\ncharacter: fox\nspeed: 1.2\nobstacles:\n  - cone (low, jump)\n  - bar (high, slide)\n::"),
     ("schema", "::schema[name=User]\n- id: uuid pk\n::"),
     ("use", "::use\n- serde\n::"),
     ("app-env", "::app-env\nKEY: value\n::"),
@@ -312,7 +315,7 @@ mod tests {
     #[test]
     fn the_typed_registry_matches_the_toml() {
         let rows = registry();
-        assert_eq!(rows.len(), 132);
+        assert_eq!(rows.len(), 133);
         let slot = rows.iter().find(|r| r.name == "panel-slot").expect("panel-slot");
         assert_eq!(slot.status, "implemented");
         assert_eq!(slot.enum_variant.as_deref(), Some("PanelSlot"));

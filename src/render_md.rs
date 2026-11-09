@@ -1239,6 +1239,17 @@ pub(crate) fn render_block(block: &Block) -> String {
             format!("*Reminder: {what} (daily at `{bind}`, {tz} time)*")
         }
 
+        // 0.46.0: a game degrades to its title, its engine and its keys.
+        Block::Game { engine, version, fields, .. } => {
+            let mut head = format!("**{}**", crate::types::game_title(fields));
+            let engine_line = game_engine_line(engine, *version);
+            if !engine_line.is_empty() {
+                head.push_str(&format!(" · {engine_line}"));
+            }
+            let keys = game_key_lines(fields);
+            if keys.is_empty() { head } else { format!("{head}\n\n{keys}") }
+        }
+
         Block::Schema { name, fields, .. } => {
             let mut lines = vec![format!("**Schema: {name}**"), String::new()];
             lines.push("| Column | Type | Constraints |".to_string());
@@ -1618,6 +1629,41 @@ pub(crate) fn render_block(block: &Block) -> String {
         Block::ProblemList { .. } => "*Problem list*".to_string(),
 
     }
+}
+
+/// The engine line of a degraded `::game` (0.46.0): the engine's word and
+/// the version (`Runner · version 1`); empty when neither is set. Shared
+/// with the native, terminal, LaTeX and Typst degradations.
+pub(crate) fn game_engine_line(engine: &str, version: Option<u32>) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(word) = crate::types::game_engine_word(engine) {
+        parts.push(word.to_string());
+    }
+    if let Some(v) = version {
+        parts.push(format!("version {v}"));
+    }
+    parts.join(" \u{b7} ")
+}
+
+/// The key lines of a degraded `::game` (0.46.0): `- key: value` per
+/// scalar, `- key:` with an indented `- item` per list item, the heading's
+/// `title:` left out.
+pub(crate) fn game_key_lines(fields: &[crate::types::GameField]) -> String {
+    use crate::types::GameValue;
+    let mut lines = Vec::new();
+    for f in crate::types::game_card_fields(fields) {
+        match &f.value {
+            GameValue::Scalar(v) if v.is_empty() => lines.push(format!("- {}:", f.key)),
+            GameValue::Scalar(v) => lines.push(format!("- {}: {v}", f.key)),
+            GameValue::List(items) => {
+                lines.push(format!("- {}:", f.key));
+                for item in items {
+                    lines.push(format!("  - {item}"));
+                }
+            }
+        }
+    }
+    lines.join("\n")
 }
 
 pub(crate) fn model_field_type_md(ft: &crate::types::ModelFieldType) -> String {

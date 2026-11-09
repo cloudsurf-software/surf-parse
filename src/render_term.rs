@@ -506,6 +506,21 @@ fn render_block(block: &Block) -> String {
             out.join("\n")
         }
 
+        // 0.46.0: a game reads as its title, its engine line and its keys.
+        Block::Game { engine, version, fields, .. } => {
+            let mut out = Vec::new();
+            let mut head = format!("{}", crate::types::game_title(fields).bold());
+            let engine_line = crate::render_md::game_engine_line(engine, *version);
+            if !engine_line.is_empty() {
+                head.push_str(&format!("  {}", engine_line.dimmed()));
+            }
+            out.push(head);
+            for line in crate::render_md::game_key_lines(fields).lines() {
+                out.push(format!("  {line}"));
+            }
+            out.join("\n")
+        }
+
         Block::Embed { src, title, .. } => {
             let label = title.as_deref().unwrap_or("Embed");
             format!("{} {}", format!("[{label}]").cyan(), src.dimmed())

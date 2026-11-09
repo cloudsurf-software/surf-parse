@@ -1,0 +1,33 @@
+---
+title: "Corpus — Tier 10: a made game's spec"
+type: document
+---
+
+# Fox Run
+
+A made game's spec (0.46.0): the engine and its version on the opener, a
+flat key list the engine reads, drawn as one card.
+
+::game[engine=runner version=1]
+title: Fox Run
+character: fox
+track: desert
+speed: 1.2
+lanes: 3
+obstacles:
+  - cone (low, jump)
+  - bar (high, slide)
+  - cactus (tall, lane)
+::
+
+::game[engine=wilds version=1]
+title: Tide Pools
+biome: shore
+species:
+  - crab (scuttles, shy)
+  - gull (flies, loud)
+::
+
+::game[engine=platformer]
+character: <b>owl</b>
+::

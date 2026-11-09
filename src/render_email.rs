@@ -233,7 +233,9 @@ pub fn email_disposition(block: &Block, profile: &EmailProfile) -> EmailDisposit
         | Block::Related { .. }
         | Block::Footnote { .. }
         | Block::Bibliography { .. }
-        | Block::Cite { .. } => Degrade,
+        | Block::Cite { .. }
+        // 0.46.0: a game's spec reads as its title, engine and keys.
+        | Block::Game { .. } => Degrade,
 
         // Interactive: a form opens on the issue's web page; a subscribe
         // block is dropped — whoever reads the issue already subscribed.

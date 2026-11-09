@@ -1633,6 +1633,26 @@ pub enum Block {
         link: Option<String>,
         span: Span,
     },
+    /// `::game` (0.46.0) — a made game's spec: `engine=` and `version=` on
+    /// the opener and a flat key list the platform's engine reads
+    /// (`title: Fox Run`, `speed: 1.2`, `obstacles:` with `  - cone (low,
+    /// jump)` items under it). surf-parse only describes it: the body is kept
+    /// verbatim, the keys are read for the card, and nothing is checked
+    /// against an engine — an unknown engine still parses (the platform
+    /// judges it) and a missing `engine=` parses as `""` with a lint warning.
+    Game {
+        /// `engine=`: the engine that reads the body (`runner`, `wilds`),
+        /// as written; `""` when the opener names none.
+        engine: String,
+        /// `version=`: the grammar version of that engine's keys; `None`
+        /// when absent or not a whole number.
+        version: Option<u32>,
+        /// The body's `key: value` lines and `key:` lists, in order.
+        fields: Vec<GameField>,
+        /// The body exactly as authored.
+        body: String,
+        span: Span,
+    },
 
     // ----- App format blocks (schema, deps, config, deploy) -----
 
@@ -2265,6 +2285,7 @@ impl Block {
             | Block::Compute { span, .. }
             | Block::Flow { span, .. }
             | Block::Schedule { span, .. }
+            | Block::Game { span, .. }
             | Block::Schema { span, .. }
             | Block::Use { span, .. }
             | Block::AppEnv { span, .. }
@@ -2942,6 +2963,75 @@ impl PlayerLayout {
             PlayerLayout::Row => "row",
         }
     }
+}
+
+/// One key of a `::game` body (0.46.0): `speed: 1.2` is a scalar,
+/// `obstacles:` followed by `  - cone (low, jump)` lines is a list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameField {
+    pub key: String,
+    pub value: GameValue,
+}
+
+/// The value of a [`GameField`]: one string, or the items of a list. Both
+/// are kept as written — surf-parse never reads a number or a word in them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GameValue {
+    Scalar(String),
+    List(Vec<String>),
+}
+
+impl GameField {
+    /// The scalar text, `None` for a list.
+    pub fn scalar(&self) -> Option<&str> {
+        match &self.value {
+            GameValue::Scalar(s) => Some(s.as_str()),
+            GameValue::List(_) => None,
+        }
+    }
+}
+
+/// The card heading of a `::game` block: its `title:` key when it has a
+/// non-empty one, else "Game".
+pub fn game_title(fields: &[GameField]) -> &str {
+    fields
+        .iter()
+        .filter(|f| f.key.eq_ignore_ascii_case("title"))
+        .filter_map(GameField::scalar)
+        .map(str::trim)
+        .find(|t| !t.is_empty())
+        .unwrap_or("Game")
+}
+
+/// The word a reader sees for a `::game` engine (0.46.0): `runner` →
+/// "Runner", `wilds` → "Surflings world", any other engine as written,
+/// `None` when the opener names none.
+pub fn game_engine_word(engine: &str) -> Option<&str> {
+    let e = engine.trim();
+    if e.is_empty() {
+        None
+    } else if e.eq_ignore_ascii_case("runner") {
+        Some("Runner")
+    } else if e.eq_ignore_ascii_case("wilds") {
+        Some("Surflings world")
+    } else {
+        Some(e)
+    }
+}
+
+/// The fields a `::game` card draws under its heading: every key but the
+/// one `title:` used as the heading.
+pub fn game_card_fields(fields: &[GameField]) -> Vec<&GameField> {
+    let title_at = fields.iter().position(|f| {
+        f.key.eq_ignore_ascii_case("title") && f.scalar().is_some_and(|t| !t.trim().is_empty())
+    });
+    fields
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| Some(*i) != title_at)
+        .map(|(_, f)| f)
+        .collect()
 }
 
 /// One track of a `Player` block: `- Title | 2:54 | /audio/a.mp3 | Chapter 4`.

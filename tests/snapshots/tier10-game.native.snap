@@ -1,0 +1,24 @@
+[
+  {
+    "type": "markdown",
+    "content": "\n# Fox Run\n\nA made game's spec (0.46.0): the engine and its version on the opener, a\nflat key list the engine reads, drawn as one card."
+  },
+  {
+    "type": "details",
+    "title": "Fox Run",
+    "open": true,
+    "content": "Runner · version 1\n\n- character: fox\n- track: desert\n- speed: 1.2\n- lanes: 3\n- obstacles:\n  - cone (low, jump)\n  - bar (high, slide)\n  - cactus (tall, lane)"
+  },
+  {
+    "type": "details",
+    "title": "Tide Pools",
+    "open": true,
+    "content": "Surflings world · version 1\n\n- biome: shore\n- species:\n  - crab (scuttles, shy)\n  - gull (flies, loud)"
+  },
+  {
+    "type": "details",
+    "title": "Game",
+    "open": true,
+    "content": "platformer\n\n- character: <b>owl</b>"
+  }
+]

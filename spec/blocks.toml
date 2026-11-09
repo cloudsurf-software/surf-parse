@@ -10,8 +10,8 @@
 
 [meta]
 spec_version = "0.1"
-total_blocks = 132
-registry_updated = "2026-10-23"
+total_blocks = 133
+registry_updated = "2026-11-09"
 
 [fields]
 # Change of kind (the AI harness, 0.39.1): a field or a list in one row means the same thing to a reader, so a swap
@@ -1297,6 +1297,18 @@ purpose = "Recurring reminder whose time of day lives in a record field (bind=),
 attributes = ["bind", "tz", "title", "body", "link"]
 degradation = "reminder line"
 enum_variant = "Schedule"
+
+# ----- A made game's spec, added in 0.46.0 (made games 2W, TASK-2872) -----
+# Inert like the backends grammar above: surf-parse reads the keys for the
+# card and never evaluates them; the platform's engine reads the body.
+
+[blocks.game]
+status = "implemented"
+category = "advanced"
+purpose = "A made game's spec — `engine=` and `version=` on the opener and a flat key list the platform's engine reads (kept verbatim, never evaluated by the parser)"
+attributes = ["engine", "version"]
+degradation = "the game's title, its engine and the key list as lines"
+enum_variant = "Game"
 
 # ----- Video added in 0.37.0 (TASK-1277) -----
 # A player for a video the workspace owns. `media:<file-id>` is resolved by

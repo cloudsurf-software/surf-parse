@@ -3,6 +3,34 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.46.0 — 2026-11-09 (a made game's spec draws as a card — the `::game` block)
+
+A game made in CloudSurf keeps its spec as a `::game` block: the engine and its version on the opener, then a flat
+key list the platform's engine reads. Until now surf-parse read it as an unknown block, so a spec doc showed the raw
+lines in a note. 0.46.0 knows the block and draws it.
+
+- **The grammar.** `::game[engine=runner version=1]` and a body of `key: value` lines and `key:` lists whose items are
+  `- item` lines at any indent (`obstacles:` / `  - cone (low, jump)`). It parses to `Block::Game { engine, version,
+  fields, body }`: `fields` are the keys in order (`GameField { key, value }`, the value a `GameValue::Scalar` or a
+  `GameValue::List`), `body` is the spec exactly as written. The parser never evaluates a key and never checks one
+  against an engine: an engine it does not know still parses — the platform judges it.
+- **A missing engine or a stray line is a warning, never an error.** A `::game` with no `engine=` parses with
+  `engine = ""`; a body line that is neither `key: value` nor a `- item` under a `key:` stays in the body and is left
+  off the card. Lint `L049` reports both.
+- **The card.** One inert `<section class="surfdoc-game" data-engine="…" data-version="…">`: the `title:` key as the
+  heading (else "Game"), the engine's word beside it ("Runner" for `runner`, "Surflings world" for `wilds`, any
+  other engine as written), the other keys as a definition list and each list as a list under its key. Every value
+  is escaped text; no script, no inline style, no handler. The DOM twin builds the same tree byte for byte, and the
+  stylesheet carries the card in tokens.
+- **Everywhere else.** Native crosses it as an open `Details` card (the title, then the engine line and the keys as
+  Markdown), so the native schema stays at 18 and the apps need nothing new; Markdown, the terminal, LaTeX, Typst
+  (and so the PDF) and an email draw the title, the engine line and the keys as lines. The serializer writes the
+  body back verbatim. `spec/blocks.toml` lists 133 blocks; `docs/game-grammar-0.46.0.surf`.
+
+Tests: `tests/game.rs` (the grammar on Fox Run, the missing and unknown engine, the card, hostile values, the DOM
+twin, the native card, every degradation, the serializer's fixed point, the lint) and the corpus tier `tier10-game`
+(html + native snapshots).
+
 ## 0.45.0 — 2026-11-05 (the site base — five rhythm variables, a site page's own column, one gap between blocks, and the author's `theme:` line as the default)
 
 Measured 2026-11-05 on a published site wearing the Atelier style (headless Chrome, 1440 and 390, re-shot from

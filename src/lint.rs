@@ -230,6 +230,7 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(BackendsShape),
         Box::new(VideoSourceUnusable),
         Box::new(VideoAuthoring),
+        Box::new(GameShape),
     ]
 }
 
@@ -480,6 +481,59 @@ impl BackendsShape {
 impl LintRule for BackendsShape {
     fn id(&self) -> &'static str {
         "L046"
+    }
+
+    fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        Self::walk(&doc.blocks, &mut out);
+        out
+    }
+}
+
+// ------------------------------------------------------------------
+// L049 — a `::game` spec's shape (0.46.0)
+// ------------------------------------------------------------------
+
+/// Tree-walking: a `::game` that names no `engine=` (the platform cannot
+/// tell which engine reads it), and a body line that is neither `key: value`
+/// nor a `- item` under a `key:` (the card leaves it out). Never a failed
+/// render, and never a judgement of the engine itself — an engine surf-parse
+/// does not know is the platform's to refuse.
+struct GameShape;
+
+impl GameShape {
+    fn walk(blocks: &[Block], out: &mut Vec<Diagnostic>) {
+        for b in blocks {
+            if let Block::Game { engine, body, span, .. } = b {
+                if engine.is_empty() {
+                    out.push(diag(
+                        "L049",
+                        "'::game' names no engine= — say which engine reads it (engine=runner)".to_string(),
+                        Some(*span),
+                    ));
+                }
+                let (_, unread) = crate::blocks::read_game_body(body);
+                for i in unread {
+                    out.push(diag(
+                        "L049",
+                        format!(
+                            "'::game' line {} is neither `key: value` nor a `- item` under a `key:` — the card leaves it out",
+                            span.start_line + 1 + i
+                        ),
+                        Some(*span),
+                    ));
+                }
+            }
+            if let Some(children) = container_children(b) {
+                Self::walk(children, out);
+            }
+        }
+    }
+}
+
+impl LintRule for GameShape {
+    fn id(&self) -> &'static str {
+        "L049"
     }
 
     fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {

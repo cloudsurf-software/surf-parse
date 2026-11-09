@@ -1,0 +1,89 @@
+---
+title: "::game — a made game's spec (0.46.0)"
+type: doc
+version: 1
+created: 2026-11-09
+updated: 2026-11-09
+status: current
+scope: surf-parse
+tags: [surfdoc, game, made-games, spec]
+---
+
+# ::game — a made game's spec
+
+::summary
+A game made in CloudSurf keeps its spec as one `::game` block: the engine and its version on the opener, then a flat key list the engine reads. surf-parse reads the keys and draws them as one card; it never evaluates a key and never checks one against an engine. The platform's engine reads the body.
+::
+
+## The grammar
+
+```surf
+::game[engine=runner version=1]
+title: Fox Run
+character: fox
+track: desert
+speed: 1.2
+lanes: 3
+obstacles:
+  - cone (low, jump)
+  - bar (high, slide)
+  - cactus (tall, lane)
+::
+```
+
+| Attribute | What |
+|---|---|
+| `engine` | The engine that reads the body: `runner`, `wilds`, or any engine the platform offers. Kept as written. |
+| `version` | The version of that engine's keys, a whole number. |
+
+The body is a flat key list:
+
+- `key: value` is a scalar key. The value is kept as written; surf-parse never reads it as a number.
+- `key:` with nothing after the colon opens a list; each `- item` (or `* item`) line after it, at any indent, is one item. A list with no items reads as an empty value.
+- A key is one word of letters, digits, `_`, `-` or `.`. Blank lines are skipped.
+
+The parsed block is `Block::Game { engine, version, fields, body }`. `fields` holds the keys in order, each a `GameField { key, value }` whose value is `GameValue::Scalar` or `GameValue::List`. `body` is the spec exactly as written, so a host hands it to its engine unchanged.
+
+## What surf-parse does not judge
+
+- **An unknown engine parses.** `::game[engine=platformer]` is a `Block::Game` with `engine = "platformer"`; whether that engine exists is the platform's call.
+- **A missing engine parses.** `::game` with no `engine=` is a `Block::Game` with `engine = ""`, and lint `L049` warns.
+- **A stray line parses.** A body line that is neither `key: value` nor a `- item` under a `key:` stays in `body`, is left off the card, and lint `L049` names its line.
+
+Nothing about a `::game` is ever a parse error.
+
+## The card
+
+```html
+<section class="surfdoc-game" data-engine="runner" data-version="1">
+  <header class="surfdoc-game-head">
+    <h3 class="surfdoc-game-title">Fox Run</h3>
+    <span class="surfdoc-game-engine">Runner</span>
+  </header>
+  <dl class="surfdoc-game-keys"><dt>character</dt><dd>fox</dd> …</dl>
+  <div class="surfdoc-game-list">
+    <span class="surfdoc-game-list-key">obstacles</span>
+    <ul class="surfdoc-game-items"><li>cone (low, jump)</li> …</ul>
+  </div>
+</section>
+```
+
+(The renderer writes it on one line; it is spread out here to read.)
+
+- The heading is the `title:` key, else "Game".
+- The engine's word: "Runner" for `runner`, "Surflings world" for `wilds`, any other engine as written; nothing when there is no engine.
+- `data-engine` and `data-version` appear when the opener sets them.
+- The other scalar keys form the definition list; each list key is a list under its name, after it.
+- Every value is escaped text. The card has no script, no inline style and no event handler; the stylesheet carries its look in tokens. The constructive DOM path builds the same tree byte for byte.
+
+## Everywhere else
+
+| Target | What it draws |
+|---|---|
+| Native (schema v18) | An open `Details` card: the title as its heading, then the engine line (`Runner · version 1`) and the keys as Markdown. No new variant; the apps need nothing new. |
+| Markdown | `**Fox Run** · Runner · version 1`, then `- key: value` lines and each list's items indented under its key. |
+| Terminal | The title in bold, the engine line dimmed, the key lines indented. |
+| LaTeX, Typst, PDF | The title in bold, the engine line, the keys as a list (a list key's items as a list inside it). |
+| Email | The Markdown lines. |
+
+The serializer writes `::game[engine="runner" version=1]` and the body back verbatim, so a round trip is a fixed point.

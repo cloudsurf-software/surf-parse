@@ -1,0 +1,9 @@
+<section class="surfdoc-section">
+<h1 id="fox-run">Fox Run</h1>
+<p>A made game's spec (0.46.0): the engine and its version on the opener, a
+flat key list the engine reads, drawn as one card.</p>
+
+<section class="surfdoc-game" data-engine="runner" data-version="1"><header class="surfdoc-game-head"><h3 class="surfdoc-game-title">Fox Run</h3><span class="surfdoc-game-engine">Runner</span></header><dl class="surfdoc-game-keys"><dt>character</dt><dd>fox</dd><dt>track</dt><dd>desert</dd><dt>speed</dt><dd>1.2</dd><dt>lanes</dt><dd>3</dd></dl><div class="surfdoc-game-list"><span class="surfdoc-game-list-key">obstacles</span><ul class="surfdoc-game-items"><li>cone (low, jump)</li><li>bar (high, slide)</li><li>cactus (tall, lane)</li></ul></div></section>
+<section class="surfdoc-game" data-engine="wilds" data-version="1"><header class="surfdoc-game-head"><h3 class="surfdoc-game-title">Tide Pools</h3><span class="surfdoc-game-engine">Surflings world</span></header><dl class="surfdoc-game-keys"><dt>biome</dt><dd>shore</dd></dl><div class="surfdoc-game-list"><span class="surfdoc-game-list-key">species</span><ul class="surfdoc-game-items"><li>crab (scuttles, shy)</li><li>gull (flies, loud)</li></ul></div></section>
+<section class="surfdoc-game" data-engine="platformer"><header class="surfdoc-game-head"><h3 class="surfdoc-game-title">Game</h3><span class="surfdoc-game-engine">platformer</span></header><dl class="surfdoc-game-keys"><dt>character</dt><dd>&lt;b&gt;owl&lt;/b&gt;</dd></dl></section>
+</section>

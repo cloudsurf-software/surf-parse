@@ -5514,6 +5514,20 @@ button.surfdoc-booking-day.is-sel { background: var(--accent); color: var(--acce
 .surfdoc-model-computed { font-size: var(--font-size-micro); color: var(--text-muted); }
 .surfdoc-form-step[data-repeat="true"] > legend::after { content: " \21BB"; color: var(--text-muted); }
 
+/* ── 0.46.0 ::game — a made game's spec as one card ─────────────────────
+   Inert: the title, the engine's word, the scalar keys as a definition
+   list, each list key as a list under its name. No script; tokens only. */
+.surfdoc-game { margin: var(--ws-space-md, 16px) 0; padding: 14px 16px; border: var(--ws-border-w) var(--ws-border-style) var(--border); border-radius: var(--ws-radius-card); background: var(--surface, transparent); }
+.surfdoc-game-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ws-space-sm, 8px); margin: 0 0 10px; }
+.surfdoc-game-title { margin: 0; font-family: var(--font-heading); font-size: var(--font-size-h3); color: var(--text); }
+.surfdoc-game-engine { font-size: var(--font-size-caption); font-weight: 600; color: var(--text-muted); }
+.surfdoc-game-keys { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.surfdoc-game-keys dt { font-weight: 600; color: var(--text); }
+.surfdoc-game-keys dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.surfdoc-game-list { margin: 10px 0 0; }
+.surfdoc-game-list-key { display: block; font-weight: 600; color: var(--text); }
+.surfdoc-game-items { margin: 4px 0 0; padding-left: 1.25em; color: var(--text); }
+
 /* ============================================================
    SITE BASE (0.45.0, D-LOOK-1) — a SITE page's column and rhythm
    ============================================================

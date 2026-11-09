@@ -432,6 +432,36 @@ fn latex_block(b: &Block, out: &mut String) {
             }
             out.push_str("\\end{enumerate}\n\n");
         }
+        // 0.46.0: a game degrades to its title, its engine line and its keys.
+        Block::Game { engine, version, fields, .. } => {
+            use crate::types::GameValue;
+            out.push_str(&format!("\\textbf{{{}}}\n\n", escape_latex(crate::types::game_title(fields))));
+            let engine_line = crate::render_md::game_engine_line(engine, *version);
+            if !engine_line.is_empty() {
+                out.push_str(&format!("{}\n\n", escape_latex(&engine_line)));
+            }
+            let shown = crate::types::game_card_fields(fields);
+            if !shown.is_empty() {
+                out.push_str("\\begin{itemize}\n");
+                for f in shown {
+                    match &f.value {
+                        GameValue::Scalar(v) => out.push_str(&format!(
+                            "\\item {}: {}\n",
+                            escape_latex(&f.key),
+                            escape_latex(v)
+                        )),
+                        GameValue::List(items) => {
+                            out.push_str(&format!("\\item {}:\n\\begin{{itemize}}\n", escape_latex(&f.key)));
+                            for item in items {
+                                out.push_str(&format!("\\item {}\n", escape_latex(item)));
+                            }
+                            out.push_str("\\end{itemize}\n");
+                        }
+                    }
+                }
+                out.push_str("\\end{itemize}\n\n");
+            }
+        }
 
         Block::Section {
             headline,

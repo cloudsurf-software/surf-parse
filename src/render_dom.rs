@@ -2805,6 +2805,70 @@ fn build_block_inner<S: DomSink>(dom: &mut Dom<'_, S>, block: &Block) -> Result<
             dom.close();
         }
 
+        // Twin of render_html::game_html (0.46.0): the inert game card.
+        Block::Game { engine, version, fields, .. } => {
+            use crate::types::GameValue;
+            dom.open("section", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-game"));
+            for (k, v) in render_html::game_attrs(engine, *version) {
+                dom.attr(k, AttrVal::Markup(&v));
+            }
+            dom.open("header", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-game-head"));
+            dom.open("h3", CloseStyle::Normal);
+            dom.attr("class", AttrVal::Markup("surfdoc-game-title"));
+            dom.text_markup(crate::types::game_title(fields));
+            dom.close();
+            if let Some(word) = crate::types::game_engine_word(engine) {
+                dom.open("span", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-game-engine"));
+                dom.text_markup(word);
+                dom.close();
+            }
+            dom.close();
+            let shown = crate::types::game_card_fields(fields);
+            let scalars: Vec<(&str, &str)> = shown
+                .iter()
+                .filter_map(|f| match &f.value {
+                    GameValue::Scalar(v) => Some((f.key.as_str(), v.as_str())),
+                    GameValue::List(_) => None,
+                })
+                .collect();
+            if !scalars.is_empty() {
+                dom.open("dl", CloseStyle::Normal);
+                dom.attr("class", AttrVal::Markup("surfdoc-game-keys"));
+                for (k, v) in scalars {
+                    dom.open("dt", CloseStyle::Normal);
+                    dom.text_markup(k);
+                    dom.close();
+                    dom.open("dd", CloseStyle::Normal);
+                    dom.text_markup(v);
+                    dom.close();
+                }
+                dom.close();
+            }
+            for f in &shown {
+                if let GameValue::List(items) = &f.value {
+                    dom.open("div", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-game-list"));
+                    dom.open("span", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-game-list-key"));
+                    dom.text_markup(&f.key);
+                    dom.close();
+                    dom.open("ul", CloseStyle::Normal);
+                    dom.attr("class", AttrVal::Markup("surfdoc-game-items"));
+                    for item in items {
+                        dom.open("li", CloseStyle::Normal);
+                        dom.text_markup(item);
+                        dom.close();
+                    }
+                    dom.close();
+                    dom.close();
+                }
+            }
+            dom.close();
+        }
+
         // Twin of render_html's Model arm (covered since 0.33.0 so a backends
         // document renders constructively whole).
         Block::Model { name, fields, .. } => {
