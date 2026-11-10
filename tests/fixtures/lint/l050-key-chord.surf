@@ -1,0 +1,26 @@
+---
+title: "Key Chord Malformed"
+type: doc
+status: active
+created: "2026-11-10"
+---
+
+::summary
+A key chord is neutral words joined by plus: mod, ctrl, alt, shift, then one key.
+::
+
+::app-shell[layout=adaptive shortcuts="cmd+1=#surfy mod+k mod+2=#cloud"]
+
+::: toolbar[title="App"]
+- button[label="New" action=openCreate key=mod+n+m]
+:::
+
+::
+
+::callout[type=info shortcuts="mod+3=#tasks"]
+Shortcuts belong on the shell.
+::
+
+::cite[key=smith2020 type=article]
+title: A cite keeps its own key
+::

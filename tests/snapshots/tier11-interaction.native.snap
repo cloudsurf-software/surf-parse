@@ -1,0 +1,206 @@
+[
+  {
+    "type": "summary",
+    "content": "The 0.47.0 interaction grammar on one adaptive shell: the shell's key chords\n(the Mac's mod+1 to mod+5, mod+k and mod+w as source), a per-button key=,\na focus order on the seats and controls, a hover reveal with its keyboard\npath, the two-pane declaration, a native seat and the surface ids the\nparity ledger checks against the source."
+  },
+  {
+    "type": "app_shell",
+    "layout": "adaptive",
+    "adaptive": {
+      "mobile": "tabs",
+      "tablet": "panels",
+      "desktop": "panels"
+    },
+    "children": [
+      {
+        "type": "toolbar",
+        "title": "CloudSurf",
+        "title_source": null,
+        "items": [
+          {
+            "kind": "button",
+            "label": "Search",
+            "action": {
+              "verb": "invoke",
+              "target": "openSearch",
+              "payload": null,
+              "raw": "openSearch"
+            },
+            "icon": "search",
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null,
+            "focus": "1"
+          },
+          {
+            "kind": "separator",
+            "label": null,
+            "action": null,
+            "icon": null,
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null
+          },
+          {
+            "kind": "button",
+            "label": "New",
+            "action": {
+              "verb": "invoke",
+              "target": "openCreate",
+              "payload": null,
+              "raw": "openCreate"
+            },
+            "icon": "plus",
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null,
+            "key": "mod+n",
+            "focus": "2"
+          },
+          {
+            "kind": "button",
+            "label": "Share",
+            "action": {
+              "verb": "invoke",
+              "target": "shareDoc",
+              "payload": null,
+              "raw": "shareDoc"
+            },
+            "icon": "share",
+            "style": null,
+            "disabled": false,
+            "value": null,
+            "color": null,
+            "options": null,
+            "key": "mod+shift+s",
+            "reveal": "hover"
+          }
+        ]
+      },
+      {
+        "type": "sidebar",
+        "position": "left",
+        "collapsible": false,
+        "width": {
+          "mobile": 0,
+          "tablet": 44,
+          "desktop": 44
+        },
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "row",
+            "icon": "sparkles",
+            "title": "Surfy",
+            "description": "",
+            "href": "#surfy",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "cloud",
+            "title": "Cloud",
+            "description": "",
+            "href": "#cloud",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "checkmark.circle",
+            "title": "Tasks",
+            "description": "",
+            "href": "#tasks",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "terminal",
+            "title": "Terminal",
+            "description": "",
+            "href": "#terminal",
+            "state": "default",
+            "actions": []
+          },
+          {
+            "type": "row",
+            "icon": "message",
+            "title": "Messages",
+            "description": "",
+            "href": "#messages",
+            "state": "default",
+            "actions": []
+          }
+        ]
+      },
+      {
+        "type": "panel_slot",
+        "role": "navigator",
+        "kind": "surfy",
+        "pinned": false,
+        "parks": true,
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": []
+      },
+      {
+        "type": "panel_slot",
+        "role": "work",
+        "kind": "desk",
+        "pinned": false,
+        "parks": false,
+        "gate": {
+          "classes": [],
+          "min_class": null
+        },
+        "children": [
+          {
+            "type": "tab_bar",
+            "active": null,
+            "items": []
+          },
+          {
+            "type": "tab_content",
+            "tab": "desk",
+            "width": null,
+            "align": null,
+            "gate": {
+              "classes": [],
+              "min_class": null
+            },
+            "children": []
+          }
+        ]
+      },
+      {
+        "type": "modal",
+        "name": "invite",
+        "title": "Invite people",
+        "children": [
+          {
+            "type": "row",
+            "icon": "person",
+            "title": "Pending invite",
+            "description": "",
+            "href": "#invite",
+            "state": "default",
+            "actions": []
+          }
+        ]
+      }
+    ]
+  }
+]

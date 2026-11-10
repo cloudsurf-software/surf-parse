@@ -1,0 +1,105 @@
+---
+title: "The interaction grammar — keys, focus, reveal, two panes, native seats, surface ids (0.47.0)"
+type: doc
+version: 1
+created: 2026-11-10
+updated: 2026-11-10
+status: current
+scope: surf-parse
+tags: [surfdoc, app-shell, keyboard, focus, foldable, native, parity]
+---
+
+# The interaction grammar
+
+::summary
+0.47.0 lets a SurfDoc app source say how a person works the app on every input and every screen: the shell's key chords and a key on any action, the keyboard order, what is revealed on hover and how a keyboard reaches it, a two-pane shape a player may split at a display seam, the closed list of things a player draws with its platform, and the parity-ledger id of every surface. Every value crosses to HTML and the DOM twin as `data-*` on the block root, and to the native tree the SwiftUI, Compose, WinUI 3 and GTK4 players read.
+::
+
+## The shell
+
+```surf
+::app-shell[layout=adaptive desktop=panels tablet=panels mobile=tabs panes=two panes-at=tablet shortcuts="mod+1=#surfy mod+2=#cloud mod+3=#tasks mod+4=#terminal mod+5=#messages mod+k=openSearch mod+w=closeTab" surface=chrome.shell]
+```
+
+| Attribute | What |
+|---|---|
+| `shortcuts` | Whitespace-separated `chord=target` pairs. The target is a `#seat` or route (`#surfy`, `/tasks`) or an action verb (`openSearch`). |
+| `panes` | `one` (the default) or `two`. |
+| `panes-at` | The smallest width class that shows two panes: `tablet` (the default) or `desktop`. Read only with `panes=two`. |
+
+These three are read on `::app-shell` alone.
+
+## Any block, and a toolbar button
+
+```surf
+- button[label="New" icon=plus action=openCreate key=mod+n focus=2]
+::::row[icon=terminal href=#terminal focus=6 native=terminal surface=panel.terminal]
+::: panel-slot[role=work kind=desk surface=panel.desk pane=end]
+::::row[icon=person href=#invite trailing-label="Remove" trailing-action=removeInvite reveal=hover focus=8]
+```
+
+| Attribute | Where | What |
+|---|---|---|
+| `surface` | any block | The surface's parity-ledger row id: a lower-case kind, a dot, then dot-separated names of letters, digits, `-` and `_` (`sheet.invite`, `panel.tasks`, `action.openCreate`). |
+| `key` | any block, toolbar buttons | One key chord that triggers the item. Not read on `::cite`, whose `key=` is its citation key. |
+| `focus` | any block, toolbar buttons | The item's place in the keyboard order, `1`–`9999`, or `none`. |
+| `reveal` | any block, toolbar buttons | `always` (the default) or `hover`. |
+| `native` | any block | One of the native-only list below. |
+| `pane` | a direct child of a two-pane shell | `start` or `end`. |
+
+## The key chord
+
+Lower-case words joined by `+`: any of the modifiers `mod`, `ctrl`, `alt` and `shift`, each at most once, then exactly one key.
+
+- `mod` is the platform's command modifier: Command on Apple platforms, Control on Android, Windows, Linux and the web. `mod+k` is one chord for six clients.
+- `ctrl` is the Control key on every platform; `alt` is Option on Apple platforms and Alt elsewhere.
+- A key is a letter `a`–`z`, a digit `0`–`9`, `f1`–`f12`, or a named key: `enter`, `escape`, `tab`, `space`, `backspace`, `delete`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `comma`, `period`, `slash`, `backslash`, `semicolon`, `quote`, `backquote`, `minus`, `equal`, `bracketleft`, `bracketright`.
+- Platform words are refused with the neutral word to write: `cmd`, `command`, `meta`, `win`, `super` → `mod`; `option`, `opt` → `alt`; `control` → `ctrl`.
+- Input is case-insensitive. Every output carries the normalised chord: lower case, modifiers in the order `mod`, `ctrl`, `alt`, `shift` (`Shift+Mod+S` → `mod+shift+s`).
+
+## Focus and reveal
+
+- `focus=<n>` orders the items of one shell, lowest first. Items with the same number keep source order; items with no number follow the numbered ones in source order. `focus=none` takes an item out of the keyboard order.
+- `reveal=hover` says an affordance is drawn only while a pointer is over it. A player also draws it while it, or its row, holds keyboard focus, and always on a touch screen.
+- A hover reveal must have a keyboard path in the source: a `focus=` number or a `key=` chord. With neither, or with `focus=none`, it is reachable only on hover, and lint L052 fails it (D-APP-2).
+
+## Two panes
+
+`::app-shell[panes=two]` declares that from `panes-at=` up the shell shows two panes side by side. Each direct child that belongs to a pane says which with `pane=start` or `pane=end`; start is the first side in reading order. A player may put the split where its display has a physical seam; the grammar names the layout, never a device. When the width class drops below `panes-at=`, the shell is one pane and no state is lost (D-APP-3).
+
+## The native-only list
+
+`native=` takes exactly the D-APP-11 list: `voice-mode`, `camera`, `terminal`, `device-pairing`, `share-sheet`, `platform-sign-in`, `store-billing`, `menu-bar`. A player draws its platform's own seat for the marked block, a named seat, never nothing. Any other value is lint L053. Widening the list is a ruling, not an edit.
+
+## The outputs
+
+| Output | What crosses |
+|---|---|
+| HTML and the DOM twin | `data-surface`, `data-key`, `data-focus`, `data-reveal`, `data-native`, `data-pane`, `data-panes`, `data-panes-at`, `data-shortcuts` on the block root, after `data-block-id` and `aria-label`; `data-key`, `data-focus`, `data-reveal` on a toolbar `<button>` after `aria-pressed`. A panels shell's work slots and the first active tab pane now carry their root attributes too. |
+| Native | `NativeDoc.block_meta` rows gain `surface_id`, `key`, `focus`, `reveal`, `native_seat`, `pane`, `panes`, `panes_at` and `shortcuts` (a list of `NativeShortcut { chord, target }`); `NativeToolbarItem` gains `key`, `focus` and `reveal`. |
+| Markdown, terminal, LaTeX, Typst, email | Nothing: these outputs carry no attributes. |
+
+Only a value that reads crosses. A chord, focus, reveal, native, pane or surface value that does not read reaches no output, and the lint names it. A document that authors none of the grammar renders byte for byte as it did in 0.46.0.
+
+The serializer writes a toolbar button's `key=`, `focus=` and `reveal=` back. The block-level attributes live in the same side table as `id=` and `label=` (`block_meta`), which the serializer does not write, as before.
+
+## The native schema: 19
+
+The schema moves from 18 to 19. The block tree's variants are unchanged, but two records gain fields and one record is new. Records cross UniFFI positionally, so a binding generated at v18 reading a v19 buffer would read the new fields as the next record's. A client must regenerate its bindings at v19. A JSON reader that ignores unknown keys reads v18's shape, because every new field is skipped when empty.
+
+## The lint rules
+
+All six are errors and none is fixable: only the author knows the intended keys, order, pane or id.
+
+| Rule | Fails |
+|---|---|
+| L050 | A `key=` or `shortcuts=` chord that does not read; a `shortcuts=` pair with no target; `shortcuts=` off a shell. |
+| L051 | One normalised chord bound twice inside one `::app-shell`, across its `shortcuts=` and every `key=` within it. Two shells are separate scopes. |
+| L052 | `reveal=hover` with no keyboard path; a `focus=` that is not `1`–`9999` or `none`; a `reveal=` that is not `always` or `hover`. |
+| L053 | A `native=` value off the closed list. |
+| L054 | A malformed `surface=` id, or one id on two blocks of one document. |
+| L055 | A `panes=`, `panes-at=` or `pane=` value outside its vocabulary; `panes=` or `panes-at=` off a shell; `panes-at=` without `panes=two`; `pane=` outside a two-pane shell; a two-pane shell that leaves a side empty. |
+
+## Tests
+
+`tests/interaction.rs` (every output, the projection by width, the serializer, each rule) and the corpus tier `tier11-interaction` (html and native snapshots, and at 390, 834 and 1280), plus one lint fixture per rule under `tests/fixtures/lint/`.

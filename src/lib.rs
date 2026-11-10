@@ -27,6 +27,7 @@ pub mod error;
 pub mod icons;
 mod icons_vendored;
 pub mod inline;
+pub mod interaction;
 pub mod limits;
 pub mod lint;
 pub mod media;
@@ -75,7 +76,7 @@ pub mod workbook;
 /// `--font-heading`, `--font-body`) for site-level theming.
 pub const SURFDOC_CSS: &str = include_str!("../assets/surfdoc.css");
 
-/// This crate's version, `CARGO_PKG_VERSION` (0.46.0) — what a consumer's
+/// This crate's version, `CARGO_PKG_VERSION` (0.47.0) — what a consumer's
 /// drift test reads back off a shipped build (the web shell's wasm pin gate,
 /// TASK-1455) and what `wasm::version` returns; the same string
 /// `spec_registry::CRATE_VERSION` stamps on the spec.

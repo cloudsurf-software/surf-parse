@@ -1,0 +1,29 @@
+---
+title: "Two Pane Shape"
+type: doc
+status: active
+created: "2026-11-10"
+---
+
+::summary
+A two-pane shell puts a child in each pane.
+::
+
+::app-shell[layout=adaptive panes=two panes-at=wide]
+
+::: panel-slot[role=navigator kind=surfy pane=start]
+:::
+
+::: panel-slot[role=work kind=desk pane=middle]
+::::tab-bar
+::::
+:::
+
+::
+
+::app-shell[layout=adaptive panes-at=desktop]
+
+::: sidebar[position=left pane=start]
+:::
+
+::

@@ -249,7 +249,9 @@ fn the_dom_twin_is_byte_identical_and_covered() {
 #[test]
 fn native_carries_an_open_details_card_and_the_schema_stays() {
     use surf_parse::render_native::{block_tier, to_native_blocks, BlockTier, NativeBlock, NATIVE_DOC_SCHEMA_VERSION};
-    assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 18, "0.46.0 adds no native variant");
+    // 0.46.0 added no native variant (it kept v18); 0.47.0's v19 adds
+    // record fields only, so the game card still crosses as `Details`.
+    assert!(NATIVE_DOC_SCHEMA_VERSION >= 18, "0.46.0 adds no native variant");
     let doc = parse(FOX).doc;
     let game = doc.blocks.iter().find(|b| matches!(b, Block::Game { .. })).unwrap();
     assert_eq!(block_tier(game), BlockTier::Content);
@@ -342,8 +344,11 @@ fn the_corpus_tier_round_trips() {
 }
 
 #[test]
-fn the_registry_lists_the_block_and_the_crate_is_0_46_0() {
-    assert_eq!(surf_parse::spec_registry::CRATE_VERSION, "0.46.0");
+fn the_registry_lists_the_block_from_0_46_0() {
+    // 0.46.0 shipped the block; 0.47.0 (the interaction grammar) moved the
+    // crate on, so the pin is a floor.
+    let v: Vec<u32> = surf_parse::spec_registry::CRATE_VERSION.split('.').map(|p| p.parse().unwrap()).collect();
+    assert!((v[0], v[1]) >= (0, 46), "{v:?}");
     let row = surf_parse::spec_registry::registry()
         .into_iter()
         .find(|r| r.name == "game")

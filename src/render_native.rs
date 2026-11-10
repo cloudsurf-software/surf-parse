@@ -1802,6 +1802,16 @@ pub struct NativeToolbarItem {
     pub value: Option<String>,
     pub color: Option<String>,
     pub options: Option<String>,
+    /// A button's key chord, normalised (`mod+n`) — schema v19 (0.47.0).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// A button's place in the keyboard order (`1`…`9999`, or `none`) — v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus: Option<String>,
+    /// `always` or `hover` — v19. A `hover` button is drawn while the
+    /// pointer is over the toolbar, while it holds focus, and always on touch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reveal: Option<String>,
 }
 
 /// A command within a native `CommandPalette`.
@@ -2624,7 +2634,17 @@ impl From<&crate::resolve::ResolvedTheme> for NativeTheme {
 /// 0.46.0 keeps v18: `::game` crosses as an open `Details` card (its title,
 /// then the engine line and the keys as Markdown), a shape every v18 client
 /// already draws.
-pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 18;
+/// v19 (0.47.0) — the interaction grammar (`crate::interaction`):
+/// `NativeBlockMeta` gains `surface_id`, `key`, `focus`, `reveal`,
+/// `native_seat`, `pane`, `panes`, `panes_at` (all `Option`) and
+/// `shortcuts` (a list of the new record `NativeShortcut`), and
+/// `NativeToolbarItem` gains `key`, `focus` and `reveal`. The block tree's
+/// variants are unchanged. It bumps because both records cross UniFFI
+/// positionally: a v18 binding reading a v19 buffer would read the new
+/// fields as the next record's, so a client must regenerate at v19. A JSON
+/// reader that ignores unknown keys reads v18's shape (every new field is
+/// skipped when empty).
+pub const NATIVE_DOC_SCHEMA_VERSION: u32 = 19;
 
 /// One block's authored addressing attributes, keyed by source span.
 ///
@@ -2648,6 +2668,47 @@ pub struct NativeBlockMeta {
     /// Authored `label=` (`aria-label` in HTML); `None` on the directives that
     /// spend `label=` on their own semantics.
     pub label: Option<String>,
+    /// `surface=` — the surface's ledger id (`sheet.invite`), v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_id: Option<String>,
+    /// `key=` — the block's key chord, normalised (`mod+k`), v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// `focus=` — its place in the keyboard order (`1`…`9999`, or `none`), v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus: Option<String>,
+    /// `reveal=` — `always` or `hover`, v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reveal: Option<String>,
+    /// `native=` — one of `interaction::NATIVE_SEATS`: the player draws its
+    /// platform's own seat here (a named seat, never nothing), v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_seat: Option<String>,
+    /// `pane=` — `start` or `end` inside a two-pane shell, v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pane: Option<String>,
+    /// `panes=` on `::app-shell` — `one` or `two`, v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panes: Option<String>,
+    /// `panes-at=` on a two-pane `::app-shell` — `tablet` or `desktop`
+    /// (`tablet` when not authored), v19.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panes_at: Option<String>,
+    /// `shortcuts=` on `::app-shell` — the shell's chords, v19.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shortcuts: Vec<NativeShortcut>,
+}
+
+/// One chord of an `::app-shell`'s `shortcuts=` (schema v19, 0.47.0).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NativeShortcut {
+    /// The normalised chord (`mod+1`); `mod` is Command on Apple platforms
+    /// and Control elsewhere.
+    pub chord: String,
+    /// What it triggers, as authored: a `#seat` or route (`#surfy`,
+    /// `/tasks`), or an action verb (`openSearch`).
+    pub target: String,
 }
 
 /// A parsed document plus its resolved theme — the unit that crosses the
@@ -2661,7 +2722,8 @@ pub struct NativeDoc {
     pub theme: NativeTheme,
     /// The block tree.
     pub blocks: Vec<NativeBlock>,
-    /// Span-indexed `id=`/`label=` metadata (schema v6).
+    /// Span-indexed `id=`/`label=` metadata (schema v6) and the interaction
+    /// grammar's facts (schema v19).
     pub block_meta: Vec<NativeBlockMeta>,
 }
 
@@ -2681,6 +2743,20 @@ pub fn to_native_block_meta(doc: &SurfDoc) -> Vec<NativeBlockMeta> {
             end_offset: span.end_offset as u32,
             block_id: meta.id,
             label: meta.label,
+            surface_id: meta.interaction.surface,
+            key: meta.interaction.key,
+            focus: meta.interaction.focus,
+            reveal: meta.interaction.reveal,
+            native_seat: meta.interaction.native,
+            pane: meta.interaction.pane,
+            panes: meta.interaction.panes,
+            panes_at: meta.interaction.panes_at,
+            shortcuts: meta
+                .interaction
+                .shortcuts
+                .into_iter()
+                .map(|(chord, target)| NativeShortcut { chord, target })
+                .collect(),
         })
         .collect()
 }
@@ -4920,6 +4996,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             // Same precedent (0.13.3): the explicit accessible name is
             // web-only render styling — no native schema field.
             aria_label: _,
+            key,
+            focus,
+            reveal,
         } => NativeToolbarItem {
             kind: "button".to_string(),
             label: label.clone(),
@@ -4930,6 +5009,12 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             value: None,
             color: None,
             options: None,
+            key: key.as_deref().and_then(|k| crate::interaction::parse_chord(k).ok()),
+            focus: focus.as_deref().and_then(crate::interaction::focus_value),
+            reveal: reveal
+                .as_deref()
+                .and_then(crate::interaction::reveal_value)
+                .map(str::to_string),
         },
         ToolbarItem::Separator => NativeToolbarItem {
             kind: "separator".to_string(),
@@ -4941,6 +5026,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             value: None,
             color: None,
             options: None,
+            key: None,
+            focus: None,
+            reveal: None,
         },
         ToolbarItem::Spacer => NativeToolbarItem {
             kind: "spacer".to_string(),
@@ -4952,6 +5040,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             value: None,
             color: None,
             options: None,
+            key: None,
+            focus: None,
+            reveal: None,
         },
         ToolbarItem::Badge { value, color } => NativeToolbarItem {
             kind: "badge".to_string(),
@@ -4963,6 +5054,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             value: Some(value.clone()),
             color: color.clone(),
             options: None,
+            key: None,
+            focus: None,
+            reveal: None,
         },
         ToolbarItem::Dropdown {
             label,
@@ -4978,6 +5072,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             value: None,
             color: None,
             options: options.clone(),
+            key: None,
+            focus: None,
+            reveal: None,
         },
         ToolbarItem::Text { value, .. } => NativeToolbarItem {
             kind: "text".to_string(),
@@ -4989,6 +5086,9 @@ fn toolbar_item_to_native(item: &ToolbarItem) -> NativeToolbarItem {
             value: Some(value.clone()),
             color: None,
             options: None,
+            key: None,
+            focus: None,
+            reveal: None,
         },
     }
 }
@@ -8486,7 +8586,9 @@ mod tests {
         // 0.40.0: a segment's icon and tint — schema v16.
         // 0.42.0: the music player — `Player` — schema v17.
         // 0.43.0: the newsletter — `Subscribe.button` / `.consent` — v18.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 18);
+        // 0.47.0: the interaction grammar — `NativeBlockMeta` and
+        // `NativeToolbarItem` fields, `NativeShortcut` — v19.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 19);
     }
 
     /// SS-1: px overrides parse to points and pill radii (999) survive the

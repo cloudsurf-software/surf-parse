@@ -738,10 +738,11 @@ mod native {
     use surf_parse::render_native::{NativeBlock, NATIVE_DOC_SCHEMA_VERSION};
 
     #[test]
-    fn native_schema_is_eighteen() {
+    fn native_schema_is_nineteen() {
         // 15 was 0.37.0's (this lane); 0.40.0 moved it to 16, 0.42.0 to
-        // 17, 0.43.0 (the newsletter's subscribe fields) to 18.
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 18);
+        // 17, 0.43.0 (the newsletter's subscribe fields) to 18, 0.47.0 (the
+        // interaction grammar's record fields) to 19.
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 19);
     }
 
     #[test]

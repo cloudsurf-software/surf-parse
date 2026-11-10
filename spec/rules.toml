@@ -33,8 +33,8 @@
 
 [meta]
 spec_version = "0.1"
-total_rules = 25
-registry_updated = "2026-11-09"
+total_rules = 31
+registry_updated = "2026-11-10"
 
 # ----------------------------------------------------------------------------
 # Syntax layer (P-codes) — emitted by src/parse.rs
@@ -210,6 +210,48 @@ severity = "warning"
 fixable = false
 message = "'::game' names no engine= — say which engine reads it (engine=runner) | '::game' line {line} is neither `key: value` nor a `- item` under a `key:` — the card leaves it out"
 description = "0.46.0 made games: a ::game spec names the engine that reads it on its opener, and its body is a flat key list — `key: value` lines and `key:` lists of `- item` lines. A missing engine= parses (engine is empty) and a line of any other shape stays in the verbatim body but is left off the card. Never a failed render, and never a judgement of the engine: an engine surf-parse does not know is the platform's to refuse. Not fixable — only the author knows the engine or the key"
+
+[rules.L050]
+layer = "style"
+severity = "error"
+fixable = false
+message = "key='{key}' on {block} is not a key chord — {why} | shortcuts= belongs on '::app-shell' — on {block} no player reads it | shortcuts= pair '{pair}' names no target — write chord=target (mod+1=#surfy) | shortcuts= chord '{chord}' is not a key chord — {why}"
+description = "0.47.0 interaction grammar: a key chord is lower-case words joined by + — any of the modifiers mod, ctrl, alt, shift (each once), then exactly one key (a-z, 0-9, f1-f12 or a named key such as enter, escape, comma). mod is Command on Apple platforms and Control elsewhere, so a chord is one spelling for every client; platform words (cmd, meta, win, option, control) are refused with the neutral word. Read on key= of any block and toolbar button (not on ::cite, whose key= is its citation key) and on each chord=target pair of an ::app-shell's shortcuts=. A chord that does not read reaches no output. Not fixable — only the author knows the intended keys"
+
+[rules.L051]
+layer = "style"
+severity = "error"
+fixable = false
+message = "chord '{chord}' is bound twice in one '::app-shell' — first on line {line}; one chord triggers one thing"
+description = "0.47.0 interaction grammar: inside one ::app-shell every chord — its shortcuts= pairs and every key= on a block or toolbar button within it — triggers one thing. A second binding of the same normalised chord (Mod+K and mod+k are one chord) is ambiguous: a player would fire whichever it met first. Two shells are separate scopes. Not fixable — only the author knows which binding stays"
+
+[rules.L052]
+layer = "style"
+severity = "error"
+fixable = false
+message = "{block} is revealed only on hover and has no keyboard path — give it focus=<n> or key=<chord>, or drop reveal=hover | focus='{focus}' on {block} is not a place in the keyboard order — a whole number 1–9999, or none | reveal='{reveal}' on {block} is not 'always' or 'hover'"
+description = "0.47.0 interaction grammar, D-APP-2 (input-agnostic by law): hover never carries meaning, so anything revealed on hover must be reachable without a pointer. reveal=hover on a block or toolbar button needs a keyboard path in the source — a focus= place (a whole number) or a key= chord; with neither, or with focus=none, it is reachable only on hover and fails. A player draws a hover reveal on hover, on keyboard focus and always on touch. Also reports a focus= value that is not 1–9999 or none and a reveal= value that is not always or hover. Not fixable — only the author knows the item's place or chord"
+
+[rules.L053]
+layer = "style"
+severity = "error"
+fixable = false
+message = "native='{value}' on {block} is not on the native-only list — one of voice-mode, camera, terminal, device-pairing, share-sheet, platform-sign-in, store-billing, menu-bar"
+description = "0.47.0 interaction grammar, D-APP-11 (native-only is a closed list, ruled once): native= marks a place a player fills with its platform's own seat — voice-mode, camera, terminal, device-pairing, share-sheet, platform-sign-in, store-billing, menu-bar — so it draws a named seat instead of nothing. The list is closed; any other value is an error and reaches no output. Not fixable — widening the list is a ruling, not an edit"
+
+[rules.L054]
+layer = "style"
+severity = "error"
+fixable = false
+message = "surface='{id}' on {block} is not a ledger id — write kind.name (sheet.invite, panel.tasks) | surface id '{id}' is used twice — first on line {line}; one surface, one id"
+description = "0.47.0 interaction grammar, D-SIX-4 (the source is the ledger): every surface in the source carries its parity-ledger row id on surface= — a lower-case kind, then dot-separated names of letters, digits, - and _ (sheet.invite, panel.tasks, action.openCreate, control.surfy-tier.sublime) — so the ledger's rows can be checked against the source. A malformed id reaches no output; the same id on two blocks of one document makes the row ambiguous. Not fixable — only the author knows the row"
+
+[rules.L055]
+layer = "style"
+severity = "error"
+fixable = false
+message = "panes='{value}' is not 'one' or 'two' | panes-at='{value}' is not 'tablet' or 'desktop' | panes-at= without panes=two — a one-pane shell has no width to split at | {attr}= belongs on '::app-shell' — on {block} no player reads it | pane='{value}' on {block} is not 'start' or 'end' | pane= on {block} is read only on a direct child of an '::app-shell[panes=two]' | '::app-shell[panes=two]' puts nothing in the {side} pane — mark the child that belongs there pane={side}"
+description = "0.47.0 interaction grammar, D-APP-3 (fold-safe by law): ::app-shell[panes=two panes-at=tablet] declares a two-pane shape from that width class up, and each direct child that belongs to a pane says pane=start or pane=end. The grammar names the layout, never a device; a player may put the split where its display has a seam. Reports values outside the vocabularies, the shell-only attributes off a shell, pane= outside a two-pane shell, and a two-pane shell with an empty side. Not fixable — only the author knows which child belongs where"
 
 [rules.L042]
 layer = "style"

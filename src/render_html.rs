@@ -2669,7 +2669,10 @@ fn render_panels_children(children: &[Block]) -> String {
     for child in children {
         match child {
             Block::PanelSlot { role: crate::types::PanelSlotRole::Work, .. } => {
-                work.push_str(&render_panel_slot(child, panels_slot_placement(preset, work_index)));
+                work.push_str(&with_root_attrs(
+                    child,
+                    render_panel_slot(child, panels_slot_placement(preset, work_index)),
+                ));
                 work_index += 1;
             }
             _ => html.push_str(&render_block(child)),
@@ -2725,7 +2728,7 @@ fn render_chrome_children(children: &[Block]) -> String {
             Block::TabContent { tab, .. }
                 if !activated && active_tab == Some(tab.as_str()) =>
             {
-                html.push_str(&render_tab_content(child, true));
+                html.push_str(&with_root_attrs(child, render_tab_content(child, true)));
                 activated = true;
             }
             _ => html.push_str(&render_block(child)),
@@ -2970,11 +2973,23 @@ fn render_toolbar_items(items: &[crate::types::ToolbarItem]) -> String {
     let mut html = String::new();
     for item in items {
         match item {
-            crate::types::ToolbarItem::Button { label, action, icon, style, toggled, avatar, aria_label, .. } => {
+            crate::types::ToolbarItem::Button { label, action, icon, style, toggled, avatar, aria_label, key, focus, reveal, .. } => {
                 let mut cls = match style {
                     Some(s) => format!(" surfdoc-toolbar-btn-{}", escape_html(s)),
                     None => String::new(),
                 };
+                // 0.47.0: the interaction grammar's key chord, focus place
+                // and reveal ride on the button after aria-pressed (the DOM
+                // twin's order). Empty when none was authored, so a 0.46
+                // toolbar renders byte-identically.
+                let interaction_attrs: String = crate::interaction::item_data_attrs(
+                    key.as_deref(),
+                    focus.as_deref(),
+                    reveal.as_deref(),
+                )
+                .into_iter()
+                .map(|(n, v)| format!(" {n}=\"{}\"", escape_html(&v)))
+                .collect();
                 let action_attr = match action {
                     Some(a) => format!(" data-action=\"{}\"", escape_html(a)),
                     None => String::new(),
@@ -3035,20 +3050,20 @@ fn render_toolbar_items(items: &[crate::types::ToolbarItem]) -> String {
                             .or(icon.as_deref())
                             .unwrap_or_default();
                         html.push_str(&format!(
-                            "<button class=\"surfdoc-toolbar-btn{}\"{}{} aria-label=\"{}\">{}</button>",
-                            cls, action_attr, toggled_attr, escape_html(aria), g,
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{} aria-label=\"{}\">{}</button>",
+                            cls, action_attr, toggled_attr, interaction_attrs, escape_html(aria), g,
                         ));
                     }
                     Some(g) => {
                         html.push_str(&format!(
-                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{}>{}{}{}</button>",
-                            cls, action_attr, toggled_attr, avatar_aria, avatar_html, g, escape_html(label_text),
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{}{}>{}{}{}</button>",
+                            cls, action_attr, toggled_attr, interaction_attrs, avatar_aria, avatar_html, g, escape_html(label_text),
                         ));
                     }
                     None => {
                         html.push_str(&format!(
-                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{}>{}{}</button>",
-                            cls, action_attr, toggled_attr, avatar_aria, avatar_html, escape_html(label_text),
+                            "<button class=\"surfdoc-toolbar-btn{}\"{}{}{}{}>{}{}</button>",
+                            cls, action_attr, toggled_attr, interaction_attrs, avatar_aria, avatar_html, escape_html(label_text),
                         ));
                     }
                 }
@@ -3207,7 +3222,7 @@ fn render_surfy_panel_children(children: &[Block]) -> String {
     for child in body {
         match child {
             Block::TabContent { tab, .. } if !activated && active_tab == Some(tab.as_str()) => {
-                html.push_str(&render_tab_content(child, true));
+                html.push_str(&with_root_attrs(child, render_tab_content(child, true)));
                 activated = true;
             }
             _ => html.push_str(&render_block(child)),
@@ -3237,6 +3252,17 @@ fn render_surfy_panel_children(children: &[Block]) -> String {
 
 pub(crate) fn render_block(block: &Block) -> String {
     let html = render_block_inner(block);
+    match crate::block_meta::root_attrs(block) {
+        Some(attrs) => inject_root_attrs(html, &attrs),
+        None => html,
+    }
+}
+
+/// The root attributes for a block a container renders directly rather than
+/// through [`render_block`] — a panels shell's work slots and the first
+/// active tab pane (0.47.0: before, an `id=` or a `surface=` on them was
+/// dropped). The DOM twin sets `root_attrs` at the same two places.
+fn with_root_attrs(block: &Block, html: String) -> String {
     match crate::block_meta::root_attrs(block) {
         Some(attrs) => inject_root_attrs(html, &attrs),
         None => html,
@@ -15384,7 +15410,7 @@ About
             title: Some("Messages".into()),
             title_source: Some("thread.display_name".into()),
             items: vec![
-                ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: Some("Deploy".into()), action: Some("deploy".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
                 ToolbarItem::Separator,
                 ToolbarItem::Spacer,
                 ToolbarItem::Badge { value: "Live".into(), color: Some("green".into()) },
@@ -15468,7 +15494,7 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: Some("New Doc".into()), action: Some("create_doc".into()), icon: Some("plus".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: Some("New Doc".into()), action: Some("create_doc".into()), icon: Some("plus".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
             ],
             span: span(),
         }]);
@@ -15490,8 +15516,8 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: None, action: Some("open_filter".into()), icon: Some("filter".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
-                ToolbarItem::Button { label: None, action: None, icon: Some("notifications".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: None, action: Some("open_filter".into()), icon: Some("filter".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
+                ToolbarItem::Button { label: None, action: None, icon: Some("notifications".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
             ],
             span: span(),
         }]);
@@ -15512,7 +15538,7 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: Some("cloudsurf".into()), action: Some("switch_workspace".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false, avatar: Some("C".into()), aria_label: None },
+                ToolbarItem::Button { label: Some("cloudsurf".into()), action: Some("switch_workspace".into()), icon: None, style: Some("primary".into()), disabled: false, toggled: false, avatar: Some("C".into()), aria_label: None, key: None, focus: None, reveal: None },
             ],
             span: span(),
         }]);
@@ -15533,7 +15559,7 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: None, action: Some("switch_workspace".into()), icon: None, style: None, disabled: false, toggled: false, avatar: Some("C".into()), aria_label: None },
+                ToolbarItem::Button { label: None, action: Some("switch_workspace".into()), icon: None, style: None, disabled: false, toggled: false, avatar: Some("C".into()), aria_label: None, key: None, focus: None, reveal: None },
             ],
             span: span(),
         }]);
@@ -15549,7 +15575,7 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: None, action: Some("mystery".into()), icon: Some("no-such-glyph".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: None, action: Some("mystery".into()), icon: Some("no-such-glyph".into()), style: None, disabled: false, toggled: false, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
             ],
             span: span(),
         }]);
@@ -15804,8 +15830,8 @@ About
             title: None,
             title_source: None,
             items: vec![
-                ToolbarItem::Button { label: Some("Panel".into()), action: Some("toggle_panel".into()), icon: None, style: None, disabled: false, toggled: true, avatar: None, aria_label: None },
-                ToolbarItem::Button { label: Some("Save".into()), action: Some("save".into()), icon: None, style: None, disabled: false, toggled: false, avatar: None, aria_label: None },
+                ToolbarItem::Button { label: Some("Panel".into()), action: Some("toggle_panel".into()), icon: None, style: None, disabled: false, toggled: true, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
+                ToolbarItem::Button { label: Some("Save".into()), action: Some("save".into()), icon: None, style: None, disabled: false, toggled: false, avatar: None, aria_label: None, key: None, focus: None, reveal: None },
             ],
             span: span(),
         }]);

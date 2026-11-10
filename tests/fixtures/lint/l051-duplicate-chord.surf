@@ -1,0 +1,27 @@
+---
+title: "Duplicate Key Chord"
+type: doc
+status: active
+created: "2026-11-10"
+---
+
+::summary
+One chord triggers one thing inside one shell.
+::
+
+::app-shell[layout=adaptive shortcuts="mod+k=openSearch mod+1=#surfy"]
+
+::: toolbar[title="App"]
+- button[label="Search" action=openSearch key=Mod+K]
+:::
+
+::: sidebar[position=left]
+::::row[icon=cloud href=#cloud key=mod+1]
+Cloud
+::::
+:::
+
+::
+
+::app-shell[layout=adaptive shortcuts="mod+k=openSearch"]
+::

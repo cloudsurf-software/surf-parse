@@ -1,0 +1,57 @@
+---
+title: Interaction grammar
+type: doc
+---
+
+::summary
+The 0.47.0 interaction grammar on one adaptive shell: the shell's key chords
+(the Mac's mod+1 to mod+5, mod+k and mod+w as source), a per-button key=,
+a focus order on the seats and controls, a hover reveal with its keyboard
+path, the two-pane declaration, a native seat and the surface ids the
+parity ledger checks against the source.
+::
+
+::app-shell[layout=adaptive desktop=panels tablet=panels mobile=tabs panes=two panes-at=tablet shortcuts="mod+1=#surfy mod+2=#cloud mod+3=#tasks mod+4=#terminal mod+5=#messages mod+k=openSearch mod+w=closeTab" surface=chrome.shell]
+
+::: toolbar[title="CloudSurf" surface=chrome.topbar]
+- button[label="Search" icon=search action=openSearch focus=1]
+- separator
+- button[label="New" icon=plus action=openCreate key=mod+n focus=2]
+- button[label="Share" icon=share action=shareDoc reveal=hover key="mod+shift+s"]
+:::
+
+::: sidebar[position=left collapsible=false width="0 44 44" surface=chrome.navbar pane=start]
+::::row[icon=sparkles href=#surfy focus=3]
+Surfy
+::::
+::::row[icon=cloud href=#cloud focus=4]
+Cloud
+::::
+::::row[icon=checkmark.circle href=#tasks focus=5]
+Tasks
+::::
+::::row[icon=terminal href=#terminal focus=6 native=terminal surface=panel.terminal]
+Terminal
+::::
+::::row[icon=message href=#messages focus=7]
+Messages
+::::
+:::
+
+::: panel-slot[role=navigator kind=surfy parks=true surface=panel.surfy pane=start]
+:::
+
+::: panel-slot[role=work kind=desk surface=panel.desk pane=end]
+::::tab-bar
+::::
+::::tab-content[tab=desk]
+::::
+:::
+
+::: modal[name=invite title="Invite people" surface=sheet.invite]
+::::row[icon=person href=#invite trailing-label="Remove" trailing-action=removeInvite reveal=hover focus=8]
+Pending invite
+::::
+:::
+
+::

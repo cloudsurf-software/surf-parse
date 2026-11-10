@@ -3469,7 +3469,7 @@ fn serialize_block(block: &Block, depth: usize) -> String {
             let mut lines = Vec::new();
             for item in items {
                 match item {
-                    crate::types::ToolbarItem::Button { label, action, icon, style, disabled, toggled, avatar, aria_label } => {
+                    crate::types::ToolbarItem::Button { label, action, icon, style, disabled, toggled, avatar, aria_label, key, focus, reveal } => {
                         let mut parts = Vec::new();
                         if let Some(l) = label { parts.push(format!("label=\"{}\"", escape_attr(l))); }
                         if let Some(a) = action { parts.push(format!("action={a}")); }
@@ -3479,6 +3479,9 @@ fn serialize_block(block: &Block, depth: usize) -> String {
                         if *toggled { parts.push("toggled=true".to_string()); }
                         if let Some(av) = avatar { parts.push(format!("avatar=\"{}\"", escape_attr(av))); }
                         if let Some(al) = aria_label { parts.push(format!("aria-label=\"{}\"", escape_attr(al))); }
+                        if let Some(k) = key { parts.push(format!("key=\"{}\"", escape_attr(k))); }
+                        if let Some(f) = focus { parts.push(format!("focus=\"{}\"", escape_attr(f))); }
+                        if let Some(r) = reveal { parts.push(format!("reveal=\"{}\"", escape_attr(r))); }
                         lines.push(format!("- button[{}]", parts.join(" ")));
                     }
                     crate::types::ToolbarItem::Separator => lines.push("- separator".to_string()),

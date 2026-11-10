@@ -1,0 +1,22 @@
+---
+title: "Surface Id Shape"
+type: doc
+status: active
+created: "2026-11-10"
+---
+
+::summary
+Every surface carries one ledger id.
+::
+
+::modal[name=invite title="Invite" surface=sheet.invite]
+Invite people.
+::
+
+::modal[name=invite2 title="Invite again" surface=sheet.invite]
+Invite more people.
+::
+
+::drawer[name=main surface=Drawer]
+The drawer.
+::

@@ -2431,6 +2431,16 @@ pub enum ToolbarItem {
         /// priority over the action/icon-derived fallback. Render concern
         /// only — same precedent as `avatar` (no native schema field).
         aria_label: Option<String>,
+        /// `key=` (0.47.0) — the button's key chord, as authored
+        /// (`mod+n`); [`crate::interaction::parse_chord`] reads it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+        /// `focus=` (0.47.0) — its place in the keyboard order, as authored.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        focus: Option<String>,
+        /// `reveal=` (0.47.0) — `always` or `hover`, as authored.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reveal: Option<String>,
     },
     Separator,
     Spacer,

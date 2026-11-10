@@ -252,12 +252,12 @@ mod tests {
     /// The schema number is what tells a client the new variants are present.
     /// (This pin still read 12 after 0.32.0 moved the schema to 13; the
     /// uniffi feature is outside the default gates, so 0.33.0 moves it to the
-    /// current number.)
+    /// current number; it read 15 again until 0.47.0 moved it to 19.)
     #[test]
-    fn native_doc_schema_version_is_fifteen() {
-        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 15);
+    fn native_doc_schema_version_is_current() {
+        assert_eq!(NATIVE_DOC_SCHEMA_VERSION, 19);
         let doc = parse_to_native("# Hi\n".into()).expect("parse");
-        assert_eq!(doc.schema_version, 15);
+        assert_eq!(doc.schema_version, 19);
     }
 
     /// 0.33.0 fail-open: a front-matter value with an unquoted colon is

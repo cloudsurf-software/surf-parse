@@ -104,7 +104,7 @@ const CORPUS_WIDTHS: [u32; 3] = [390, 834, 1280];
 fn corpus_width_varying_pinned() {
     // 0.27: the panels fixture rides the same three-width pin (F-6) — its
     // slot SET changes per class, not just its widths.
-    for name in ["tier5-size-class.surf", "tier7-panels.surf"] {
+    for name in ["tier5-size-class.surf", "tier7-panels.surf", "tier11-interaction.surf"] {
         width_varying_fixture_pinned(name);
     }
 }

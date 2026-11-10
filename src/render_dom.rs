@@ -5793,7 +5793,9 @@ fn build_chrome_children<S: DomSink>(
     for child in children {
         match child {
             Block::TabContent { tab, .. } if !activated && active_tab == Some(tab.as_str()) => {
+                dom.root_attrs = crate::block_meta::root_attrs(child);
                 build_tab_content(dom, child, true)?;
+                dom.root_attrs = None;
                 activated = true;
             }
             _ => build_block(dom, child)?,
@@ -5824,7 +5826,10 @@ fn build_panels_children<S: DomSink>(
         dom.attr("class", AttrVal::Markup("surfdoc-panels-work"));
         dom.attr("style", AttrVal::Markup(&panels_grid_style(preset)));
         for (slot, placement) in work {
+            // 0.47.0: twin of render_html::with_root_attrs.
+            dom.root_attrs = crate::block_meta::root_attrs(slot);
             build_panel_slot(dom, slot, placement)?;
+            dom.root_attrs = None;
         }
         dom.close();
     }
@@ -5953,7 +5958,7 @@ fn build_toolbar_items<S: DomSink>(
     use crate::types::ToolbarItem;
     for item in items {
         match item {
-            ToolbarItem::Button { label, action, icon, style, toggled, avatar, aria_label, .. } => {
+            ToolbarItem::Button { label, action, icon, style, toggled, avatar, aria_label, key, focus, reveal, .. } => {
                 let mut cls = match style {
                     Some(s) => format!(" surfdoc-toolbar-btn-{s}"),
                     None => String::new(),
@@ -5974,6 +5979,14 @@ fn build_toolbar_items<S: DomSink>(
                 }
                 if *toggled {
                     dom.attr("aria-pressed", AttrVal::Markup("true"));
+                }
+                // 0.47.0: twin of render_html::render_toolbar_items.
+                for (name, value) in crate::interaction::item_data_attrs(
+                    key.as_deref(),
+                    focus.as_deref(),
+                    reveal.as_deref(),
+                ) {
+                    dom.attr(name, AttrVal::Markup(&value));
                 }
                 if icon_only {
                     let aria = aria_label
@@ -6234,7 +6247,9 @@ fn build_surfy_panel_children<S: DomSink>(
     for child in body {
         match child {
             Block::TabContent { tab, .. } if !activated && active_tab == Some(tab.as_str()) => {
+                dom.root_attrs = crate::block_meta::root_attrs(child);
                 build_tab_content(dom, child, true)?;
+                dom.root_attrs = None;
                 activated = true;
             }
             _ => build_block(dom, child)?,

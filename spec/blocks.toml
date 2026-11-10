@@ -11,7 +11,7 @@
 [meta]
 spec_version = "0.1"
 total_blocks = 133
-registry_updated = "2026-11-09"
+registry_updated = "2026-11-10"
 
 [fields]
 # Change of kind (the AI harness, 0.39.1): a field or a list in one row means the same thing to a reader, so a swap
@@ -956,8 +956,8 @@ enum_variant = "InfoCard"
 [blocks.app-shell]
 status = "implemented"
 category = "advanced"
-purpose = "Root app container with layout mode, optional explicit height, and child blocks. layout is the closed set {sidebar-main-panel, tabs, adaptive, panels}; layout=adaptive takes mobile/tablet/desktop sub-attrs from {tabs, rail, sidebar, panels}. panels (0.27) is the CloudSurf app's grid: the sidebar is the Navbar rail, panel-slot children are navigator seats and work slots (Desks), preset children the named grid shapes; the work slots render inside one surfdoc-panels-work grid carrying the default preset's shape as --panels-columns/--panels-rows. Unknown values degrade to sidebar-main-panel (lint L041)"
-attributes = ["layout", "height", "mobile", "tablet", "desktop"]
+purpose = "Root app container with layout mode, optional explicit height, and child blocks. layout is the closed set {sidebar-main-panel, tabs, adaptive, panels}; layout=adaptive takes mobile/tablet/desktop sub-attrs from {tabs, rail, sidebar, panels}. panels (0.27) is the CloudSurf app's grid: the sidebar is the Navbar rail, panel-slot children are navigator seats and work slots (Desks), preset children the named grid shapes; the work slots render inside one surfdoc-panels-work grid carrying the default preset's shape as --panels-columns/--panels-rows. Unknown values degrade to sidebar-main-panel (lint L041). The interaction grammar (0.47.0): shortcuts= is the shell's whitespace-separated chord=target pairs (mod+1=#surfy mod+k=openSearch; lint L050, L051), panes=two with panes-at={tablet, desktop} declares a two-pane shape whose direct children say pane=start or pane=end (lint L055); the any-block attributes surface= key= focus= reveal= native= pane= are in docs/interaction-grammar-0.47.0.surf"
+attributes = ["layout", "height", "mobile", "tablet", "desktop", "shortcuts", "panes", "panes-at"]
 degradation = "sequential child blocks"
 enum_variant = "AppShell"
 

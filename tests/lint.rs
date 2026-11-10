@@ -65,6 +65,13 @@ const LINT_CORPUS: &[(&str, &[&str])] = &[
     ("l044-data-source-counts.surf", &["L044"]),
     ("l047-video-source.surf", &["L047", "L047", "L047"]),
     ("l048-video-authoring.surf", &["L048", "L048", "L048", "L048", "L048", "L048"]),
+    // 0.47.0 the interaction grammar
+    ("l050-key-chord.surf", &["L050", "L050", "L050", "L050"]),
+    ("l051-duplicate-chord.surf", &["L051", "L051"]),
+    ("l052-hover-only.surf", &["L052", "L052", "L052", "L052"]),
+    ("l053-native-seat.surf", &["L053"]),
+    ("l054-surface-id.surf", &["L054", "L054"]),
+    ("l055-two-panes.surf", &["L055", "L055", "L055", "L055", "L055"]),
     ("registered-blocks.surf", &[]),
     ("p001-unclosed.surf", &[]),
     ("p002-unclosed-frontmatter.surf", &[]),

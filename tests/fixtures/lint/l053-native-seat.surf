@@ -1,0 +1,20 @@
+---
+title: "Native Seat Unknown"
+type: doc
+status: active
+created: "2026-11-10"
+---
+
+::summary
+Native-only is a closed list.
+::
+
+::app-shell[layout=adaptive]
+
+::: panel-slot[role=navigator kind=terminal native=terminal]
+:::
+
+::: panel-slot[role=navigator kind=printer native=printer]
+:::
+
+::

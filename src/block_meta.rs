@@ -53,12 +53,18 @@ pub struct BlockMeta {
     /// the directives that spend `label=` on their own semantics (see the
     /// module docs).
     pub label: Option<String>,
+    /// The interaction grammar (0.47.0): `surface=`, `key=`, `focus=`,
+    /// `reveal=`, `native=`, `pane=` on any block and `shortcuts=`,
+    /// `panes=`, `panes-at=` on `::app-shell` — read and normalised by
+    /// [`crate::interaction::Interaction::from_attrs`], emitted as `data-*`
+    /// on the block root after `data-block-id` / `aria-label`.
+    pub interaction: crate::interaction::Interaction,
 }
 
 impl BlockMeta {
-    /// `true` when neither attribute was authored (nothing to emit).
+    /// `true` when nothing was authored (nothing to emit).
     pub fn is_empty(&self) -> bool {
-        self.id.is_none() && self.label.is_none()
+        self.id.is_none() && self.label.is_none() && self.interaction.is_empty()
     }
 }
 
@@ -146,13 +152,13 @@ pub fn record(span: Span, name: &str, attrs: &Attrs) {
     } else {
         attr_text(attrs, "label")
     };
-    if id.is_none() && label.is_none() {
+    let interaction = crate::interaction::Interaction::from_attrs(name, attrs);
+    let meta = BlockMeta { id, label, interaction };
+    if meta.is_empty() {
         return;
     }
     TABLE.with(|t| {
-        t.borrow_mut()
-            .entries
-            .insert(key(span), (span, BlockMeta { id, label }));
+        t.borrow_mut().entries.insert(key(span), (span, meta));
     });
 }
 
@@ -178,6 +184,7 @@ pub fn root_attrs(block: &Block) -> Option<Vec<(&'static str, String)>> {
     if let Some(label) = meta.label {
         out.push(("aria-label", label));
     }
+    out.extend(meta.interaction.data_attrs());
     if out.is_empty() { None } else { Some(out) }
 }
 

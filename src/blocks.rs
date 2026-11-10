@@ -6441,6 +6441,9 @@ fn parse_toolbar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     toggled: attr_bool(&attrs, "toggled"),
                     avatar: attr_string(&attrs, "avatar"),
                     aria_label: attr_string(&attrs, "aria-label"),
+                    key: attr_string(&attrs, "key"),
+                    focus: attr_string(&attrs, "focus"),
+                    reveal: attr_string(&attrs, "reveal"),
                 });
             } else if let Some(inner) = rest.strip_prefix("badge[") {
                 let inner = inner.trim_end_matches(']');
@@ -6477,6 +6480,9 @@ fn parse_toolbar(attrs: &Attrs, content: &str, span: Span) -> Block {
                     toggled: false,
                     avatar: None,
                     aria_label: None,
+                    key: None,
+                    focus: None,
+                    reveal: None,
                 });
             }
         }

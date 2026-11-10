@@ -1,0 +1,31 @@
+---
+title: "Hover Only Reach"
+type: doc
+status: active
+created: "2026-11-10"
+---
+
+::summary
+Anything revealed on hover has a keyboard path.
+::
+
+::app-shell[layout=adaptive]
+
+::: toolbar[title="App"]
+- button[label="Share" action=share reveal=hover]
+- button[label="Copy" action=copy reveal=hover key=mod+c]
+:::
+
+::: sidebar[position=left]
+::::row[icon=doc href=#a reveal=hover focus=none]
+A
+::::
+::::row[icon=doc href=#b reveal=hover focus=2]
+B
+::::
+::::row[icon=doc href=#c reveal=peek focus=first]
+C
+::::
+:::
+
+::

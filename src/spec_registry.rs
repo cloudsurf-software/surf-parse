@@ -35,6 +35,7 @@ pub const CORPUS: &[(&str, &str)] = &[
     ("tier10-video", include_str!("../tests/corpus/tier10-video.surf")),
     ("tier10-player", include_str!("../tests/corpus/tier10-player.surf")),
     ("tier10-game", include_str!("../tests/corpus/tier10-game.surf")),
+    ("tier11-interaction", include_str!("../tests/corpus/tier11-interaction.surf")),
 ];
 
 /// One minimal source document per implemented registry kind — the

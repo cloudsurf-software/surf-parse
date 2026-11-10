@@ -3,6 +3,49 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.47.0 — 2026-11-10 (the interaction grammar — key chords, focus order, hover reveal, two panes, native seats, surface ids)
+
+An app source could say what is on each screen, but not how a person works it. The Mac's ⌘1–⌘5, ⌘K and ⌘W lived in
+Swift, nothing in the grammar could say an affordance shows only on hover (or prove a keyboard reaches it), a
+two-pane shape had no words, a native-only seat drew as nothing, and the parity ledger's surface ids lived beside the
+source instead of in it. 0.47.0 adds the words, so a UI change is one edit to the source and every client reads it.
+
+- **Key chords.** `::app-shell[shortcuts="mod+1=#surfy mod+k=openSearch mod+w=closeTab"]` and a per-item `key=` on
+  any block or toolbar `- button[…]`. A chord is lower-case words joined by `+`: any of `mod`, `ctrl`, `alt`, `shift`,
+  then one key (a letter, a digit, `f1`–`f12` or a named key). `mod` is Command on Apple platforms and Control
+  elsewhere, so a chord is one spelling for every client; `cmd`, `meta`, `win`, `option` and `control` are refused with
+  the neutral word. Every output carries the normalised chord (`Shift+Mod+S` → `mod+shift+s`). `key=` is not read on
+  `::cite`, whose `key=` is its citation key.
+- **Focus and reveal.** `focus=<n>` (1–9999) or `focus=none` places an item in the keyboard order; `reveal=hover` says
+  an affordance is drawn only under a pointer (a player also draws it on focus and always on touch). A hover reveal
+  with no `focus=` number and no `key=` is reachable only on hover and fails lint L052 (D-APP-2).
+- **Two panes.** `::app-shell[panes=two panes-at=tablet]` with `pane=start` / `pane=end` on its direct children. No
+  device words: the grammar names the layout, and a player may split it where its display has a seam (D-APP-3).
+- **Native seats.** `native=` takes the closed D-APP-11 list — `voice-mode`, `camera`, `terminal`, `device-pairing`,
+  `share-sheet`, `platform-sign-in`, `store-billing`, `menu-bar` — so a player draws a named seat instead of nothing.
+- **Surface ids.** `surface=sheet.invite` on any block carries its parity-ledger row id (D-SIX-4): a lower-case kind,
+  then dot-separated names of letters, digits, `-` and `_`.
+- **Where it crosses.** HTML and the DOM twin: `data-surface`, `data-key`, `data-focus`, `data-reveal`, `data-native`,
+  `data-pane`, `data-panes`, `data-panes-at`, `data-shortcuts` on the block root after `data-block-id` / `aria-label`,
+  and `data-key` / `data-focus` / `data-reveal` on a toolbar button after `aria-pressed`. A panels shell's work slots
+  and the first active tab pane now carry their root attributes, which they dropped before (an `id=` on them included).
+  Native: the `block_meta` rows gain `surface_id`, `key`, `focus`, `reveal`, `native_seat`, `pane`, `panes`,
+  `panes_at` and `shortcuts` (the new record `NativeShortcut { chord, target }`), and `NativeToolbarItem` gains `key`,
+  `focus` and `reveal`. Only a value that reads crosses; the serializer writes a button's three back.
+- **Native schema 19.** The block tree's variants are unchanged, but records cross UniFFI positionally, so a v18
+  binding would misread a v19 buffer: clients regenerate at v19. A JSON reader that ignores unknown keys reads v18's
+  shape (every new field is skipped when empty).
+- **Six lint errors, none fixable.** L050 a chord that does not read (and `shortcuts=` off a shell), L051 one chord
+  bound twice in one shell, L052 reachable only on hover (and bad `focus=` / `reveal=` values), L053 a `native=` off
+  the list, L054 a malformed or duplicate surface id, L055 the two-pane shape. `spec/rules.toml` lists 31 rules.
+- **No existing output changed.** A document that authors none of the grammar renders byte for byte as in 0.46.0;
+  only new snapshots appeared. New public names: the module `interaction` (`parse_chord`, `ChordError`,
+  `Interaction`, `NATIVE_SEATS` …), `ToolbarItem::Button { key, focus, reveal }`, `NativeShortcut`,
+  `lint::blocks_with_typed_key`. `docs/interaction-grammar-0.47.0.surf`.
+
+Tests: `tests/interaction.rs`, the corpus tier `tier11-interaction` (html and native snapshots, and at 390, 834 and
+1280), and one lint fixture per rule (`l050`–`l055`).
+
 ## 0.46.0 — 2026-11-09 (a made game's spec draws as a card — the `::game` block)
 
 A game made in CloudSurf keeps its spec as a `::game` block: the engine and its version on the opener, then a flat

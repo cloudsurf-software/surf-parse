@@ -158,6 +158,24 @@ static LABEL_TYPED_BLOCK_NAMES: LazyLock<BTreeSet<String>> = LazyLock::new(|| {
         .collect()
 });
 
+/// Directives whose `attributes` list in `spec/blocks.toml` includes `key` —
+/// the ones that spend `key=` on their own meaning (`::cite[key=smith2020]`).
+/// The interaction grammar's `key=` chord (`crate::interaction`, 0.47.0)
+/// is not read on them.
+static KEY_TYPED_BLOCK_NAMES: LazyLock<BTreeSet<String>> = LazyLock::new(|| {
+    BLOCKS_SPEC
+        .blocks
+        .iter()
+        .filter(|(_, row)| row.attributes.iter().any(|a| a == "key"))
+        .map(|(name, _)| name.clone())
+        .collect()
+});
+
+/// Registered directives that carry a typed `key=` attribute (0.47.0).
+pub fn blocks_with_typed_key() -> &'static BTreeSet<String> {
+    &KEY_TYPED_BLOCK_NAMES
+}
+
 /// All block names registered in `spec/blocks.toml` (any status).
 ///
 /// L020 keys off this set — the spec, not the `Block` enum, is the law.
@@ -231,6 +249,12 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(VideoSourceUnusable),
         Box::new(VideoAuthoring),
         Box::new(GameShape),
+        Box::new(KeyChordMalformed),
+        Box::new(DuplicateKeyChord),
+        Box::new(HoverOnlyReach),
+        Box::new(NativeSeatUnknown),
+        Box::new(SurfaceIdShape),
+        Box::new(TwoPaneShape),
     ]
 }
 
@@ -539,6 +563,465 @@ impl LintRule for GameShape {
     fn check(&self, doc: &SurfDoc, _source: &str) -> Vec<Diagnostic> {
         let mut out = Vec::new();
         Self::walk(&doc.blocks, &mut out);
+        out
+    }
+}
+
+// ------------------------------------------------------------------
+// L050–L055 — the interaction grammar (0.47.0, `crate::interaction`)
+// ------------------------------------------------------------------
+
+/// One place the interaction grammar can be authored: a directive opener,
+/// or a toolbar `- button[…]` item line. Source-scanned (the L043
+/// precedent): an invalid value never reaches the typed tree or the side
+/// table, so the authored spelling only survives in the source.
+struct InteractionSite {
+    span: Span,
+    /// The directive name, or `toolbar button` for an item line.
+    name: String,
+    item: bool,
+    attrs: crate::types::Attrs,
+    /// The innermost enclosing `::app-shell` (an index into the shell
+    /// list); an `::app-shell` is its own scope.
+    shell: Option<usize>,
+    /// Set when the site is a direct child of an `::app-shell`.
+    shell_parent: Option<usize>,
+}
+
+/// Every interaction site of `source`, in source order, and the indices of
+/// the `::app-shell` openers among them.
+fn interaction_sites(source: &str) -> (Vec<InteractionSite>, Vec<usize>) {
+    struct Open {
+        depth: usize,
+        name: String,
+        shell: Option<usize>,
+    }
+    let mut stack: Vec<Open> = Vec::new();
+    let mut sites = Vec::new();
+    let mut shells: Vec<usize> = Vec::new();
+    for line in scan_lines(source) {
+        if line.literal {
+            continue;
+        }
+        if let Some(d) = closing_directive_depth(line.trimmed) {
+            if let Some(pos) = stack.iter().rposition(|o| o.depth == d) {
+                stack.truncate(pos);
+            }
+            continue;
+        }
+        if let Some((depth, name, attrs_str)) = opening_directive(line.trimmed) {
+            // An opener at this depth or shallower closes any closer-less
+            // leaf still open at that depth.
+            while stack.last().is_some_and(|o| o.depth >= depth) {
+                stack.pop();
+            }
+            let parent = stack.last();
+            let shell_parent = parent.filter(|p| p.name == "app-shell").and_then(|p| p.shell);
+            let enclosing = parent.and_then(|p| p.shell);
+            let attrs = parse_attrs(&attrs_str).unwrap_or_default();
+            let shell = if name == "app-shell" {
+                shells.push(sites.len());
+                Some(shells.len() - 1)
+            } else {
+                enclosing
+            };
+            sites.push(InteractionSite {
+                span: line.span(),
+                name: name.clone(),
+                item: false,
+                attrs,
+                shell,
+                shell_parent,
+            });
+            stack.push(Open { depth, name, shell });
+            continue;
+        }
+        if let Some(top) = stack.last()
+            && top.name == "toolbar"
+            && let Some(rest) = line.trimmed.strip_prefix("- ")
+            && let Some(inner) = rest.trim().strip_prefix("button[")
+        {
+            let attrs = parse_attrs(inner.trim_end_matches(']')).unwrap_or_default();
+            sites.push(InteractionSite {
+                span: line.span(),
+                name: "toolbar button".to_string(),
+                item: true,
+                attrs,
+                shell: top.shell,
+                shell_parent: None,
+            });
+        }
+    }
+    (sites, shells)
+}
+
+/// An authored attribute as text (numbers and flags spelled back).
+fn site_attr(site: &InteractionSite, name: &str) -> Option<String> {
+    let raw = match site.attrs.get(name)? {
+        AttrValue::String(s) => s.trim().to_string(),
+        AttrValue::Number(n) => n.to_string(),
+        AttrValue::Bool(b) => b.to_string(),
+        AttrValue::Null => return None,
+    };
+    Some(raw)
+}
+
+impl InteractionSite {
+    /// `'::row'` or `'toolbar button'` — how a message names the site.
+    fn label(&self) -> String {
+        if self.item { self.name.clone() } else { format!("'::{}'", self.name) }
+    }
+
+    /// The authored `key=` chord, unless the directive spends `key=` on its
+    /// own meaning (`::cite`).
+    fn key(&self) -> Option<String> {
+        if !self.item && crate::interaction::key_is_typed(&self.name) {
+            return None;
+        }
+        site_attr(self, "key")
+    }
+}
+
+/// L050 — a key chord that does not read: `key=` on any block or toolbar
+/// button, a pair of a shell's `shortcuts=`, and `shortcuts=` anywhere but
+/// on `::app-shell`.
+struct KeyChordMalformed;
+
+impl LintRule for KeyChordMalformed {
+    fn id(&self) -> &'static str {
+        "L050"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        use crate::interaction::{parse_chord, shortcut_pairs};
+        let mut out = Vec::new();
+        for site in interaction_sites(source).0 {
+            if let Some(k) = site.key()
+                && let Err(e) = parse_chord(&k)
+            {
+                out.push(diag(
+                    "L050",
+                    format!("key='{k}' on {} is not a key chord — {e}", site.label()),
+                    Some(site.span),
+                ));
+            }
+            let Some(s) = site_attr(&site, "shortcuts") else { continue };
+            if site.name != "app-shell" {
+                out.push(diag(
+                    "L050",
+                    format!(
+                        "shortcuts= belongs on '::app-shell' — on {} no player reads it",
+                        site.label()
+                    ),
+                    Some(site.span),
+                ));
+                continue;
+            }
+            for pair in shortcut_pairs(&s) {
+                if pair.target.is_empty() {
+                    out.push(diag(
+                        "L050",
+                        format!(
+                            "shortcuts= pair '{}' names no target — write chord=target (mod+1=#surfy)",
+                            pair.chord
+                        ),
+                        Some(site.span),
+                    ));
+                } else if let Err(e) = parse_chord(pair.chord) {
+                    out.push(diag(
+                        "L050",
+                        format!("shortcuts= chord '{}' is not a key chord — {e}", pair.chord),
+                        Some(site.span),
+                    ));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// L051 — one chord bound twice inside one `::app-shell` (its
+/// `shortcuts=` and every `key=` within it).
+struct DuplicateKeyChord;
+
+impl LintRule for DuplicateKeyChord {
+    fn id(&self) -> &'static str {
+        "L051"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        use crate::interaction::{parse_chord, parse_shortcuts};
+        let mut out = Vec::new();
+        // (shell, chord) -> 1-based line of its first binding.
+        let mut seen: BTreeMap<(usize, String), usize> = BTreeMap::new();
+        let mut bind = |shell: usize, chord: String, span: Span, out: &mut Vec<Diagnostic>| {
+            match seen.get(&(shell, chord.clone())) {
+                Some(first) => out.push(diag(
+                    "L051",
+                    format!(
+                        "chord '{chord}' is bound twice in one '::app-shell' — first on line {first}; \
+                         one chord triggers one thing"
+                    ),
+                    Some(span),
+                )),
+                None => {
+                    seen.insert((shell, chord), span.start_line);
+                }
+            }
+        };
+        for site in interaction_sites(source).0 {
+            let Some(shell) = site.shell else { continue };
+            if site.name == "app-shell"
+                && let Some(s) = site_attr(&site, "shortcuts")
+            {
+                for (chord, _) in parse_shortcuts(&s) {
+                    bind(shell, chord, site.span, &mut out);
+                }
+            }
+            if let Some(k) = site.key()
+                && let Ok(chord) = parse_chord(&k)
+            {
+                bind(shell, chord, site.span, &mut out);
+            }
+        }
+        out
+    }
+}
+
+/// L052 — reachable only on hover: `reveal=hover` with no keyboard path
+/// (no `focus=<n>` and no `key=`, or `focus=none`); and a `focus=` or
+/// `reveal=` value outside its vocabulary.
+struct HoverOnlyReach;
+
+impl LintRule for HoverOnlyReach {
+    fn id(&self) -> &'static str {
+        "L052"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        use crate::interaction::{focus_value, parse_chord, reveal_value};
+        let mut out = Vec::new();
+        for site in interaction_sites(source).0 {
+            let focus = site_attr(&site, "focus");
+            let focus_read = focus.as_deref().and_then(focus_value);
+            if let Some(f) = &focus
+                && focus_read.is_none()
+            {
+                out.push(diag(
+                    "L052",
+                    format!(
+                        "focus='{f}' on {} is not a place in the keyboard order — a whole number 1–9999, or none",
+                        site.label()
+                    ),
+                    Some(site.span),
+                ));
+            }
+            let Some(r) = site_attr(&site, "reveal") else { continue };
+            match reveal_value(&r) {
+                None => out.push(diag(
+                    "L052",
+                    format!("reveal='{r}' on {} is not 'always' or 'hover'", site.label()),
+                    Some(site.span),
+                )),
+                Some("hover") => {
+                    let by_focus = focus_read.as_deref().is_some_and(|f| f != "none");
+                    let by_key = site.key().is_some_and(|k| parse_chord(&k).is_ok());
+                    if !by_focus && !by_key {
+                        let why = if focus_read.as_deref() == Some("none") {
+                            " (focus=none takes it out of the keyboard order)"
+                        } else {
+                            ""
+                        };
+                        out.push(diag(
+                            "L052",
+                            format!(
+                                "{} is revealed only on hover and has no keyboard path{why} — give it \
+                                 focus=<n> or key=<chord>, or drop reveal=hover",
+                                site.label()
+                            ),
+                            Some(site.span),
+                        ));
+                    }
+                }
+                Some(_) => {}
+            }
+        }
+        out
+    }
+}
+
+/// L053 — a `native=` value off the closed native-only list (D-APP-11).
+struct NativeSeatUnknown;
+
+impl LintRule for NativeSeatUnknown {
+    fn id(&self) -> &'static str {
+        "L053"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        for site in interaction_sites(source).0 {
+            if let Some(n) = site_attr(&site, "native")
+                && crate::interaction::native_value(&n).is_none()
+            {
+                out.push(diag(
+                    "L053",
+                    format!(
+                        "native='{n}' on {} is not on the native-only list — one of {}",
+                        site.label(),
+                        crate::interaction::NATIVE_SEATS.join(", ")
+                    ),
+                    Some(site.span),
+                ));
+            }
+        }
+        out
+    }
+}
+
+/// L054 — a `surface=` ledger id that is malformed, or used twice in one
+/// document.
+struct SurfaceIdShape;
+
+impl LintRule for SurfaceIdShape {
+    fn id(&self) -> &'static str {
+        "L054"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+        for site in interaction_sites(source).0 {
+            let Some(id) = site_attr(&site, "surface") else { continue };
+            if !crate::interaction::is_surface_id(&id) {
+                out.push(diag(
+                    "L054",
+                    format!(
+                        "surface='{id}' on {} is not a ledger id — write kind.name (sheet.invite, panel.tasks)",
+                        site.label()
+                    ),
+                    Some(site.span),
+                ));
+                continue;
+            }
+            match seen.get(&id) {
+                Some(first) => out.push(diag(
+                    "L054",
+                    format!(
+                        "surface id '{id}' is used twice — first on line {first}; one surface, one id"
+                    ),
+                    Some(site.span),
+                )),
+                None => {
+                    seen.insert(id, site.span.start_line);
+                }
+            }
+        }
+        out
+    }
+}
+
+/// L055 — the two-pane declaration: `panes=` / `panes-at=` / `pane=`
+/// values, the shell-only attributes off a shell, `pane=` outside a two-pane
+/// shell, and a two-pane shell that leaves a pane empty.
+struct TwoPaneShape;
+
+impl LintRule for TwoPaneShape {
+    fn id(&self) -> &'static str {
+        "L055"
+    }
+
+    fn check(&self, _doc: &SurfDoc, source: &str) -> Vec<Diagnostic> {
+        use crate::interaction::{pane_value, panes_at_value, panes_value};
+        let mut out = Vec::new();
+        let (sites, shells) = interaction_sites(source);
+        let two_pane: Vec<bool> = shells
+            .iter()
+            .map(|&i| site_attr(&sites[i], "panes").as_deref().and_then(panes_value) == Some("two"))
+            .collect();
+        let mut filled: Vec<(bool, bool)> = vec![(false, false); shells.len()];
+        for site in &sites {
+            let is_shell = site.name == "app-shell";
+            for attr in ["panes", "panes-at"] {
+                if !is_shell && site_attr(site, attr).is_some() {
+                    out.push(diag(
+                        "L055",
+                        format!("{attr}= belongs on '::app-shell' — on {} no player reads it", site.label()),
+                        Some(site.span),
+                    ));
+                }
+            }
+            if is_shell {
+                let panes = site_attr(site, "panes");
+                if let Some(p) = &panes
+                    && panes_value(p).is_none()
+                {
+                    out.push(diag(
+                        "L055",
+                        format!("panes='{p}' is not 'one' or 'two'"),
+                        Some(site.span),
+                    ));
+                }
+                if let Some(at) = site_attr(site, "panes-at") {
+                    if panes_at_value(&at).is_none() {
+                        out.push(diag(
+                            "L055",
+                            format!("panes-at='{at}' is not 'tablet' or 'desktop'"),
+                            Some(site.span),
+                        ));
+                    } else if panes.as_deref().and_then(panes_value) != Some("two") {
+                        out.push(diag(
+                            "L055",
+                            "panes-at= without panes=two — a one-pane shell has no width to split at".to_string(),
+                            Some(site.span),
+                        ));
+                    }
+                }
+            }
+            let Some(p) = site_attr(site, "pane") else { continue };
+            let Some(side) = pane_value(&p) else {
+                out.push(diag(
+                    "L055",
+                    format!("pane='{p}' on {} is not 'start' or 'end'", site.label()),
+                    Some(site.span),
+                ));
+                continue;
+            };
+            match site.shell_parent {
+                Some(s) if two_pane[s] => {
+                    if side == "start" {
+                        filled[s].0 = true;
+                    } else {
+                        filled[s].1 = true;
+                    }
+                }
+                _ => out.push(diag(
+                    "L055",
+                    format!(
+                        "pane= on {} is read only on a direct child of an '::app-shell[panes=two]'",
+                        site.label()
+                    ),
+                    Some(site.span),
+                )),
+            }
+        }
+        for (s, &i) in shells.iter().enumerate() {
+            if !two_pane[s] {
+                continue;
+            }
+            for (side, has) in [("start", filled[s].0), ("end", filled[s].1)] {
+                if !has {
+                    out.push(diag(
+                        "L055",
+                        format!(
+                            "'::app-shell[panes=two]' puts nothing in the {side} pane — mark the child \
+                             that belongs there pane={side}"
+                        ),
+                        Some(sites[i].span),
+                    ));
+                }
+            }
+        }
         out
     }
 }
