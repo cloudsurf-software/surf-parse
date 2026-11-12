@@ -3,6 +3,16 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.49.0 — 2026-11-12 (font presets public — one list for the web and the native engine)
+
+`resolve::resolve_font_preset` and `resolve::FontPreset` are public, and `resolve::FONT_PRESETS` lists the canonical names
+with their labels in menu order. A preset now also carries `faces` — the native family list (first that exists wins, the
+last a CSS generic: `system-ui`, `serif`, `sans-serif`, `monospace`) — and `bundle`, the family a native host must ship
+itself (Inter, Lato, Montserrat, Playfair Display, JetBrains Mono, Surf Display; `None` for system faces). The SurfDoc
+engine reads a document's `::style` `font` / `heading-font` / `body-font` through these, so a doc set to Playfair on the
+web is Playfair on the Mac. No behaviour change for `render_html` or `render_native`. (0.48.0 is a separate, unmerged
+release line; this release is cut from 0.47.0.)
+
 ## 0.47.0 — 2026-11-10 (the interaction grammar — key chords, focus order, hover reveal, two panes, native seats, surface ids)
 
 An app source could say what is on each screen, but not how a person works it. The Mac's ⌘1–⌘5, ⌘K and ⌘W lived in

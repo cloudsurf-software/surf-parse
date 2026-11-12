@@ -241,8 +241,10 @@ fn the_native_list_is_the_closed_d_app_11_list() {
 }
 
 #[test]
-fn the_crate_is_0_47_0() {
-    assert_eq!(surf_parse::spec_registry::CRATE_VERSION, "0.47.0");
+fn the_crate_carries_the_interaction_grammar_0_47_0_or_later() {
+    // 0.49.0 (public font presets) moved past 0.47.0; the grammar this file tests is in every later release.
+    let v: Vec<u32> = surf_parse::spec_registry::CRATE_VERSION.split('.').map(|p| p.parse().unwrap()).collect();
+    assert!((v[0], v[1]) >= (0, 47), "{}", surf_parse::spec_registry::CRATE_VERSION);
 }
 
 #[test]

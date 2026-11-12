@@ -27,42 +27,80 @@ use crate::types::{
 // Fonts
 // ═══════════════════════════════════════════════════════════════════════
 
-/// A resolved font preset: CSS font stack + optional Google Fonts import URL.
-pub(crate) struct FontPreset {
-    pub(crate) stack: &'static str,
-    pub(crate) import: Option<&'static str>,
+/// A resolved font preset: CSS font stack + optional Google Fonts import URL, and the same face for a native renderer
+/// (0.49.0: public, so the native SurfDoc engine resolves the SAME names the web does — one list, never two).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FontPreset {
+    /// The CSS `font-family` stack the web emits.
+    pub stack: &'static str,
+    /// The stylesheet import the web adds, when the face is not a system one.
+    pub import: Option<&'static str>,
+    /// The native family list, first that exists wins; the last entry is a CSS generic family (`system-ui`, `serif`,
+    /// `sans-serif`, `monospace`) every platform resolves.
+    pub faces: &'static [&'static str],
+    /// The family a native host must ship itself (the platform does not carry it); `None` for system faces.
+    pub bundle: Option<&'static str>,
 }
 
-/// Resolve a font preset name to a CSS font stack and optional import.
-pub(crate) fn resolve_font_preset(name: &str) -> Option<FontPreset> {
+/// The font presets, canonical name and label, in the order a font menu lists them. Every name resolves through
+/// [`resolve_font_preset`]; the aliases it also takes (`sans`, `editorial`, `technical`, …) are not repeated here.
+pub const FONT_PRESETS: &[(&str, &str)] = &[
+    ("system", "System"),
+    ("serif", "Serif"),
+    ("mono", "Mono"),
+    ("inter", "Inter"),
+    ("lato", "Lato"),
+    ("montserrat", "Montserrat"),
+    ("playfair-display", "Playfair Display"),
+    ("jetbrains-mono", "JetBrains Mono"),
+    ("surf-display", "Surf Display"),
+];
+
+/// Resolve a font preset name (`::style` `font` / `heading-font` / `body-font`) to its CSS stack, import and native faces.
+/// Case and surrounding spaces are ignored; an unknown name is `None` (the caller keeps its default face).
+pub fn resolve_font_preset(name: &str) -> Option<FontPreset> {
     match name.trim().to_lowercase().as_str() {
         "system" | "sans" => Some(FontPreset {
             stack: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, sans-serif",
             import: None,
+            faces: &["system-ui"],
+            bundle: None,
         }),
         "serif" | "editorial" => Some(FontPreset {
             stack: "Georgia, \"Palatino Linotype\", \"Book Antiqua\", Palatino, serif",
             import: None,
+            faces: &["Georgia", "serif"],
+            bundle: None,
         }),
         "mono" | "monospace" | "technical" => Some(FontPreset {
             stack: "\"SF Mono\", \"Fira Code\", \"Cascadia Code\", Menlo, Consolas, monospace",
             import: None,
+            faces: &["SF Mono", "Menlo", "Consolas", "monospace"],
+            bundle: None,
         }),
         "inter" => Some(FontPreset {
             stack: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
             import: Some("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"),
+            faces: &["Inter", "system-ui"],
+            bundle: Some("Inter"),
         }),
         "montserrat" => Some(FontPreset {
             stack: "'Montserrat', sans-serif",
             import: Some("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap"),
+            faces: &["Montserrat", "sans-serif"],
+            bundle: Some("Montserrat"),
         }),
         "jetbrains-mono" | "jetbrains" => Some(FontPreset {
             stack: "'JetBrains Mono', monospace",
             import: Some("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"),
+            faces: &["JetBrains Mono", "monospace"],
+            bundle: Some("JetBrains Mono"),
         }),
         "playfair" | "playfair-display" => Some(FontPreset {
             stack: "'Playfair Display', Georgia, serif",
             import: Some("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap"),
+            faces: &["Playfair Display", "Georgia", "serif"],
+            bundle: Some("Playfair Display"),
         }),
         // Surf's own display face. No import URL on purpose: the font files
         // are self-hosted by consumers (@font-face in the host page/app
@@ -73,10 +111,14 @@ pub(crate) fn resolve_font_preset(name: &str) -> Option<FontPreset> {
         "surf-display" => Some(FontPreset {
             stack: "'Surf Display', -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
             import: None,
+            faces: &["Surf Display", "system-ui"],
+            bundle: Some("Surf Display"),
         }),
         "lato" => Some(FontPreset {
             stack: "'Lato', -apple-system, BlinkMacSystemFont, sans-serif",
             import: Some("https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap"),
+            faces: &["Lato", "system-ui"],
+            bundle: Some("Lato"),
         }),
         _ => None,
     }
@@ -965,6 +1007,24 @@ mod tests {
     /// SS-1: `surf-display` resolves to the self-hosted Surf Display face —
     /// stack present, graceful system fallback, and NO import URL (consumers
     /// self-host the font files; the crate must not emit a Google Fonts URL).
+    #[test]
+    fn every_listed_font_preset_resolves_with_native_faces() {
+        for (name, label) in FONT_PRESETS {
+            let p = resolve_font_preset(name).unwrap_or_else(|| panic!("{name} resolves"));
+            assert!(!label.is_empty());
+            let last = *p.faces.last().expect("faces");
+            assert!(["system-ui", "serif", "sans-serif", "monospace"].contains(&last), "{name}: ends in a generic, got {last}");
+            if let Some(bundle) = p.bundle {
+                assert_eq!(p.faces[0], bundle, "{name}: the bundled family is tried first");
+                assert!(p.stack.contains(bundle), "{name}: the web stack names the same family");
+            }
+        }
+        // The aliases resolve to their canonical preset.
+        assert_eq!(resolve_font_preset(" Editorial "), resolve_font_preset("serif"));
+        assert_eq!(resolve_font_preset("playfair"), resolve_font_preset("playfair-display"));
+        assert!(resolve_font_preset("comic-sans").is_none());
+    }
+
     #[test]
     fn surf_display_font_preset_resolves_without_import() {
         let p = resolve_font_preset("surf-display").expect("surf-display is a preset");
