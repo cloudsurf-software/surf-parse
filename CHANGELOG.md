@@ -3,6 +3,31 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
+## 0.48.0 — 2026-11-12 (composition — every block says what it is made of: class, primitives, states, emits)
+
+The registry said what each of the 133 blocks is for and how it degrades in Markdown, but not what a player has to
+draw to draw it. So every player's coverage was a hand-kept list (the Android catalog, `coverage-native.json`, each
+player's dispatch), and "which blocks can this platform draw" had no answer short of reading six renderers. 0.48.0
+adds the answer to the registry itself.
+
+- **Four keys on every block** in `spec/blocks.toml`: `class` — `content` (read-only drawing), `control` (it takes
+  input: always the platform's own control) or `chrome` (app and page furniture: always native) — 89 · 25 · 19;
+  `primitives` — the platform-free parts the block is made of, most defining first; `states` — which of
+  `empty` · `loading` · `error` · `filled` apply; `emits` — the events a flow step can name on it (`press` · `submit` ·
+  `select` · `change` · `open`).
+- **A closed vocabulary** in a new `[composition]` table: the three classes, **28 primitives** (text · heading · row ·
+  table · ledger · image · icon · button · field · segmented · menu · chips · check · card · stack · sheet · bar · tree ·
+  canvas · code · bubble · badge · progress · disclosure · rule · stat · placard · inert), the four states and the five
+  events. A player maps each primitive to one component of its platform; its block coverage then follows from the
+  registry instead of being typed per block.
+- **Typed.** `spec_registry::RegistryEntry` gains `class`, `primitives`, `states` and `emits`;
+  `spec_registry::composition()` returns the vocabulary.
+- **A drift test** (`tests/spec_compliance.rs`, `every_block_says_what_it_is_made_of`): a block without all four keys,
+  a word outside the vocabulary, a control that emits nothing, or a primitive no block is made of, fails.
+
+Nothing is parsed or rendered differently: no grammar change, no HTML, DOM or native-schema change (native schema stays
+19). The rows were read from the six renderers on 2026-11-11 (the UI atlas's component census).
+
 ## 0.47.0 — 2026-11-10 (the interaction grammar — key chords, focus order, hover reveal, two panes, native seats, surface ids)
 
 An app source could say what is on each screen, but not how a person works it. The Mac's ⌘1–⌘5, ⌘K and ⌘W lived in

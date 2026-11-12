@@ -200,6 +200,45 @@ pub struct RegistryEntry {
     pub attributes: Vec<String>,
     pub degradation: String,
     pub enum_variant: Option<String>,
+    /// Who draws the block (0.48.0): `content` (read-only drawing), `control`
+    /// (it takes input — always the platform's own control) or `chrome`
+    /// (app and page furniture — always native).
+    pub class: String,
+    /// The platform-free parts the block is made of, most defining first
+    /// (0.48.0) — each a member of [`Composition::primitives`].
+    pub primitives: Vec<String>,
+    /// The states that apply to the block (0.48.0): a subset of
+    /// [`Composition::states`].
+    pub states: Vec<String>,
+    /// The events a flow step can name on the block (0.48.0): a subset of
+    /// [`Composition::emits`]; empty when it emits nothing.
+    pub emits: Vec<String>,
+}
+
+/// The closed vocabularies of the four composition keys (0.48.0), read from
+/// the registry's `[composition]` table — so a player that maps each
+/// primitive to one component of its platform can read its own block
+/// coverage from the registry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Composition {
+    pub classes: Vec<String>,
+    pub primitives: Vec<String>,
+    pub states: Vec<String>,
+    pub emits: Vec<String>,
+}
+
+/// The registry's `[composition]` table.
+pub fn composition() -> Composition {
+    let value: toml::Value = toml::from_str(BLOCKS_TOML).expect("spec/blocks.toml parses");
+    let list = |k: &str| {
+        value
+            .get("composition")
+            .and_then(|c| c.get(k))
+            .and_then(|a| a.as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default()
+    };
+    Composition { classes: list("classes"), primitives: list("primitives"), states: list("states"), emits: list("emits") }
 }
 
 /// Every registered block, in registry (alphabetical) order.
@@ -209,6 +248,12 @@ pub fn registry() -> Vec<RegistryEntry> {
         return Vec::new();
     };
     let str_of = |t: &toml::Value, k: &str| t.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let list_of = |t: &toml::Value, k: &str| -> Vec<String> {
+        t.get(k)
+            .and_then(|a| a.as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default()
+    };
     blocks
         .iter()
         .map(|(name, t)| RegistryEntry {
@@ -223,6 +268,10 @@ pub fn registry() -> Vec<RegistryEntry> {
                 .unwrap_or_default(),
             degradation: str_of(t, "degradation"),
             enum_variant: t.get("enum_variant").and_then(|v| v.as_str()).map(str::to_string),
+            class: str_of(t, "class"),
+            primitives: list_of(t, "primitives"),
+            states: list_of(t, "states"),
+            emits: list_of(t, "emits"),
         })
         .collect()
 }

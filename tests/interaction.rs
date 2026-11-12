@@ -242,7 +242,7 @@ fn the_native_list_is_the_closed_d_app_11_list() {
 
 #[test]
 fn the_crate_is_0_47_0() {
-    assert_eq!(surf_parse::spec_registry::CRATE_VERSION, "0.47.0");
+    assert_eq!(surf_parse::spec_registry::CRATE_VERSION, "0.48.0");
 }
 
 #[test]

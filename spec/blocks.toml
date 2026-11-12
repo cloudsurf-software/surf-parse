@@ -7,11 +7,57 @@
 #
 # Status: "implemented" | "planned" | "deprecated"
 # Category: core | data | container | web | site | advanced | utility
+#
+# Composition (0.48.0) — what a block is MADE OF, so a player's coverage is read from the registry, not typed per block:
+#   class       who draws it: "content" (read-only drawing) | "control" (it takes input: the platform's own control,
+#               always) | "chrome" (app and page furniture: always native)
+#   primitives  the platform-free parts it is made of, most defining first — the closed list in [composition]
+#   states      the states that apply to it: empty | loading | error | filled
+#   emits       the events a flow step can name on it: press | submit | select | change | open ([] = it emits nothing)
+# A block without all four fails tests/spec_compliance.rs.
 
 [meta]
 spec_version = "0.1"
 total_blocks = 133
-registry_updated = "2026-11-10"
+registry_updated = "2026-11-12"
+
+[composition]
+# The closed vocabularies of the four composition keys (0.48.0). A primitive is a platform-free part; each player maps
+# a primitive to ONE component of its platform (a SwiftUI view, a Compose composable, a WinUI 3 control, a GTK4 widget,
+# a DOM element), so block coverage follows from primitive coverage.
+classes = ["content", "control", "chrome"]
+primitives = [
+    "text",        # a run of prose with inline marks, wrapping to its container; list items are text with a marker
+    "heading",     # a title line at one of six levels; carries document structure
+    "row",         # one line item: leading icon or avatar, title, optional description, trailing matter
+    "table",       # a grid of cells under a header row
+    "ledger",      # key / value pairs in two columns
+    "image",       # a picture from a URL with loading and missing states, alt text, optional caption; media frames
+    "icon",        # a small glyph resolved from a name token to the platform's own set
+    "button",      # a pressable label and / or icon
+    "field",       # a text input: single line, multi-line, secure, search
+    "segmented",   # one-of-few choice shown all at once as joined segments
+    "menu",        # one-of-many choice behind a trigger that opens a list
+    "chips",       # a row of small pills: selectable, filters, suggestions, removable tokens
+    "check",       # a two-state mark with a label: checkbox or switch
+    "card",        # a padded surface with a fill and / or a border that groups content
+    "stack",       # arrangement without a surface of its own: stack, columns, grid, split, section
+    "sheet",       # content presented over the page: modal, drawer, bottom sheet, palette
+    "bar",         # a horizontal strip of title and controls: toolbar, tab bar, switcher
+    "tree",        # an expandable hierarchy of rows bound to a live source
+    "canvas",      # a free drawing surface for a chart or diagram scene
+    "code",        # a monospace well that keeps whitespace and scrolls sideways
+    "bubble",      # one chat message: a rounded panel aligned by side
+    "badge",       # a short status word in a pill
+    "progress",    # how far along: a determinate bar, steps with statuses, or a spinner
+    "disclosure",  # a titled section that opens and closes in place
+    "rule",        # a horizontal divider, optionally with a label set into it
+    "stat",        # a big number with a label, a unit and a trend
+    "placard",     # the "not here" panel: a mount point or an empty state naming what it would bind
+    "inert",       # a record that draws nothing by design
+]
+states = ["empty", "loading", "error", "filled"]
+emits = ["press", "submit", "select", "change", "open"]
 
 [fields]
 # Change of kind (the AI harness, 0.39.1): a field or a list in one row means the same thing to a reader, so a swap
@@ -28,6 +74,10 @@ synonyms = [
 [blocks.ai-context]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "text"]
+states = ["empty", "filled"]
+emits = []
 purpose = "AI generation metadata"
 attributes = ["model", "tokens", "loaded"]
 degradation = "fenced code block"
@@ -36,6 +86,10 @@ enum_variant = "AiContext"
 [blocks.ai-generated]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "badge", "text"]
+states = ["empty", "filled"]
+emits = []
 purpose = "AI attribution"
 attributes = ["model", "date", "reviewed"]
 degradation = "blockquote with attribution"
@@ -44,6 +98,10 @@ enum_variant = "AiGenerated"
 [blocks.alternatives]
 status = "implemented"
 category = "data"
+class = "content"
+primitives = ["table", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Option comparison — a pipe table whose verdict column is colour-coded (Selected / Rejected / Considered)"
 attributes = []
 degradation = "markdown table"
@@ -63,6 +121,10 @@ keywords = ["note", "warning", "tip", "notice", "alert", "important", "heads up"
 fields_admitted = true
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["card", "icon", "heading", "text"]
+states = ["filled"]
+emits = []
 purpose = "Styled callout"
 attributes = ["type", "title"]
 degradation = "blockquote with bold prefix"
@@ -71,6 +133,10 @@ enum_variant = "Callout"
 [blocks.chart]
 status = "implemented"
 category = "data"
+class = "content"
+primitives = ["canvas", "card", "text"]
+states = ["empty", "loading", "error", "filled"]
+emits = []
 purpose = "Data visualization — 8 types (line, area, bar, stacked-bar, scatter, pie, donut, radar) rendered as deterministic SVG from an inline pipe-delimited dataset, or a live-data mount point via source="
 attributes = ["type", "source", "period", "title"]
 degradation = "data table fallback"
@@ -79,6 +145,10 @@ enum_variant = "Chart"
 [blocks.code]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["code", "badge", "button"]
+states = ["filled"]
+emits = ["press"]
 purpose = "Enhanced code block"
 attributes = ["lang", "file", "highlight"]
 degradation = "fenced code block"
@@ -87,6 +157,10 @@ enum_variant = "Code"
 [blocks.columns]
 status = "implemented"
 category = "container"
+class = "content"
+primitives = ["stack", "text"]
+states = ["filled"]
+emits = []
 purpose = "Multi-column layout"
 attributes = []
 degradation = "sequential sections with horizontal rules"
@@ -95,6 +169,10 @@ enum_variant = "Columns"
 [blocks.countdown]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["stat", "text"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Event countdown"
 attributes = ["date", "label"]
 degradation = "paragraph with date"
@@ -103,6 +181,10 @@ enum_variant = "Countdown"
 [blocks.css]
 status = "implemented"
 category = "utility"
+class = "chrome"
+primitives = ["inert"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Raw CSS escape hatch"
 attributes = []
 degradation = "omitted"
@@ -122,6 +204,10 @@ keywords = ["button", "call to action", "sign up", "book", "contact us", "subscr
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "control"
+primitives = ["button", "icon"]
+states = ["filled"]
+emits = ["press", "open"]
 purpose = "Call-to-action button"
 attributes = ["label", "href", "primary", "icon"]
 degradation = "markdown link"
@@ -141,6 +227,10 @@ keywords = ["table", "rows", "data", "schedule", "hours", "opening hours", "time
 fields_admitted = true
 status = "implemented"
 category = "data"
+class = "content"
+primitives = ["table", "text", "button"]
+states = ["empty", "filled"]
+emits = ["change", "open"]
 purpose = "Structured data table, or one sheet of a `type: spreadsheet` workbook; a trailing `total: a | b | c` line becomes the summary row; `source=` references out-of-line rows carrying `rows=`/`cols=` counts"
 attributes = ["id", "format", "sortable", "caption", "name", "source", "rows", "cols"]
 planned_attributes = ["filterable", "chart"]
@@ -150,6 +240,10 @@ enum_variant = "Data"
 [blocks.decision]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["card", "badge", "text"]
+states = ["filled"]
+emits = []
 purpose = "Decision record"
 attributes = ["status", "date", "deciders"]
 degradation = "blockquote with status prefix"
@@ -158,6 +252,10 @@ enum_variant = "Decision"
 [blocks.diagram]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["canvas", "text"]
+states = ["error", "filled"]
+emits = []
 purpose = "Native diagram rendered as inline SVG — 17 types (architecture, erd, flowchart, sequence, gantt, state, mindmap, class, timeline, journey, quadrant, kanban, usecase, gitgraph, c4, requirement, sankey) plus 4 chart aliases (pie, donut, radar, xychart); mermaid-syntax bodies are auto-detected (or forced with type=mermaid) and translated to the native DSL"
 attributes = ["type", "title"]
 degradation = "fenced code block with raw DSL"
@@ -166,6 +264,10 @@ enum_variant = "Diagram"
 [blocks.details]
 status = "implemented"
 category = "container"
+class = "content"
+primitives = ["disclosure", "text"]
+states = ["filled"]
+emits = []
 purpose = "Collapsible section"
 attributes = ["title", "open"]
 degradation = "heading with content"
@@ -174,6 +276,10 @@ enum_variant = "Details"
 [blocks.divider]
 status = "implemented"
 category = "utility"
+class = "content"
+primitives = ["rule", "text"]
+states = ["filled"]
+emits = []
 purpose = "Labeled break"
 attributes = ["label"]
 degradation = "horizontal rule"
@@ -182,6 +288,10 @@ enum_variant = "Divider"
 [blocks.embed]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["image", "card", "button"]
+states = ["loading", "error", "filled"]
+emits = ["open"]
 purpose = "Embedded external content — a provider page is a link card, a generic page with a height is a frame, and (0.37.0) a video file (`media:<file-id>` or a `.mp4 .webm .mov .m4v .ogv` path / https URL) is a player"
 attributes = ["src", "type", "width", "height", "title"]
 degradation = "link to source"
@@ -199,6 +309,10 @@ keywords = ["questions", "answers", "faq", "ask", "help", "common questions", "q
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["disclosure", "text"]
+states = ["filled"]
+emits = []
 purpose = "Accordion FAQ"
 attributes = []
 degradation = "heading/answer pairs"
@@ -207,6 +321,10 @@ enum_variant = "Faq"
 [blocks.figure]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["image", "text"]
+states = ["loading", "error", "filled"]
+emits = []
 purpose = "Image with caption"
 attributes = ["src", "caption", "alt", "width"]
 degradation = "markdown image with alt text"
@@ -215,6 +333,10 @@ enum_variant = "Figure"
 [blocks.footer]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["stack", "text", "button", "icon"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Structured site footer"
 attributes = []
 degradation = "horizontal rule with links"
@@ -223,6 +345,10 @@ enum_variant = "Footer"
 [blocks.footnote]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["text", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Citation"
 attributes = ["id"]
 degradation = "inline parenthetical"
@@ -245,6 +371,10 @@ keywords = ["form", "sign up", "sign-up", "updates", "contact form", "subscribe"
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "control"
+primitives = ["field", "menu", "check", "button", "card", "text"]
+states = ["empty", "error", "filled"]
+emits = ["submit", "change"]
 purpose = "Form with typed fields (text, email, tel, date, number, password, select, textarea, checkbox, radio, toggle, file, hidden, range); a `group: Label` line or a `:::step[title=…]` child opens a fieldset; steps=true (0.32.0) makes every fieldset one step of a CSS-only stepped form; model= (0.33.0) posts one row to /_api/{model} and reads the model's own field lines"
 attributes = ["submit", "action", "method", "honeypot", "steps", "id", "model"]
 degradation = "labeled list"
@@ -262,6 +392,10 @@ keywords = ["photos", "pictures", "images", "gallery", "portfolio", "shots", "ph
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["image", "stack", "sheet"]
+states = ["loading", "error", "filled"]
+emits = ["open"]
 purpose = "Image gallery. The attribute is spelled columns here (cols on ::features); it accepts a per-size-class triple and, when absent, falls back to the item-count heuristic"
 attributes = ["columns"]
 degradation = "sequential images"
@@ -270,6 +404,10 @@ enum_variant = "Gallery"
 [blocks.hero-image]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["image"]
+states = ["loading", "error", "filled"]
+emits = []
 purpose = "Hero visual"
 attributes = ["src", "alt"]
 degradation = "markdown image"
@@ -278,6 +416,10 @@ enum_variant = "HeroImage"
 [blocks.kernel]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Execution environment — `lang=`/`env=` name it, `runtime:` / `packages: [a, b]` / `sandbox:` body lines (or attributes) describe it"
 attributes = ["lang", "env", "runtime", "packages", "sandbox"]
 degradation = "fenced code block with language"
@@ -286,6 +428,10 @@ enum_variant = "Kernel"
 [blocks.logo-cloud]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["image", "stack", "text"]
+states = ["empty", "loading", "filled"]
+emits = []
 purpose = "Logo strip — `- src`, `- src | Name` or `- [Name](src)` lines"
 attributes = ["title"]
 degradation = "bulleted list of names"
@@ -306,6 +452,10 @@ keywords = ["number", "figure", "kpi", "value", "count", "one number"]
 fields_admitted = true
 status = "implemented"
 category = "data"
+class = "content"
+primitives = ["stat", "badge", "progress"]
+states = ["filled"]
+emits = []
 purpose = "Single metric display; with max= it also draws a gauge"
 attributes = ["label", "value", "trend", "unit", "min", "max"]
 degradation = "bold label: value"
@@ -314,6 +464,10 @@ enum_variant = "Metric"
 [blocks.nav]
 status = "implemented"
 category = "site"
+class = "chrome"
+primitives = ["bar", "button", "image"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Navigation bar"
 attributes = ["logo"]
 degradation = "bulleted link list"
@@ -322,6 +476,10 @@ enum_variant = "Nav"
 [blocks.output]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["code", "badge", "text"]
+states = ["empty", "error", "filled"]
+emits = []
 purpose = "Execution output — the verbatim stdout of the `::code` block named by `for=`"
 attributes = ["for", "timestamp", "exit", "format"]
 degradation = "fenced code block"
@@ -330,6 +488,10 @@ enum_variant = "Output"
 [blocks.page]
 status = "implemented"
 category = "site"
+class = "chrome"
+primitives = ["stack", "heading"]
+states = ["filled"]
+emits = []
 purpose = "Route/layout definition. layout is the recognized set {default, hero, cards, split}; unknown values degrade to default (lint L041)"
 attributes = ["route", "layout", "title", "sidebar"]
 degradation = "heading with content"
@@ -338,6 +500,10 @@ enum_variant = "Page"
 [blocks.product-grid]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "image", "stack", "button"]
+states = ["empty", "loading", "filled"]
+emits = ["open"]
 purpose = "Grid of product link-cards, optionally split into labelled groups; tiles selects the full-bleed promo-tile rendering. cols is a per-size-class column count for the block (per-group {cols=N} braces still win locally)"
 attributes = ["tiles", "cols"]
 degradation = "bulleted link list"
@@ -355,6 +521,10 @@ keywords = ["prices", "pricing", "plans", "rates", "tiers", "cost", "fees", "how
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["table", "badge", "button"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Pricing comparison; highlight= features a tier, current= marks the viewer's own"
 attributes = ["highlight", "current"]
 degradation = "markdown table"
@@ -363,6 +533,10 @@ enum_variant = "PricingTable"
 [blocks.post-grid]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "image", "stack", "text"]
+states = ["empty", "filled"]
+emits = ["open"]
 purpose = "Card grid for a blog/news/events index"
 attributes = ["title", "subtitle"]
 degradation = "dated link list"
@@ -371,6 +545,10 @@ enum_variant = "PostGrid"
 [blocks.gate]
 status = "implemented"
 category = "web"
+class = "control"
+primitives = ["field", "button", "card", "heading", "text"]
+states = ["error", "filled"]
+emits = ["submit"]
 purpose = "Access-code card (password + submit)"
 attributes = ["title", "subtitle", "action", "field", "submit", "error"]
 degradation = "password form"
@@ -379,6 +557,10 @@ enum_variant = "Gate"
 [blocks.progress]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["progress", "text", "icon"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Progress indicator — named steps with statuses, or a determinate bar when value= is set"
 attributes = ["source", "value", "max"]
 degradation = "ordered list of step labels"
@@ -398,6 +580,10 @@ keywords = ["quote", "saying", "pull quote", "words", "cite", "line"]
 fields_admitted = true
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["text", "card"]
+states = ["filled"]
+emits = []
 purpose = "Attributed quotation"
 attributes = ["by", "cite"]
 degradation = "blockquote with attribution"
@@ -406,6 +592,10 @@ enum_variant = "Quote"
 [blocks.related]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["row", "text"]
+states = ["empty", "filled"]
+emits = ["open"]
 purpose = "Cross-references — `- [Title](href) — relation`, `- relation: href` or `- href — note` lines"
 attributes = []
 degradation = "bulleted link list"
@@ -414,6 +604,10 @@ enum_variant = "Related"
 [blocks.site]
 status = "implemented"
 category = "site"
+class = "chrome"
+primitives = ["inert"]
+states = ["filled"]
+emits = []
 purpose = "Website config"
 attributes = ["domain"]
 degradation = "omitted"
@@ -422,6 +616,10 @@ enum_variant = "Site"
 [blocks.style]
 status = "implemented"
 category = "utility"
+class = "chrome"
+primitives = ["inert"]
+states = ["filled"]
+emits = []
 purpose = "Presentation overrides"
 attributes = ["accent", "font", "heading-font", "body-font"]
 degradation = "omitted"
@@ -430,6 +628,10 @@ enum_variant = "Style"
 [blocks.subscribe]
 status = "implemented"
 category = "web"
+class = "control"
+primitives = ["field", "button", "text", "card"]
+states = ["empty", "filled"]
+emits = ["submit"]
 purpose = "Email subscription — renders as a `::form` named `newsletter` (0.43.0): the pitch, an email field, the button and a consent line, with the `_honey` field"
 attributes = ["action", "placeholder", "button", "consent"]
 degradation = "link to subscription page"
@@ -438,6 +640,10 @@ enum_variant = "Subscribe"
 [blocks.summary]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["card", "text"]
+states = ["filled"]
+emits = []
 purpose = "Token-efficient summary"
 attributes = []
 degradation = "italic blockquote"
@@ -446,6 +652,10 @@ enum_variant = "Summary"
 [blocks.tabs]
 status = "implemented"
 category = "container"
+class = "content"
+primitives = ["bar", "text"]
+states = ["filled"]
+emits = ["select"]
 purpose = "Tabbed sections"
 attributes = []
 degradation = "sequential headings with content"
@@ -454,6 +664,10 @@ enum_variant = "Tabs"
 [blocks.tasks]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["check", "text", "badge"]
+states = ["filled"]
+emits = []
 purpose = "Task list"
 attributes = []
 degradation = "checkbox list"
@@ -474,6 +688,10 @@ keywords = ["review", "customer quote", "customer", "said", "feedback", "rating"
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "text"]
+states = ["filled"]
+emits = []
 purpose = "Customer quote"
 attributes = ["author", "role", "company"]
 degradation = "blockquote with attribution"
@@ -482,6 +700,10 @@ enum_variant = "Testimonial"
 [blocks.timeline]
 status = "implemented"
 category = "data"
+class = "content"
+primitives = ["row", "text", "heading"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Chronological sequence — `- when — label` (or `- when: label`) entries, grouped under `## heading` lines"
 attributes = ["title"]
 degradation = "ordered list with dates"
@@ -490,6 +712,10 @@ enum_variant = "Timeline"
 [blocks.turn]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["bubble", "text", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Conversation turn — a markdown body from one participant; `timestamp=` is read as `time=`, the role is inferred from the participant when absent"
 attributes = ["participant", "time", "role", "model"]
 degradation = "blockquote with speaker prefix"
@@ -515,6 +741,10 @@ keywords = ["headline", "banner", "top of the page", "intro", "welcome", "cover"
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["heading", "text", "button", "badge", "image", "stack"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Full hero section with headline, subtitle, badge, and CTA buttons — `video=` (0.37.0) plays a muted, looping background video behind the headline, with `poster=` (else `image`) as its still picture"
 attributes = ["badge", "align", "image", "video", "poster"]
 degradation = "heading with subtitle and links"
@@ -532,6 +762,10 @@ keywords = ["cards", "feature", "benefits", "services", "highlights", "grid", "w
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "stack", "icon", "heading", "text"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Card grid for features, products, or value propositions. cols accepts a per-size-class triple (cols=\"1 2 3\", mobile/tablet/desktop order); a single value broadcasts to all classes"
 attributes = ["cols"]
 degradation = "heading/body pairs"
@@ -549,6 +783,10 @@ keywords = ["steps", "how it works", "process", "numbered", "stages", "instructi
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["row", "badge", "text"]
+states = ["filled"]
+emits = []
 purpose = "Numbered process or timeline steps with optional time estimates"
 attributes = []
 degradation = "ordered list with headings"
@@ -566,6 +804,10 @@ keywords = ["numbers", "figures", "stat", "count", "key numbers", "at a glance",
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["stat", "stack"]
+states = ["filled"]
+emits = []
 purpose = "Row of metric/stat cards with value and label"
 attributes = []
 degradation = "bulleted value list"
@@ -583,6 +825,10 @@ keywords = ["compare", "compare plans", "versus", "vs", "side by side", "differe
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["table", "icon"]
+states = ["filled"]
+emits = []
 purpose = "Feature comparison matrix with check/dash rendering and column highlight"
 attributes = ["highlight"]
 degradation = "markdown table"
@@ -591,6 +837,10 @@ enum_variant = "Comparison"
 [blocks.logo]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["image"]
+states = ["loading", "error", "filled"]
+emits = []
 purpose = "Centered brand or product logo display"
 attributes = ["src", "alt", "size"]
 degradation = "markdown image"
@@ -599,6 +849,10 @@ enum_variant = "Logo"
 [blocks.toc]
 status = "implemented"
 category = "utility"
+class = "content"
+primitives = ["row", "text"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Auto-generated table of contents from document headings"
 attributes = ["depth"]
 degradation = "bulleted link list"
@@ -607,6 +861,10 @@ enum_variant = "Toc"
 [blocks.before-after]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "stack", "text", "icon"]
+states = ["filled"]
+emits = []
 purpose = "Before/after problem-to-solution visualization with bullet lists"
 attributes = ["transition"]
 degradation = "two-column heading/list pairs"
@@ -615,6 +873,10 @@ enum_variant = "BeforeAfter"
 [blocks.pipeline]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["stack", "card", "icon", "text"]
+states = ["filled"]
+emits = []
 purpose = "Horizontal flow pipeline with labeled steps and arrows"
 attributes = []
 degradation = "ordered list"
@@ -623,6 +885,10 @@ enum_variant = "Pipeline"
 [blocks.section]
 status = "implemented"
 category = "container"
+class = "content"
+primitives = ["stack", "heading", "text"]
+states = ["filled"]
+emits = []
 purpose = "Page section container with background control and child blocks"
 attributes = ["bg", "headline", "subtitle"]
 degradation = "heading with content"
@@ -648,6 +914,10 @@ keywords = ["product", "price", "prices", "item", "offer", "buy", "pass", "packa
 fields_admitted = true
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "badge", "text", "button"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Rich product card with badge, body text, feature list, and CTA"
 attributes = ["title", "subtitle", "badge", "badge-color", "cta-label", "cta-href", "price", "currency"]
 degradation = "heading with bulleted features and link"
@@ -658,6 +928,10 @@ enum_variant = "ProductCard"
 [blocks.list]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["row", "chips", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = ["select", "open"]
 purpose = "Dynamic data list with filtering, sorting, and display modes"
 attributes = ["source", "display", "preload", "stream", "on-select"]
 degradation = "bulleted list"
@@ -666,6 +940,10 @@ enum_variant = "List"
 [blocks.board]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["stack", "card", "row", "badge"]
+states = ["empty", "loading", "error", "filled"]
+emits = ["change", "select"]
 purpose = "Kanban board with draggable cards grouped by column values; a `columns: To Do | Done` line names the columns and a `card-template: …` line the card layout"
 attributes = ["source", "preload"]
 degradation = "section-per-column with task list"
@@ -674,6 +952,10 @@ enum_variant = "Board"
 [blocks.action]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["field", "button", "badge", "card"]
+states = ["filled"]
+emits = ["submit"]
 purpose = "CRUD form that submits via HTMX with method, target, and confirm prompt"
 attributes = ["method", "target", "label", "confirm"]
 degradation = "labeled form"
@@ -682,6 +964,10 @@ enum_variant = "Action"
 [blocks.filter-bar]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["chips", "menu"]
+states = ["filled"]
+emits = ["change"]
 purpose = "Filter controls for data views with named fields and option lists — a chip row since 0.39; `size=compact` for a navigator head, `inline=true` to sit beside a preceding inline control"
 attributes = ["target", "size", "inline"]
 degradation = "bulleted filter labels"
@@ -690,6 +976,10 @@ enum_variant = "FilterBar"
 [blocks.search]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["field", "icon", "row"]
+states = ["empty", "loading", "filled"]
+emits = ["submit", "change"]
 purpose = "Search input with typeahead results from a data source"
 attributes = ["source", "placeholder"]
 degradation = "text input description"
@@ -698,6 +988,10 @@ enum_variant = "Search"
 [blocks.dashboard]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["stat", "stack", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = []
 purpose = "Metrics dashboard with configurable auto-refresh interval"
 attributes = ["source", "refresh"]
 degradation = "linked data source"
@@ -706,6 +1000,10 @@ enum_variant = "Dashboard"
 [blocks.chat-input]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["field", "button", "segmented"]
+states = ["empty", "filled"]
+emits = ["submit", "change"]
 purpose = "Smart-routed chat input with action endpoint and mode switching"
 attributes = ["action", "placeholder", "modes"]
 degradation = "text input description"
@@ -714,6 +1012,10 @@ enum_variant = "ChatInput"
 [blocks.feed]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["row", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = []
 purpose = "Real-time content feed via SSE or polling"
 attributes = ["source", "stream"]
 degradation = "linked data source"
@@ -724,6 +1026,10 @@ enum_variant = "Feed"
 [blocks.editor]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["code", "field", "placard"]
+states = ["empty", "loading", "filled"]
+emits = ["change"]
 purpose = "Code or SurfDoc editor mount point with optional live preview"
 attributes = ["source", "lang", "preview"]
 degradation = "linked document"
@@ -732,6 +1038,10 @@ enum_variant = "Editor"
 [blocks.split-pane]
 status = "implemented"
 category = "container"
+class = "chrome"
+primitives = ["stack", "button"]
+states = ["empty", "filled"]
+emits = ["press"]
 purpose = "Resizable side-by-side layout mount point with configurable ratio; back-label/back-action emit the small-screen back control in the right plane"
 attributes = ["ratio", "back-label", "back-action"]
 degradation = "sequential sections"
@@ -740,6 +1050,10 @@ enum_variant = "SplitPane"
 [blocks.pane]
 status = "implemented"
 category = "container"
+class = "chrome"
+primitives = ["stack"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Child plane of a split-pane; side=left|right selects the plane (order is the fallback: first pane left, second right)"
 attributes = ["side"]
 degradation = "sequential sections"
@@ -750,6 +1064,10 @@ enum_variant = "SplitPane"
 [blocks.app]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge", "stack"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Top-level app manifest container with name, region, port, and child blocks"
 attributes = ["name", "binary", "region", "port", "platform", "auth"]
 degradation = "heading with child blocks"
@@ -758,6 +1076,10 @@ enum_variant = "App"
 [blocks.build]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Build configuration: base image, runtime, edition"
 attributes = ["base", "runtime", "edition"]
 degradation = "key-value list"
@@ -766,6 +1088,10 @@ enum_variant = "Build"
 [blocks.database]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Infrastructure database configuration with volume and shared auth"
 attributes = ["name", "shared_auth", "volume_gb"]
 degradation = "key-value list"
@@ -774,6 +1100,10 @@ enum_variant = "InfraDatabase"
 [blocks.deploy]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Deployment environment configuration: machines, memory, auto-stop, strategy"
 attributes = ["env", "app", "machines", "memory", "auto_stop", "min_machines", "strategy"]
 degradation = "key-value list"
@@ -782,6 +1112,10 @@ enum_variant = "Deploy"
 [blocks.env]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Environment variable group with tier classification (required/optional/defaults)"
 attributes = ["tier"]
 degradation = "definition list"
@@ -790,6 +1124,10 @@ enum_variant = "InfraEnv"
 [blocks.health]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Health check configuration: path, method, grace period, interval, timeout"
 attributes = ["path", "method", "grace", "interval", "timeout"]
 degradation = "key-value list"
@@ -798,6 +1136,10 @@ enum_variant = "Health"
 [blocks.concurrency]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Concurrency and connection limits with hard/soft limits and HTTPS forcing"
 attributes = ["type", "hard_limit", "soft_limit", "force_https"]
 degradation = "key-value list"
@@ -806,6 +1148,10 @@ enum_variant = "Concurrency"
 [blocks.cicd]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "CI/CD pipeline configuration with provider and key-value properties"
 attributes = ["provider"]
 degradation = "key-value list"
@@ -814,6 +1160,10 @@ enum_variant = "Cicd"
 [blocks.smoke]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "table", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Smoke test checks: HTTP method, path, and expected status code per check"
 attributes = ["script"]
 degradation = "definition list of HTTP checks"
@@ -822,6 +1172,10 @@ enum_variant = "Smoke"
 [blocks.domains]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Domain entries for an app with optional descriptions"
 attributes = []
 degradation = "bulleted list of domains"
@@ -830,6 +1184,10 @@ enum_variant = "Domains"
 [blocks.crates]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "table", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Shared crate dependencies with source and feature flags"
 attributes = []
 degradation = "definition list"
@@ -838,6 +1196,10 @@ enum_variant = "Crates"
 [blocks.deploy-urls]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = ["open"]
 purpose = "Per-environment deploy URLs as key-value pairs"
 attributes = []
 degradation = "definition list"
@@ -846,6 +1208,10 @@ enum_variant = "DeployUrls"
 [blocks.volumes]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Named volume mounts with mount paths"
 attributes = []
 degradation = "definition list"
@@ -856,6 +1222,10 @@ enum_variant = "Volumes"
 [blocks.model]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "table", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Data model definition with typed fields and constraints; owner= (0.33.0) says whose rows they are (viewer, workspace, public) and `- f: type = expr` declares a computed field"
 attributes = ["name", "owner"]
 degradation = "definition list of fields"
@@ -864,6 +1234,10 @@ enum_variant = "Model"
 [blocks.route]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "badge", "code", "text"]
+states = ["filled"]
+emits = []
 purpose = "API route/endpoint definition with method, auth, returns, and optional handler"
 attributes = ["method", "path", "auth", "returns", "body", "filter", "sort"]
 degradation = "heading with method and path"
@@ -872,6 +1246,10 @@ enum_variant = "Route"
 [blocks.auth]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["filled"]
+emits = []
 purpose = "Authentication configuration with provider, session, and role definitions"
 attributes = ["provider", "session", "default_role"]
 degradation = "key-value list"
@@ -880,6 +1258,10 @@ enum_variant = "Auth"
 [blocks.binding]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["filled"]
+emits = []
 purpose = "Data-to-UI binding connecting a route or model to a UI block"
 attributes = ["source", "target"]
 degradation = "key-value list"
@@ -890,6 +1272,10 @@ enum_variant = "Binding"
 [blocks.schema]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "table", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Data schema definition with typed fields and constraints"
 attributes = ["name"]
 degradation = "definition list of fields"
@@ -898,6 +1284,10 @@ enum_variant = "Schema"
 [blocks.use]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Crate/dependency declarations for an app with version and features"
 attributes = []
 degradation = "definition list"
@@ -906,6 +1296,10 @@ enum_variant = "Use"
 [blocks.app-env]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger", "badge"]
+states = ["empty", "filled"]
+emits = []
 purpose = "App-level environment variable declarations with descriptions and required flag"
 attributes = []
 degradation = "definition list"
@@ -914,6 +1308,10 @@ enum_variant = "AppEnv"
 [blocks.app-deploy]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "App-level deployment configuration: region, scale, domain, memory"
 attributes = ["region", "scale", "domain", "memory"]
 degradation = "key-value list"
@@ -924,6 +1322,10 @@ enum_variant = "AppDeploy"
 [blocks.row]
 status = "implemented"
 category = "utility"
+class = "control"
+primitives = ["row", "icon", "badge", "button", "progress"]
+states = ["empty", "loading", "filled"]
+emits = ["press", "open", "select"]
 purpose = "Compact row component with icon, title, description, and optional link; supports loading/empty states, a right-side unread dot, an optional usage/progress fraction bar, and (0.17) initials/group avatar, right-side rtime meta, and an unread count pill"
 attributes = ["icon", "href", "state", "unread", "trailing-label", "trailing-action", "action", "progress", "avatar", "rtime", "unread-count"]
 degradation = "single-line description"
@@ -946,6 +1348,10 @@ keywords = ["card", "profile", "summary", "info", "about", "facts", "bio", "who 
 fields_admitted = true
 status = "implemented"
 category = "utility"
+class = "content"
+primitives = ["card", "heading", "text", "ledger", "image", "row"]
+states = ["empty", "loading", "error", "filled"]
+emits = []
 purpose = "Knowledge/info card with title, subtitle, summary, facts table, and optional image"
 attributes = ["intent", "image", "state"]
 degradation = "heading with fact list"
@@ -956,6 +1362,10 @@ enum_variant = "InfoCard"
 [blocks.app-shell]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["stack", "bar", "sheet"]
+states = ["filled"]
+emits = ["select"]
 purpose = "Root app container with layout mode, optional explicit height, and child blocks. layout is the closed set {sidebar-main-panel, tabs, adaptive, panels}; layout=adaptive takes mobile/tablet/desktop sub-attrs from {tabs, rail, sidebar, panels}. panels (0.27) is the CloudSurf app's grid: the sidebar is the Navbar rail, panel-slot children are navigator seats and work slots (Desks), preset children the named grid shapes; the work slots render inside one surfdoc-panels-work grid carrying the default preset's shape as --panels-columns/--panels-rows. Unknown values degrade to sidebar-main-panel (lint L041). The interaction grammar (0.47.0): shortcuts= is the shell's whitespace-separated chord=target pairs (mod+1=#surfy mod+k=openSearch; lint L050, L051), panes=two with panes-at={tablet, desktop} declares a two-pane shape whose direct children say pane=start or pane=end (lint L055); the any-block attributes surface= key= focus= reveal= native= pane= are in docs/interaction-grammar-0.47.0.surf"
 attributes = ["layout", "height", "mobile", "tablet", "desktop", "shortcuts", "panes", "panes-at"]
 degradation = "sequential child blocks"
@@ -964,6 +1374,10 @@ enum_variant = "AppShell"
 [blocks.panel-slot]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["stack"]
+states = ["empty", "filled"]
+emits = []
 purpose = "One cell of a layout=panels app shell (0.27). role=navigator is a seat one navigator kind fills at a time (pinned=true keeps a second seat open beside it); role=work is a Desk whose tab-bar/tab-content strip is user-populated at runtime — the strip is authored, its tabs are not. kind= is the slot's identity (cloud, surfdocs, surfy, messages, tasks, desk, desk2 …); parks=true keeps the slot's state when hidden. Per size class the shell keeps every slot on desktop, the first unpinned seat plus one work slot on tablet, one work slot on mobile. classes/min-class gate as on sidebar. Lint L045 reports a work slot without a tab-bar and a seat without a kind"
 attributes = ["role", "kind", "pinned", "parks", "classes", "min-class"]
 degradation = "sequential child blocks"
@@ -972,6 +1386,10 @@ enum_variant = "PanelSlot"
 [blocks.preset]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["inert"]
+states = ["filled"]
+emits = []
 purpose = "A named grid shape the work slots of a layout=panels shell can take (0.27): columns= and rows= are whitespace-separated track fractions, spans= one col,row[,colSpan,rowSpan] cell per seated slot in slot order (absent = one cell per grid position, row-major), slots= the work-slot kinds seated (absent = authored order), default=true the shape a fresh arrangement opens on. Renders as an inert <template class=surfdoc-preset> record the player reads; a leaf. Lint L045 reports a preset seating an undeclared slot"
 attributes = ["name", "title", "icon", "columns", "rows", "spans", "slots", "default"]
 degradation = "omitted"
@@ -980,6 +1398,10 @@ enum_variant = "Preset"
 [blocks.sidebar]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["stack", "row"]
+states = ["filled"]
+emits = ["change"]
 purpose = "Collapsible side panel with position, width, and child blocks. width accepts a per-size-class triple (width=\"0 72 260\", mobile/tablet/desktop order); classes/min-class gate which size classes it appears in"
 attributes = ["position", "collapsible", "width", "classes", "min-class"]
 degradation = "sequential child blocks"
@@ -988,6 +1410,10 @@ enum_variant = "Sidebar"
 [blocks.panel]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["stack", "bar"]
+states = ["filled"]
+emits = ["change"]
 purpose = "Resizable bottom or side panel with height and class-conditional visibility. desktop-only=true is a DEPRECATED alias for classes=desktop (lint L042); it still parses and normalizes into the same class set"
 attributes = ["position", "resizable", "height", "desktop-only", "classes", "min-class"]
 degradation = "sequential child blocks"
@@ -996,6 +1422,10 @@ enum_variant = "Panel"
 [blocks.tab-bar]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["bar", "chips", "icon", "badge"]
+states = ["empty", "filled"]
+emits = ["select"]
 purpose = "Tab strip navigation with labeled tab items, active tab control, and per-item icon/unread/role tokens ({icon=name role=primary unread} braces on an item line)"
 attributes = ["active"]
 degradation = "bulleted tab labels"
@@ -1004,6 +1434,10 @@ enum_variant = "TabBar"
 [blocks.tab-content]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["stack"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Tab-associated content pane rendered when its named tab is active; width/align cap and center the content column. width accepts a per-size-class triple; classes/min-class gate which size classes it appears in"
 attributes = ["tab", "width", "align", "classes", "min-class"]
 degradation = "heading with content"
@@ -1012,6 +1446,10 @@ enum_variant = "TabContent"
 [blocks.toolbar]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["bar", "button", "icon", "menu", "badge", "heading"]
+states = ["filled"]
+emits = ["press", "select", "open"]
 purpose = "Horizontal toolbar with buttons (label/action/icon/style/disabled/toggled), separators, badges, dropdowns, and text items"
 attributes = ["title", "title-source"]
 degradation = "bulleted action list"
@@ -1020,6 +1458,10 @@ enum_variant = "Toolbar"
 [blocks.drawer]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["sheet", "button", "stack"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Slide-out drawer panel with name, position, width, and optional trigger. width accepts a per-size-class triple; classes/min-class gate which size classes it appears in"
 attributes = ["name", "position", "width", "trigger", "classes", "min-class"]
 degradation = "sequential child blocks"
@@ -1028,6 +1470,10 @@ enum_variant = "Drawer"
 [blocks.modal]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["sheet", "button", "heading", "stack"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Dialog overlay with name, optional title, and child blocks; header always shows the title and a top-right close control"
 attributes = ["name", "title", "width", "placement", "dismissible"]
 degradation = "heading with content"
@@ -1036,6 +1482,10 @@ enum_variant = "Modal"
 [blocks.segmented-control]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["segmented"]
+states = ["empty", "filled"]
+emits = ["select"]
 purpose = "Compact pill single-select control for filtering — a filter idiom, not a tab-bar style; a segment line may carry `{icon=name tint=blue}` (0.39) and `fold=always` renders the control as one chip opening a menu of the segments as rows; `fold=auto` (0.40) renders both the pill row and the menu and the stylesheet folds at `fold-at=<px>` (bucketed; estimated from the labels when absent)"
 attributes = ["active", "size", "action", "fold", "fold-at"]
 degradation = "inline segment list with active bolded"
@@ -1044,6 +1494,10 @@ enum_variant = "SegmentedControl"
 [blocks.dropdown-select]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["menu", "icon"]
+states = ["filled"]
+emits = ["select"]
 purpose = "Anchored dropdown select menu with trigger label/icon/selected and options carrying label, description, icon, action"
 attributes = ["label", "icon", "selected", "align"]
 degradation = "bulleted option list"
@@ -1052,6 +1506,10 @@ enum_variant = "DropdownSelect"
 [blocks.command-palette]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["sheet", "field", "row", "icon"]
+states = ["empty", "filled"]
+emits = ["press", "open"]
 purpose = "Searchable command picker with labeled actions, descriptions, icons, and groups (`- \"Label\" description= action= icon= group=`)"
 attributes = ["trigger"]
 degradation = "bulleted command list"
@@ -1060,6 +1518,10 @@ enum_variant = "CommandPalette"
 [blocks.code-editor]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["code", "field", "placard"]
+states = ["empty", "filled"]
+emits = ["change"]
 purpose = "Syntax-highlighted code editor with optional data source and line numbers"
 attributes = ["lang", "source", "line-numbers"]
 degradation = "fenced code block"
@@ -1068,6 +1530,10 @@ enum_variant = "CodeEditor"
 [blocks.block-editor]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["placard"]
+states = ["empty", "loading", "filled"]
+emits = ["change"]
 purpose = "Visual block editor mount point with optional document source"
 attributes = ["source"]
 degradation = "omitted"
@@ -1076,6 +1542,10 @@ enum_variant = "BlockEditor"
 [blocks.terminal]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["code", "field", "placard"]
+states = ["empty", "filled"]
+emits = ["submit"]
 purpose = "Shell/terminal panel with configurable shell and working directory"
 attributes = ["shell", "cwd"]
 degradation = "omitted"
@@ -1084,6 +1554,10 @@ enum_variant = "Terminal"
 [blocks.nav-tree]
 status = "implemented"
 category = "advanced"
+class = "chrome"
+primitives = ["tree", "row", "icon", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = ["select", "open", "change"]
 purpose = "File/navigation tree with source and optional select/rename/delete callbacks"
 attributes = ["source", "on-select", "on-rename", "on-delete"]
 degradation = "bulleted file list"
@@ -1092,6 +1566,10 @@ enum_variant = "NavTree"
 [blocks.badge]
 status = "implemented"
 category = "utility"
+class = "content"
+primitives = ["badge"]
+states = ["filled"]
+emits = []
 purpose = "Status badge pill with value and optional color"
 attributes = ["value", "color"]
 degradation = "inline text label"
@@ -1100,6 +1578,10 @@ enum_variant = "Badge"
 [blocks.suggestion-chips]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["chips", "placard"]
+states = ["empty", "loading", "filled"]
+emits = ["press"]
 purpose = "Clickable suggestion chips from source with max count and dismissible option"
 attributes = ["source", "max", "dismissible"]
 degradation = "bulleted suggestion list"
@@ -1108,6 +1590,10 @@ enum_variant = "SuggestionChips"
 [blocks.recipient-picker]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["row", "check", "button", "field"]
+states = ["empty", "loading", "filled"]
+emits = ["select", "submit"]
 purpose = "Recipient picker: select one or more entries from a data source and submit the selection (group compose)"
 attributes = ["source", "mode", "on-submit"]
 degradation = "labeled source description"
@@ -1116,6 +1602,10 @@ enum_variant = "RecipientPicker"
 [blocks.qr]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["image", "button"]
+states = ["filled"]
+emits = ["press", "open"]
 purpose = "Platform-conditional QR block: show-my-code or scan, with a resolve action fired on a successful scan/exchange"
 attributes = ["mode", "on-resolve"]
 degradation = "italic placeholder text"
@@ -1124,6 +1614,10 @@ enum_variant = "Qr"
 [blocks.chat-thread]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["bubble", "badge", "text", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = ["press", "open"]
 purpose = "Chat conversation thread display from source with optional action callback; 0.17 adds authored message children (side, sender, in-bubble timestamp, read-only reaction pills)"
 attributes = ["source", "on-action", "on-react", "on-doc-open"]
 degradation = "sequential message list"
@@ -1132,6 +1626,10 @@ enum_variant = "ChatThread"
 [blocks.chat-input-simple]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["field", "button"]
+states = ["empty", "filled"]
+emits = ["submit"]
 purpose = "Simple chat message input with placeholder and action (distinct from app-bound chat-input)"
 attributes = ["placeholder", "action"]
 degradation = "text input description"
@@ -1140,6 +1638,10 @@ enum_variant = "ChatInputSimple"
 [blocks.chip-input]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["chips", "field", "button"]
+states = ["empty", "filled"]
+emits = ["change"]
 purpose = "Recipient chip input (compose To: line): label, removable chips with a close glyph, inline filter input; shape-only in HTML, behavior dispatcher-owned"
 attributes = ["label", "placeholder", "source", "on-change"]
 degradation = "labeled chip list"
@@ -1148,6 +1650,10 @@ enum_variant = "ChipInput"
 [blocks.log-stream]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["code", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = []
 purpose = "Live log output stream with optional source and tail line count"
 attributes = ["source", "tail"]
 degradation = "fenced code block"
@@ -1156,6 +1662,10 @@ enum_variant = "LogStream"
 [blocks.problem-list]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["row", "badge", "placard"]
+states = ["empty", "loading", "error", "filled"]
+emits = ["open"]
 purpose = "Error/warning problem list from source, styled as diagnostic output"
 attributes = ["source"]
 degradation = "bulleted error list"
@@ -1170,6 +1680,10 @@ enum_variant = "ProblemList"
 [blocks.banner]
 status = "implemented"
 category = "web"
+class = "content"
+primitives = ["card", "heading", "text", "button"]
+states = ["filled"]
+emits = ["open"]
 purpose = "Centered call-to-action band: headline, subtitle, and link buttons"
 attributes = ["id"]
 degradation = "heading with paragraph and links"
@@ -1178,6 +1692,10 @@ enum_variant = "Banner"
 [blocks.booking]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["menu", "segmented", "card", "text"]
+states = ["empty", "filled"]
+emits = ["select"]
 purpose = "Appointment booking surface: bookable services and per-day time slots"
 attributes = ["title", "service-label"]
 degradation = "service list with availability table"
@@ -1186,6 +1704,10 @@ enum_variant = "Booking"
 [blocks.store]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["row", "badge", "text", "card"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Storefront product list with categories, prices, blurbs, and badges"
 attributes = ["title", "currency"]
 degradation = "markdown table of items"
@@ -1194,6 +1716,10 @@ enum_variant = "Store"
 [blocks.cite]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["text"]
+states = ["filled"]
+emits = []
 purpose = "Reference definition — one bibliographic entry addressed by key"
 attributes = ["key", "id", "type"]
 degradation = "omitted (definition only)"
@@ -1202,6 +1728,10 @@ enum_variant = "Cite"
 [blocks.bibliography]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["row", "text", "heading"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Formatted reference list built from the document's cite definitions"
 attributes = ["style"]
 degradation = "bulleted reference list"
@@ -1210,6 +1740,10 @@ enum_variant = "Bibliography"
 [blocks.notes]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["card", "text"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Presenter notes — inside a ::slide the parser folds this into the slide's notes field; standalone (0.25.0) it is a Notes block the deck renderer omits"
 attributes = []
 degradation = "omitted from the rendered deck"
@@ -1222,6 +1756,10 @@ enum_variant = "Notes"
 [blocks.hours]
 status = "implemented"
 category = "site"
+class = "content"
+primitives = ["ledger", "badge", "heading"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Opening hours — one row per weekday, plus a status line the host stamps with its own clock"
 attributes = ["title", "timezone"]
 degradation = "plain table of days and hours"
@@ -1230,6 +1768,10 @@ enum_variant = "Hours"
 [blocks.marquee]
 status = "implemented"
 category = "site"
+class = "content"
+primitives = ["text", "stack"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Looping ticker band of short items, emitted twice so a CSS translate loop is seamless"
 attributes = []
 degradation = "comma-joined line"
@@ -1241,6 +1783,10 @@ enum_variant = "Marquee"
 [blocks.carousel]
 status = "implemented"
 category = "site"
+class = "content"
+primitives = ["image", "card", "stack"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Horizontal scroll-snap carousel — `:::slide[image= alt=]` children (or one slide per `### ` heading), each a title, a markdown body and an optional image, with a dot nav of in-page anchors; no script"
 attributes = ["id", "aspect"]
 degradation = "the slides in order as heading, image and body"
@@ -1249,6 +1795,10 @@ enum_variant = "Carousel"
 [blocks.player]
 status = "implemented"
 category = "site"
+class = "control"
+primitives = ["row", "button", "image", "progress"]
+states = ["empty", "loading", "filled"]
+emits = ["press", "select"]
 purpose = "A record's tracks on ONE persistent player per page — each `- Title | 2:54 | /audio/a.mp3 | Chapter` row plays in place (an empty source = locked: sold, not streamed, the row links to `buy`); a mini bar at the foot opens into a now-playing sheet with seek, previous, play / pause, next and shuffle; the OS media surface; keyboard transport; `layout=row` is the one-row now-playing strip"
 attributes = ["title", "artist", "art", "buy", "buy-label", "line", "layout"]
 degradation = "the record's name and a numbered track list — a streaming track links to its file, a locked one says so"
@@ -1261,6 +1811,10 @@ enum_variant = "Player"
 [blocks.picker]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["chips", "text", "placard"]
+states = ["empty", "filled"]
+emits = ["select", "change"]
 purpose = "Tiered choice bound to a record field — each `- Core: a · b · c` row offers up to tiers= graded radio choices, with an optional `| info=\"…\"` tail"
 attributes = ["bind", "tiers", "layout", "emoji"]
 degradation = "bulleted rows of core and choices"
@@ -1269,6 +1823,10 @@ enum_variant = "Picker"
 [blocks.when]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["stack", "inert", "placard"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Section of blocks shown only while a predicate holds — bind= + op= + value=, or expr="
 attributes = ["bind", "op", "value", "expr"]
 degradation = "the predicate as a note, then the body"
@@ -1277,6 +1835,10 @@ enum_variant = "When"
 [blocks.compute]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["inert", "placard"]
+states = ["empty", "filled"]
+emits = []
 purpose = "Named value the runtime derives from expr= over the rows at source= (kept verbatim, never evaluated by the parser)"
 attributes = ["name", "expr", "source"]
 degradation = "name = expression line"
@@ -1285,6 +1847,10 @@ enum_variant = "Compute"
 [blocks.flow]
 status = "implemented"
 category = "advanced"
+class = "control"
+primitives = ["stack", "field", "button", "heading", "placard"]
+states = ["empty", "filled"]
+emits = ["submit", "change"]
 purpose = "Stepped entry bound to a record — `:::step[title= repeat=]` children holding blocks and field lines, posting one row to /_api/{model}"
 attributes = ["model", "id", "submit"]
 degradation = "numbered steps with their fields"
@@ -1293,6 +1859,10 @@ enum_variant = "Flow"
 [blocks.schedule]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["inert", "placard"]
+states = ["filled"]
+emits = []
 purpose = "Recurring reminder whose time of day lives in a record field (bind=), delivered by the platform in tz= with a title, body and link"
 attributes = ["bind", "tz", "title", "body", "link"]
 degradation = "reminder line"
@@ -1305,6 +1875,10 @@ enum_variant = "Schedule"
 [blocks.game]
 status = "implemented"
 category = "advanced"
+class = "content"
+primitives = ["card", "ledger"]
+states = ["empty", "filled"]
+emits = []
 purpose = "A made game's spec — `engine=` and `version=` on the opener and a flat key list the platform's engine reads (kept verbatim, never evaluated by the parser)"
 attributes = ["engine", "version"]
 degradation = "the game's title, its engine and the key list as lines"
@@ -1319,6 +1893,10 @@ enum_variant = "Game"
 [blocks.video]
 status = "implemented"
 category = "core"
+class = "content"
+primitives = ["image", "button", "text", "placard"]
+states = ["loading", "error", "filled"]
+emits = ["press"]
 purpose = "Video player with a poster, a caption and playback flags — `src` is `media:<file-id>` (a library file the host resolves), a site-relative path, or an https: URL; `autoplay` implies muted and inline, and yields to reduced motion"
 attributes = ["src", "poster", "autoplay", "loop", "muted", "controls", "caption", "alt", "width", "aspect"]
 degradation = "poster picture, caption and a link to the video"

@@ -146,6 +146,75 @@ fn spec_compliance() {
 }
 
 // ------------------------------------------------------------------
+// Composition (0.48.0): every block says what it is made of
+// ------------------------------------------------------------------
+
+/// A block without `class`, `primitives`, `states` and `emits` — or with a
+/// word outside the `[composition]` vocabularies — is refused. The registry
+/// is where a player reads its coverage from, so a block that does not say
+/// what it is made of cannot be drawn from the registry.
+#[test]
+fn every_block_says_what_it_is_made_of() {
+    let vocab = surf_parse::spec_registry::composition();
+    assert_eq!(vocab.classes, ["content", "control", "chrome"]);
+    assert_eq!(vocab.states, ["empty", "loading", "error", "filled"]);
+    assert_eq!(vocab.emits, ["press", "submit", "select", "change", "open"]);
+    assert_eq!(vocab.primitives.len(), 28, "the primitive list is closed: a new primitive is a registry change every player answers");
+    let unique: BTreeSet<&str> = vocab.primitives.iter().map(String::as_str).collect();
+    assert_eq!(unique.len(), vocab.primitives.len(), "a primitive is named once");
+
+    let registry = surf_parse::spec_registry::registry();
+    assert_eq!(registry.len(), 133);
+    let mut wrong: Vec<String> = Vec::new();
+    let mut used: BTreeSet<&str> = BTreeSet::new();
+    for b in &registry {
+        if !vocab.classes.contains(&b.class) {
+            wrong.push(format!("::{} — class `{}` is not content | control | chrome", b.name, b.class));
+        }
+        if b.primitives.is_empty() {
+            wrong.push(format!("::{} — no primitives (a block that draws nothing by design says [\"inert\"])", b.name));
+        }
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        for p in &b.primitives {
+            if !vocab.primitives.contains(p) {
+                wrong.push(format!("::{} — primitive `{}` is not in [composition].primitives", b.name, p));
+            }
+            if !seen.insert(p.as_str()) {
+                wrong.push(format!("::{} — primitive `{}` is listed twice", b.name, p));
+            }
+            used.insert(p.as_str());
+        }
+        for s in &b.states {
+            if !vocab.states.contains(s) {
+                wrong.push(format!("::{} — state `{}` is not in [composition].states", b.name, s));
+            }
+        }
+        for e in &b.emits {
+            if !vocab.emits.contains(e) {
+                wrong.push(format!("::{} — emits `{}` is not in [composition].emits", b.name, e));
+            }
+        }
+        // A control exists to take input: it emits something a flow step can name.
+        if b.class == "control" && b.emits.is_empty() {
+            wrong.push(format!("::{} — a control emits at least one event", b.name));
+        }
+    }
+    assert!(wrong.is_empty(), "\n\nCOMPOSITION: {} row(s) of spec/blocks.toml are wrong:\n  {}\n", wrong.len(), wrong.join("\n  "));
+
+    // Every primitive is what at least one block is made of — a primitive nothing uses is not one.
+    let unused: Vec<&String> = vocab.primitives.iter().filter(|p| !used.contains(p.as_str())).collect();
+    assert!(unused.is_empty(), "primitives no block is made of: {unused:?}");
+
+    // The four keys are present in the SOURCE of every block (a default would hide a missing row).
+    let raw: toml::Value = toml::from_str(include_str!("../spec/blocks.toml")).expect("blocks.toml");
+    for (name, t) in raw["blocks"].as_table().expect("blocks") {
+        for key in ["class", "primitives", "states", "emits"] {
+            assert!(t.get(key).is_some(), "::{name} has no `{key}` row in spec/blocks.toml");
+        }
+    }
+}
+
+// ------------------------------------------------------------------
 // Lint rule registry (spec/rules.toml) drift checks
 // ------------------------------------------------------------------
 
