@@ -3,11 +3,11 @@
 All notable changes to surf-parse. The crate is consumed by git tag; each
 entry below corresponds to a tagged (or about-to-be-tagged) release.
 
-## 0.48.0 — 2026-11-12 (composition — every block says what it is made of: class, primitives, states, emits)
+## 0.50.0 — 2026-11-13 (composition — every block says what it is made of: class, primitives, states, emits)
 
 The registry said what each of the 133 blocks is for and how it degrades in Markdown, but not what a player has to
 draw to draw it. So every player's coverage was a hand-kept list (the Android catalog, `coverage-native.json`, each
-player's dispatch), and "which blocks can this platform draw" had no answer short of reading six renderers. 0.48.0
+player's dispatch), and "which blocks can this platform draw" had no answer short of reading six renderers. 0.50.0
 adds the answer to the registry itself.
 
 - **Four keys on every block** in `spec/blocks.toml`: `class` — `content` (read-only drawing), `control` (it takes
@@ -27,6 +27,19 @@ adds the answer to the registry itself.
 
 Nothing is parsed or rendered differently: no grammar change, no HTML, DOM or native-schema change (native schema stays
 19). The rows were read from the six renderers on 2026-11-11 (the UI atlas's component census).
+
+Built on 2026-11-12 as 0.48.0 and never released under that number: 0.49.0 was cut from 0.47.0 first, so this is the next
+minor after it.
+
+## 0.49.0 — 2026-11-12 (font presets public — one list for the web and the native engine)
+
+`resolve::resolve_font_preset` and `resolve::FontPreset` are public, and `resolve::FONT_PRESETS` lists the canonical names
+with their labels in menu order. A preset now also carries `faces` — the native family list (first that exists wins, the
+last a CSS generic: `system-ui`, `serif`, `sans-serif`, `monospace`) — and `bundle`, the family a native host must ship
+itself (Inter, Lato, Montserrat, Playfair Display, JetBrains Mono, Surf Display; `None` for system faces). The SurfDoc
+engine reads a document's `::style` `font` / `heading-font` / `body-font` through these, so a doc set to Playfair on the
+web is Playfair on the Mac. No behaviour change for `render_html` or `render_native`. (Cut from 0.47.0; the composition work built as
+0.48.0 was released after it, as 0.50.0.)
 
 ## 0.47.0 — 2026-11-10 (the interaction grammar — key chords, focus order, hover reveal, two panes, native seats, surface ids)
 

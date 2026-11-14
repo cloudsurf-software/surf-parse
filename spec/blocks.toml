@@ -8,7 +8,7 @@
 # Status: "implemented" | "planned" | "deprecated"
 # Category: core | data | container | web | site | advanced | utility
 #
-# Composition (0.48.0) — what a block is MADE OF, so a player's coverage is read from the registry, not typed per block:
+# Composition (0.50.0) — what a block is MADE OF, so a player's coverage is read from the registry, not typed per block:
 #   class       who draws it: "content" (read-only drawing) | "control" (it takes input: the platform's own control,
 #               always) | "chrome" (app and page furniture: always native)
 #   primitives  the platform-free parts it is made of, most defining first — the closed list in [composition]
@@ -22,7 +22,7 @@ total_blocks = 133
 registry_updated = "2026-11-12"
 
 [composition]
-# The closed vocabularies of the four composition keys (0.48.0). A primitive is a platform-free part; each player maps
+# The closed vocabularies of the four composition keys (0.50.0). A primitive is a platform-free part; each player maps
 # a primitive to ONE component of its platform (a SwiftUI view, a Compose composable, a WinUI 3 control, a GTK4 widget,
 # a DOM element), so block coverage follows from primitive coverage.
 classes = ["content", "control", "chrome"]

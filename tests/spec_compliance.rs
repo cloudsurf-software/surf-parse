@@ -146,7 +146,7 @@ fn spec_compliance() {
 }
 
 // ------------------------------------------------------------------
-// Composition (0.48.0): every block says what it is made of
+// Composition (0.50.0): every block says what it is made of
 // ------------------------------------------------------------------
 
 /// A block without `class`, `primitives`, `states` and `emits` — or with a

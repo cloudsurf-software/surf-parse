@@ -200,22 +200,22 @@ pub struct RegistryEntry {
     pub attributes: Vec<String>,
     pub degradation: String,
     pub enum_variant: Option<String>,
-    /// Who draws the block (0.48.0): `content` (read-only drawing), `control`
+    /// Who draws the block (0.50.0): `content` (read-only drawing), `control`
     /// (it takes input — always the platform's own control) or `chrome`
     /// (app and page furniture — always native).
     pub class: String,
     /// The platform-free parts the block is made of, most defining first
-    /// (0.48.0) — each a member of [`Composition::primitives`].
+    /// (0.50.0) — each a member of [`Composition::primitives`].
     pub primitives: Vec<String>,
-    /// The states that apply to the block (0.48.0): a subset of
+    /// The states that apply to the block (0.50.0): a subset of
     /// [`Composition::states`].
     pub states: Vec<String>,
-    /// The events a flow step can name on the block (0.48.0): a subset of
+    /// The events a flow step can name on the block (0.50.0): a subset of
     /// [`Composition::emits`]; empty when it emits nothing.
     pub emits: Vec<String>,
 }
 
-/// The closed vocabularies of the four composition keys (0.48.0), read from
+/// The closed vocabularies of the four composition keys (0.50.0), read from
 /// the registry's `[composition]` table — so a player that maps each
 /// primitive to one component of its platform can read its own block
 /// coverage from the registry.
