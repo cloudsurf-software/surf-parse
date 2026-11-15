@@ -1,5 +1,10 @@
 # surf-parse
 
+> **This repository is a published copy.** The source of surf-parse is the folder `grammar/surf-parse/` of CloudSurf's
+> `cloudsurf-platform` repository. Each release is written here from that folder by its export script, which replaces
+> every file. A change made directly in this repository is not carried back, and the next export refuses to run until
+> it is removed. For a bug or a request, please open an issue here.
+
 The **SurfDoc reference implementation**: parser and renderers for SurfDoc, a plain-text document format whose typed `::` blocks a parser validates. One `.surf` file renders to HTML, PDF, slides, the terminal, and a native block tree that Swift and Kotlin receive through UniFFI.
 
 SurfDoc uses `::directive` blocks to represent data tables, callouts, decisions, metrics, tasks, code, figures, FAQ, pricing tables, landing page sections, and full multi-page site structures. Every block is typed, validated, and renderable to HTML, LaTeX, Typst, PDF, slides, ANSI terminal output, or a native block tree exported through UniFFI to Swift and Kotlin. A `.surf` file without a renderer is still readable plain text.
